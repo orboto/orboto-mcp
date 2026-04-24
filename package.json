@@ -1,0 +1,32 @@
+{
+  "name": "@orbit/mcp",
+  "version": "0.51.0",
+  "description": "Orbit MCP server — exposes Orbit tickets, docs, and timers as Model Context Protocol tools for Claude Desktop / Cursor / Copilot.",
+  "main": "dist/index.js",
+  "bin": {
+    "orbit-mcp": "dist/index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@orbit/shared-schema": "workspace:*",
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@typescript-eslint/eslint-plugin": "^7",
+    "@typescript-eslint/parser": "^7",
+    "eslint": "^8",
+    "tsx": "^4",
+    "typescript": "^5",
+    "vitest": "^1"
+  }
+}
