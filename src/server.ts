@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase A — MCP server factory.
+ * ORB-244 Phase A/B — MCP server factory.
  *
  * Builds an `McpServer` with the registered tool set + a handle to
  * the Orbit REST client. Transport is picked by the process entry
@@ -10,12 +10,26 @@
  * `@orbit/mcp-cli`) or HTTP-SSE for Self-Hosted-inline.
  *
  * Tool registrations stay in this file so adding a new tool in
- * Phase B is one diff here + one new file in `tools/`. Phase D will
+ * Phase C is one diff here + one new file in `tools/`. Phase D will
  * add `registerResource` / `registerPrompt` calls here too.
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { OrbitClient, type OrbitClientConfig } from './orbit-client.js';
 import { listProjectsToolConfig, makeListProjectsHandler } from './tools/list-projects.js';
+import { getProjectToolConfig, makeGetProjectHandler } from './tools/get-project.js';
+import { listTicketsToolConfig, makeListTicketsHandler } from './tools/list-tickets.js';
+import { getTicketToolConfig, makeGetTicketHandler } from './tools/get-ticket.js';
+import { myTicketsToolConfig, makeMyTicketsHandler } from './tools/my-tickets.js';
+import {
+  listMilestonesToolConfig, makeListMilestonesHandler,
+  getMilestoneToolConfig, makeGetMilestoneHandler,
+} from './tools/milestones.js';
+import { searchToolConfig, makeSearchHandler } from './tools/search.js';
+import {
+  listDocSpacesToolConfig, makeListDocSpacesHandler,
+  getDocToolConfig, makeGetDocHandler,
+} from './tools/docs.js';
+import { getTimerToolConfig, makeGetTimerHandler } from './tools/get-timer.js';
 
 export interface BuildServerOptions extends OrbitClientConfig {
   /** Optional — passed through to McpServer metadata. Clients
@@ -36,19 +50,25 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
         'Orbit is a ticket + project management system.',
         'Use `orbit_list_projects` first to discover what the user can see.',
         'Ticket keys look like `PROJ-123`; the first segment is the project key.',
+        'For "what am I working on?" prefer `orbit_my_tickets`; for "anything about X?" prefer `orbit_search`.',
         'All writes respect the caller\'s project-level permissions — a 403 means the API rejected the write, not the MCP server.',
       ].join(' '),
     },
   );
 
-  // Tools — single dispatch point for future registrations. Each
-  // tool file owns its input/output schema; the server just glues
-  // names to handlers.
-  server.registerTool(
-    'orbit_list_projects',
-    listProjectsToolConfig,
-    makeListProjectsHandler(client),
-  );
+  // Tools — alphabetical-ish by concept. Each tool file owns its
+  // input/output schema; the server just glues names to handlers.
+  server.registerTool('orbit_list_projects', listProjectsToolConfig, makeListProjectsHandler(client));
+  server.registerTool('orbit_get_project', getProjectToolConfig, makeGetProjectHandler(client));
+  server.registerTool('orbit_list_tickets', listTicketsToolConfig, makeListTicketsHandler(client));
+  server.registerTool('orbit_get_ticket', getTicketToolConfig, makeGetTicketHandler(client));
+  server.registerTool('orbit_my_tickets', myTicketsToolConfig, makeMyTicketsHandler(client));
+  server.registerTool('orbit_list_milestones', listMilestonesToolConfig, makeListMilestonesHandler(client));
+  server.registerTool('orbit_get_milestone', getMilestoneToolConfig, makeGetMilestoneHandler(client));
+  server.registerTool('orbit_search', searchToolConfig, makeSearchHandler(client));
+  server.registerTool('orbit_list_doc_spaces', listDocSpacesToolConfig, makeListDocSpacesHandler(client));
+  server.registerTool('orbit_get_doc', getDocToolConfig, makeGetDocHandler(client));
+  server.registerTool('orbit_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
 
   return server;
 }
