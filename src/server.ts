@@ -53,7 +53,7 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
         'Ticket keys look like `PROJ-123`; the first segment is the project key.',
         'For "what am I working on?" prefer `orbit_my_tickets`; for "anything about X?" prefer `orbit_search`.',
         'Checklists: `orbit_get_ticket` includes them inline; use `orbit_get_checklists` when you only need the items. A linked-ticket suffix (`↪ [ACME-99]`) means the item is automatically checked/unchecked as that ticket\'s status moves.',
-        'When you write a git commit that touches a ticket, put the Jira-style key in parentheses at the END of the subject line — `feat(auth): add token rotation (ORB-42)`. This is what the Orbit git-activity parser looks for; skipping it means the commit never gets linked to the ticket.',
+        'When you write a git commit that touches a ticket, put the ticket key (e.g. `ORB-42`) in parentheses at the END of the subject line — `feat(auth): add token rotation (ORB-42)`. This is what the Orbit git-activity parser looks for; skipping it means the commit never gets linked to the ticket.',
         'All writes respect the caller\'s project-level permissions — a 403 means the API rejected the write, not the MCP server.',
       ].join(' '),
     },
