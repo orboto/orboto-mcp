@@ -4,31 +4,32 @@
  * `orbit_list_milestones` and `orbit_get_milestone` share this file
  * because they're cheap neighbours (same API root, same resolution
  * chain). The `get` tool also pulls the `/progress` endpoint so the
- * model sees burndown numbers without an extra call.
+ * model sees ticket-count breakdowns alongside the metadata.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbitApiError, type OrbitClient } from '../orbit-client.js';
 import { resolveProjectByKey } from './shared.js';
 
+/** Matches MilestoneSchema in @orbit/shared-schema. `description` is
+ *  intentionally absent there — milestones hold name + dates + status
+ *  only, no free-text body. */
 interface MilestoneRow {
   id: string;
+  projectId: string;
   name: string;
-  description: string | null;
   status: string;
   startDate: string | null;
   endDate: string | null;
   isPrivate: boolean;
 }
 
+/** `/progress` response — one row per status, plus total count.
+ *  Keys in `byStatus` are the legacy status enum (TODO / IN_PROGRESS
+ *  / IN_REVIEW / DONE / WONT_FIX). */
 interface MilestoneProgress {
   total: number;
-  done: number;
-  inProgress: number;
-  todo: number;
-  percentDone: number;
-  loggedMinutes: number;
-  estimatedMinutes: number;
+  byStatus: Record<string, number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -77,7 +78,7 @@ export function makeListMilestonesHandler(client: OrbitClient) {
 export const getMilestoneToolConfig = {
   title: 'Get milestone details',
   description:
-    'Return milestone metadata plus burndown (% done, ticket counts, logged vs estimated minutes).',
+    'Return milestone metadata plus ticket-count breakdown by status (to do / in progress / done / …).',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
     milestone: z.string().min(1).describe('Milestone name (case-sensitive).'),
@@ -94,7 +95,7 @@ export function makeGetMilestoneHandler(client: OrbitClient) {
     const m = milestones.find((x) => x.name === milestoneName);
     if (!m) throw new Error(`Milestone "${milestoneName}" not found in project ${project.key}.`);
 
-    // Burndown comes from a separate endpoint; tolerate 404 gracefully
+    // Progress comes from a separate endpoint; tolerate 404 gracefully
     // in case a future API rename drops it so the tool still returns
     // the metadata half.
     const progress = await client.get<MilestoneProgress>(
@@ -106,17 +107,21 @@ export function makeGetMilestoneHandler(client: OrbitClient) {
 
     const lines = [
       `${m.name} [${m.status}]`,
-      m.description ? `Description: ${m.description}` : null,
       `Dates: ${m.startDate ?? '(no start)'} → ${m.endDate ?? '(no end)'}`,
       m.isPrivate ? 'Private: yes' : null,
     ].filter((l): l is string => l !== null);
 
     if (progress) {
+      const done = progress.byStatus.DONE ?? 0;
+      const inProgress = progress.byStatus.IN_PROGRESS ?? 0;
+      const inReview = progress.byStatus.IN_REVIEW ?? 0;
+      const todo = progress.byStatus.TODO ?? 0;
+      const wontFix = progress.byStatus.WONT_FIX ?? 0;
+      const percent = progress.total > 0 ? Math.round((done / progress.total) * 100) : 0;
       lines.push(
         '',
-        `Progress: ${progress.percentDone}% done`,
-        `Tickets: ${progress.done}/${progress.total} done · ${progress.inProgress} in progress · ${progress.todo} to do`,
-        `Time: ${progress.loggedMinutes} logged / ${progress.estimatedMinutes} estimated minutes`,
+        `Progress: ${percent}% done (${done}/${progress.total})`,
+        `  to do: ${todo} · in progress: ${inProgress} · in review: ${inReview} · won't fix: ${wontFix}`,
       );
     }
 
@@ -128,7 +133,6 @@ export function makeGetMilestoneHandler(client: OrbitClient) {
           status: m.status,
           startDate: m.startDate,
           endDate: m.endDate,
-          description: m.description,
           isPrivate: m.isPrivate,
         },
         progress,

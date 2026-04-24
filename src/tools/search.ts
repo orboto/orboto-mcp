@@ -5,27 +5,37 @@
  * to the existing `/search` route (Phase 21 global search) which
  * already respects PBAC visibility (private tickets, internal
  * comments, doc ACL).
+ *
+ * ORB-272: /search is cursor-paginated. Response shape is
+ * `{items, nextCursor, total}`. We surface `total` so the model
+ * knows how many hits exist globally, but don't expose `cursor` on
+ * the tool input — repeat MCP tool calls to walk a search cursor is
+ * an awkward UX. Users who need to see more narrow the query or
+ * open the full-page /search in the web UI.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbitClient } from '../orbit-client.js';
 import { resolveProjectByKey } from './shared.js';
 
+/** Matches SearchResultSchema in @orbit/shared-schema. */
 interface SearchHit {
   type: 'ticket' | 'comment' | 'doc';
   id: string;
-  projectId: string | null;
   title: string;
-  snippet: string;
-  rank: number;
-  // Extra metadata the /search route decorates rows with; present for
-  // tickets + comments, null for docs.
+  excerpt: string;
+  projectId: string | null;
+  projectName: string | null;
+  spaceId: string | null;
+  spaceName: string | null;
+  url: string;
   ticketKey?: string | null;
-  docSpaceId?: string | null;
+  rank?: number;
 }
 
 interface SearchResponse {
   items: SearchHit[];
+  nextCursor: string | null;
   total: number;
 }
 
@@ -61,24 +71,33 @@ export function makeSearchHandler(client: OrbitClient) {
 
     const res = await client.get<SearchResponse>(`/search?${qs}`);
 
+    const shown = res.items.length;
+    const hasMore = !!res.nextCursor && res.total > shown;
+    const headerHint = hasMore ? ` (showing ${shown} of ${res.total})` : '';
+
     const text = res.items.length === 0
       ? `No hits for "${input.query}".`
-      : res.items.map((h) => {
+      : `Hits${headerHint}:\n\n` + res.items.map((h) => {
         const tag = h.type.toUpperCase();
         const ident = h.ticketKey ?? h.id.slice(0, 8);
-        return `- [${tag} ${ident}] ${h.title}\n  ${h.snippet}`;
+        const project = h.projectName ? ` · ${h.projectName}` : '';
+        return `- [${tag} ${ident}${project}] ${h.title}\n  ${h.excerpt}`;
       }).join('\n\n');
 
     return {
       content: [{ type: 'text', text }],
       structuredContent: {
         total: res.total,
+        shown,
+        hasMore,
         hits: res.items.map((h) => ({
           type: h.type,
           title: h.title,
-          snippet: h.snippet,
+          excerpt: h.excerpt,
           ticketKey: h.ticketKey ?? null,
-          docSpaceId: h.docSpaceId ?? null,
+          projectName: h.projectName,
+          spaceName: h.spaceName,
+          url: h.url,
         })),
       },
     };

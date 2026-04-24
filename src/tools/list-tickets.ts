@@ -63,8 +63,14 @@ export function makeListTicketsHandler(client: OrbitClient) {
       qs.set('milestoneId', m.id);
     }
     if (input.assigneeEmail) {
-      const members = await client.get<Array<{ userId: string; email: string }>>(`/projects/${project.id}/members`);
-      const member = members.find((x) => x.email.toLowerCase() === input.assigneeEmail!.toLowerCase());
+      // Members endpoint returns `{userId, user: {email, ...}, role: {...}}`;
+      // we need to peek inside `user` to match by email.
+      const members = await client.get<Array<{ userId: string; user: { email: string } }>>(
+        `/projects/${project.id}/members`,
+      );
+      const member = members.find(
+        (x) => x.user.email.toLowerCase() === input.assigneeEmail!.toLowerCase(),
+      );
       if (!member) throw new Error(`No project member with email "${input.assigneeEmail}".`);
       qs.set('assigneeId', member.userId);
     }

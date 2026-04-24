@@ -4,19 +4,28 @@
  * Returns the caller's active stopwatch (or `null` when none is
  * running). Useful for the model to answer "am I still tracking
  * time on that bug from earlier?" without guessing.
+ *
+ * API shape: `GET /time/timer` returns `ActiveTimer | null` directly
+ * (not wrapped). ActiveTimer carries `ticketTitle` and `projectId`
+ * as joined fields but no `ticketKey` — so the ticket identifier is
+ * resolved the cheap way: first 8 chars of the UUID when no title
+ * is available, just the title otherwise.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbitClient } from '../orbit-client.js';
 
-interface TimerRow {
+/** Matches ActiveTimerSchema in @orbit/shared-schema. */
+interface ActiveTimer {
   id: string;
+  userId: string;
   ticketId: string;
-  ticketKey: string | null;
-  ticketTitle: string | null;
   startedAt: string;
   pausedAt: string | null;
   accumulatedSeconds: number;
+  description: string | null;
+  ticketTitle?: string;
+  projectId?: string;
 }
 
 export const getTimerToolConfig = {
@@ -29,9 +38,8 @@ export const getTimerToolConfig = {
 
 export function makeGetTimerHandler(client: OrbitClient) {
   return async (): Promise<CallToolResult> => {
-    // The `/time/timer` endpoint returns { timer: TimerRow | null }.
-    const res = await client.get<{ timer: TimerRow | null }>('/time/timer');
-    const timer = res.timer;
+    // `/time/timer` returns the timer row directly, or `null`.
+    const timer = await client.get<ActiveTimer | null>('/time/timer');
     if (!timer) {
       return {
         content: [{ type: 'text', text: 'No active timer.' }],
@@ -46,19 +54,23 @@ export function makeGetTimerHandler(client: OrbitClient) {
     const totalSeconds = timer.accumulatedSeconds + elapsedSinceStart;
     const minutes = Math.floor(totalSeconds / 60);
 
+    const ticketLabel = timer.ticketTitle ?? `(ticket ${timer.ticketId.slice(0, 8)})`;
     const text = [
-      `Timer ${isPaused ? 'paused' : 'running'} on [${timer.ticketKey ?? timer.ticketId.slice(0, 8)}] ${timer.ticketTitle ?? ''}`,
+      `Timer ${isPaused ? 'paused' : 'running'} on ${ticketLabel}`,
       `Elapsed: ${minutes} min (${totalSeconds}s total)`,
       `Started: ${timer.startedAt}`,
       isPaused ? `Paused: ${timer.pausedAt}` : null,
+      timer.description ? `Note: ${timer.description}` : null,
     ].filter((l): l is string => l !== null).join('\n');
 
     return {
       content: [{ type: 'text', text }],
       structuredContent: {
         timer: {
-          ticketKey: timer.ticketKey,
-          ticketTitle: timer.ticketTitle,
+          ticketId: timer.ticketId,
+          ticketTitle: timer.ticketTitle ?? null,
+          projectId: timer.projectId ?? null,
+          description: timer.description,
           startedAt: timer.startedAt,
           pausedAt: timer.pausedAt,
           accumulatedSeconds: timer.accumulatedSeconds,

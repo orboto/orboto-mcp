@@ -7,19 +7,27 @@
  * fetched in parallel with the ticket payload; git activity is
  * skipped when the ticket's `gitActivityCount` is 0 so we don't waste
  * a round-trip on the common case.
+ *
+ * ORB-272: `/tickets/:id/comments` is cursor-paginated. We pull the
+ * first page (50 by default) — if the ticket has more, a footer line
+ * nudges the user to open it in the UI. AI agents asking "give me
+ * the full history" beyond 50 is a rare enough case not to fan out.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbitApiError, type OrbitClient } from '../orbit-client.js';
 import { resolveTicketByKey, type TicketRow } from './shared.js';
 
+/** Matches `CommentSchema` in @orbit/shared-schema. */
 interface CommentRow {
   id: string;
-  body: string;
+  ticketId: string;
+  userId: string;
+  content: string;
   isInternal: boolean;
   createdAt: string;
-  authorName: string | null;
-  authorEmail: string | null;
+  editedAt?: string | null;
+  userName?: string | null;
 }
 interface ChecklistRow {
   id: string;
@@ -36,6 +44,9 @@ interface GitActivityRow {
   createdAt: string;
   url: string | null;
 }
+interface CursorPage<T> { items: T[]; nextCursor: string | null }
+
+const COMMENT_PAGE_SIZE = 50;
 
 export const getTicketToolConfig = {
   title: 'Get ticket details',
@@ -51,22 +62,23 @@ export function makeGetTicketHandler(client: OrbitClient) {
   return async ({ ticketKey }: { ticketKey: string }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
 
-    // Parallel fan-out for the three sub-resources. Git activity is a
-    // conditional fourth call — skipped when the ticket has no linked
-    // commits/PRs because that's the common case.
-    const needGit = (ticket as unknown as { gitActivityCount?: number }).gitActivityCount
-      ? ((ticket as unknown as { gitActivityCount: number }).gitActivityCount > 0)
-      : false;
-    const [comments, checklists, gitActivity] = await Promise.all([
-      client.get<CommentRow[]>(`/tickets/${ticket.id}/comments`).catch(swallow404([])),
-      client.get<ChecklistRow[]>(`/tickets/${ticket.id}/checklists`).catch(swallow404([])),
-      needGit
-        ? client.get<GitActivityRow[]>(`/tickets/${ticket.id}/git-activity`).catch(swallow404([]))
+    const gitCount = (ticket as unknown as { gitActivityCount?: number }).gitActivityCount ?? 0;
+
+    const [commentsPage, checklists, gitActivity] = await Promise.all([
+      client.get<CursorPage<CommentRow>>(
+        `/tickets/${ticket.id}/comments?limit=${COMMENT_PAGE_SIZE}`,
+      ).catch(swallow404<CursorPage<CommentRow>>({ items: [], nextCursor: null })),
+      client.get<ChecklistRow[]>(`/tickets/${ticket.id}/checklists`).catch(swallow404<ChecklistRow[]>([])),
+      gitCount > 0
+        ? client.get<GitActivityRow[]>(`/tickets/${ticket.id}/git-activity`).catch(swallow404<GitActivityRow[]>([]))
         : Promise.resolve([]),
     ]);
 
+    const comments = commentsPage.items;
+    const hasMoreComments = !!commentsPage.nextCursor;
+
     return {
-      content: [{ type: 'text', text: formatTicket(ticket, comments, checklists, gitActivity) }],
+      content: [{ type: 'text', text: formatTicket(ticket, comments, hasMoreComments, checklists, gitActivity) }],
       structuredContent: {
         key: ticket.ticketKey,
         title: ticket.title,
@@ -83,11 +95,13 @@ export function makeGetTicketHandler(client: OrbitClient) {
         assignees: ticket.assignees ?? [],
         labels: (ticket.labels ?? []).map((l) => l.name),
         comments: comments.map((c) => ({
-          author: c.authorName ?? c.authorEmail,
-          body: c.body,
+          author: c.userName ?? null,
+          body: c.content,
           createdAt: c.createdAt,
+          editedAt: c.editedAt ?? null,
           isInternal: c.isInternal,
         })),
+        commentsHasMore: hasMoreComments,
         checklists: checklists.map((cl) => ({
           title: cl.title,
           triggersDone: cl.triggersDone,
@@ -116,6 +130,7 @@ function swallow404<T>(fallback: T): (err: unknown) => T {
 function formatTicket(
   ticket: TicketRow,
   comments: CommentRow[],
+  hasMoreComments: boolean,
   checklists: ChecklistRow[],
   gitActivity: GitActivityRow[],
 ): string {
@@ -148,11 +163,14 @@ function formatTicket(
 
   const commentLines: string[] = [];
   if (comments.length > 0) {
-    commentLines.push('', `## Comments (${comments.length})`);
+    const headerLine = hasMoreComments
+      ? `## Comments (${comments.length} shown, more in the UI)`
+      : `## Comments (${comments.length})`;
+    commentLines.push('', headerLine);
     for (const c of comments) {
       commentLines.push(
-        `**${c.authorName ?? c.authorEmail ?? '(unknown)'}** — ${c.createdAt}${c.isInternal ? ' [internal]' : ''}`,
-        c.body,
+        `**${c.userName ?? '(unknown author)'}** — ${c.createdAt}${c.isInternal ? ' [internal]' : ''}`,
+        c.content,
         '',
       );
     }

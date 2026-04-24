@@ -1,16 +1,14 @@
 /**
  * ORB-244 Phase B — `orbit_get_project`.
  *
- * Returns metadata + milestones + labels for a project. Accepts the
- * human-readable project key (`ACME`), case-insensitive — the API's
- * `GET /projects/by-key/:key` does the lookup, the rest of the
- * hydration (milestones + labels) comes from the `/projects/:id/*`
- * endpoints that take the resolved UUID.
+ * Returns metadata + milestones + labels + members for a project.
+ * Accepts the human-readable project key (`ACME`), case-insensitive
+ * — the API's `GET /projects/by-key/:key` does the lookup, the rest
+ * of the hydration (milestones + labels + members) comes from the
+ * `/projects/:id/*` endpoints that take the resolved UUID.
  *
- * The reason we don't just expose a key on the inner endpoints too:
- * every other ticket / milestone / label route is UUID-keyed for
- * join-performance, and one new endpoint per shape would be a lot
- * of surface for a niche MCP concern.
+ * Members endpoint returns a nested `{user: {...}, role: {...}}`
+ * shape; we flatten here into a card-friendly line.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -27,9 +25,10 @@ interface MilestoneRow {
 interface LabelRow { id: string; name: string; color: string | null }
 interface MemberRow {
   userId: string;
-  fullName: string;
-  email: string;
-  roleName: string;
+  projectId: string;
+  roleId: string;
+  user: { id: string; email: string; fullName: string | null; avatarUrl: string | null };
+  role: { id: string; name: string };
 }
 
 export const getProjectToolConfig = {
@@ -64,7 +63,10 @@ export function makeGetProjectHandler(client: OrbitClient) {
       `Labels: ${labels.map((l) => l.name).join(', ') || '(none)'}`,
       '',
       `Members (${members.length}):`,
-      ...members.map((m) => `  - ${m.fullName || m.email} <${m.email}> — ${m.roleName}`),
+      ...members.map((m) => {
+        const name = m.user.fullName || m.user.email;
+        return `  - ${name} <${m.user.email}> — ${m.role.name}`;
+      }),
     ].filter((l): l is string => l !== null);
 
     return {
@@ -78,7 +80,12 @@ export function makeGetProjectHandler(client: OrbitClient) {
         },
         milestones,
         labels,
-        members,
+        members: members.map((m) => ({
+          userId: m.userId,
+          fullName: m.user.fullName,
+          email: m.user.email,
+          roleName: m.role.name,
+        })),
       },
     };
   };

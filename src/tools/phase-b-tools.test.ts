@@ -3,9 +3,9 @@
  *
  * Each tool gets one happy-path test that confirms it hits the
  * expected API endpoints in order and produces structured content
- * with the advertised keys. Error-path coverage lives in
- * `shared.test.ts` (key-resolution) + `orbit-client.test.ts` (HTTP
- * transport).
+ * with the advertised keys. The fixtures below use the REAL shapes
+ * from `@orbit/shared-schema` — if a schema drift lands, these tests
+ * break, which is exactly what we want.
  */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { OrbitClient } from '../orbit-client.js';
@@ -31,7 +31,10 @@ function stub(responses: Array<{ ok?: boolean; status?: number; json?: unknown }
       ok: r.ok ?? true,
       status: r.status ?? 200,
       statusText: 'OK',
-      json: async () => r.json ?? {},
+      // `'json' in r` so an explicit `json: null` preserves null;
+      // `r.json ?? {}` would collapse null → {} and hide nullable
+      // endpoints (e.g. GET /time/timer returns the row or null).
+      json: async () => ('json' in r ? r.json : {}),
       text: async () => '',
     } as unknown as Response;
   });
@@ -48,17 +51,20 @@ describe('orbit_get_project', () => {
       { json: PROJ },
       { json: [{ id: 'm1', name: 'v1', status: 'active', startDate: '2026-01-01', endDate: '2026-03-01' }] },
       { json: [{ id: 'l1', name: 'bug', color: '#f00' }] },
-      { json: [{ userId: 'u1', fullName: 'Ada', email: 'ada@acme', roleName: 'developer' }] },
+      // Members endpoint response: nested user + role objects per the real schema.
+      { json: [{ userId: 'u1', projectId: 'p1', roleId: 'r1',
+        user: { id: 'u1', email: 'ada@acme', fullName: 'Ada', avatarUrl: null },
+        role: { id: 'r1', name: 'developer' } }] },
     ]);
     const res = await makeGetProjectHandler(client)({ projectKey: 'acme' });
     expect(calls).toHaveLength(4);
     expect(calls[1]).toContain('/projects/p1/milestones');
     expect(calls[2]).toContain('/projects/p1/labels');
     expect(calls[3]).toContain('/projects/p1/members');
-    const sc = res.structuredContent as { milestones: unknown[]; labels: unknown[]; members: unknown[] };
-    expect(sc.milestones).toHaveLength(1);
-    expect(sc.labels).toHaveLength(1);
-    expect(sc.members).toHaveLength(1);
+    const sc = res.structuredContent as { members: Array<{ fullName: string; email: string; roleName: string }> };
+    expect(sc.members[0]).toEqual({
+      userId: 'u1', fullName: 'Ada', email: 'ada@acme', roleName: 'developer',
+    });
   });
 });
 
@@ -84,6 +90,21 @@ describe('orbit_list_tickets', () => {
     expect(calls[2]).toContain('milestoneId=m2');
   });
 
+  it('resolves assigneeEmail via the nested members shape', async () => {
+    const calls = stub([
+      { json: PROJ },
+      {
+        json: [
+          { userId: 'u1', user: { email: 'alice@acme' } },
+          { userId: 'u2', user: { email: 'bob@acme' } },
+        ],
+      },
+      { json: { items: [], nextCursor: null } },
+    ]);
+    await makeListTicketsHandler(client)({ projectKey: 'ACME', assigneeEmail: 'bob@acme' });
+    expect(calls[2]).toContain('assigneeId=u2');
+  });
+
   it('throws when the milestone name does not exist', async () => {
     stub([
       { json: PROJ },
@@ -96,28 +117,57 @@ describe('orbit_list_tickets', () => {
 });
 
 describe('orbit_get_ticket', () => {
-  it('fetches comments + checklists, skips git when count is 0', async () => {
+  it('fetches cursor-paged comments + checklists, skips git when count is 0', async () => {
     const calls = stub([
       { json: PROJ },
       { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-5', title: 'Bug', status: 'TODO', statusName: 'To Do', type: 'bug', priority: 'normal', gitActivityCount: 0 } },
-      { json: [] }, // comments
-      { json: [] }, // checklists
+      // Comments endpoint: cursor-paged {items, nextCursor}
+      { json: { items: [], nextCursor: null } },
+      { json: [] }, // checklists — flat array
     ]);
     await makeGetTicketHandler(client)({ ticketKey: 'ACME-5' });
     // Calls: by-key project, by-key ticket, comments, checklists (no git).
     expect(calls).toHaveLength(4);
+    expect(calls[2]).toContain('/tickets/t1/comments?limit=');
     expect(calls.some((c) => c.includes('/git-activity'))).toBe(false);
+  });
+
+  it('surfaces hasMoreComments + content field from cursor page', async () => {
+    stub([
+      { json: PROJ },
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-6', title: 'X', status: 'TODO', gitActivityCount: 0 } },
+      {
+        json: {
+          items: [{ id: 'c1', ticketId: 't1', userId: 'u1', content: 'first thought', isInternal: false, createdAt: 'now', userName: 'Ada' }],
+          nextCursor: 'next-page-token',
+        },
+      },
+      { json: [] },
+    ]);
+    const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-6' });
+    const sc = res.structuredContent as {
+      comments: Array<{ body: string; author: string }>;
+      commentsHasMore: boolean;
+    };
+    expect(sc.comments[0]).toEqual({
+      body: 'first thought',
+      author: 'Ada',
+      createdAt: 'now',
+      editedAt: null,
+      isInternal: false,
+    });
+    expect(sc.commentsHasMore).toBe(true);
   });
 
   it('fetches git activity when gitActivityCount > 0', async () => {
     const calls = stub([
       { json: PROJ },
-      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-6', title: 'Feature', status: 'IN_PROGRESS', gitActivityCount: 2 } },
-      { json: [] },
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-7', title: 'Feature', status: 'IN_PROGRESS', gitActivityCount: 2 } },
+      { json: { items: [], nextCursor: null } },
       { json: [] },
       { json: [{ type: 'pr', title: 'fix', state: 'open', externalId: '1', authorName: 'x', createdAt: 'now', url: 'x' }] },
     ]);
-    await makeGetTicketHandler(client)({ ticketKey: 'ACME-6' });
+    await makeGetTicketHandler(client)({ ticketKey: 'ACME-7' });
     expect(calls.some((c) => c.includes('/git-activity'))).toBe(true);
   });
 });
@@ -140,23 +190,24 @@ describe('milestone tools', () => {
   it('list: returns structured milestones array', async () => {
     stub([
       { json: PROJ },
-      { json: [{ id: 'm1', name: 'v1', status: 'active', startDate: null, endDate: null, isPrivate: false }] },
+      { json: [{ id: 'm1', projectId: 'p1', name: 'v1', status: 'active', startDate: null, endDate: null, isPrivate: false }] },
     ]);
     const res = await makeListMilestonesHandler(client)({ projectKey: 'ACME' });
     const sc = res.structuredContent as { milestones: Array<{ name: string }> };
     expect(sc.milestones[0].name).toBe('v1');
   });
 
-  it('get: pulls progress alongside metadata', async () => {
+  it('get: maps byStatus into percent + per-category counts', async () => {
     const calls = stub([
       { json: PROJ },
-      { json: [{ id: 'm1', name: 'v1', status: 'active', startDate: null, endDate: null, isPrivate: false, description: null }] },
-      { json: { total: 10, done: 5, inProgress: 3, todo: 2, percentDone: 50, loggedMinutes: 1200, estimatedMinutes: 2400 } },
+      { json: [{ id: 'm1', projectId: 'p1', name: 'v1', status: 'active', startDate: null, endDate: null, isPrivate: false }] },
+      { json: { total: 10, byStatus: { DONE: 5, IN_PROGRESS: 3, TODO: 2 } } },
     ]);
     const res = await makeGetMilestoneHandler(client)({ projectKey: 'ACME', milestone: 'v1' });
     expect(calls[2]).toContain('/projects/p1/milestones/m1/progress');
-    const sc = res.structuredContent as { progress: { percentDone: number } };
-    expect(sc.progress.percentDone).toBe(50);
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('50% done (5/10)');
+    expect(text).toContain('to do: 2 · in progress: 3');
   });
 });
 
@@ -164,70 +215,76 @@ describe('orbit_search', () => {
   it('includes projectId when projectKey filter is set', async () => {
     const calls = stub([
       { json: PROJ },
-      { json: { items: [], total: 0 } },
+      { json: { items: [], nextCursor: null, total: 0 } },
     ]);
     await makeSearchHandler(client)({ query: 'foo', projectKey: 'ACME' });
     expect(calls[1]).toContain('projectId=p1');
   });
 
-  it('renders multi-type hit snippets in text output', async () => {
+  it('renders real SearchResult shape with excerpt field + hasMore flag', async () => {
     stub([
       {
         json: {
           items: [
-            { type: 'ticket', id: 't1', title: 'Bug', snippet: '…login fails…', rank: 1, ticketKey: 'ACME-1' },
-            { type: 'doc', id: 'd1', title: 'Runbook', snippet: '…restart…', rank: 0.5 },
+            { type: 'ticket', id: 't1', title: 'Bug', excerpt: '…login fails…', projectId: 'p1', projectName: 'Acme', spaceId: null, spaceName: null, url: '/projects/acme/tickets/ACME-1', ticketKey: 'ACME-1', rank: 1 },
+            { type: 'doc', id: 'd1', title: 'Runbook', excerpt: '…restart…', projectId: null, projectName: null, spaceId: 's1', spaceName: 'Ops', url: '/spaces/ops/docs/runbook', rank: 0.5 },
           ],
-          total: 2,
+          nextCursor: 'more',
+          total: 42,
         },
       },
     ]);
     const res = await makeSearchHandler(client)({ query: 'login' });
     const text = (res.content[0] as { text: string }).text;
-    expect(text).toContain('[TICKET ACME-1]');
-    expect(text).toContain('[DOC');
+    expect(text).toContain('[TICKET ACME-1 · Acme]');
+    expect(text).toContain('login fails');
+    const sc = res.structuredContent as { total: number; hasMore: boolean };
+    expect(sc.total).toBe(42);
+    expect(sc.hasMore).toBe(true);
   });
 });
 
 describe('doc tools', () => {
-  it('list: renders project-scoped vs workspace-wide scope label', async () => {
+  it('list: uses DocSpace.type to label scope, not a joined projectName', async () => {
     stub([{ json: [
-      { id: 's1', name: 'Team', description: null, projectId: 'p1', projectName: 'Acme' },
-      { id: 's2', name: 'Global', description: null, projectId: null, projectName: null },
+      { id: 's1', name: 'Team', slug: 'team', type: 'project', description: null, icon: null, projectId: 'p1', isPublic: false },
+      { id: 's2', name: 'Global', slug: 'global', type: 'global', description: null, icon: null, projectId: null, isPublic: true },
     ] }]);
     const res = await makeListDocSpacesHandler(client)();
     const text = (res.content[0] as { text: string }).text;
-    expect(text).toContain('project Acme');
+    expect(text).toContain('project-scoped');
     expect(text).toContain('workspace-wide');
   });
 
-  it('get: fetches doc + backlinks in parallel, surfaces body', async () => {
+  it('get: reads doc.content (not body) + backlink.sourceDocTitle', async () => {
     stub([
-      { json: { id: 'd1', spaceId: 's1', title: 'Runbook', body: '# Restart\n\n1. Kill…', parentDocId: null, visibility: 'workspace', icon: null, updatedAt: 'now' } },
-      { json: [{ sourceId: 't1', sourceType: 'ticket', sourceTitle: 'Service down' }] },
+      { json: { id: 'd1', spaceId: 's1', parentDocId: null, title: 'Runbook', content: '# Restart\n\n1. Kill the process.', slug: 'runbook', visibility: 'workspace', sortOrder: 0, icon: null, updatedAt: 'now' } },
+      { json: [{ type: 'ticket', id: 't1', label: null, sourceDocId: 'd2', sourceDocTitle: 'Incident playbook', sourceSpaceId: 's1' }] },
     ]);
     const res = await makeGetDocHandler(client)({ docId: '00000000-0000-0000-0000-000000000001' });
     const text = (res.content[0] as { text: string }).text;
     expect(text).toContain('# Runbook');
     expect(text).toContain('1. Kill');
+    expect(text).toContain('Incident playbook');
   });
 });
 
 describe('orbit_get_timer', () => {
-  it('returns null when no timer is running', async () => {
-    stub([{ json: { timer: null } }]);
+  it('returns null when the endpoint returns null directly (not wrapped)', async () => {
+    stub([{ json: null }]);
     const res = await makeGetTimerHandler(client)();
     expect(res.structuredContent).toEqual({ timer: null });
   });
 
   it('computes totalSeconds including elapsed time since startedAt', async () => {
     const startedAt = new Date(Date.now() - 120_000).toISOString(); // 2 min ago
-    stub([{ json: { timer: { id: 'tm1', ticketId: 't1', ticketKey: 'ACME-1', ticketTitle: 'Bug', startedAt, pausedAt: null, accumulatedSeconds: 300 } } }]);
+    stub([{ json: { id: 'tm1', userId: 'u1', ticketId: 't1', ticketTitle: 'Bug', startedAt, pausedAt: null, accumulatedSeconds: 300, description: 'debug' } }]);
     const res = await makeGetTimerHandler(client)();
-    const sc = res.structuredContent as { timer: { totalSeconds: number; paused: boolean } };
+    const sc = res.structuredContent as { timer: { totalSeconds: number; paused: boolean; ticketTitle: string | null } };
     // 300 accumulated + ~120 elapsed. Allow ±5s for test timing jitter.
     expect(sc.timer.totalSeconds).toBeGreaterThanOrEqual(418);
     expect(sc.timer.totalSeconds).toBeLessThanOrEqual(425);
     expect(sc.timer.paused).toBe(false);
+    expect(sc.timer.ticketTitle).toBe('Bug');
   });
 });
