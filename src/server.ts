@@ -30,6 +30,7 @@ import {
   getDocToolConfig, makeGetDocHandler,
 } from './tools/docs.js';
 import { getTimerToolConfig, makeGetTimerHandler } from './tools/get-timer.js';
+import { getChecklistsToolConfig, makeGetChecklistsHandler } from './tools/get-checklists.js';
 
 export interface BuildServerOptions extends OrbitClientConfig {
   /** Optional — passed through to McpServer metadata. Clients
@@ -51,6 +52,7 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
         'Use `orbit_list_projects` first to discover what the user can see.',
         'Ticket keys look like `PROJ-123`; the first segment is the project key.',
         'For "what am I working on?" prefer `orbit_my_tickets`; for "anything about X?" prefer `orbit_search`.',
+        'Checklists: `orbit_get_ticket` includes them inline; use `orbit_get_checklists` when you only need the items. A linked-ticket suffix (`↪ [ACME-99]`) means the item is automatically checked/unchecked as that ticket\'s status moves.',
         'All writes respect the caller\'s project-level permissions — a 403 means the API rejected the write, not the MCP server.',
       ].join(' '),
     },
@@ -62,6 +64,7 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
   server.registerTool('orbit_get_project', getProjectToolConfig, makeGetProjectHandler(client));
   server.registerTool('orbit_list_tickets', listTicketsToolConfig, makeListTicketsHandler(client));
   server.registerTool('orbit_get_ticket', getTicketToolConfig, makeGetTicketHandler(client));
+  server.registerTool('orbit_get_checklists', getChecklistsToolConfig, makeGetChecklistsHandler(client));
   server.registerTool('orbit_my_tickets', myTicketsToolConfig, makeMyTicketsHandler(client));
   server.registerTool('orbit_list_milestones', listMilestonesToolConfig, makeListMilestonesHandler(client));
   server.registerTool('orbit_get_milestone', getMilestoneToolConfig, makeGetMilestoneHandler(client));

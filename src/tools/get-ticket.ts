@@ -29,11 +29,27 @@ interface CommentRow {
   editedAt?: string | null;
   userName?: string | null;
 }
+/** ORB-234 — checklist items can link to another ticket; when they do,
+ *  `effectiveCompleted` tracks the linked ticket's status category
+ *  automatically ('done' → item checked). `storedCompleted` is the
+ *  raw bit on this item's own row. The model wants the effective
+ *  value because that's what renders in the UI. */
+interface ChecklistItemRow {
+  id: string;
+  content: string;
+  storedCompleted: boolean;
+  effectiveCompleted: boolean;
+  linkedTicketId: string | null;
+  linkedTicketKey: string | null;
+  linkedTicketTitle: string | null;
+  linkedTicketStatusCategory: string | null;
+}
 interface ChecklistRow {
   id: string;
   title: string;
   triggersDone: boolean;
-  items: Array<{ id: string; content: string; done: boolean }>;
+  progress: { done: number; total: number };
+  items: ChecklistItemRow[];
 }
 interface GitActivityRow {
   type: string;
@@ -105,7 +121,20 @@ export function makeGetTicketHandler(client: OrbitClient) {
         checklists: checklists.map((cl) => ({
           title: cl.title,
           triggersDone: cl.triggersDone,
-          items: cl.items.map((i) => ({ content: i.content, done: i.done })),
+          progress: cl.progress,
+          items: cl.items.map((i) => ({
+            content: i.content,
+            done: i.effectiveCompleted,
+            // When the item links to another ticket, `effectiveCompleted`
+            // mirrors that ticket's status-category instead of this item's
+            // own checkbox. Surface the link so the model can explain
+            // why the item is/isn't done.
+            linkedTicket: i.linkedTicketKey ? {
+              key: i.linkedTicketKey,
+              title: i.linkedTicketTitle,
+              statusCategory: i.linkedTicketStatusCategory,
+            } : null,
+          })),
         })),
         gitActivity: gitActivity.map((g) => ({
           type: g.type,
@@ -154,10 +183,18 @@ function formatTicket(
   if (checklists.length > 0) {
     checklistLines.push('', '## Checklists');
     for (const cl of checklists) {
+      const progressLabel = `${cl.progress.done}/${cl.progress.total}`;
       checklistLines.push(
-        `### ${cl.title}${cl.triggersDone ? ' (triggers done)' : ''}`,
-        ...cl.items.map((i) => `- [${i.done ? 'x' : ' '}] ${i.content}`),
+        `### ${cl.title} (${progressLabel})${cl.triggersDone ? ' · triggers done' : ''}`,
       );
+      for (const i of cl.items) {
+        // Linked-ticket suffix on items that track another ticket —
+        // lets the model say "item X is done because [ACME-42] shipped".
+        const link = i.linkedTicketKey
+          ? ` ↪ [${i.linkedTicketKey}] ${i.linkedTicketTitle ?? ''} (${i.linkedTicketStatusCategory ?? 'unknown'})`
+          : '';
+        checklistLines.push(`- [${i.effectiveCompleted ? 'x' : ' '}] ${i.content}${link}`);
+      }
     }
   }
 

@@ -17,6 +17,7 @@ import { makeListMilestonesHandler, makeGetMilestoneHandler } from './milestones
 import { makeSearchHandler } from './search.js';
 import { makeListDocSpacesHandler, makeGetDocHandler } from './docs.js';
 import { makeGetTimerHandler } from './get-timer.js';
+import { makeGetChecklistsHandler } from './get-checklists.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
 afterEach(() => { vi.restoreAllMocks(); });
@@ -159,6 +160,28 @@ describe('orbit_get_ticket', () => {
     expect(sc.commentsHasMore).toBe(true);
   });
 
+  it('reads effectiveCompleted (not done) + surfaces linked-ticket suffix', async () => {
+    stub([
+      { json: PROJ },
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-8', title: 'Epic', status: 'IN_PROGRESS', gitActivityCount: 0 } },
+      { json: { items: [], nextCursor: null } },
+      {
+        json: [{
+          id: 'cl1', title: 'Gate items', triggersDone: false,
+          progress: { done: 0, total: 1 },
+          items: [{
+            id: 'i1', content: 'Sub-task', storedCompleted: false, effectiveCompleted: false,
+            linkedTicketId: 't9', linkedTicketKey: 'ACME-9', linkedTicketTitle: 'Race fix', linkedTicketStatusCategory: 'in_progress', sortOrder: 0,
+          }],
+        }],
+      },
+    ]);
+    const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-8' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Gate items (0/1)');
+    expect(text).toContain('[ ] Sub-task ↪ [ACME-9]');
+  });
+
   it('fetches git activity when gitActivityCount > 0', async () => {
     const calls = stub([
       { json: PROJ },
@@ -266,6 +289,56 @@ describe('doc tools', () => {
     expect(text).toContain('# Runbook');
     expect(text).toContain('1. Kill');
     expect(text).toContain('Incident playbook');
+  });
+});
+
+describe('orbit_get_checklists', () => {
+  it('surfaces effectiveCompleted + linked-ticket metadata (ORB-234 shape)', async () => {
+    stub([
+      { json: PROJ },
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-10', title: 'Epic', status: 'IN_PROGRESS' } },
+      {
+        json: [{
+          id: 'cl1', title: 'Before ship', triggersDone: true,
+          progress: { done: 1, total: 2 },
+          items: [
+            // One plain item, one linked-to-another-ticket item.
+            { id: 'i1', content: 'Docs updated', storedCompleted: true, effectiveCompleted: true,
+              linkedTicketId: null, linkedTicketKey: null, linkedTicketTitle: null, linkedTicketStatusCategory: null, sortOrder: 0 },
+            { id: 'i2', content: 'Sub-task done', storedCompleted: false, effectiveCompleted: false,
+              linkedTicketId: 't99', linkedTicketKey: 'ACME-99', linkedTicketTitle: 'Fix race', linkedTicketStatusCategory: 'in_progress', sortOrder: 1 },
+          ],
+        }],
+      },
+    ]);
+    const res = await makeGetChecklistsHandler(client)({ ticketKey: 'ACME-10' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Before ship (1/2)');
+    expect(text).toContain('triggers ticket done');
+    expect(text).toContain('[x] Docs updated');
+    expect(text).toContain('[ ] Sub-task done ↪ [ACME-99] Fix race (in_progress)');
+
+    const sc = res.structuredContent as {
+      checklists: Array<{
+        progress: { done: number; total: number };
+        items: Array<{ done: boolean; linkedTicket: { key: string; statusCategory: string } | null }>;
+      }>;
+    };
+    expect(sc.checklists[0].progress).toEqual({ done: 1, total: 2 });
+    expect(sc.checklists[0].items[0].linkedTicket).toBeNull();
+    expect(sc.checklists[0].items[1].linkedTicket).toEqual({
+      key: 'ACME-99', title: 'Fix race', statusCategory: 'in_progress',
+    });
+  });
+
+  it('renders the empty-state line when a ticket has no checklists', async () => {
+    stub([
+      { json: PROJ },
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-11', title: 'Plain ticket' } },
+      { json: [] },
+    ]);
+    const res = await makeGetChecklistsHandler(client)({ ticketKey: 'ACME-11' });
+    expect((res.content[0] as { text: string }).text).toBe('[ACME-11] has no checklists.');
   });
 });
 
