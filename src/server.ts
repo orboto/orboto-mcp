@@ -46,6 +46,12 @@ import {
   timerStopToolConfig, makeTimerStopHandler,
   logTimeToolConfig, makeLogTimeHandler,
 } from './tools/time-writes.js';
+import {
+  checkToolConfig, makeCheckHandler,
+  uncheckToolConfig, makeUncheckHandler,
+  addCheckToolConfig, makeAddCheckHandler,
+  newChecklistToolConfig, makeNewChecklistHandler,
+} from './tools/checklist-writes.js';
 
 export interface BuildServerOptions extends OrbitClientConfig {
   /** Optional — passed through to McpServer metadata. Clients
@@ -106,6 +112,12 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
   server.registerTool('orbit_timer_start', timerStartToolConfig, makeTimerStartHandler(client));
   server.registerTool('orbit_timer_stop', timerStopToolConfig, makeTimerStopHandler(client));
   server.registerTool('orbit_log_time', logTimeToolConfig, makeLogTimeHandler(client));
+
+  // ORB-309 Phase C — Group 3: checklist writes (ORB-234 surface).
+  server.registerTool('orbit_check', checkToolConfig, makeCheckHandler(client));
+  server.registerTool('orbit_uncheck', uncheckToolConfig, makeUncheckHandler(client));
+  server.registerTool('orbit_add_check', addCheckToolConfig, makeAddCheckHandler(client));
+  server.registerTool('orbit_new_checklist', newChecklistToolConfig, makeNewChecklistHandler(client));
 
   return server;
 }
