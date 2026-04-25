@@ -31,6 +31,16 @@ import {
 } from './tools/docs.js';
 import { getTimerToolConfig, makeGetTimerHandler } from './tools/get-timer.js';
 import { getChecklistsToolConfig, makeGetChecklistsHandler } from './tools/get-checklists.js';
+import {
+  createTicketToolConfig, makeCreateTicketHandler,
+  updateTicketToolConfig, makeUpdateTicketHandler,
+  moveTicketToolConfig, makeMoveTicketHandler,
+  closeTicketToolConfig, makeCloseTicketHandler,
+  commentToolConfig, makeCommentHandler,
+  assignToolConfig, makeAssignHandler,
+  unassignToolConfig, makeUnassignHandler,
+  setMilestoneToolConfig, makeSetMilestoneHandler,
+} from './tools/ticket-writes.js';
 
 export interface BuildServerOptions extends OrbitClientConfig {
   /** Optional — passed through to McpServer metadata. Clients
@@ -74,6 +84,18 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
   server.registerTool('orbit_list_doc_spaces', listDocSpacesToolConfig, makeListDocSpacesHandler(client));
   server.registerTool('orbit_get_doc', getDocToolConfig, makeGetDocHandler(client));
   server.registerTool('orbit_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
+
+  // ORB-309 Phase C — write tools (Group 1: ticket mutations).
+  // Each respects the API's PBAC cascade — a 403 surfaces as
+  // OrbitApiError → MCP throws → client sees an isError response.
+  server.registerTool('orbit_create_ticket', createTicketToolConfig, makeCreateTicketHandler(client));
+  server.registerTool('orbit_update_ticket', updateTicketToolConfig, makeUpdateTicketHandler(client));
+  server.registerTool('orbit_move_ticket', moveTicketToolConfig, makeMoveTicketHandler(client));
+  server.registerTool('orbit_close_ticket', closeTicketToolConfig, makeCloseTicketHandler(client));
+  server.registerTool('orbit_comment', commentToolConfig, makeCommentHandler(client));
+  server.registerTool('orbit_assign', assignToolConfig, makeAssignHandler(client));
+  server.registerTool('orbit_unassign', unassignToolConfig, makeUnassignHandler(client));
+  server.registerTool('orbit_set_milestone', setMilestoneToolConfig, makeSetMilestoneHandler(client));
 
   return server;
 }
