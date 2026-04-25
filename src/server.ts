@@ -17,6 +17,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { OrbitClient, type OrbitClientConfig } from './orbit-client.js';
 import { registerOrbitResources } from './resources.js';
 import { registerOrbitPrompts } from './prompts.js';
+import { registerWithMetrics } from './with-metrics.js';
 import { listProjectsToolConfig, makeListProjectsHandler } from './tools/list-projects.js';
 import { getProjectToolConfig, makeGetProjectHandler } from './tools/get-project.js';
 import { listTicketsToolConfig, makeListTicketsHandler } from './tools/list-tickets.js';
@@ -89,50 +90,56 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
     },
   );
 
+  // ORB-311 — every tool dispatch posts one row to /admin/mcp/instrument
+  // via the withMetrics wrapper. `reg` is a one-line shim around
+  // `server.registerTool` that adds the metrics layer at registration
+  // time; per-tool files stay metrics-unaware.
+  const reg = registerWithMetrics(server, client, opts.userAgentSuffix);
+
   // Tools — alphabetical-ish by concept. Each tool file owns its
   // input/output schema; the server just glues names to handlers.
-  server.registerTool('orbit_list_projects', listProjectsToolConfig, makeListProjectsHandler(client));
-  server.registerTool('orbit_get_project', getProjectToolConfig, makeGetProjectHandler(client));
-  server.registerTool('orbit_list_tickets', listTicketsToolConfig, makeListTicketsHandler(client));
-  server.registerTool('orbit_get_ticket', getTicketToolConfig, makeGetTicketHandler(client));
-  server.registerTool('orbit_get_checklists', getChecklistsToolConfig, makeGetChecklistsHandler(client));
-  server.registerTool('orbit_my_tickets', myTicketsToolConfig, makeMyTicketsHandler(client));
-  server.registerTool('orbit_list_milestones', listMilestonesToolConfig, makeListMilestonesHandler(client));
-  server.registerTool('orbit_get_milestone', getMilestoneToolConfig, makeGetMilestoneHandler(client));
-  server.registerTool('orbit_search', searchToolConfig, makeSearchHandler(client));
-  server.registerTool('orbit_list_doc_spaces', listDocSpacesToolConfig, makeListDocSpacesHandler(client));
-  server.registerTool('orbit_get_doc', getDocToolConfig, makeGetDocHandler(client));
-  server.registerTool('orbit_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
+  reg('orbit_list_projects', listProjectsToolConfig, makeListProjectsHandler(client));
+  reg('orbit_get_project', getProjectToolConfig, makeGetProjectHandler(client));
+  reg('orbit_list_tickets', listTicketsToolConfig, makeListTicketsHandler(client));
+  reg('orbit_get_ticket', getTicketToolConfig, makeGetTicketHandler(client));
+  reg('orbit_get_checklists', getChecklistsToolConfig, makeGetChecklistsHandler(client));
+  reg('orbit_my_tickets', myTicketsToolConfig, makeMyTicketsHandler(client));
+  reg('orbit_list_milestones', listMilestonesToolConfig, makeListMilestonesHandler(client));
+  reg('orbit_get_milestone', getMilestoneToolConfig, makeGetMilestoneHandler(client));
+  reg('orbit_search', searchToolConfig, makeSearchHandler(client));
+  reg('orbit_list_doc_spaces', listDocSpacesToolConfig, makeListDocSpacesHandler(client));
+  reg('orbit_get_doc', getDocToolConfig, makeGetDocHandler(client));
+  reg('orbit_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
 
   // ORB-309 Phase C — write tools (Group 1: ticket mutations).
   // Each respects the API's PBAC cascade — a 403 surfaces as
   // OrbitApiError → MCP throws → client sees an isError response.
-  server.registerTool('orbit_create_ticket', createTicketToolConfig, makeCreateTicketHandler(client));
-  server.registerTool('orbit_update_ticket', updateTicketToolConfig, makeUpdateTicketHandler(client));
-  server.registerTool('orbit_move_ticket', moveTicketToolConfig, makeMoveTicketHandler(client));
-  server.registerTool('orbit_close_ticket', closeTicketToolConfig, makeCloseTicketHandler(client));
-  server.registerTool('orbit_comment', commentToolConfig, makeCommentHandler(client));
-  server.registerTool('orbit_assign', assignToolConfig, makeAssignHandler(client));
-  server.registerTool('orbit_unassign', unassignToolConfig, makeUnassignHandler(client));
-  server.registerTool('orbit_set_milestone', setMilestoneToolConfig, makeSetMilestoneHandler(client));
+  reg('orbit_create_ticket', createTicketToolConfig, makeCreateTicketHandler(client));
+  reg('orbit_update_ticket', updateTicketToolConfig, makeUpdateTicketHandler(client));
+  reg('orbit_move_ticket', moveTicketToolConfig, makeMoveTicketHandler(client));
+  reg('orbit_close_ticket', closeTicketToolConfig, makeCloseTicketHandler(client));
+  reg('orbit_comment', commentToolConfig, makeCommentHandler(client));
+  reg('orbit_assign', assignToolConfig, makeAssignHandler(client));
+  reg('orbit_unassign', unassignToolConfig, makeUnassignHandler(client));
+  reg('orbit_set_milestone', setMilestoneToolConfig, makeSetMilestoneHandler(client));
 
   // ORB-309 Phase C — Group 2: time tools.
-  server.registerTool('orbit_timer_start', timerStartToolConfig, makeTimerStartHandler(client));
-  server.registerTool('orbit_timer_stop', timerStopToolConfig, makeTimerStopHandler(client));
-  server.registerTool('orbit_log_time', logTimeToolConfig, makeLogTimeHandler(client));
+  reg('orbit_timer_start', timerStartToolConfig, makeTimerStartHandler(client));
+  reg('orbit_timer_stop', timerStopToolConfig, makeTimerStopHandler(client));
+  reg('orbit_log_time', logTimeToolConfig, makeLogTimeHandler(client));
 
   // ORB-309 Phase C — Group 3: checklist writes (ORB-234 surface).
-  server.registerTool('orbit_check', checkToolConfig, makeCheckHandler(client));
-  server.registerTool('orbit_uncheck', uncheckToolConfig, makeUncheckHandler(client));
-  server.registerTool('orbit_add_check', addCheckToolConfig, makeAddCheckHandler(client));
-  server.registerTool('orbit_new_checklist', newChecklistToolConfig, makeNewChecklistHandler(client));
+  reg('orbit_check', checkToolConfig, makeCheckHandler(client));
+  reg('orbit_uncheck', uncheckToolConfig, makeUncheckHandler(client));
+  reg('orbit_add_check', addCheckToolConfig, makeAddCheckHandler(client));
+  reg('orbit_new_checklist', newChecklistToolConfig, makeNewChecklistHandler(client));
 
   // ORB-309 Phase C — Group 4: admin-only tools. Each call hits a
   // route gated on super-admin / admin:* permissions; a non-admin
   // caller's 403 surfaces as a readable error from rewrite403().
-  server.registerTool('orbit_list_users', listUsersToolConfig, makeListUsersHandler(client));
-  server.registerTool('orbit_get_audit_log', getAuditLogToolConfig, makeGetAuditLogHandler(client));
-  server.registerTool('orbit_trigger_backup', triggerBackupToolConfig, makeTriggerBackupHandler(client));
+  reg('orbit_list_users', listUsersToolConfig, makeListUsersHandler(client));
+  reg('orbit_get_audit_log', getAuditLogToolConfig, makeGetAuditLogHandler(client));
+  reg('orbit_trigger_backup', triggerBackupToolConfig, makeTriggerBackupHandler(client));
 
   // ORB-310 Phase D — read-only `orbit://…` URI resources +
   // task-shaped Prompt templates the MCP client offers in its UI.
