@@ -52,6 +52,11 @@ import {
   addCheckToolConfig, makeAddCheckHandler,
   newChecklistToolConfig, makeNewChecklistHandler,
 } from './tools/checklist-writes.js';
+import {
+  listUsersToolConfig, makeListUsersHandler,
+  getAuditLogToolConfig, makeGetAuditLogHandler,
+  triggerBackupToolConfig, makeTriggerBackupHandler,
+} from './tools/admin-writes.js';
 
 export interface BuildServerOptions extends OrbitClientConfig {
   /** Optional — passed through to McpServer metadata. Clients
@@ -118,6 +123,13 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
   server.registerTool('orbit_uncheck', uncheckToolConfig, makeUncheckHandler(client));
   server.registerTool('orbit_add_check', addCheckToolConfig, makeAddCheckHandler(client));
   server.registerTool('orbit_new_checklist', newChecklistToolConfig, makeNewChecklistHandler(client));
+
+  // ORB-309 Phase C — Group 4: admin-only tools. Each call hits a
+  // route gated on super-admin / admin:* permissions; a non-admin
+  // caller's 403 surfaces as a readable error from rewrite403().
+  server.registerTool('orbit_list_users', listUsersToolConfig, makeListUsersHandler(client));
+  server.registerTool('orbit_get_audit_log', getAuditLogToolConfig, makeGetAuditLogHandler(client));
+  server.registerTool('orbit_trigger_backup', triggerBackupToolConfig, makeTriggerBackupHandler(client));
 
   return server;
 }
