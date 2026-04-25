@@ -41,6 +41,11 @@ import {
   unassignToolConfig, makeUnassignHandler,
   setMilestoneToolConfig, makeSetMilestoneHandler,
 } from './tools/ticket-writes.js';
+import {
+  timerStartToolConfig, makeTimerStartHandler,
+  timerStopToolConfig, makeTimerStopHandler,
+  logTimeToolConfig, makeLogTimeHandler,
+} from './tools/time-writes.js';
 
 export interface BuildServerOptions extends OrbitClientConfig {
   /** Optional — passed through to McpServer metadata. Clients
@@ -96,6 +101,11 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
   server.registerTool('orbit_assign', assignToolConfig, makeAssignHandler(client));
   server.registerTool('orbit_unassign', unassignToolConfig, makeUnassignHandler(client));
   server.registerTool('orbit_set_milestone', setMilestoneToolConfig, makeSetMilestoneHandler(client));
+
+  // ORB-309 Phase C — Group 2: time tools.
+  server.registerTool('orbit_timer_start', timerStartToolConfig, makeTimerStartHandler(client));
+  server.registerTool('orbit_timer_stop', timerStopToolConfig, makeTimerStopHandler(client));
+  server.registerTool('orbit_log_time', logTimeToolConfig, makeLogTimeHandler(client));
 
   return server;
 }
