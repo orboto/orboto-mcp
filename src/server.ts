@@ -15,6 +15,8 @@
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { OrbitClient, type OrbitClientConfig } from './orbit-client.js';
+import { registerOrbitResources } from './resources.js';
+import { registerOrbitPrompts } from './prompts.js';
 import { listProjectsToolConfig, makeListProjectsHandler } from './tools/list-projects.js';
 import { getProjectToolConfig, makeGetProjectHandler } from './tools/get-project.js';
 import { listTicketsToolConfig, makeListTicketsHandler } from './tools/list-tickets.js';
@@ -81,6 +83,7 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
         'Checklists: `orbit_get_ticket` includes them inline; use `orbit_get_checklists` when you only need the items. A linked-ticket suffix (`↪ [ACME-99]`) means the item is automatically checked/unchecked as that ticket\'s status moves.',
         'Sub-tickets: `orbit_get_ticket` surfaces `parentTicket` + `children`; walk an epic via `orbit_list_tickets` with `parentTicketKey`. Use sub-tickets for steps large enough to need their own commit / time tracking / review, and checklists for one-liners inside a single ticket\'s scope. Only materialise sub-tickets / checklist items when the parent is actively being worked — pure planning tickets keep their phase plan inside the description, not as empty TODO sub-tickets that clutter every team member\'s `my-tickets` list.',
         'When you write a git commit that touches a ticket, put the ticket key (e.g. `ORB-42`) in parentheses at the END of the subject line — `feat(auth): add token rotation (ORB-42)`. This is what the Orbit git-activity parser looks for; skipping it means the commit never gets linked to the ticket.',
+        'Resources (`orbit://ticket/<key>`, `orbit://doc/<id>`, `orbit://project/<key>`, `orbit://search/<query>`) return read-only Markdown — useful when the client UI lets the user pin content rather than re-asking. Prompts (`plan-sprint`, `triage-my-tickets`, `summarize-project`, `estimate-ticket`, `find-duplicates`) are one-click guided workflows the client surfaces; each emits a goal + tool sequence the model executes.',
         'All writes respect the caller\'s project-level permissions — a 403 means the API rejected the write, not the MCP server.',
       ].join(' '),
     },
@@ -130,6 +133,11 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
   server.registerTool('orbit_list_users', listUsersToolConfig, makeListUsersHandler(client));
   server.registerTool('orbit_get_audit_log', getAuditLogToolConfig, makeGetAuditLogHandler(client));
   server.registerTool('orbit_trigger_backup', triggerBackupToolConfig, makeTriggerBackupHandler(client));
+
+  // ORB-310 Phase D — read-only `orbit://…` URI resources +
+  // task-shaped Prompt templates the MCP client offers in its UI.
+  registerOrbitResources(server, client);
+  registerOrbitPrompts(server);
 
   return server;
 }
