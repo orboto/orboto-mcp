@@ -34,6 +34,7 @@ import {
 } from './tools/docs.js';
 import { getTimerToolConfig, makeGetTimerHandler } from './tools/get-timer.js';
 import { getChecklistsToolConfig, makeGetChecklistsHandler } from './tools/get-checklists.js';
+import { listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler } from './tools/list-git-app-installations.js';
 import {
   createTicketToolConfig, makeCreateTicketHandler,
   updateTicketToolConfig, makeUpdateTicketHandler,
@@ -110,6 +111,7 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
   reg('orbit_list_doc_spaces', listDocSpacesToolConfig, makeListDocSpacesHandler(client));
   reg('orbit_get_doc', getDocToolConfig, makeGetDocHandler(client));
   reg('orbit_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
+  reg('orbit_list_git_app_installations', listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler(client));
 
   // ORB-309 Phase C — write tools (Group 1: ticket mutations).
   // Each respects the API's PBAC cascade — a 403 surfaces as
