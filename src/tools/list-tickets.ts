@@ -10,7 +10,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbitClient } from '../orbit-client.js';
-import { resolveProjectByKey, ticketLine, type TicketRow } from './shared.js';
+import { resolveProjectByKey, resolveTicketByKey, ticketLine, type TicketRow } from './shared.js';
 
 interface TicketPage {
   items: TicketRow[];
@@ -35,6 +35,10 @@ export const listTicketsToolConfig = {
       .string()
       .optional()
       .describe('Email of a project member. Omit for all assignees including unassigned.'),
+    parentTicketKey: z
+      .string()
+      .optional()
+      .describe('List only children of this ticket (e.g. "ACME-42"). Useful for walking an epic into its sub-tickets.'),
     limit: z.number().int().min(1).max(50).default(25).describe('Max rows to return.'),
   }).shape,
   annotations: { readOnlyHint: true },
@@ -46,6 +50,7 @@ export function makeListTicketsHandler(client: OrbitClient) {
     statusCategory?: 'todo' | 'in_progress' | 'in_review' | 'done' | 'wont_fix';
     milestone?: string;
     assigneeEmail?: string;
+    parentTicketKey?: string;
     limit?: number;
   }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, input.projectKey);
@@ -73,6 +78,10 @@ export function makeListTicketsHandler(client: OrbitClient) {
       );
       if (!member) throw new Error(`No project member with email "${input.assigneeEmail}".`);
       qs.set('assigneeId', member.userId);
+    }
+    if (input.parentTicketKey) {
+      const parent = await resolveTicketByKey(client, input.parentTicketKey);
+      qs.set('parentTicketId', parent.id);
     }
 
     const page = await client.get<TicketPage>(`/projects/${project.id}/tickets?${qs}`);

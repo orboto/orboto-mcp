@@ -118,25 +118,30 @@ describe('orbit_list_tickets', () => {
 });
 
 describe('orbit_get_ticket', () => {
-  it('fetches cursor-paged comments + checklists, skips git when count is 0', async () => {
+  // Fixture: empty children page (always-fetched after ORB-244 hierarchy surfacing).
+  const NO_CHILDREN = { json: { items: [], nextCursor: null } };
+
+  it('fetches cursor-paged comments + checklists + children, skips git when count is 0', async () => {
     const calls = stub([
       { json: PROJ },
-      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-5', title: 'Bug', status: 'TODO', statusName: 'To Do', type: 'bug', priority: 'normal', gitActivityCount: 0 } },
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-5', title: 'Bug', status: 'TODO', statusName: 'To Do', type: 'bug', priority: 'normal', gitActivityCount: 0, parentTicketId: null } },
       // Comments endpoint: cursor-paged {items, nextCursor}
       { json: { items: [], nextCursor: null } },
       { json: [] }, // checklists — flat array
+      NO_CHILDREN, // children via /tickets?parentTicketId=… filter
     ]);
     await makeGetTicketHandler(client)({ ticketKey: 'ACME-5' });
-    // Calls: by-key project, by-key ticket, comments, checklists (no git).
-    expect(calls).toHaveLength(4);
+    // Calls: by-key project, by-key ticket, comments, checklists, children (no git, no parent).
+    expect(calls).toHaveLength(5);
     expect(calls[2]).toContain('/tickets/t1/comments?limit=');
+    expect(calls[4]).toContain('parentTicketId=t1');
     expect(calls.some((c) => c.includes('/git-activity'))).toBe(false);
   });
 
   it('surfaces hasMoreComments + content field from cursor page', async () => {
     stub([
       { json: PROJ },
-      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-6', title: 'X', status: 'TODO', gitActivityCount: 0 } },
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-6', title: 'X', status: 'TODO', gitActivityCount: 0, parentTicketId: null } },
       {
         json: {
           items: [{ id: 'c1', ticketId: 't1', userId: 'u1', content: 'first thought', isInternal: false, createdAt: 'now', userName: 'Ada' }],
@@ -144,11 +149,14 @@ describe('orbit_get_ticket', () => {
         },
       },
       { json: [] },
+      NO_CHILDREN,
     ]);
     const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-6' });
     const sc = res.structuredContent as {
       comments: Array<{ body: string; author: string }>;
       commentsHasMore: boolean;
+      parentTicket: unknown;
+      children: unknown[];
     };
     expect(sc.comments[0]).toEqual({
       body: 'first thought',
@@ -158,12 +166,14 @@ describe('orbit_get_ticket', () => {
       isInternal: false,
     });
     expect(sc.commentsHasMore).toBe(true);
+    expect(sc.parentTicket).toBeNull();
+    expect(sc.children).toEqual([]);
   });
 
   it('reads effectiveCompleted (not done) + surfaces linked-ticket suffix', async () => {
     stub([
       { json: PROJ },
-      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-8', title: 'Epic', status: 'IN_PROGRESS', gitActivityCount: 0 } },
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-8', title: 'Epic', status: 'IN_PROGRESS', gitActivityCount: 0, parentTicketId: null } },
       { json: { items: [], nextCursor: null } },
       {
         json: [{
@@ -175,6 +185,7 @@ describe('orbit_get_ticket', () => {
           }],
         }],
       },
+      NO_CHILDREN,
     ]);
     const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-8' });
     const text = (res.content[0] as { text: string }).text;
@@ -182,13 +193,41 @@ describe('orbit_get_ticket', () => {
     expect(text).toContain('[ ] Sub-task ↪ [ACME-9]');
   });
 
+  it('surfaces parent + sub-tickets (hierarchy view)', async () => {
+    stub([
+      { json: PROJ },
+      { json: { id: 't5', projectId: 'p1', ticketKey: 'ACME-5', title: 'Phase A', status: 'DONE', statusName: 'Done', statusCategory: 'done', type: 'task', priority: 'normal', gitActivityCount: 0, parentTicketId: 't1' } },
+      { json: { items: [], nextCursor: null } }, // comments
+      { json: [] },                               // checklists
+      // Parent ticket fetch
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-1', title: 'Epic foo', status: 'IN_PROGRESS', statusName: 'In Progress', statusCategory: 'in_progress' } },
+      // Children of ACME-5 (none)
+      NO_CHILDREN,
+    ]);
+    const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-5' });
+    const sc = res.structuredContent as {
+      parentTicket: { key: string; title: string; status: string };
+      children: unknown[];
+    };
+    expect(sc.parentTicket).toEqual({
+      key: 'ACME-1',
+      title: 'Epic foo',
+      status: 'In Progress',
+      statusCategory: 'in_progress',
+    });
+    expect(sc.children).toEqual([]);
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Parent: [ACME-1] Epic foo (In Progress)');
+  });
+
   it('fetches git activity when gitActivityCount > 0', async () => {
     const calls = stub([
       { json: PROJ },
-      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-7', title: 'Feature', status: 'IN_PROGRESS', gitActivityCount: 2 } },
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-7', title: 'Feature', status: 'IN_PROGRESS', gitActivityCount: 2, parentTicketId: null } },
       { json: { items: [], nextCursor: null } },
       { json: [] },
       { json: [{ type: 'pr', title: 'fix', state: 'open', externalId: '1', authorName: 'x', createdAt: 'now', url: 'x' }] },
+      NO_CHILDREN,
     ]);
     await makeGetTicketHandler(client)({ ticketKey: 'ACME-7' });
     expect(calls.some((c) => c.includes('/git-activity'))).toBe(true);

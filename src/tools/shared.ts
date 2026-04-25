@@ -35,6 +35,7 @@ export interface TicketRow {
   id: string;
   projectId: string;
   milestoneId: string | null;
+  parentTicketId?: string | null;
   ticketKey: string | null;
   ticketNumber: number | null;
   title: string;

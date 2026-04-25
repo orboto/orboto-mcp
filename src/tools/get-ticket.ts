@@ -18,6 +18,15 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbitApiError, type OrbitClient } from '../orbit-client.js';
 import { resolveTicketByKey, type TicketRow } from './shared.js';
 
+interface TicketSummaryRow {
+  id: string;
+  ticketKey: string | null;
+  title: string;
+  status: string;
+  statusName?: string;
+  statusCategory?: string;
+}
+
 /** Matches `CommentSchema` in @orbit/shared-schema. */
 interface CommentRow {
   id: string;
@@ -67,7 +76,7 @@ const COMMENT_PAGE_SIZE = 50;
 export const getTicketToolConfig = {
   title: 'Get ticket details',
   description:
-    'Return a ticket including description, comments, assignees, labels, checklists, and git activity. Input is the ticket key like "ACME-42".',
+    'Return a ticket including description, comments, assignees, labels, checklists, git activity, parent ticket (if any), and sub-tickets. Input is the ticket key like "ACME-42".',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key like "ACME-42".'),
   }).shape,
@@ -79,8 +88,9 @@ export function makeGetTicketHandler(client: OrbitClient) {
     const ticket = await resolveTicketByKey(client, ticketKey);
 
     const gitCount = (ticket as unknown as { gitActivityCount?: number }).gitActivityCount ?? 0;
+    const parentId = ticket.parentTicketId ?? null;
 
-    const [commentsPage, checklists, gitActivity] = await Promise.all([
+    const [commentsPage, checklists, gitActivity, parent, childrenPage] = await Promise.all([
       client.get<CursorPage<CommentRow>>(
         `/tickets/${ticket.id}/comments?limit=${COMMENT_PAGE_SIZE}`,
       ).catch(swallow404<CursorPage<CommentRow>>({ items: [], nextCursor: null })),
@@ -88,13 +98,25 @@ export function makeGetTicketHandler(client: OrbitClient) {
       gitCount > 0
         ? client.get<GitActivityRow[]>(`/tickets/${ticket.id}/git-activity`).catch(swallow404<GitActivityRow[]>([]))
         : Promise.resolve([]),
+      // Parent ticket — only fetched when set. Lets the model say
+      // "this is sub-ticket of [ACME-10]" without a second tool call.
+      parentId
+        ? client.get<TicketSummaryRow>(`/projects/${ticket.projectId}/tickets/${parentId}`).catch(swallow404<TicketSummaryRow | null>(null))
+        : Promise.resolve(null),
+      // Children via the new parentTicketId filter (API-side, O(children)).
+      // Cap at 50; anything bigger should use `orbit_list_tickets
+      // --parentTicketKey` and paginate explicitly.
+      client.get<CursorPage<TicketSummaryRow>>(
+        `/projects/${ticket.projectId}/tickets?parentTicketId=${ticket.id}&limit=50`,
+      ).catch(swallow404<CursorPage<TicketSummaryRow>>({ items: [], nextCursor: null })),
     ]);
 
     const comments = commentsPage.items;
     const hasMoreComments = !!commentsPage.nextCursor;
+    const children = childrenPage.items;
 
     return {
-      content: [{ type: 'text', text: formatTicket(ticket, comments, hasMoreComments, checklists, gitActivity) }],
+      content: [{ type: 'text', text: formatTicket(ticket, comments, hasMoreComments, checklists, gitActivity, parent, children) }],
       structuredContent: {
         key: ticket.ticketKey,
         title: ticket.title,
@@ -108,6 +130,21 @@ export function makeGetTicketHandler(client: OrbitClient) {
         estimatedTimeMinutes: ticket.estimatedTimeMinutes,
         loggedMinutes: ticket.loggedMinutes ?? 0,
         description: ticket.description ?? null,
+        // Hierarchy — null when no parent, array of summary rows for
+        // children (empty array when none). Sub-ticket consumers can
+        // decide to call orbit_get_ticket on each for the full detail.
+        parentTicket: parent ? {
+          key: parent.ticketKey,
+          title: parent.title,
+          status: parent.statusName ?? parent.status,
+          statusCategory: parent.statusCategory ?? null,
+        } : null,
+        children: children.map((c) => ({
+          key: c.ticketKey,
+          title: c.title,
+          status: c.statusName ?? c.status,
+          statusCategory: c.statusCategory ?? null,
+        })),
         assignees: ticket.assignees ?? [],
         labels: (ticket.labels ?? []).map((l) => l.name),
         comments: comments.map((c) => ({
@@ -162,11 +199,17 @@ function formatTicket(
   hasMoreComments: boolean,
   checklists: ChecklistRow[],
   gitActivity: GitActivityRow[],
+  parent: TicketSummaryRow | null,
+  children: TicketSummaryRow[],
 ): string {
   const header = [
     `[${ticket.ticketKey}] ${ticket.title}`,
     `Status: ${ticket.statusName ?? ticket.status}  Priority: ${ticket.priority}  Type: ${ticket.type}`,
     ticket.dueDate ? `Due: ${ticket.dueDate}` : null,
+    parent ? `Parent: [${parent.ticketKey}] ${parent.title} (${parent.statusName ?? parent.status})` : null,
+    children.length > 0
+      ? `Sub-tickets: ${children.length} (${children.filter((c) => c.statusCategory !== 'done' && c.statusCategory !== 'wont_fix').length} open)`
+      : null,
     ticket.assignees && ticket.assignees.length > 0
       ? `Assignees: ${ticket.assignees.map((a) => a.fullName || a.email).join(', ')}`
       : 'Assignees: (unassigned)',
@@ -174,6 +217,13 @@ function formatTicket(
       ? `Labels: ${ticket.labels.map((l) => l.name).join(', ')}`
       : null,
   ].filter((s): s is string => s !== null);
+
+  if (children.length > 0) {
+    header.push('', 'Children:');
+    for (const c of children) {
+      header.push(`  - [${c.ticketKey}] ${c.title} (${c.statusName ?? c.status})`);
+    }
+  }
 
   const description = ticket.description
     ? ['', '## Description', ticket.description]
