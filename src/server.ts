@@ -20,6 +20,7 @@ import { registerOrbitPrompts } from './prompts.js';
 import { registerWithMetrics } from './with-metrics.js';
 import { listProjectsToolConfig, makeListProjectsHandler } from './tools/list-projects.js';
 import { getProjectToolConfig, makeGetProjectHandler } from './tools/get-project.js';
+import { getProjectPrimerToolConfig, makeGetProjectPrimerHandler } from './tools/get-project-primer.js';
 import { listTicketsToolConfig, makeListTicketsHandler } from './tools/list-tickets.js';
 import { getTicketToolConfig, makeGetTicketHandler } from './tools/get-ticket.js';
 import { myTicketsToolConfig, makeMyTicketsHandler } from './tools/my-tickets.js';
@@ -101,6 +102,7 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
   // input/output schema; the server just glues names to handlers.
   reg('orbit_list_projects', listProjectsToolConfig, makeListProjectsHandler(client));
   reg('orbit_get_project', getProjectToolConfig, makeGetProjectHandler(client));
+  reg('orbit_get_project_primer', getProjectPrimerToolConfig, makeGetProjectPrimerHandler(client));
   reg('orbit_list_tickets', listTicketsToolConfig, makeListTicketsHandler(client));
   reg('orbit_get_ticket', getTicketToolConfig, makeGetTicketHandler(client));
   reg('orbit_get_checklists', getChecklistsToolConfig, makeGetChecklistsHandler(client));
