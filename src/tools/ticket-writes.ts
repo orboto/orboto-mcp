@@ -22,6 +22,9 @@
  *   - orbit_assign
  *   - orbit_unassign
  *   - orbit_set_milestone
+ *   - orbit_add_ticket_dependency       (ORB-453)
+ *   - orbit_remove_ticket_dependency    (ORB-453)
+ *   - orbit_list_ticket_dependencies    (ORB-453)
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -440,6 +443,144 @@ export function makeSetMilestoneHandler(client: OrbitClient) {
           : `Removed [${ticket.ticketKey}] from any milestone.`,
       }],
       structuredContent: ticketStructured(updated),
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// orbit_add_ticket_dependency / remove / list — ORB-453
+// ---------------------------------------------------------------------------
+
+interface DependencyEdge {
+  id: string;
+  ticketKey: string | null;
+  title: string;
+  projectId: string;
+  statusName: string | null;
+  statusCategory: string | null;
+}
+
+export const addTicketDependencyToolConfig = {
+  title: 'Add a ticket dependency',
+  description:
+    'Mark `ticketKey` as depending on `dependsOnKey` — i.e. `dependsOnKey` blocks `ticketKey`. Both tickets must live in the same project; cycles + self-dependencies are rejected by the API.',
+  inputSchema: z.object({
+    ticketKey: z.string().min(3).describe('The dependent ticket (the one being blocked).'),
+    dependsOnKey: z.string().min(3).describe('The ticket that must complete first (the blocker).'),
+  }).shape,
+};
+
+export function makeAddTicketDependencyHandler(client: OrbitClient) {
+  return async ({ ticketKey, dependsOnKey }: {
+    ticketKey: string; dependsOnKey: string;
+  }): Promise<CallToolResult> => {
+    const ticket = await resolveTicketByKey(client, ticketKey);
+    const dependsOn = await resolveTicketByKey(client, dependsOnKey);
+    try {
+      await client.post(
+        `/projects/${ticket.projectId}/tickets/${ticket.id}/dependencies`,
+        { dependsOnId: dependsOn.id },
+      );
+    } catch (err) {
+      // 409 = edge already exists — idempotent success.
+      if (err instanceof OrbitApiError && err.status === 409) {
+        return {
+          content: [{ type: 'text', text: `[${ticket.ticketKey}] already depends on [${dependsOn.ticketKey}].` }],
+          structuredContent: { ticketKey: ticket.ticketKey, dependsOnKey: dependsOn.ticketKey, alreadyExisted: true },
+        };
+      }
+      throw err;
+    }
+    return {
+      content: [{
+        type: 'text',
+        text: `[${ticket.ticketKey}] now depends on [${dependsOn.ticketKey}] — must complete first.`,
+      }],
+      structuredContent: {
+        ticketKey: ticket.ticketKey,
+        dependsOnKey: dependsOn.ticketKey,
+      },
+    };
+  };
+}
+
+export const removeTicketDependencyToolConfig = {
+  title: 'Remove a ticket dependency',
+  description: 'Drop the dependency edge from `ticketKey` to `dependsOnKey`. Idempotent — removing an edge that isn\'t there returns the same success.',
+  inputSchema: z.object({
+    ticketKey: z.string().min(3),
+    dependsOnKey: z.string().min(3),
+  }).shape,
+};
+
+export function makeRemoveTicketDependencyHandler(client: OrbitClient) {
+  return async ({ ticketKey, dependsOnKey }: {
+    ticketKey: string; dependsOnKey: string;
+  }): Promise<CallToolResult> => {
+    const ticket = await resolveTicketByKey(client, ticketKey);
+    const dependsOn = await resolveTicketByKey(client, dependsOnKey);
+    try {
+      await client.delete(
+        `/projects/${ticket.projectId}/tickets/${ticket.id}/dependencies/${dependsOn.id}`,
+      );
+    } catch (err) {
+      // 404 = edge wasn't there. Idempotent success.
+      if (err instanceof OrbitApiError && err.status === 404) {
+        return {
+          content: [{ type: 'text', text: `[${ticket.ticketKey}] didn\'t depend on [${dependsOn.ticketKey}].` }],
+          structuredContent: { ticketKey: ticket.ticketKey, dependsOnKey: dependsOn.ticketKey, alreadyAbsent: true },
+        };
+      }
+      throw err;
+    }
+    return {
+      content: [{
+        type: 'text',
+        text: `Removed dependency [${ticket.ticketKey}] → [${dependsOn.ticketKey}].`,
+      }],
+      structuredContent: {
+        ticketKey: ticket.ticketKey,
+        dependsOnKey: dependsOn.ticketKey,
+      },
+    };
+  };
+}
+
+export const listTicketDependenciesToolConfig = {
+  title: 'List a ticket\'s dependencies',
+  description:
+    'Show both directions of the dependency graph for a ticket: `blockedBy` (tickets that must finish first) and `blocks` (tickets waiting on this one).',
+  inputSchema: z.object({
+    ticketKey: z.string().min(3),
+  }).shape,
+};
+
+export function makeListTicketDependenciesHandler(client: OrbitClient) {
+  return async ({ ticketKey }: { ticketKey: string }): Promise<CallToolResult> => {
+    const ticket = await resolveTicketByKey(client, ticketKey);
+    const data = await client.get<{ blockedBy: DependencyEdge[]; blocks: DependencyEdge[] }>(
+      `/projects/${ticket.projectId}/tickets/${ticket.id}/dependencies`,
+    );
+    const fmt = (edges: DependencyEdge[]) =>
+      edges.length === 0
+        ? '_(none)_'
+        : edges.map((e) => `- [${e.ticketKey ?? e.id.slice(0, 8)}] ${e.title}${e.statusName ? ` — ${e.statusName}` : ''}`).join('\n');
+    const lines = [
+      `# Dependencies for [${ticket.ticketKey}]`,
+      '',
+      '## Blocked by (must complete first)',
+      fmt(data.blockedBy),
+      '',
+      '## Blocks (waiting on this ticket)',
+      fmt(data.blocks),
+    ];
+    return {
+      content: [{ type: 'text', text: lines.join('\n') }],
+      structuredContent: {
+        ticketKey: ticket.ticketKey,
+        blockedBy: data.blockedBy.map((e) => ({ ticketKey: e.ticketKey, title: e.title, statusName: e.statusName })),
+        blocks: data.blocks.map((e) => ({ ticketKey: e.ticketKey, title: e.title, statusName: e.statusName })),
+      },
     };
   };
 }

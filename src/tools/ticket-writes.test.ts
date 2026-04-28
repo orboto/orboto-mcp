@@ -13,6 +13,8 @@ import {
   makeCreateTicketHandler, makeUpdateTicketHandler, makeMoveTicketHandler,
   makeCloseTicketHandler, makeCommentHandler, makeAssignHandler,
   makeUnassignHandler, makeSetMilestoneHandler,
+  makeAddTicketDependencyHandler, makeRemoveTicketDependencyHandler,
+  makeListTicketDependenciesHandler,
 } from './ticket-writes.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -238,5 +240,70 @@ describe('orbit_set_milestone', () => {
     ]);
     await makeSetMilestoneHandler(client)({ ticketKey: 'ACME-1', milestone: null });
     expect(calls[2].body).toEqual({ milestoneId: null });
+  });
+});
+
+describe('orbit_add_ticket_dependency / remove / list — ORB-453', () => {
+  const TICKET_B = { ...TICKET, id: 't2', ticketKey: 'ACME-2', ticketNumber: 2, title: 'Other' };
+
+  it('add resolves both ticket keys then POSTs dependsOnId', async () => {
+    const calls = stub([
+      { json: PROJ },           // resolve ACME-1 project
+      { json: TICKET },         // resolve ACME-1 ticket
+      { json: PROJ },           // resolve ACME-2 project
+      { json: TICKET_B },       // resolve ACME-2 ticket
+      { status: 204 },          // POST /dependencies
+    ]);
+    await makeAddTicketDependencyHandler(client)({ ticketKey: 'ACME-1', dependsOnKey: 'ACME-2' });
+    expect(calls[4].method).toBe('POST');
+    expect(calls[4].url).toContain(`/projects/p1/tickets/t1/dependencies`);
+    expect(calls[4].body).toEqual({ dependsOnId: 't2' });
+  });
+
+  it('add treats 409 as idempotent', async () => {
+    stub([
+      { json: PROJ }, { json: TICKET },
+      { json: PROJ }, { json: TICKET_B },
+      { ok: false, status: 409, json: { error: 'edge already exists' } },
+    ]);
+    const res = await makeAddTicketDependencyHandler(client)({ ticketKey: 'ACME-1', dependsOnKey: 'ACME-2' });
+    expect((res.content[0] as { text: string }).text).toContain('already depends on');
+  });
+
+  it('remove sends DELETE on /dependencies/:dependsOnId', async () => {
+    const calls = stub([
+      { json: PROJ }, { json: TICKET },
+      { json: PROJ }, { json: TICKET_B },
+      { status: 204 },
+    ]);
+    await makeRemoveTicketDependencyHandler(client)({ ticketKey: 'ACME-1', dependsOnKey: 'ACME-2' });
+    expect(calls[4].method).toBe('DELETE');
+    expect(calls[4].url).toContain(`/projects/p1/tickets/t1/dependencies/t2`);
+  });
+
+  it('remove treats 404 as idempotent already-absent', async () => {
+    stub([
+      { json: PROJ }, { json: TICKET },
+      { json: PROJ }, { json: TICKET_B },
+      { ok: false, status: 404, json: { error: 'not found' } },
+    ]);
+    const res = await makeRemoveTicketDependencyHandler(client)({ ticketKey: 'ACME-1', dependsOnKey: 'ACME-2' });
+    expect((res.content[0] as { text: string }).text).toContain("didn't depend on");
+  });
+
+  it('list returns both directions formatted', async () => {
+    stub([
+      { json: PROJ }, { json: TICKET },
+      { json: {
+        blockedBy: [{ id: 't2', ticketKey: 'ACME-2', title: 'Other', projectId: 'p1', statusName: 'In Progress', statusCategory: 'in_progress' }],
+        blocks: [],
+      } },
+    ]);
+    const res = await makeListTicketDependenciesHandler(client)({ ticketKey: 'ACME-1' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Blocked by');
+    expect(text).toContain('[ACME-2] Other');
+    expect(text).toContain('Blocks');
+    expect(text).toContain('_(none)_');
   });
 });

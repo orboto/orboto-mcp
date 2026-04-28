@@ -45,6 +45,9 @@ import {
   assignToolConfig, makeAssignHandler,
   unassignToolConfig, makeUnassignHandler,
   setMilestoneToolConfig, makeSetMilestoneHandler,
+  addTicketDependencyToolConfig, makeAddTicketDependencyHandler,
+  removeTicketDependencyToolConfig, makeRemoveTicketDependencyHandler,
+  listTicketDependenciesToolConfig, makeListTicketDependenciesHandler,
 } from './tools/ticket-writes.js';
 import {
   timerStartToolConfig, makeTimerStartHandler,
@@ -126,6 +129,13 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
   reg('orbit_assign', assignToolConfig, makeAssignHandler(client));
   reg('orbit_unassign', unassignToolConfig, makeUnassignHandler(client));
   reg('orbit_set_milestone', setMilestoneToolConfig, makeSetMilestoneHandler(client));
+
+  // ORB-453 — ticket-dependency tools (3-way-sync gap filed after the
+  // skill wrapper landed in ORB-452). Same idempotent-on-409/404
+  // semantics as orbit_assign / orbit_unassign.
+  reg('orbit_add_ticket_dependency', addTicketDependencyToolConfig, makeAddTicketDependencyHandler(client));
+  reg('orbit_remove_ticket_dependency', removeTicketDependencyToolConfig, makeRemoveTicketDependencyHandler(client));
+  reg('orbit_list_ticket_dependencies', listTicketDependenciesToolConfig, makeListTicketDependenciesHandler(client));
 
   // ORB-309 Phase C — Group 2: time tools.
   reg('orbit_timer_start', timerStartToolConfig, makeTimerStartHandler(client));
