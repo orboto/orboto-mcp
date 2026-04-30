@@ -65,6 +65,14 @@ import {
   getAuditLogToolConfig, makeGetAuditLogHandler,
   triggerBackupToolConfig, makeTriggerBackupHandler,
 } from './tools/admin-writes.js';
+import {
+  primerFactListToolConfig, makePrimerFactListHandler,
+  primerFactAddToolConfig, makePrimerFactAddHandler,
+  primerFactUpdateToolConfig, makePrimerFactUpdateHandler,
+  primerFactSupersedeToolConfig, makePrimerFactSupersedeHandler,
+  primerFactVerifyToolConfig, makePrimerFactVerifyHandler,
+  primerFactDeleteToolConfig, makePrimerFactDeleteHandler,
+} from './tools/primer-facts.js';
 
 export interface BuildServerOptions extends OrbitClientConfig {
   /** Optional — passed through to McpServer metadata. Clients
@@ -154,6 +162,17 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
   reg('orbit_list_users', listUsersToolConfig, makeListUsersHandler(client));
   reg('orbit_get_audit_log', getAuditLogToolConfig, makeGetAuditLogHandler(client));
   reg('orbit_trigger_backup', triggerBackupToolConfig, makeTriggerBackupHandler(client));
+
+  // ORB-510 / ORB-513 — primer-fact tools. Wraps the ORB-511 REST
+  // surface so agents can record structured project facts that the
+  // primer renderer (ORB-512) surfaces at session start. The skill
+  // rule (ORB-514) tells agents *when* to record; these are the *how*.
+  reg('orbit_primer_fact_list', primerFactListToolConfig, makePrimerFactListHandler(client));
+  reg('orbit_primer_fact_add', primerFactAddToolConfig, makePrimerFactAddHandler(client));
+  reg('orbit_primer_fact_update', primerFactUpdateToolConfig, makePrimerFactUpdateHandler(client));
+  reg('orbit_primer_fact_supersede', primerFactSupersedeToolConfig, makePrimerFactSupersedeHandler(client));
+  reg('orbit_primer_fact_verify', primerFactVerifyToolConfig, makePrimerFactVerifyHandler(client));
+  reg('orbit_primer_fact_delete', primerFactDeleteToolConfig, makePrimerFactDeleteHandler(client));
 
   // ORB-310 Phase D — read-only `orbit://…` URI resources +
   // task-shaped Prompt templates the MCP client offers in its UI.
