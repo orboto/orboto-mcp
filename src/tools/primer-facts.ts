@@ -388,7 +388,13 @@ export const primerFactDeleteToolConfig = {
 
 export function makePrimerFactDeleteHandler(client: OrbitClient) {
   return async ({ factId, reason }: { factId: string; reason?: string }): Promise<CallToolResult> => {
-    await client.delete(`/primer-facts/${factId}`).catch(rewritePermissionError('delete primer fact'));
+    // ORB-516 — pass the reason through so the audit-log entry
+    // captures it. Old API versions silently ignore the querystring
+    // so there's no compat risk.
+    const path = reason
+      ? `/primer-facts/${factId}?reason=${encodeURIComponent(reason)}`
+      : `/primer-facts/${factId}`;
+    await client.delete(path).catch(rewritePermissionError('delete primer fact'));
     return {
       content: [{
         type: 'text',
