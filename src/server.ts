@@ -29,6 +29,7 @@ import {
   getMilestoneToolConfig, makeGetMilestoneHandler,
 } from './tools/milestones.js';
 import { searchToolConfig, makeSearchHandler } from './tools/search.js';
+import { queryToolConfig, makeQueryHandler } from './tools/query.js';
 import {
   listDocSpacesToolConfig, makeListDocSpacesHandler,
   getDocToolConfig, makeGetDocHandler,
@@ -121,6 +122,7 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
   reg('orbit_list_milestones', listMilestonesToolConfig, makeListMilestonesHandler(client));
   reg('orbit_get_milestone', getMilestoneToolConfig, makeGetMilestoneHandler(client));
   reg('orbit_search', searchToolConfig, makeSearchHandler(client));
+  reg('orbit_query', queryToolConfig, makeQueryHandler(client));
   reg('orbit_list_doc_spaces', listDocSpacesToolConfig, makeListDocSpacesHandler(client));
   reg('orbit_get_doc', getDocToolConfig, makeGetDocHandler(client));
   reg('orbit_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
