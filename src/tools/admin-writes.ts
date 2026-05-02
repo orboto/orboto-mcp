@@ -79,20 +79,22 @@ function rewrite403(action: string): (err: unknown) => never {
 export const listUsersToolConfig = {
   title: 'List workspace users (admin)',
   description:
-    'Return the workspace user directory. Super-admin only. Useful for AI agents that need to look up an email beyond their visible project members (e.g. to assign someone who isn\'t on the current project yet).',
+    'Return the workspace user directory. Super-admin only. Useful for AI agents that need to look up an email beyond their visible project members (e.g. to assign someone who isn\'t on the current project yet). Imported placeholder users (`*@imported.ghost`) are hidden by default; set `showGhosts=true` to include them.',
   inputSchema: z.object({
     search: z.string().optional().describe('Substring match against fullName + email.'),
     limit: z.number().int().min(1).max(100).default(50),
+    showGhosts: z.boolean().optional().describe('Include `*@imported.ghost` placeholder users created during project imports. Off by default.'),
   }).shape,
 };
 
 export function makeListUsersHandler(client: OrbitClient) {
-  return async ({ search, limit }: {
-    search?: string; limit?: number;
+  return async ({ search, limit, showGhosts }: {
+    search?: string; limit?: number; showGhosts?: boolean;
   }): Promise<CallToolResult> => {
     const qs = new URLSearchParams();
     qs.set('limit', String(limit ?? 50));
     if (search) qs.set('search', search);
+    if (showGhosts) qs.set('hideGhosts', 'false');
     const page = await client.get<{ items: UserRow[]; nextCursor: string | null }>(
       `/admin/users?${qs}`,
     ).catch(rewrite403('list_users'));
