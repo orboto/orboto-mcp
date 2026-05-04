@@ -18,6 +18,7 @@ import { OrbitClient, type OrbitClientConfig } from './orbit-client.js';
 import { registerOrbitResources } from './resources.js';
 import { registerOrbitPrompts } from './prompts.js';
 import { registerWithMetrics } from './with-metrics.js';
+import { aiStatusToolConfig, makeAiStatusHandler } from './tools/ai-status.js';
 import { listProjectsToolConfig, makeListProjectsHandler } from './tools/list-projects.js';
 import { getProjectToolConfig, makeGetProjectHandler } from './tools/get-project.js';
 import { getProjectPrimerToolConfig, makeGetProjectPrimerHandler } from './tools/get-project-primer.js';
@@ -112,6 +113,7 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
 
   // Tools — alphabetical-ish by concept. Each tool file owns its
   // input/output schema; the server just glues names to handlers.
+  reg('orbit_ai_status', aiStatusToolConfig, makeAiStatusHandler(client));
   reg('orbit_list_projects', listProjectsToolConfig, makeListProjectsHandler(client));
   reg('orbit_get_project', getProjectToolConfig, makeGetProjectHandler(client));
   reg('orbit_get_project_primer', getProjectPrimerToolConfig, makeGetProjectPrimerHandler(client));
