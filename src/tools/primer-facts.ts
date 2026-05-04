@@ -176,7 +176,7 @@ export function makePrimerFactListHandler(client: OrbitClient) {
 export const primerFactAddToolConfig = {
   title: 'Record a new project primer fact',
   description:
-    'Record a new structured fact about the project that future AI agents should see at session start. Use when you learn something during work that is missing from the primer (a library version, a convention, a deployment quirk, an architecture decision). Set observed=true when you are recording from a bot/agent context — the fact will land as agent_observed and require operator verification before losing the (observed) marker.',
+    'Record a new structured fact about the project that future AI agents should see at session start. Use when you learn something during work that is missing from the primer (a library version, a convention, a deployment quirk, an architecture decision). Note: the auto-generated primer does NOT automatically include CLAUDE.md / AGENTS.md content unless the operator configured repo briefings and the API host can read those files from disk — most deployments cannot. Treat key conventions documented in CLAUDE.md / AGENTS.md as fair game to record here so they survive cross-deployment. Set observed=true when you are recording from a bot/agent context — the fact will land as agent_observed and require operator verification before losing the (observed) marker.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key, e.g. "ORB". Case-insensitive.'),
     category: PrimerFactCategoryEnum.describe(
