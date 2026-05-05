@@ -52,7 +52,7 @@ const TICKET = {
   estimatedTimeMinutes: 0, dueDate: null, isPrivate: false,
 };
 
-describe('orbit_create_ticket', () => {
+describe('orboto_create_ticket', () => {
   it('creates with body fields, no extra calls when no labels/assignees', async () => {
     const calls = stub([
       { json: PROJ },
@@ -92,7 +92,7 @@ describe('orbit_create_ticket', () => {
   });
 });
 
-describe('orbit_update_ticket', () => {
+describe('orboto_update_ticket', () => {
   it('PATCHes only the supplied fields, leaves others untouched', async () => {
     const calls = stub([
       { json: PROJ },
@@ -108,7 +108,7 @@ describe('orbit_update_ticket', () => {
   });
 });
 
-describe('orbit_move_ticket', () => {
+describe('orboto_move_ticket', () => {
   it('maps statusCategory → legacy status enum on the wire', async () => {
     const calls = stub([
       { json: PROJ },
@@ -120,7 +120,7 @@ describe('orbit_move_ticket', () => {
   });
 });
 
-describe('orbit_close_ticket', () => {
+describe('orboto_close_ticket', () => {
   it('posts the closing comment BEFORE the status move (audit-trail order)', async () => {
     const calls = stub([
       { json: PROJ },                                          // resolveTicketByKey: project
@@ -147,7 +147,7 @@ describe('orbit_close_ticket', () => {
   });
 });
 
-describe('orbit_comment', () => {
+describe('orboto_comment', () => {
   it('posts a regular (non-internal) comment by default', async () => {
     const calls = stub([
       { json: PROJ },
@@ -171,7 +171,7 @@ describe('orbit_comment', () => {
   });
 });
 
-describe('orbit_assign / orbit_unassign', () => {
+describe('orboto_assign / orboto_unassign', () => {
   const MEMBERS = [{ userId: 'u1', user: { email: 'ada@acme', fullName: 'Ada' }, role: { name: 'developer' } }];
 
   it('assign POSTs to /assignees/:userId', async () => {
@@ -220,7 +220,7 @@ describe('orbit_assign / orbit_unassign', () => {
   });
 });
 
-describe('orbit_set_milestone', () => {
+describe('orboto_set_milestone', () => {
   it('resolves milestone name + sends milestoneId', async () => {
     const calls = stub([
       { json: PROJ },
@@ -243,7 +243,7 @@ describe('orbit_set_milestone', () => {
   });
 });
 
-describe('orbit_add_ticket_dependency / remove / list — ORB-453', () => {
+describe('orboto_add_ticket_dependency / remove / list — ORB-453', () => {
   const TICKET_B = { ...TICKET, id: 't2', ticketKey: 'ACME-2', ticketNumber: 2, title: 'Other' };
 
   it('add resolves both ticket keys then POSTs dependsOnId', async () => {

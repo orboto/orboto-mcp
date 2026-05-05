@@ -18,7 +18,7 @@
  *      logs all light up for free.
  *
  * Every request adds `Authorization: Bearer <apiKey>` (from env) and
- * a `User-Agent: orbit-mcp/<version>` header for the admin UI to
+ * a `User-Agent: orboto-mcp/<version>` header for the admin UI to
  * distinguish MCP traffic from regular API traffic. Non-2xx responses
  * throw `OrbotoApiError` so tool handlers can translate to MCP's
  * `{isError: true}` shape.
@@ -54,13 +54,13 @@ export class OrbotoClient {
 
   constructor(config: OrbotoClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, '');
-    // User-Agent shape: `orbit-mcp/0.51.0 (claude-desktop)`. The
+    // User-Agent shape: `orboto-mcp/0.51.0 (claude-desktop)`. The
     // suffix is optional metadata so the admin's MCP-usage panel
     // (Phase F) can group calls per client family without needing a
     // new DB column.
     const ua = config.userAgentSuffix
-      ? `orbit-mcp/0.51.0 (${config.userAgentSuffix})`
-      : 'orbit-mcp/0.51.0';
+      ? `orboto-mcp/0.51.0 (${config.userAgentSuffix})`
+      : 'orboto-mcp/0.51.0';
     this.headers = {
       Authorization: `Bearer ${config.apiKey}`,
       'User-Agent': ua,

@@ -10,7 +10,7 @@
  *
  * Today no MCP tool requires AI directly — every `orboto_*` tool is a
  * thin REST wrapper that does its own thing. The dependency lives on
- * the skill side (`orbit ask-docs`) and on chat-only LLM calls the
+ * the skill side (`orboto ask-docs`) and on chat-only LLM calls the
  * agent host might make. This tool exists so an agent can plan around
  * the workspace shape before calling those skill shortcuts or before
  * suggesting AI-gated features to the operator.

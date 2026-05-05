@@ -34,7 +34,7 @@ const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey:
 const PROJ = { id: 'p1', key: 'ACME', name: 'Acme', description: null, status: 'active' };
 const TICKET = { id: 't1', projectId: 'p1', ticketKey: 'ACME-1', title: 'Bug' };
 
-describe('orbit_timer_start', () => {
+describe('orboto_timer_start', () => {
   it('starts with description + replace=false default', async () => {
     const calls = stub([
       { json: PROJ },
@@ -69,7 +69,7 @@ describe('orbit_timer_start', () => {
   });
 });
 
-describe('orbit_timer_stop', () => {
+describe('orboto_timer_stop', () => {
   it('returns durationMinutes from the API response', async () => {
     const calls = stub([{ json: { durationMinutes: 47 } }]);
     const res = await makeTimerStopHandler(client)();
@@ -87,7 +87,7 @@ describe('orbit_timer_stop', () => {
   });
 });
 
-describe('orbit_log_time', () => {
+describe('orboto_log_time', () => {
   it('POSTs durationMinutes + optional description', async () => {
     const calls = stub([
       { json: PROJ },

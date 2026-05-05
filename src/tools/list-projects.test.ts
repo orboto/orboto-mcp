@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase A — reference test for `orbit_list_projects` tool
+ * ORB-244 Phase A — reference test for `orboto_list_projects` tool
  * mapping. Confirms that the tool handler:
  *   - calls `GET /projects`
  *   - produces both a text block (for the model) and structured content

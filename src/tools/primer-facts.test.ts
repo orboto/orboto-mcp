@@ -46,7 +46,7 @@ function stub(responses: Array<{ ok?: boolean; status?: number; json?: unknown }
 
 const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 
-const projectStub = { id: 'p-uuid-1234', key: 'ORB', name: 'Orbit', description: null, status: 'active' };
+const projectStub = { id: 'p-uuid-1234', key: 'ORB', name: 'Orboto', description: null, status: 'active' };
 const factStub = {
   id: 'f-uuid-1111',
   projectId: 'p-uuid-1234',
@@ -65,10 +65,10 @@ const factStub = {
 };
 
 // ---------------------------------------------------------------------------
-// orbit_primer_fact_list
+// orboto_primer_fact_list
 // ---------------------------------------------------------------------------
 
-describe('orbit_primer_fact_list', () => {
+describe('orboto_primer_fact_list', () => {
   it('resolves projectKey then GETs /projects/<id>/primer-facts with filters', async () => {
     const calls = stub([
       { json: projectStub },
@@ -142,10 +142,10 @@ describe('orbit_primer_fact_list', () => {
 });
 
 // ---------------------------------------------------------------------------
-// orbit_primer_fact_add
+// orboto_primer_fact_add
 // ---------------------------------------------------------------------------
 
-describe('orbit_primer_fact_add', () => {
+describe('orboto_primer_fact_add', () => {
   it('observed=false (default) sends source=manual', async () => {
     const calls = stub([
       { json: projectStub },
@@ -221,10 +221,10 @@ describe('orbit_primer_fact_add', () => {
 });
 
 // ---------------------------------------------------------------------------
-// orbit_primer_fact_update
+// orboto_primer_fact_update
 // ---------------------------------------------------------------------------
 
-describe('orbit_primer_fact_update', () => {
+describe('orboto_primer_fact_update', () => {
   it('PATCHes /primer-facts/<id> with only the provided fields', async () => {
     const calls = stub([{ json: { ...factStub, value: 'pnpm 10' } }]);
     await makePrimerFactUpdateHandler(client)({
@@ -280,10 +280,10 @@ describe('orboto_primer_fact_supersede', () => {
 });
 
 // ---------------------------------------------------------------------------
-// orbit_primer_fact_verify
+// orboto_primer_fact_verify
 // ---------------------------------------------------------------------------
 
-describe('orbit_primer_fact_verify', () => {
+describe('orboto_primer_fact_verify', () => {
   it('POSTs /primer-facts/<id>/verify with empty body', async () => {
     const calls = stub([{ json: { ...factStub, verified: true, verifiedBy: 'u1', verifiedAt: 'now' } }]);
     await makePrimerFactVerifyHandler(client)({ factId: factStub.id });
@@ -294,10 +294,10 @@ describe('orbit_primer_fact_verify', () => {
 });
 
 // ---------------------------------------------------------------------------
-// orbit_primer_fact_delete
+// orboto_primer_fact_delete
 // ---------------------------------------------------------------------------
 
-describe('orbit_primer_fact_delete', () => {
+describe('orboto_primer_fact_delete', () => {
   it('DELETEs /primer-facts/<id>', async () => {
     const calls = stub([{ status: 204 }]);
     const res = await makePrimerFactDeleteHandler(client)({ factId: factStub.id });

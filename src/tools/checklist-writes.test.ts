@@ -44,7 +44,7 @@ const SAMPLE_LIST = {
   ],
 };
 
-describe('orbit_check / orbit_uncheck', () => {
+describe('orboto_check / orboto_uncheck', () => {
   it('check resolves a 1-based index → item UUID, then PATCHes isCompleted=true', async () => {
     const calls = stub([
       { json: PROJ },
@@ -95,7 +95,7 @@ describe('orbit_check / orbit_uncheck', () => {
   });
 });
 
-describe('orbit_add_check', () => {
+describe('orboto_add_check', () => {
   it('appends to the FIRST list by default', async () => {
     const calls = stub([
       { json: PROJ },

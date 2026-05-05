@@ -54,7 +54,7 @@ describe('withMetrics', () => {
 
   it('logs success: false + errorMessage when the handler throws, then re-throws', async () => {
     const calls = captureFetch();
-    const wrapped = withMetrics(client, 'orbit_explode', undefined, async () => {
+    const wrapped = withMetrics(client, 'orboto_explode', undefined, async () => {
       throw new Error('kaboom');
     });
 
@@ -68,7 +68,7 @@ describe('withMetrics', () => {
 
   it('treats result.isError=true as success: false (soft failure)', async () => {
     const calls = captureFetch();
-    const wrapped = withMetrics(client, 'orbit_softfail', undefined, async () => ({
+    const wrapped = withMetrics(client, 'orboto_softfail', undefined, async () => ({
       content: [{ type: 'text' as const, text: 'permission denied' }],
       isError: true,
     }));

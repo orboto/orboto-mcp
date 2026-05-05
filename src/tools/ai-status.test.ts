@@ -1,5 +1,5 @@
 /**
- * ORB-564 — `orbit_ai_status` tool mapping test.
+ * ORB-564 — `orboto_ai_status` tool mapping test.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';

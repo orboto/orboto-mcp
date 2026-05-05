@@ -1,5 +1,5 @@
 /**
- * ORB-273 Phase F — `orbit_query` MCP tool tests.
+ * ORB-273 Phase F — `orboto_query` MCP tool tests.
  *
  * Confirms the handler:
  *   - posts to /query with the right body shape

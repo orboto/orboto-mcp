@@ -32,7 +32,7 @@ function stub(responses: Array<{ ok?: boolean; status?: number; json?: unknown }
 
 const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 
-describe('orbit_list_users', () => {
+describe('orboto_list_users', () => {
   it('passes search + limit, surfaces user tags in text output', async () => {
     const calls = stub([{
       json: {
@@ -60,7 +60,7 @@ describe('orbit_list_users', () => {
   });
 });
 
-describe('orbit_get_audit_log', () => {
+describe('orboto_get_audit_log', () => {
   it('plain entityType filter just queries with entityType', async () => {
     const calls = stub([{ json: { items: [], nextCursor: null } }]);
     await makeGetAuditLogHandler(client)({ entityType: 'user', limit: 25 });
@@ -104,7 +104,7 @@ describe('orbit_get_audit_log', () => {
   });
 });
 
-describe('orbit_trigger_backup', () => {
+describe('orboto_trigger_backup', () => {
   it('resolves jobName → jobId, then POSTs the run', async () => {
     const calls = stub([
       { json: [{ id: 'j1', name: 'nightly', scope: 'full', schedule: '0 3 * * *', isActive: true }] },

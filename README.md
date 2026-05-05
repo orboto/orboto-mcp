@@ -1,6 +1,6 @@
 # `@orboto/mcp`
 
-Model Context Protocol server for Orbit. Exposes 42 tools, 4 resources, and 5 prompts so MCP-aware AI clients (Claude Desktop, Cursor, GitHub Copilot Chat) can read and write Orbit data as a regular API user.
+Model Context Protocol server for Orboto. Exposes 42 tools, 4 resources, and 5 prompts so MCP-aware AI clients (Claude Desktop, Cursor, GitHub Copilot Chat) can read and write Orboto data as a regular API user.
 
 > **Operators**: head to [`docs/mcp-setup.md`](../../docs/mcp-setup.md) for the per-client setup walkthrough. The README below is for contributors hacking on the MCP package itself.
 
@@ -11,7 +11,7 @@ src/
   index.ts             entry point — picks transport from ORBOTO_MCP_TRANSPORT
   server.ts            McpServer factory + tool/resource/prompt registration
   http-transport.ts    Streamable HTTP transport for the Self-Hosted-Inline mode
-  orbit-client.ts      tiny REST client wrapping the Orbit API
+  orboto-client.ts     tiny REST client wrapping the Orboto API
   resources.ts         registerResource() calls
   prompts.ts           registerPrompt() calls
   tools/               one file per tool category (tickets, time, primer-facts, …)
@@ -29,7 +29,7 @@ pnpm --filter @orboto/mcp test         # vitest
 A live API instance is required — the dev mode preflights against `/users/me` on boot. Easiest setup:
 
 ```bash
-# Terminal 1 — Orbit stack
+# Terminal 1 — Orboto stack
 docker compose -f docker-compose.local.yml up -d
 pnpm --filter @orboto/api dev
 
@@ -51,7 +51,7 @@ See [`docs/env.md`](../../docs/env.md#mcp-server-orbitmcp) for the complete list
 | `ORBOTO_API_KEY` | stdio only | `orb_…` token; HTTP mode reads it per-request from the `Authorization` header instead. |
 | `ORBOTO_MCP_TRANSPORT` | no | `stdio` (default) or `http`. |
 | `ORBOTO_MCP_PORT` | http only | Listen port (default `3100`). |
-| `ORBOTO_MCP_CLIENT` | no | User-Agent suffix sent on every Orbit API call. |
+| `ORBOTO_MCP_CLIENT` | no | User-Agent suffix sent on every Orboto API call. |
 
 ## Three-way sync
 
@@ -59,6 +59,6 @@ Per [`CLAUDE.md`](../../CLAUDE.md), every API route change ships in one commit b
 
 1. `apps/api/` — the route + tests
 2. `apps/mcp/src/tools/` — the tool wrapper + unit test fixture (this package)
-3. `.claude/skills/orbit/` — the SKILL.md operation row + `scripts/orboto.mjs` shortcut where it makes sense
+3. `.claude/skills/orboto/` — the SKILL.md operation row + `scripts/orboto.mjs` shortcut where it makes sense
 
 Skipping any one drifts the consuming surfaces out of sync with the producing route. Adding a new tool here means: new file under `tools/`, register it in `server.ts`, add a unit test under `tools/<name>.test.ts`.

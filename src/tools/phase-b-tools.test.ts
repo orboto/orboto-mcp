@@ -46,7 +46,7 @@ const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey:
 
 const PROJ = { id: 'p1', key: 'ACME', name: 'Acme', description: 'Customer portal', status: 'active' };
 
-describe('orbit_get_project', () => {
+describe('orboto_get_project', () => {
   it('aggregates project + milestones + labels + members into structured content', async () => {
     const calls = stub([
       { json: PROJ },
@@ -69,7 +69,7 @@ describe('orbit_get_project', () => {
   });
 });
 
-describe('orbit_list_tickets', () => {
+describe('orboto_list_tickets', () => {
   it('passes limit + statusCategory to the API', async () => {
     const calls = stub([
       { json: PROJ },
@@ -117,7 +117,7 @@ describe('orbit_list_tickets', () => {
   });
 });
 
-describe('orbit_get_ticket', () => {
+describe('orboto_get_ticket', () => {
   // Fixture: empty children page (always-fetched after ORB-244 hierarchy surfacing).
   const NO_CHILDREN = { json: { items: [], nextCursor: null } };
 
@@ -234,7 +234,7 @@ describe('orbit_get_ticket', () => {
   });
 });
 
-describe('orbit_my_tickets', () => {
+describe('orboto_my_tickets', () => {
   it('defaults to TODO,IN_PROGRESS,IN_REVIEW when no category is given', async () => {
     const calls = stub([{ json: { items: [], nextCursor: null } }]);
     await makeMyTicketsHandler(client)({});
@@ -273,7 +273,7 @@ describe('milestone tools', () => {
   });
 });
 
-describe('orbit_search', () => {
+describe('orboto_search', () => {
   it('includes projectId when projectKey filter is set', async () => {
     const calls = stub([
       { json: PROJ },
@@ -331,7 +331,7 @@ describe('doc tools', () => {
   });
 });
 
-describe('orbit_get_checklists', () => {
+describe('orboto_get_checklists', () => {
   it('surfaces effectiveCompleted + linked-ticket metadata (ORB-234 shape)', async () => {
     stub([
       { json: PROJ },
@@ -381,7 +381,7 @@ describe('orbit_get_checklists', () => {
   });
 });
 
-describe('orbit_get_timer', () => {
+describe('orboto_get_timer', () => {
   it('returns null when the endpoint returns null directly (not wrapped)', async () => {
     stub([{ json: null }]);
     const res = await makeGetTimerHandler(client)();

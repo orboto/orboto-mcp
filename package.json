@@ -1,10 +1,10 @@
 {
   "name": "@orboto/mcp",
   "version": "0.51.0",
-  "description": "Orbit MCP server — exposes Orbit tickets, docs, and timers as Model Context Protocol tools for Claude Desktop / Cursor / Copilot.",
+  "description": "Orboto MCP server — exposes Orboto tickets, docs, and timers as Model Context Protocol tools for Claude Desktop / Cursor / Copilot.",
   "main": "dist/index.js",
   "bin": {
-    "orbit-mcp": "dist/index.js"
+    "orboto-mcp": "dist/index.js"
   },
   "type": "module",
   "scripts": {
