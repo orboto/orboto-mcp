@@ -2,7 +2,7 @@
  * ORB-244 Phase A/B — MCP server factory.
  *
  * Builds an `McpServer` with the registered tool set + a handle to
- * the Orbit REST client. Transport is picked by the process entry
+ * the Orboto REST client. Transport is picked by the process entry
  * point (`index.ts`) based on `ORBOTO_MCP_TRANSPORT=stdio|http`.
  *
  * Keeping the server factory transport-agnostic means `server.ts` is
@@ -92,14 +92,14 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
       // MCP clients inject before the user's first message. Keep it
       // short + specific; avoid walls of text.
       instructions: [
-        'Orbit is a ticket + project management system.',
-        'Use `orbit_list_projects` first to discover what the user can see.',
+        'Orboto is a ticket + project management system.',
+        'Use `orboto_list_projects` first to discover what the user can see.',
         'Ticket keys look like `PROJ-123`; the first segment is the project key.',
-        'For "what am I working on?" prefer `orbit_my_tickets`; for "anything about X?" prefer `orbit_search`.',
-        'Checklists: `orbit_get_ticket` includes them inline; use `orbit_get_checklists` when you only need the items. A linked-ticket suffix (`↪ [ACME-99]`) means the item is automatically checked/unchecked as that ticket\'s status moves.',
-        'Sub-tickets: `orbit_get_ticket` surfaces `parentTicket` + `children`; walk an epic via `orbit_list_tickets` with `parentTicketKey`. Use sub-tickets for steps large enough to need their own commit / time tracking / review, and checklists for one-liners inside a single ticket\'s scope. Only materialise sub-tickets / checklist items when the parent is actively being worked — pure planning tickets keep their phase plan inside the description, not as empty TODO sub-tickets that clutter every team member\'s `my-tickets` list.',
-        'When you write a git commit that touches a ticket, put the ticket key (e.g. `ORB-42`) in parentheses at the END of the subject line — `feat(auth): add token rotation (ORB-42)`. This is what the Orbit git-activity parser looks for; skipping it means the commit never gets linked to the ticket.',
-        'Resources (`orbit://ticket/<key>`, `orbit://doc/<id>`, `orbit://project/<key>`, `orbit://search/<query>`) return read-only Markdown — useful when the client UI lets the user pin content rather than re-asking. Prompts (`plan-sprint`, `triage-my-tickets`, `summarize-project`, `estimate-ticket`, `find-duplicates`) are one-click guided workflows the client surfaces; each emits a goal + tool sequence the model executes.',
+        'For "what am I working on?" prefer `orboto_my_tickets`; for "anything about X?" prefer `orboto_search`.',
+        'Checklists: `orboto_get_ticket` includes them inline; use `orboto_get_checklists` when you only need the items. A linked-ticket suffix (`↪ [ACME-99]`) means the item is automatically checked/unchecked as that ticket\'s status moves.',
+        'Sub-tickets: `orboto_get_ticket` surfaces `parentTicket` + `children`; walk an epic via `orboto_list_tickets` with `parentTicketKey`. Use sub-tickets for steps large enough to need their own commit / time tracking / review, and checklists for one-liners inside a single ticket\'s scope. Only materialise sub-tickets / checklist items when the parent is actively being worked — pure planning tickets keep their phase plan inside the description, not as empty TODO sub-tickets that clutter every team member\'s `my-tickets` list.',
+        'When you write a git commit that touches a ticket, put the ticket key (e.g. `ORB-42`) in parentheses at the END of the subject line — `feat(auth): add token rotation (ORB-42)`. This is what the Orboto git-activity parser looks for; skipping it means the commit never gets linked to the ticket.',
+        'Resources (`orbit://ticket/<key>`, `orbit://doc/<id>`, `orbit://project/<key>`, `orbit://search/<query>`) return read-only Markdown — useful when the client UI lets the user pin content rather than re-asking. The `orbit://` URI scheme stays as the canonical resource prefix even after the Orboto rebrand because clients pin URIs in their UI; renaming the scheme would invalidate every saved bookmark. Prompts (`plan-sprint`, `triage-my-tickets`, `summarize-project`, `estimate-ticket`, `find-duplicates`) are one-click guided workflows the client surfaces; each emits a goal + tool sequence the model executes.',
         'All writes respect the caller\'s project-level permissions — a 403 means the API rejected the write, not the MCP server.',
       ].join(' '),
     },
@@ -144,7 +144,7 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
 
   // ORB-453 — ticket-dependency tools (3-way-sync gap filed after the
   // skill wrapper landed in ORB-452). Same idempotent-on-409/404
-  // semantics as orbit_assign / orbit_unassign.
+  // semantics as orboto_assign / orboto_unassign.
   reg('orboto_add_ticket_dependency', addTicketDependencyToolConfig, makeAddTicketDependencyHandler(client));
   reg('orboto_remove_ticket_dependency', removeTicketDependencyToolConfig, makeRemoveTicketDependencyHandler(client));
   reg('orboto_list_ticket_dependencies', listTicketDependenciesToolConfig, makeListTicketDependenciesHandler(client));

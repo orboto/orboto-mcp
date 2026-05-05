@@ -1,7 +1,7 @@
 /**
  * ORB-244 Phase B — milestone tools.
  *
- * `orbit_list_milestones` and `orbit_get_milestone` share this file
+ * `orboto_list_milestones` and `orboto_get_milestone` share this file
  * because they're cheap neighbours (same API root, same resolution
  * chain). The `get` tool also pulls the `/progress` endpoint so the
  * model sees ticket-count breakdowns alongside the metadata.
@@ -33,7 +33,7 @@ interface MilestoneProgress {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_list_milestones
+// orboto_list_milestones
 // ---------------------------------------------------------------------------
 
 export const listMilestonesToolConfig = {
@@ -72,7 +72,7 @@ export function makeListMilestonesHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_get_milestone
+// orboto_get_milestone
 // ---------------------------------------------------------------------------
 
 export const getMilestoneToolConfig = {

@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase B — `orbit_get_timer`.
+ * ORB-244 Phase B — `orboto_get_timer`.
  *
  * Returns the caller's active stopwatch (or `null` when none is
  * running). Useful for the model to answer "am I still tracking

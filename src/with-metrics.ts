@@ -40,7 +40,7 @@ async function postLogEntry(client: OrbitClient, entry: LogEntry): Promise<void>
  * Wrap a CallToolResult-returning handler so every invocation posts
  * one row to mcp_call_log via /admin/mcp/instrument.
  *
- * Used as: `withMetrics(client, 'orbit_get_ticket', clientHint, makeGetTicketHandler(client))`
+ * Used as: `withMetrics(client, 'orboto_get_ticket', clientHint, makeGetTicketHandler(client))`
  *
  * Wired centrally in `server.ts` so per-tool files don't need to
  * know about instrumentation.
@@ -94,7 +94,7 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
  *   reg('orboto_list_projects', listProjectsToolConfig, makeListProjectsHandler(client));
  *
  * ORB-585 — every tool registered with the canonical `orboto_*` name
- * also gets a `orbit_*` legacy alias that points to the same handler.
+ * also gets a `orboto_*` legacy alias that points to the same handler.
  * The alias's description is prefixed with [DEPRECATED ALIAS] so
  * clients that surface tool descriptions show the migration hint.
  * Metrics rows log under the actually-invoked name so dashboards can
@@ -127,11 +127,11 @@ export function registerWithMetrics(
       withMetrics(client, canonicalName, clientHint, handler),
     );
 
-    // ORB-585 — legacy `orbit_*` alias for one major release. Skipped
+    // ORB-585 — legacy `orboto_*` alias for one major release. Skipped
     // when the canonical name doesn't carry the new prefix (defensive;
     // every current call site uses `orboto_*`).
     if (canonicalName.startsWith('orboto_')) {
-      const legacyName = `orbit_${canonicalName.slice('orboto_'.length)}`;
+      const legacyName = `orboto_${canonicalName.slice('orboto_'.length)}`;
       const legacyDesc = config?.description
         ? `[DEPRECATED ALIAS — use ${canonicalName} instead; this name is removed in v1.0] ${config.description}`
         : `[DEPRECATED ALIAS — use ${canonicalName} instead; this name is removed in v1.0]`;

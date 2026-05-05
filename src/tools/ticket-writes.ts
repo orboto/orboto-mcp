@@ -14,17 +14,17 @@
  *   - `milestone` (name) → milestoneId via the project milestones list
  *
  * Tools in this file:
- *   - orbit_create_ticket
- *   - orbit_update_ticket
- *   - orbit_move_ticket
- *   - orbit_close_ticket
- *   - orbit_comment
- *   - orbit_assign
- *   - orbit_unassign
- *   - orbit_set_milestone
- *   - orbit_add_ticket_dependency       (ORB-453)
- *   - orbit_remove_ticket_dependency    (ORB-453)
- *   - orbit_list_ticket_dependencies    (ORB-453)
+ *   - orboto_create_ticket
+ *   - orboto_update_ticket
+ *   - orboto_move_ticket
+ *   - orboto_close_ticket
+ *   - orboto_comment
+ *   - orboto_assign
+ *   - orboto_unassign
+ *   - orboto_set_milestone
+ *   - orboto_add_ticket_dependency       (ORB-453)
+ *   - orboto_remove_ticket_dependency    (ORB-453)
+ *   - orboto_list_ticket_dependencies    (ORB-453)
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -113,7 +113,7 @@ function ticketStructured(t: TicketRow) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_create_ticket
+// orboto_create_ticket
 // ---------------------------------------------------------------------------
 
 export const createTicketToolConfig = {
@@ -185,13 +185,13 @@ export function makeCreateTicketHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_update_ticket
+// orboto_update_ticket
 // ---------------------------------------------------------------------------
 
 export const updateTicketToolConfig = {
   title: 'Update a ticket',
   description:
-    'Patch one or more fields on a ticket (title, description, type, priority, dueDate, startDate, isPrivate, estimatedTimeMinutes). Use `orbit_move_ticket` for status, `orbit_set_milestone` for milestone, and `orbit_assign` / `orbit_unassign` for members.',
+    'Patch one or more fields on a ticket (title, description, type, priority, dueDate, startDate, isPrivate, estimatedTimeMinutes). Use `orboto_move_ticket` for status, `orboto_set_milestone` for milestone, and `orboto_assign` / `orboto_unassign` for members.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     patch: z.object({
@@ -224,7 +224,7 @@ export function makeUpdateTicketHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_move_ticket
+// orboto_move_ticket
 // ---------------------------------------------------------------------------
 
 export const moveTicketToolConfig = {
@@ -254,13 +254,13 @@ export function makeMoveTicketHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_close_ticket
+// orboto_close_ticket
 // ---------------------------------------------------------------------------
 
 export const closeTicketToolConfig = {
   title: 'Close a ticket',
   description:
-    'Move a ticket to `done` and optionally post a closing comment in one call. Convenience wrapper around `orbit_move_ticket` + `orbit_comment` so the model doesn\'t need to chain two writes.',
+    'Move a ticket to `done` and optionally post a closing comment in one call. Convenience wrapper around `orboto_move_ticket` + `orboto_comment` so the model doesn\'t need to chain two writes.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     comment: z.string().min(1).optional().describe('Optional closing comment posted before the move.'),
@@ -290,7 +290,7 @@ export function makeCloseTicketHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_comment
+// orboto_comment
 // ---------------------------------------------------------------------------
 
 interface CommentResponse {
@@ -336,13 +336,13 @@ export function makeCommentHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_assign / orbit_unassign
+// orboto_assign / orboto_unassign
 // ---------------------------------------------------------------------------
 
 export const assignToolConfig = {
   title: 'Assign a user to a ticket',
   description:
-    'Add a project member as an assignee on a ticket. Multi-assignee is supported — this adds, it does not replace. Use `orbit_unassign` to remove.',
+    'Add a project member as an assignee on a ticket. Multi-assignee is supported — this adds, it does not replace. Use `orboto_unassign` to remove.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     assigneeEmail: z.string().email(),
@@ -409,7 +409,7 @@ export function makeUnassignHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_set_milestone
+// orboto_set_milestone
 // ---------------------------------------------------------------------------
 
 export const setMilestoneToolConfig = {
@@ -448,7 +448,7 @@ export function makeSetMilestoneHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_add_ticket_dependency / remove / list — ORB-453
+// orboto_add_ticket_dependency / remove / list — ORB-453
 // ---------------------------------------------------------------------------
 
 interface DependencyEdge {

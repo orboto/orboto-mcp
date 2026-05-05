@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase B — `orbit_get_ticket`.
+ * ORB-244 Phase B — `orboto_get_ticket`.
  *
  * Returns a ticket's full context — description, comments, assignees,
  * labels, checklists, git activity — in a shape the model can
@@ -104,7 +104,7 @@ export function makeGetTicketHandler(client: OrbitClient) {
         ? client.get<TicketSummaryRow>(`/projects/${ticket.projectId}/tickets/${parentId}`).catch(swallow404<TicketSummaryRow | null>(null))
         : Promise.resolve(null),
       // Children via the new parentTicketId filter (API-side, O(children)).
-      // Cap at 50; anything bigger should use `orbit_list_tickets
+      // Cap at 50; anything bigger should use `orboto_list_tickets
       // --parentTicketKey` and paginate explicitly.
       client.get<CursorPage<TicketSummaryRow>>(
         `/projects/${ticket.projectId}/tickets?parentTicketId=${ticket.id}&limit=50`,
@@ -132,7 +132,7 @@ export function makeGetTicketHandler(client: OrbitClient) {
         description: ticket.description ?? null,
         // Hierarchy — null when no parent, array of summary rows for
         // children (empty array when none). Sub-ticket consumers can
-        // decide to call orbit_get_ticket on each for the full detail.
+        // decide to call orboto_get_ticket on each for the full detail.
         parentTicket: parent ? {
           key: parent.ticketKey,
           title: parent.title,

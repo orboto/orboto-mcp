@@ -5,7 +5,7 @@
  * (Claude Desktop, Cursor) surfaces in its UI as a one-click action.
  * Each handler returns `messages[]` that become the start of the
  * conversation; the user's model then drives the work, typically
- * by calling Orbit MCP tools.
+ * by calling Orboto MCP tools.
  *
  * Five v1 templates — each a thin wrapper that hands the model a
  * focused goal + a tool sequence to execute:

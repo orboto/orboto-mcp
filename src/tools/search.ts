@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase B — `orbit_search`.
+ * ORB-244 Phase B — `orboto_search`.
  *
  * Unified full-text search across tickets, comments, and docs. Maps
  * to the existing `/search` route (Phase 21 global search) which
@@ -40,7 +40,7 @@ interface SearchResponse {
 }
 
 export const searchToolConfig = {
-  title: 'Search across Orbit',
+  title: 'Search across Orboto',
   description:
     'Full-text search across tickets, comments, and docs. Honours the caller\'s visibility — private tickets and internal comments never appear unless the caller can already see them.',
   inputSchema: z.object({

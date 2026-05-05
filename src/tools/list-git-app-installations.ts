@@ -1,7 +1,7 @@
 /**
- * ORB-320 — `orbit_list_git_app_installations`.
+ * ORB-320 — `orboto_list_git_app_installations`.
  *
- * Returns every GitHub App installation Orbit knows about. Wraps
+ * Returns every GitHub App installation Orboto knows about. Wraps
  * `GET /admin/git-app-installations` (super-admin only on the API
  * side; a 403 here means the caller's API key isn't super-admin).
  *
@@ -25,7 +25,7 @@ interface InstallationRow {
 export const listGitAppInstallationsToolConfig = {
   title: 'List GitHub App installations',
   description:
-    'Return every GitHub App installation Orbit knows about (across all projects). Requires super-admin on the API side. Each row carries the org/user the App is installed on, when it was installed, and whether it is currently suspended.',
+    'Return every GitHub App installation Orboto knows about (across all projects). Requires super-admin on the API side. Each row carries the org/user the App is installed on, when it was installed, and whether it is currently suspended.',
   inputSchema: z.object({}).shape,
   outputSchema: z.object({
     installations: z.array(z.object({

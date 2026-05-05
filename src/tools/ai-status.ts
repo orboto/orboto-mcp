@@ -1,5 +1,5 @@
 /**
- * ORB-564 — `orbit_ai_status`.
+ * ORB-564 — `orboto_ai_status`.
  *
  * Pre-flight check for agents: is the workspace's AI provider configured?
  * Wraps `GET /ai/status`. Two flags come back — chat features and
@@ -8,7 +8,7 @@
  * (`ask-docs`, similar-tickets rerank, partial-overlap detection)
  * need both.
  *
- * Today no MCP tool requires AI directly — every `orbit_*` tool is a
+ * Today no MCP tool requires AI directly — every `orboto_*` tool is a
  * thin REST wrapper that does its own thing. The dependency lives on
  * the skill side (`orbit ask-docs`) and on chat-only LLM calls the
  * agent host might make. This tool exists so an agent can plan around
@@ -25,7 +25,7 @@ interface AiStatusResponse {
 }
 
 export const aiStatusToolConfig = {
-  title: 'Check whether the Orbit workspace has AI configured',
+  title: 'Check whether the Orboto workspace has AI configured',
   description:
     'Pre-flight check for AI-gated operations. Returns two flags: `configured` (chat / completion provider set up — required by `ask-docs`, summarisation, ticket polish, suggest-title, suggest-priority, suggest-labels, translate, NL search, retro generation, daily digest, milestone risk, ticket split) and `embeddingsConfigured` (embedding provider set up — required by RAG features like `ask-docs` and similar-tickets rerank). Anthropic-only deployments return `{ configured: true, embeddingsConfigured: false }` because Anthropic does not produce embeddings. Call this before invoking AI-gated skill shortcuts so you can plan around a workspace that has AI disabled.',
   inputSchema: z.object({}).shape,

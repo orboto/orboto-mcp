@@ -1,5 +1,5 @@
 /**
- * ORB-408 (Phase 3 of ORB-406) — `orbit_get_project_primer`.
+ * ORB-408 (Phase 3 of ORB-406) — `orboto_get_project_primer`.
  *
  * Returns the project's auto-generated AI Context Pack as a single
  * markdown blob, token-budget aware. AI agents call this as their

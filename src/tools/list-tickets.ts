@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase B — `orbit_list_tickets`.
+ * ORB-244 Phase B — `orboto_list_tickets`.
  *
  * Lists tickets in a project with optional filters. The API endpoint
  * (`GET /projects/:id/tickets`) supports cursor pagination; this

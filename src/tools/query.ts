@@ -1,8 +1,8 @@
 /**
- * ORB-273 Phase F — `orbit_query`.
+ * ORB-273 Phase F — `orboto_query`.
  *
  * Lets the model reach for the OQL DSL when the per-entity list
- * tools (`orbit_list_tickets`, `orbit_my_tickets`) get too narrow:
+ * tools (`orboto_list_tickets`, `orboto_my_tickets`) get too narrow:
  * combined `assignee + dueDate + label + statusCategory` filters
  * with explicit ORDER BY are awkward to express through tool
  * arguments but trivial in OQL. Falls back to JQL syntax via
@@ -35,7 +35,7 @@ export const queryToolConfig = {
     + '`project = ORB AND assignee = currentUser() AND statusCategory != done`; '
     + '`priority IN (blocker, high) AND dueDate <= now() ORDER BY dueDate ASC LIMIT 25`; '
     + '`labels = "bug" AND createdAt >= daysAgo(7)`. '
-    + 'Reach for this tool when per-entity tools (orbit_list_tickets / orbit_my_tickets) cannot express the combined filter.',
+    + 'Reach for this tool when per-entity tools (orboto_list_tickets / orboto_my_tickets) cannot express the combined filter.',
   inputSchema: z.object({
     oql: z.string().min(1).max(8000).describe('The OQL (or JQL when syntax="jql") query string.'),
     syntax: z.enum(['oql', 'jql']).default('oql').describe('Set "jql" to accept Jira-flavoured syntax (resolution, sprint, due, etc. are auto-mapped).'),

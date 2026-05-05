@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase B — `orbit_get_project`.
+ * ORB-244 Phase B — `orboto_get_project`.
  *
  * Returns metadata + milestones + labels + members for a project.
  * Accepts the human-readable project key (`ACME`), case-insensitive

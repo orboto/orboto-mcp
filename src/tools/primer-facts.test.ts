@@ -194,7 +194,7 @@ describe('orbit_primer_fact_add', () => {
         key: 'package-manager',
         value: 'yarn',
       })
-    ).rejects.toThrow(/orbit_primer_fact_supersede/);
+    ).rejects.toThrow(/orboto_primer_fact_supersede/);
   });
 
   it('input schema rejects an empty key', () => {
@@ -251,10 +251,10 @@ describe('orbit_primer_fact_update', () => {
 });
 
 // ---------------------------------------------------------------------------
-// orbit_primer_fact_supersede
+// orboto_primer_fact_supersede
 // ---------------------------------------------------------------------------
 
-describe('orbit_primer_fact_supersede', () => {
+describe('orboto_primer_fact_supersede', () => {
   it('POSTs /primer-facts/<id>/supersede with category + key + value', async () => {
     const calls = stub([{ json: { ...factStub, id: 'new-uuid', value: 'pnpm 10' } }]);
     await makePrimerFactSupersedeHandler(client)({

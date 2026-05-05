@@ -148,7 +148,7 @@ describe('orbit_add_check', () => {
     ]);
     await expect(
       makeAddCheckHandler(client)({ ticketKey: 'ACME-1', content: 'x' })
-    ).rejects.toThrow(/no checklists yet.*orbit_new_checklist/);
+    ).rejects.toThrow(/no checklists yet.*orboto_new_checklist/);
   });
 
   it('lists existing list titles when the requested one does not match', async () => {
@@ -163,7 +163,7 @@ describe('orbit_add_check', () => {
   });
 });
 
-describe('orbit_new_checklist', () => {
+describe('orboto_new_checklist', () => {
   it('POSTs title + optional triggersDone + seeded items', async () => {
     const calls = stub([
       { json: PROJ },

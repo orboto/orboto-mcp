@@ -12,12 +12,12 @@
  * English so the international LLM tool-selection path is reliable.
  *
  * Wire order in server.ts:
- *   - orbit_primer_fact_list
- *   - orbit_primer_fact_add
- *   - orbit_primer_fact_update
- *   - orbit_primer_fact_supersede
- *   - orbit_primer_fact_verify
- *   - orbit_primer_fact_delete
+ *   - orboto_primer_fact_list
+ *   - orboto_primer_fact_add
+ *   - orboto_primer_fact_update
+ *   - orboto_primer_fact_supersede
+ *   - orboto_primer_fact_verify
+ *   - orboto_primer_fact_delete
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -73,7 +73,7 @@ function rewritePermissionError(action: string): (err: unknown) => never {
     }
     if (err instanceof OrbitApiError && err.status === 409) {
       throw new Error(
-        `${action}: a fact with that category + key already exists in this scope. Use orbit_primer_fact_supersede or orbit_primer_fact_update instead.`,
+        `${action}: a fact with that category + key already exists in this scope. Use orboto_primer_fact_supersede or orboto_primer_fact_update instead.`,
       );
     }
     throw err as Error;
@@ -96,7 +96,7 @@ function summariseFact(f: PrimerFactRow): string {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_primer_fact_list
+// orboto_primer_fact_list
 // ---------------------------------------------------------------------------
 
 export const primerFactListToolConfig = {
@@ -170,7 +170,7 @@ export function makePrimerFactListHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_primer_fact_add
+// orboto_primer_fact_add
 // ---------------------------------------------------------------------------
 
 export const primerFactAddToolConfig = {
@@ -236,15 +236,15 @@ export function makePrimerFactAddHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_primer_fact_update
+// orboto_primer_fact_update
 // ---------------------------------------------------------------------------
 
 export const primerFactUpdateToolConfig = {
   title: 'Update an existing primer fact',
   description:
-    'Update an existing fact. Use this when the value has changed (e.g. version bumped) or you are renaming the key. Bumps last_verified_at automatically when the value changes; pure renames leave it untouched. To replace a fact while preserving history, use orbit_primer_fact_supersede instead.',
+    'Update an existing fact. Use this when the value has changed (e.g. version bumped) or you are renaming the key. Bumps last_verified_at automatically when the value changes; pure renames leave it untouched. To replace a fact while preserving history, use orboto_primer_fact_supersede instead.',
   inputSchema: z.object({
-    factId: z.string().min(1).describe('UUID of the fact to update. Read it from orbit_primer_fact_list output.'),
+    factId: z.string().min(1).describe('UUID of the fact to update. Read it from orboto_primer_fact_list output.'),
     value: z.string().min(1).max(8000).optional().describe('New Markdown body.'),
     category: PrimerFactCategoryEnum.optional().describe('New category.'),
     key: z.string().min(1).max(120).optional().describe('New key.'),
@@ -268,7 +268,7 @@ export function makePrimerFactUpdateHandler(client: OrbitClient) {
     if (category !== undefined) body.category = category;
     if (key !== undefined) body.key = key;
     if (Object.keys(body).length === 0) {
-      throw new Error('orbit_primer_fact_update needs at least one of value, category, key.');
+      throw new Error('orboto_primer_fact_update needs at least one of value, category, key.');
     }
     const row = await client
       .patch<PrimerFactRow>(`/primer-facts/${factId}`, body)
@@ -290,7 +290,7 @@ export function makePrimerFactUpdateHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_primer_fact_supersede
+// orboto_primer_fact_supersede
 // ---------------------------------------------------------------------------
 
 export const primerFactSupersedeToolConfig = {
@@ -337,7 +337,7 @@ export function makePrimerFactSupersedeHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_primer_fact_verify
+// orboto_primer_fact_verify
 // ---------------------------------------------------------------------------
 
 export const primerFactVerifyToolConfig = {
@@ -371,13 +371,13 @@ export function makePrimerFactVerifyHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_primer_fact_delete
+// orboto_primer_fact_delete
 // ---------------------------------------------------------------------------
 
 export const primerFactDeleteToolConfig = {
   title: 'Delete a primer fact',
   description:
-    'Hard-delete a fact. Prefer orbit_primer_fact_supersede when the fact is being replaced; only delete when the fact was wrong from the start or no longer relevant. Writes an audit-log entry; the row itself is gone (no soft-delete).',
+    'Hard-delete a fact. Prefer orboto_primer_fact_supersede when the fact is being replaced; only delete when the fact was wrong from the start or no longer relevant. Writes an audit-log entry; the row itself is gone (no soft-delete).',
   inputSchema: z.object({
     factId: z.string().min(1).describe('UUID of the fact to delete.'),
     reason: z.string().max(500).optional().describe(

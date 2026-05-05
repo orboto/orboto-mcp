@@ -2,10 +2,10 @@
  * ORB-244 Phase C Group 3 — checklist write tools (ORB-234).
  *
  * Four tools:
- *   - orbit_check / orbit_uncheck — toggle a single item's `isCompleted`
- *   - orbit_add_check — append a new item to a list (default: first list
+ *   - orboto_check / orboto_uncheck — toggle a single item's `isCompleted`
+ *   - orboto_add_check — append a new item to a list (default: first list
  *                       on the ticket)
- *   - orbit_new_checklist — create a fresh list with optional triggers-done
+ *   - orboto_new_checklist — create a fresh list with optional triggers-done
  *
  * Item identifier: agents prefer 1-based indexes ("check item 3 on
  * ACME-42") because UUIDs are ergonomic disasters in a chat. The
@@ -68,7 +68,7 @@ async function resolveItemId(
 }
 
 // ---------------------------------------------------------------------------
-// orbit_check / orbit_uncheck
+// orboto_check / orboto_uncheck
 // ---------------------------------------------------------------------------
 
 function makeToggleHandler(client: OrbitClient, completed: boolean) {
@@ -113,7 +113,7 @@ export const checkToolConfig = {
 export const uncheckToolConfig = {
   title: 'Uncheck a checklist item',
   description:
-    'Mark a checklist item as not-completed. Same `item` semantics as orbit_check.',
+    'Mark a checklist item as not-completed. Same `item` semantics as orboto_check.',
   inputSchema: toggleInputSchema,
 };
 
@@ -121,7 +121,7 @@ export const makeCheckHandler = (client: OrbitClient) => makeToggleHandler(clien
 export const makeUncheckHandler = (client: OrbitClient) => makeToggleHandler(client, false);
 
 // ---------------------------------------------------------------------------
-// orbit_add_check
+// orboto_add_check
 // ---------------------------------------------------------------------------
 
 export const addCheckToolConfig = {
@@ -144,7 +144,7 @@ export function makeAddCheckHandler(client: OrbitClient) {
     const checklists = await client.get<Checklist[]>(`/tickets/${ticket.id}/checklists`);
     if (checklists.length === 0) {
       throw new Error(
-        `[${ticket.ticketKey}] has no checklists yet. Create one with orbit_new_checklist first.`,
+        `[${ticket.ticketKey}] has no checklists yet. Create one with orboto_new_checklist first.`,
       );
     }
 
@@ -186,7 +186,7 @@ export function makeAddCheckHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_new_checklist
+// orboto_new_checklist
 // ---------------------------------------------------------------------------
 
 export const newChecklistToolConfig = {

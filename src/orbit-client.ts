@@ -1,12 +1,12 @@
 /**
  * ORB-244 Phase A — thin HTTP client the MCP server uses to talk to
- * the Orbit API.
+ * the Orboto API.
  *
  * Deliberately speaks HTTPS-REST rather than importing `@orboto/api`'s
  * services directly, for three reasons:
  *   1. One code path covers both delivery variants from the ticket —
  *      Local-Proxy (`npx @orboto/mcp-cli`, running on the dev's laptop,
- *      pointing at the public Orbit URL) AND Self-Hosted-inline
+ *      pointing at the public Orboto URL) AND Self-Hosted-inline
  *      (separate container in docker-compose, pointing at
  *      `http://api:3000`). The only difference is the env var.
  *   2. The API's `requirePermission` / PBAC cascade runs server-side
@@ -25,7 +25,7 @@
  */
 
 export interface OrbitClientConfig {
-  /** Base URL of the Orbit API — e.g. `https://orboto.example.com` or
+  /** Base URL of the Orboto API — e.g. `https://orboto.example.com` or
    *  `http://api:3000` when running inside docker-compose. No trailing
    *  slash; we'll strip one if the operator pastes it. */
   baseUrl: string;
@@ -43,7 +43,7 @@ export class OrbitApiError extends Error {
     public readonly body: string,
     public readonly url: string,
   ) {
-    super(`Orbit API ${status}: ${body || '(empty body)'}`);
+    super(`Orboto API ${status}: ${body || '(empty body)'}`);
     this.name = 'OrbitApiError';
   }
 }

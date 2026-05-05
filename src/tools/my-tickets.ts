@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase B — `orbit_my_tickets`.
+ * ORB-244 Phase B — `orboto_my_tickets`.
  *
  * The caller's own assignments. Maps to
  * `GET /users/me/assigned-tickets`, which already does the

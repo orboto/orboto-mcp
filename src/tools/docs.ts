@@ -1,7 +1,7 @@
 /**
  * ORB-244 Phase B — doc tools.
  *
- * `orbit_list_doc_spaces` and `orbit_get_doc` share this file for the
+ * `orboto_list_doc_spaces` and `orboto_get_doc` share this file for the
  * same reason the milestone tools do — cheap neighbours on the same
  * API root. Docs are referenced by UUID even in the MCP surface
  * because they have no human-readable key (no per-space short-id).
@@ -50,13 +50,13 @@ interface DocBacklinkRow {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_list_doc_spaces
+// orboto_list_doc_spaces
 // ---------------------------------------------------------------------------
 
 export const listDocSpacesToolConfig = {
   title: 'List doc spaces',
   description:
-    'List wiki spaces (global and project-scoped) the caller can read. Each space contains a tree of docs accessed via orbit_get_doc.',
+    'List wiki spaces (global and project-scoped) the caller can read. Each space contains a tree of docs accessed via orboto_get_doc.',
   inputSchema: z.object({}).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -91,7 +91,7 @@ export function makeListDocSpacesHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_get_doc
+// orboto_get_doc
 // ---------------------------------------------------------------------------
 
 export const getDocToolConfig = {
@@ -99,7 +99,7 @@ export const getDocToolConfig = {
   description:
     'Return the doc content (Markdown) plus backlinks (other docs that reference this doc, or tickets/milestones the doc is linked from).',
   inputSchema: z.object({
-    docId: z.string().uuid().describe('Doc UUID. Discover via orbit_list_doc_spaces or orbit_search.'),
+    docId: z.string().uuid().describe('Doc UUID. Discover via orboto_list_doc_spaces or orboto_search.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

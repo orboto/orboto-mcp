@@ -14,9 +14,9 @@
  * just rewrite 403 into a clear message.
  *
  * Tools:
- *   - orbit_list_users — admin user directory with cursor pagination
- *   - orbit_get_audit_log — recent admin / mutation events
- *   - orbit_trigger_backup — run a configured backup job by name
+ *   - orboto_list_users — admin user directory with cursor pagination
+ *   - orboto_get_audit_log — recent admin / mutation events
+ *   - orboto_trigger_backup — run a configured backup job by name
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -73,7 +73,7 @@ function rewrite403(action: string): (err: unknown) => never {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_list_users
+// orboto_list_users
 // ---------------------------------------------------------------------------
 
 export const listUsersToolConfig = {
@@ -128,7 +128,7 @@ export function makeListUsersHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_get_audit_log
+// orboto_get_audit_log
 // ---------------------------------------------------------------------------
 
 export const getAuditLogToolConfig = {
@@ -191,7 +191,7 @@ export function makeGetAuditLogHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_trigger_backup
+// orboto_trigger_backup
 // ---------------------------------------------------------------------------
 
 export const triggerBackupToolConfig = {

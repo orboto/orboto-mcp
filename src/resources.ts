@@ -2,7 +2,7 @@
  * ORB-244 Phase D — MCP resources.
  *
  * Resources let MCP-aware clients (Claude Desktop, Cursor) read
- * Orbit content as static blobs without explicitly invoking a tool.
+ * Orboto content as static blobs without explicitly invoking a tool.
  * Where tools are RPCs ("do this thing"), resources are URIs ("here
  * is content at this address").
  *
@@ -59,7 +59,7 @@ export function registerOrbitResources(server: McpServer, client: OrbitClient): 
     'ticket',
     new ResourceTemplate('orbit://ticket/{ticketKey}', { list: undefined }),
     {
-      title: 'Orbit ticket',
+      title: 'Orboto ticket',
       description: 'A single ticket with description, assignees, comments, and labels — rendered as Markdown.',
       mimeType: 'text/markdown',
     },
@@ -91,7 +91,7 @@ export function registerOrbitResources(server: McpServer, client: OrbitClient): 
     'doc',
     new ResourceTemplate('orbit://doc/{docId}', { list: undefined }),
     {
-      title: 'Orbit doc',
+      title: 'Orboto doc',
       description: 'A wiki page from a doc space — Markdown body.',
       mimeType: 'text/markdown',
     },
@@ -117,7 +117,7 @@ export function registerOrbitResources(server: McpServer, client: OrbitClient): 
     'project',
     new ResourceTemplate('orbit://project/{projectKey}', { list: undefined }),
     {
-      title: 'Orbit project',
+      title: 'Orboto project',
       description: 'Project metadata, milestones, members.',
       mimeType: 'text/markdown',
     },
@@ -149,7 +149,7 @@ export function registerOrbitResources(server: McpServer, client: OrbitClient): 
     'search',
     new ResourceTemplate('orbit://search/{query}', { list: undefined }),
     {
-      title: 'Orbit search',
+      title: 'Orboto search',
       description: 'Full-text search across tickets, comments, docs — visibility-filtered.',
       mimeType: 'text/markdown',
     },

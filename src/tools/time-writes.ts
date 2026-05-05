@@ -3,17 +3,17 @@
  *
  * Three tools that wrap the existing /time/timer/* + /tickets/:id/time-entries
  * endpoints:
- *   - orbit_timer_start (ticketKey, description?, replace?)
- *   - orbit_timer_stop  — closes the running timer; the API converts
+ *   - orboto_timer_start (ticketKey, description?, replace?)
+ *   - orboto_timer_stop  — closes the running timer; the API converts
  *                         elapsed time into a time_entries row using the
  *                         description set at start.
- *   - orbit_log_time    — direct time-entry POST for after-the-fact
+ *   - orboto_log_time    — direct time-entry POST for after-the-fact
  *                         logging (no running timer involved).
  *
  * Note: the wrapper's `timer-stop "note"` syntax sends a `note` field
  * the API silently ignores — the time entry's description is whatever
  * was set on `start`. To attach a note to a stopped session, post a
- * comment afterwards via `orbit_comment`. The MCP tool only accepts
+ * comment afterwards via `orboto_comment`. The MCP tool only accepts
  * what the API actually accepts.
  */
 import { z } from 'zod';
@@ -43,7 +43,7 @@ interface TimeEntry {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_timer_start
+// orboto_timer_start
 // ---------------------------------------------------------------------------
 
 export const timerStartToolConfig = {
@@ -94,7 +94,7 @@ export function makeTimerStartHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_timer_stop
+// orboto_timer_stop
 // ---------------------------------------------------------------------------
 
 export const timerStopToolConfig = {
@@ -128,7 +128,7 @@ export function makeTimerStopHandler(client: OrbitClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orbit_log_time
+// orboto_log_time
 // ---------------------------------------------------------------------------
 
 export const logTimeToolConfig = {
