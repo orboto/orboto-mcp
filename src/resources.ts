@@ -7,10 +7,10 @@
  * is content at this address").
  *
  * Four URI templates exposed:
- *   orbit://ticket/{ticketKey}     — rendered Markdown of the ticket
- *   orbit://doc/{docId}            — doc body (Markdown)
- *   orbit://project/{projectKey}   — project summary
- *   orbit://search/{query}         — search results as Markdown
+ *   orboto://ticket/{ticketKey}     — rendered Markdown of the ticket
+ *   orboto://doc/{docId}            — doc body (Markdown)
+ *   orboto://project/{projectKey}   — project summary
+ *   orboto://search/{query}         — search results as Markdown
  *
  * No `list` callback for tickets/docs because the candidate set is
  * unbounded (every ticket, every doc) — the URI templates are
@@ -53,11 +53,11 @@ interface SearchResponse {
 
 export function registerOrbotoResources(server: McpServer, client: OrbotoClient): void {
   // -------------------------------------------------------------------------
-  // orbit://ticket/{ticketKey}
+  // orboto://ticket/{ticketKey}
   // -------------------------------------------------------------------------
   server.registerResource(
     'ticket',
-    new ResourceTemplate('orbit://ticket/{ticketKey}', { list: undefined }),
+    new ResourceTemplate('orboto://ticket/{ticketKey}', { list: undefined }),
     {
       title: 'Orboto ticket',
       description: 'A single ticket with description, assignees, comments, and labels — rendered as Markdown.',
@@ -85,11 +85,11 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
   );
 
   // -------------------------------------------------------------------------
-  // orbit://doc/{docId}
+  // orboto://doc/{docId}
   // -------------------------------------------------------------------------
   server.registerResource(
     'doc',
-    new ResourceTemplate('orbit://doc/{docId}', { list: undefined }),
+    new ResourceTemplate('orboto://doc/{docId}', { list: undefined }),
     {
       title: 'Orboto doc',
       description: 'A wiki page from a doc space — Markdown body.',
@@ -111,11 +111,11 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
   );
 
   // -------------------------------------------------------------------------
-  // orbit://project/{projectKey}
+  // orboto://project/{projectKey}
   // -------------------------------------------------------------------------
   server.registerResource(
     'project',
-    new ResourceTemplate('orbit://project/{projectKey}', { list: undefined }),
+    new ResourceTemplate('orboto://project/{projectKey}', { list: undefined }),
     {
       title: 'Orboto project',
       description: 'Project metadata, milestones, members.',
@@ -139,7 +139,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
   );
 
   // -------------------------------------------------------------------------
-  // orbit://search/{query}
+  // orboto://search/{query}
   //
   // Note: clients URL-encode `query` automatically. Special chars in
   // a natural-language query are fine; the URI template handles
@@ -147,7 +147,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
   // -------------------------------------------------------------------------
   server.registerResource(
     'search',
-    new ResourceTemplate('orbit://search/{query}', { list: undefined }),
+    new ResourceTemplate('orboto://search/{query}', { list: undefined }),
     {
       title: 'Orboto search',
       description: 'Full-text search across tickets, comments, docs — visibility-filtered.',

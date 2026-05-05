@@ -15,31 +15,36 @@
  *
  * Config (env-only — no config file):
  *   ORBOTO_API_URL        required — base URL of the Orboto API
- *   ORBOTO_API_KEY        required — `orb_*` API key with `mcp:use`
+ *   ORBOTO_API_KEY        required — `obo_*` API key with `mcp:use`
  *                         scope (stdio mode). Per-session bearer token
  *                         is read from Authorization header in http mode.
  *   ORBOTO_MCP_TRANSPORT  optional — `stdio` (default) | `http`
  *   ORBOTO_MCP_PORT       optional — port for http transport, default 3100
  *   ORBOTO_MCP_CLIENT     optional — client hint for User-Agent (e.g.
  *                         `claude-desktop`, `cursor`).
- *
- * ORB-584 — legacy `ORBIT_*` names are still accepted for one major
- * release with a deprecation warning to stderr. Removed in v1.0.
  */
 import { buildOrbotoMcpServer } from './server.js';
 import { OrbotoClient, preflightMcpSession } from './orboto-client.js';
-import { envOrLegacy, requireEnvOrLegacy } from './env-compat.js';
+
+function requireEnv(name: string): string {
+  const v = process.env[name];
+  if (!v || v.length === 0) {
+    process.stderr.write(`[orboto-mcp] missing required env var: ${name}\n`);
+    process.exit(2);
+  }
+  return v;
+}
 
 async function main() {
-  const transport = (envOrLegacy('ORBOTO_MCP_TRANSPORT', 'ORBIT_MCP_TRANSPORT') ?? 'stdio').toLowerCase();
+  const transport = (process.env.ORBOTO_MCP_TRANSPORT ?? 'stdio').toLowerCase();
 
   if (transport === 'stdio') {
     // Local-Proxy mode — one MCP client, one process, one API key.
     // All config read at boot; no per-request auth needed because the
     // only user of this stdio pair is the client that spawned us.
-    const baseUrl = requireEnvOrLegacy('ORBOTO_API_URL', 'ORBIT_API_URL');
-    const apiKey = requireEnvOrLegacy('ORBOTO_API_KEY', 'ORBIT_API_KEY');
-    const userAgentSuffix = envOrLegacy('ORBOTO_MCP_CLIENT', 'ORBIT_MCP_CLIENT');
+    const baseUrl = requireEnv('ORBOTO_API_URL');
+    const apiKey = requireEnv('ORBOTO_API_KEY');
+    const userAgentSuffix = process.env.ORBOTO_MCP_CLIENT;
 
     // Preflight BEFORE spinning up the transport — so a
     // mis-configured install fails loudly to stderr instead of
@@ -48,10 +53,10 @@ async function main() {
     try {
       const { userEmail } = await preflightMcpSession(preflightClient);
       // eslint-disable-next-line no-console
-      console.error(`[orbit-mcp] authenticated as ${userEmail} → ${baseUrl}`);
+      console.error(`[orboto-mcp] authenticated as ${userEmail} → ${baseUrl}`);
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error(`[orbit-mcp] ${(err as Error).message}`);
+      console.error(`[orboto-mcp] ${(err as Error).message}`);
       process.exit(1);
     }
 
@@ -70,15 +75,15 @@ async function main() {
     // the caller (Claude Desktop / Cursor) on every POST — a per-
     // session server is built so each session carries its own
     // API-key scoped OrbotoClient.
-    const port = Number(envOrLegacy('ORBOTO_MCP_PORT', 'ORBIT_MCP_PORT') ?? '3100');
-    const baseUrl = requireEnvOrLegacy('ORBOTO_API_URL', 'ORBIT_API_URL');
+    const port = Number(process.env.ORBOTO_MCP_PORT ?? '3100');
+    const baseUrl = requireEnv('ORBOTO_API_URL');
     const { createHttpServer } = await import('./http-transport.js');
     const httpServer = createHttpServer({ baseUrl });
     httpServer.listen(port, () => {
       // stderr so self-hosted operators can tail the container log
       // without parsing the JSON on stdout (stdio mode).
       // eslint-disable-next-line no-console
-      console.error(`[orbit-mcp] http listening on :${port} → ${baseUrl}`);
+      console.error(`[orboto-mcp] http listening on :${port} → ${baseUrl}`);
     });
     return;
   }
@@ -90,6 +95,6 @@ async function main() {
 
 main().catch((err) => {
   // eslint-disable-next-line no-console
-  console.error('[orbit-mcp] fatal:', err);
+  console.error('[orboto-mcp] fatal:', err);
   process.exit(1);
 });

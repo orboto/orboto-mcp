@@ -22,7 +22,7 @@ function mockFetch(json: unknown) {
 }
 
 describe('tools/list-projects', () => {
-  const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
+  const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'obo_test' });
 
   it('emits a human-readable text block + structured content', async () => {
     mockFetch([

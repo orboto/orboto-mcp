@@ -33,7 +33,7 @@ function stub(responses: Array<{ ok?: boolean; status?: number; json?: unknown }
   });
 }
 
-const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
+const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'obo_x' });
 
 function buildServerWithResources() {
   const server = new McpServer({ name: 'test', version: '0.0.0' });
@@ -49,7 +49,7 @@ function getTemplateHandler(server: McpServer, name: string) {
   return entry.readCallback;
 }
 
-describe('orbit:// ticket resource', () => {
+describe('orboto:// ticket resource', () => {
   it('renders a ticket as Markdown with description + comments', async () => {
     stub([
       // resolveTicketByKey: project lookup
@@ -78,7 +78,7 @@ describe('orbit:// ticket resource', () => {
 
     const server = buildServerWithResources();
     const handler = getTemplateHandler(server, 'ticket');
-    const out = await handler(new URL('orbit://ticket/ACME-7'), { ticketKey: 'ACME-7' });
+    const out = await handler(new URL('orboto://ticket/ACME-7'), { ticketKey: 'ACME-7' });
 
     const text = out.contents[0]?.text;
     expect(text).toContain('# [ACME-7] Login bug');
@@ -106,14 +106,14 @@ describe('orbit:// ticket resource', () => {
 
     const server = buildServerWithResources();
     const handler = getTemplateHandler(server, 'ticket');
-    const out = await handler(new URL('orbit://ticket/ACME-8'), { ticketKey: 'ACME-8' });
+    const out = await handler(new URL('orboto://ticket/ACME-8'), { ticketKey: 'ACME-8' });
     const text = out.contents[0]?.text;
     expect(text).toContain('# [ACME-8] Plain');
     expect(text).not.toContain('## Comments');
   });
 });
 
-describe('orbit:// doc resource', () => {
+describe('orboto:// doc resource', () => {
   it('renders the doc title + body as Markdown', async () => {
     stub([{
       json: {
@@ -123,7 +123,7 @@ describe('orbit:// doc resource', () => {
     }]);
     const server = buildServerWithResources();
     const handler = getTemplateHandler(server, 'doc');
-    const out = await handler(new URL('orbit://doc/d1'), { docId: 'd1' });
+    const out = await handler(new URL('orboto://doc/d1'), { docId: 'd1' });
     const text = out.contents[0]?.text;
     expect(text).toContain('# Runbook');
     expect(text).toContain('Visibility: workspace');
@@ -131,7 +131,7 @@ describe('orbit:// doc resource', () => {
   });
 });
 
-describe('orbit:// project resource', () => {
+describe('orboto:// project resource', () => {
   it('aggregates project + milestones + members into Markdown', async () => {
     stub([
       // resolveProjectByKey
@@ -143,7 +143,7 @@ describe('orbit:// project resource', () => {
     ]);
     const server = buildServerWithResources();
     const handler = getTemplateHandler(server, 'project');
-    const out = await handler(new URL('orbit://project/ACME'), { projectKey: 'ACME' });
+    const out = await handler(new URL('orboto://project/ACME'), { projectKey: 'ACME' });
     const text = out.contents[0]?.text;
     expect(text).toContain('# ACME — Acme Inc');
     expect(text).toContain('## Milestones');
@@ -153,7 +153,7 @@ describe('orbit:// project resource', () => {
   });
 });
 
-describe('orbit:// search resource', () => {
+describe('orboto:// search resource', () => {
   it('renders top hits when results are present', async () => {
     stub([{
       json: {
@@ -165,7 +165,7 @@ describe('orbit:// search resource', () => {
     }]);
     const server = buildServerWithResources();
     const handler = getTemplateHandler(server, 'search');
-    const out = await handler(new URL('orbit://search/login'), { query: 'login' });
+    const out = await handler(new URL('orboto://search/login'), { query: 'login' });
     const text = out.contents[0]?.text;
     expect(text).toContain('# Search: login');
     expect(text).toContain('TICKET ACME-1');
@@ -176,7 +176,7 @@ describe('orbit:// search resource', () => {
     stub([{ json: { items: [], total: 0 } }]);
     const server = buildServerWithResources();
     const handler = getTemplateHandler(server, 'search');
-    const out = await handler(new URL('orbit://search/zzz'), { query: 'zzz' });
+    const out = await handler(new URL('orboto://search/zzz'), { query: 'zzz' });
     const text = out.contents[0]?.text;
     expect(text).toContain('# Search: zzz');
     expect(text).toContain('_No hits._');

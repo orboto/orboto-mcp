@@ -30,7 +30,7 @@ function sequence(responses: Array<{ ok?: boolean; status?: number; json?: unkno
   return calls;
 }
 
-const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
+const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'obo_x' });
 
 describe('resolveProjectByKey', () => {
   it('returns the project on success', async () => {

@@ -6,7 +6,7 @@
  * 3100). The reverse proxy routes `/mcp` to this port.
  *
  * Per-request auth: every POST must carry `Authorization: Bearer
- * orb_*` in the header. We build one `McpServer` per session so each
+ * obo_*` in the header. We build one `McpServer` per session so each
  * session gets its own OrbotoClient bound to that session's token —
  * no mid-session token mutation, no cross-session leakage.
  *

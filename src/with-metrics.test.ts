@@ -15,7 +15,7 @@ import { withMetrics } from './with-metrics.js';
 beforeEach(() => { vi.restoreAllMocks(); });
 afterEach(() => { vi.restoreAllMocks(); });
 
-const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
+const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'obo_x' });
 
 /** Capture every POST body the client makes and let the test inspect them. */
 function captureFetch() {
@@ -35,7 +35,7 @@ function captureFetch() {
 describe('withMetrics', () => {
   it('logs success: true with measured duration on a normal handler', async () => {
     const calls = captureFetch();
-    const wrapped = withMetrics(client, 'orbit_test', undefined, async () => ({
+    const wrapped = withMetrics(client, 'orboto_test', undefined, async () => ({
       content: [{ type: 'text' as const, text: 'ok' }],
     }));
     const result = await wrapped({});
@@ -47,7 +47,7 @@ describe('withMetrics', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toContain('/admin/mcp/instrument');
     const body = calls[0].body as { toolName: string; success: boolean; durationMs: number };
-    expect(body.toolName).toBe('orbit_test');
+    expect(body.toolName).toBe('orboto_test');
     expect(body.success).toBe(true);
     expect(body.durationMs).toBeGreaterThanOrEqual(0);
   });
@@ -84,7 +84,7 @@ describe('withMetrics', () => {
 
   it('threads clientHint into the log entry', async () => {
     const calls = captureFetch();
-    const wrapped = withMetrics(client, 'orbit_test', 'cursor', async () => ({
+    const wrapped = withMetrics(client, 'orboto_test', 'cursor', async () => ({
       content: [{ type: 'text' as const, text: 'ok' }],
     }));
     await wrapped({});
@@ -105,7 +105,7 @@ describe('withMetrics', () => {
       text: async () => '',
     } as unknown as Response));
 
-    const wrapped = withMetrics(client, 'orbit_test', undefined, async () => ({
+    const wrapped = withMetrics(client, 'orboto_test', undefined, async () => ({
       content: [{ type: 'text' as const, text: 'survives' }],
     }));
     const result = await wrapped({});

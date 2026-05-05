@@ -12,7 +12,7 @@
  *   2. The API's `requirePermission` / PBAC cascade runs server-side
  *      where it belongs. The MCP server is a pure transport adapter;
  *      it never sees the DB or trust boundary.
- *   3. The `orb_*` API-key flow is already wired into the API's
+ *   3. The `obo_*` API-key flow is already wired into the API's
  *      `authenticate` decorator — reusing it means the existing
  *      `mcp:use` + `api:use` scope checks, rate limits, and audit
  *      logs all light up for free.
@@ -30,7 +30,7 @@ export interface OrbotoClientConfig {
    *  slash; we'll strip one if the operator pastes it. */
   baseUrl: string;
   /** API key minted in Profile → API Keys with the `mcp:use` scope.
-   *  Format `orb_*`. */
+   *  Format `obo_*`. */
   apiKey: string;
   /** Optional user-agent suffix so admins can tell `claude-desktop`
    *  traffic apart from `cursor`. */
