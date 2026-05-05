@@ -1,5 +1,5 @@
 {
-  "name": "@orbit/mcp",
+  "name": "@orboto/mcp",
   "version": "0.51.0",
   "description": "Orbit MCP server — exposes Orbit tickets, docs, and timers as Model Context Protocol tools for Claude Desktop / Cursor / Copilot.",
   "main": "dist/index.js",
@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@orbit/shared-schema": "workspace:*",
+    "@orboto/shared-schema": "workspace:*",
     "zod": "^3"
   },
   "devDependencies": {

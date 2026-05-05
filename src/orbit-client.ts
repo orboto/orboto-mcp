@@ -2,10 +2,10 @@
  * ORB-244 Phase A — thin HTTP client the MCP server uses to talk to
  * the Orbit API.
  *
- * Deliberately speaks HTTPS-REST rather than importing `@orbit/api`'s
+ * Deliberately speaks HTTPS-REST rather than importing `@orboto/api`'s
  * services directly, for three reasons:
  *   1. One code path covers both delivery variants from the ticket —
- *      Local-Proxy (`npx @orbit/mcp-cli`, running on the dev's laptop,
+ *      Local-Proxy (`npx @orboto/mcp-cli`, running on the dev's laptop,
  *      pointing at the public Orbit URL) AND Self-Hosted-inline
  *      (separate container in docker-compose, pointing at
  *      `http://api:3000`). The only difference is the env var.

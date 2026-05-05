@@ -4,7 +4,7 @@
  * Each tool gets one happy-path test that confirms it hits the
  * expected API endpoints in order and produces structured content
  * with the advertised keys. The fixtures below use the REAL shapes
- * from `@orbit/shared-schema` — if a schema drift lands, these tests
+ * from `@orboto/shared-schema` — if a schema drift lands, these tests
  * break, which is exactly what we want.
  */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';

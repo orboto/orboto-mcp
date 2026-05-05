@@ -7,7 +7,7 @@
  *
  * Keeping the server factory transport-agnostic means `server.ts` is
  * the same object whether we ship stdio for Local-Proxy (Phase G
- * `@orbit/mcp-cli`) or HTTP-SSE for Self-Hosted-inline.
+ * `@orboto/mcp-cli`) or HTTP-SSE for Self-Hosted-inline.
  *
  * Tool registrations stay in this file so adding a new tool in
  * Phase C is one diff here + one new file in `tools/`. Phase D will

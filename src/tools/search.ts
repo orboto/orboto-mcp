@@ -18,7 +18,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbitClient } from '../orbit-client.js';
 import { resolveProjectByKey } from './shared.js';
 
-/** Matches SearchResultSchema in @orbit/shared-schema. */
+/** Matches SearchResultSchema in @orboto/shared-schema. */
 interface SearchHit {
   type: 'ticket' | 'comment' | 'doc';
   id: string;

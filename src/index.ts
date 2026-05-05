@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ORB-244 Phase A — entry point for `@orbit/mcp`.
+ * ORB-244 Phase A — entry point for `@orboto/mcp`.
  *
  * Two transport modes, picked by env:
  *   ORBIT_MCP_TRANSPORT=stdio (default)  — JSON-RPC over stdin/stdout,

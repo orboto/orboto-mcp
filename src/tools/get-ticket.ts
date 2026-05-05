@@ -27,7 +27,7 @@ interface TicketSummaryRow {
   statusCategory?: string;
 }
 
-/** Matches `CommentSchema` in @orbit/shared-schema. */
+/** Matches `CommentSchema` in @orboto/shared-schema. */
 interface CommentRow {
   id: string;
   ticketId: string;

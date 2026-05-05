@@ -11,7 +11,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbitApiError, type OrbitClient } from '../orbit-client.js';
 import { resolveProjectByKey } from './shared.js';
 
-/** Matches MilestoneSchema in @orbit/shared-schema. `description` is
+/** Matches MilestoneSchema in @orboto/shared-schema. `description` is
  *  intentionally absent there — milestones hold name + dates + status
  *  only, no free-text body. */
 interface MilestoneRow {

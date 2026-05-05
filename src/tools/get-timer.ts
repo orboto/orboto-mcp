@@ -15,7 +15,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbitClient } from '../orbit-client.js';
 
-/** Matches ActiveTimerSchema in @orbit/shared-schema. */
+/** Matches ActiveTimerSchema in @orboto/shared-schema. */
 interface ActiveTimer {
   id: string;
   userId: string;

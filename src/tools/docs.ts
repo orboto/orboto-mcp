@@ -6,7 +6,7 @@
  * API root. Docs are referenced by UUID even in the MCP surface
  * because they have no human-readable key (no per-space short-id).
  *
- * Schema alignment: field names match `@orbit/shared-schema`
+ * Schema alignment: field names match `@orboto/shared-schema`
  * exactly — `content` not `body` on docs, `excerpt` not `snippet` on
  * hits, backlinks carry `{type, id, label, sourceDocId,
  * sourceDocTitle, sourceSpaceId}`. Getting those wrong 500s the tool
