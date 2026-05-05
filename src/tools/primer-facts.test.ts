@@ -7,7 +7,7 @@
  * the `add` tool's `observed` flag.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { OrbitClient } from '../orbit-client.js';
+import { OrbotoClient } from '../orboto-client.js';
 import {
   makePrimerFactListHandler,
   makePrimerFactAddHandler,
@@ -44,7 +44,7 @@ function stub(responses: Array<{ ok?: boolean; status?: number; json?: unknown }
   return calls;
 }
 
-const client = new OrbitClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
+const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 
 const projectStub = { id: 'p-uuid-1234', key: 'ORB', name: 'Orbit', description: null, status: 'active' };
 const factStub = {

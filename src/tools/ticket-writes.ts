@@ -28,7 +28,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { OrbitApiError, type OrbitClient } from '../orbit-client.js';
+import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey, resolveTicketByKey, type TicketRow } from './shared.js';
 
 // ---------------------------------------------------------------------------
@@ -56,7 +56,7 @@ interface MilestoneRow { id: string; name: string }
 interface LabelRow { id: string; name: string }
 
 async function resolveAssigneeId(
-  client: OrbitClient,
+  client: OrbotoClient,
   projectId: string,
   email: string,
 ): Promise<string> {
@@ -67,7 +67,7 @@ async function resolveAssigneeId(
 }
 
 async function resolveMilestoneId(
-  client: OrbitClient,
+  client: OrbotoClient,
   projectId: string,
   milestoneName: string,
 ): Promise<string> {
@@ -78,7 +78,7 @@ async function resolveMilestoneId(
 }
 
 async function resolveLabelIds(
-  client: OrbitClient,
+  client: OrbotoClient,
   projectId: string,
   names: string[],
 ): Promise<string[]> {
@@ -135,7 +135,7 @@ export const createTicketToolConfig = {
   }).shape,
 };
 
-export function makeCreateTicketHandler(client: OrbitClient) {
+export function makeCreateTicketHandler(client: OrbotoClient) {
   return async (input: {
     projectKey: string; title: string; description?: string;
     type?: 'task' | 'bug' | 'story' | 'epic';
@@ -207,7 +207,7 @@ export const updateTicketToolConfig = {
   }).shape,
 };
 
-export function makeUpdateTicketHandler(client: OrbitClient) {
+export function makeUpdateTicketHandler(client: OrbotoClient) {
   return async ({ ticketKey, patch }: {
     ticketKey: string;
     patch: Record<string, unknown>;
@@ -237,7 +237,7 @@ export const moveTicketToolConfig = {
   }).shape,
 };
 
-export function makeMoveTicketHandler(client: OrbitClient) {
+export function makeMoveTicketHandler(client: OrbotoClient) {
   return async ({ ticketKey, statusCategory }: {
     ticketKey: string; statusCategory: StatusCategory;
   }): Promise<CallToolResult> => {
@@ -267,7 +267,7 @@ export const closeTicketToolConfig = {
   }).shape,
 };
 
-export function makeCloseTicketHandler(client: OrbitClient) {
+export function makeCloseTicketHandler(client: OrbotoClient) {
   return async ({ ticketKey, comment }: {
     ticketKey: string; comment?: string;
   }): Promise<CallToolResult> => {
@@ -311,7 +311,7 @@ export const commentToolConfig = {
   }).shape,
 };
 
-export function makeCommentHandler(client: OrbitClient) {
+export function makeCommentHandler(client: OrbotoClient) {
   return async ({ ticketKey, text, isInternal }: {
     ticketKey: string; text: string; isInternal?: boolean;
   }): Promise<CallToolResult> => {
@@ -349,7 +349,7 @@ export const assignToolConfig = {
   }).shape,
 };
 
-export function makeAssignHandler(client: OrbitClient) {
+export function makeAssignHandler(client: OrbotoClient) {
   return async ({ ticketKey, assigneeEmail }: {
     ticketKey: string; assigneeEmail: string;
   }): Promise<CallToolResult> => {
@@ -358,7 +358,7 @@ export function makeAssignHandler(client: OrbitClient) {
     try {
       await client.post(`/projects/${ticket.projectId}/tickets/${ticket.id}/assignees/${userId}`, {});
     } catch (err) {
-      if (err instanceof OrbitApiError && err.status === 409) {
+      if (err instanceof OrbotoApiError && err.status === 409) {
         // Already assigned — idempotent success.
         return {
           content: [{ type: 'text', text: `[${ticket.ticketKey}] already assigned to ${assigneeEmail}.` }],
@@ -383,7 +383,7 @@ export const unassignToolConfig = {
   }).shape,
 };
 
-export function makeUnassignHandler(client: OrbitClient) {
+export function makeUnassignHandler(client: OrbotoClient) {
   return async ({ ticketKey, assigneeEmail }: {
     ticketKey: string; assigneeEmail: string;
   }): Promise<CallToolResult> => {
@@ -393,7 +393,7 @@ export function makeUnassignHandler(client: OrbitClient) {
       await client.delete(`/projects/${ticket.projectId}/tickets/${ticket.id}/assignees/${userId}`);
     } catch (err) {
       // 404 = wasn't assigned. Idempotent success.
-      if (err instanceof OrbitApiError && err.status === 404) {
+      if (err instanceof OrbotoApiError && err.status === 404) {
         return {
           content: [{ type: 'text', text: `${assigneeEmail} wasn\'t assigned to [${ticket.ticketKey}].` }],
           structuredContent: { ticketKey: ticket.ticketKey, alreadyUnassigned: true },
@@ -422,7 +422,7 @@ export const setMilestoneToolConfig = {
   }).shape,
 };
 
-export function makeSetMilestoneHandler(client: OrbitClient) {
+export function makeSetMilestoneHandler(client: OrbotoClient) {
   return async ({ ticketKey, milestone }: {
     ticketKey: string; milestone?: string | null;
   }): Promise<CallToolResult> => {
@@ -470,7 +470,7 @@ export const addTicketDependencyToolConfig = {
   }).shape,
 };
 
-export function makeAddTicketDependencyHandler(client: OrbitClient) {
+export function makeAddTicketDependencyHandler(client: OrbotoClient) {
   return async ({ ticketKey, dependsOnKey }: {
     ticketKey: string; dependsOnKey: string;
   }): Promise<CallToolResult> => {
@@ -483,7 +483,7 @@ export function makeAddTicketDependencyHandler(client: OrbitClient) {
       );
     } catch (err) {
       // 409 = edge already exists — idempotent success.
-      if (err instanceof OrbitApiError && err.status === 409) {
+      if (err instanceof OrbotoApiError && err.status === 409) {
         return {
           content: [{ type: 'text', text: `[${ticket.ticketKey}] already depends on [${dependsOn.ticketKey}].` }],
           structuredContent: { ticketKey: ticket.ticketKey, dependsOnKey: dependsOn.ticketKey, alreadyExisted: true },
@@ -513,7 +513,7 @@ export const removeTicketDependencyToolConfig = {
   }).shape,
 };
 
-export function makeRemoveTicketDependencyHandler(client: OrbitClient) {
+export function makeRemoveTicketDependencyHandler(client: OrbotoClient) {
   return async ({ ticketKey, dependsOnKey }: {
     ticketKey: string; dependsOnKey: string;
   }): Promise<CallToolResult> => {
@@ -525,7 +525,7 @@ export function makeRemoveTicketDependencyHandler(client: OrbitClient) {
       );
     } catch (err) {
       // 404 = edge wasn't there. Idempotent success.
-      if (err instanceof OrbitApiError && err.status === 404) {
+      if (err instanceof OrbotoApiError && err.status === 404) {
         return {
           content: [{ type: 'text', text: `[${ticket.ticketKey}] didn\'t depend on [${dependsOn.ticketKey}].` }],
           structuredContent: { ticketKey: ticket.ticketKey, dependsOnKey: dependsOn.ticketKey, alreadyAbsent: true },
@@ -555,7 +555,7 @@ export const listTicketDependenciesToolConfig = {
   }).shape,
 };
 
-export function makeListTicketDependenciesHandler(client: OrbitClient) {
+export function makeListTicketDependenciesHandler(client: OrbotoClient) {
   return async ({ ticketKey }: { ticketKey: string }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
     const data = await client.get<{ blockedBy: DependencyEdge[]; blocks: DependencyEdge[] }>(

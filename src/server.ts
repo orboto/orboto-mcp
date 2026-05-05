@@ -14,9 +14,9 @@
  * add `registerResource` / `registerPrompt` calls here too.
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { OrbitClient, type OrbitClientConfig } from './orbit-client.js';
-import { registerOrbitResources } from './resources.js';
-import { registerOrbitPrompts } from './prompts.js';
+import { OrbotoClient, type OrbotoClientConfig } from './orboto-client.js';
+import { registerOrbotoResources } from './resources.js';
+import { registerOrbotoPrompts } from './prompts.js';
 import { registerWithMetrics } from './with-metrics.js';
 import { aiStatusToolConfig, makeAiStatusHandler } from './tools/ai-status.js';
 import { listProjectsToolConfig, makeListProjectsHandler } from './tools/list-projects.js';
@@ -76,14 +76,14 @@ import {
   primerFactDeleteToolConfig, makePrimerFactDeleteHandler,
 } from './tools/primer-facts.js';
 
-export interface BuildServerOptions extends OrbitClientConfig {
+export interface BuildServerOptions extends OrbotoClientConfig {
   /** Optional — passed through to McpServer metadata. Clients
    *  sometimes surface this in their UI. */
   clientDescription?: string;
 }
 
-export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
-  const client = new OrbitClient(opts);
+export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
+  const client = new OrbotoClient(opts);
 
   const server = new McpServer(
     { name: 'orboto', version: '0.51.0' },
@@ -132,7 +132,7 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
 
   // ORB-309 Phase C — write tools (Group 1: ticket mutations).
   // Each respects the API's PBAC cascade — a 403 surfaces as
-  // OrbitApiError → MCP throws → client sees an isError response.
+  // OrbotoApiError → MCP throws → client sees an isError response.
   reg('orboto_create_ticket', createTicketToolConfig, makeCreateTicketHandler(client));
   reg('orboto_update_ticket', updateTicketToolConfig, makeUpdateTicketHandler(client));
   reg('orboto_move_ticket', moveTicketToolConfig, makeMoveTicketHandler(client));
@@ -180,8 +180,8 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
 
   // ORB-310 Phase D — read-only `orbit://…` URI resources +
   // task-shaped Prompt templates the MCP client offers in its UI.
-  registerOrbitResources(server, client);
-  registerOrbitPrompts(server);
+  registerOrbotoResources(server, client);
+  registerOrbotoPrompts(server);
 
   return server;
 }

@@ -8,7 +8,7 @@
  * Each future read-tool (Phase B) should follow this test shape.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { OrbitClient } from '../orbit-client.js';
+import { OrbotoClient } from '../orboto-client.js';
 import { makeListProjectsHandler } from './list-projects.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -22,7 +22,7 @@ function mockFetch(json: unknown) {
 }
 
 describe('tools/list-projects', () => {
-  const client = new OrbitClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
+  const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
 
   it('emits a human-readable text block + structured content', async () => {
     mockFetch([

@@ -25,7 +25,7 @@
  * now the resources are independent thin renderers.
  */
 import { ResourceTemplate, type McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { OrbitApiError, type OrbitClient } from './orbit-client.js';
+import { OrbotoApiError, type OrbotoClient } from './orboto-client.js';
 import { resolveProjectByKey, resolveTicketByKey, type TicketRow } from './tools/shared.js';
 
 interface CommentPage {
@@ -51,7 +51,7 @@ interface SearchResponse {
   total: number;
 }
 
-export function registerOrbitResources(server: McpServer, client: OrbitClient): void {
+export function registerOrbotoResources(server: McpServer, client: OrbotoClient): void {
   // -------------------------------------------------------------------------
   // orbit://ticket/{ticketKey}
   // -------------------------------------------------------------------------
@@ -69,7 +69,7 @@ export function registerOrbitResources(server: McpServer, client: OrbitClient): 
       const commentsPage = await client.get<CommentPage>(
         `/tickets/${ticket.id}/comments?limit=50`,
       ).catch((err) => {
-        if (err instanceof OrbitApiError && err.status === 404) {
+        if (err instanceof OrbotoApiError && err.status === 404) {
           return { items: [], nextCursor: null };
         }
         throw err;

@@ -13,7 +13,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbitClient } from '../orbit-client.js';
+import type { OrbotoClient } from '../orboto-client.js';
 
 /** Matches ActiveTimerSchema in @orboto/shared-schema. */
 interface ActiveTimer {
@@ -36,7 +36,7 @@ export const getTimerToolConfig = {
   annotations: { readOnlyHint: true },
 };
 
-export function makeGetTimerHandler(client: OrbitClient) {
+export function makeGetTimerHandler(client: OrbotoClient) {
   return async (): Promise<CallToolResult> => {
     // `/time/timer` returns the timer row directly, or `null`.
     const timer = await client.get<ActiveTimer | null>('/time/timer');

@@ -9,13 +9,13 @@
  *   - The instrument POST is fire-and-forget — never delays the caller.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { OrbitClient } from './orbit-client.js';
+import { OrbotoClient } from './orboto-client.js';
 import { withMetrics } from './with-metrics.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
 afterEach(() => { vi.restoreAllMocks(); });
 
-const client = new OrbitClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
+const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 
 /** Capture every POST body the client makes and let the test inspect them. */
 function captureFetch() {

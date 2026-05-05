@@ -15,7 +15,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { OrbitApiError, type OrbitClient } from '../orbit-client.js';
+import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveTicketByKey, type TicketRow } from './shared.js';
 
 interface TicketSummaryRow {
@@ -83,7 +83,7 @@ export const getTicketToolConfig = {
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
-export function makeGetTicketHandler(client: OrbitClient) {
+export function makeGetTicketHandler(client: OrbotoClient) {
   return async ({ ticketKey }: { ticketKey: string }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
 
@@ -188,7 +188,7 @@ export function makeGetTicketHandler(client: OrbitClient) {
 
 function swallow404<T>(fallback: T): (err: unknown) => T {
   return (err) => {
-    if (err instanceof OrbitApiError && err.status === 404) return fallback;
+    if (err instanceof OrbotoApiError && err.status === 404) return fallback;
     throw err;
   };
 }

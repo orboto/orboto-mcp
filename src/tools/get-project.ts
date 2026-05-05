@@ -12,7 +12,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbitClient } from '../orbit-client.js';
+import type { OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey } from './shared.js';
 
 interface MilestoneRow {
@@ -41,7 +41,7 @@ export const getProjectToolConfig = {
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
-export function makeGetProjectHandler(client: OrbitClient) {
+export function makeGetProjectHandler(client: OrbotoClient) {
   return async ({ projectKey }: { projectKey: string }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, projectKey);
     // Parallel fan-out — the API doesn't have a single aggregate route

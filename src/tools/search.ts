@@ -15,7 +15,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbitClient } from '../orbit-client.js';
+import type { OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey } from './shared.js';
 
 /** Matches SearchResultSchema in @orboto/shared-schema. */
@@ -53,7 +53,7 @@ export const searchToolConfig = {
   annotations: { readOnlyHint: true },
 };
 
-export function makeSearchHandler(client: OrbitClient) {
+export function makeSearchHandler(client: OrbotoClient) {
   return async (input: {
     query: string;
     types?: Array<'ticket' | 'comment' | 'doc'>;

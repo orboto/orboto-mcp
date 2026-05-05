@@ -17,7 +17,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbitClient } from '../orbit-client.js';
+import type { OrbotoClient } from '../orboto-client.js';
 
 interface AiStatusResponse {
   configured: boolean;
@@ -39,7 +39,7 @@ export const aiStatusToolConfig = {
   },
 };
 
-export function makeAiStatusHandler(client: OrbitClient) {
+export function makeAiStatusHandler(client: OrbotoClient) {
   return async (): Promise<CallToolResult> => {
     const status = await client.get<AiStatusResponse>('/ai/status');
     const lines: string[] = [];

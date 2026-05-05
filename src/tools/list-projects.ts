@@ -12,7 +12,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbitClient } from '../orbit-client.js';
+import type { OrbotoClient } from '../orboto-client.js';
 
 interface ProjectRow {
   id: string;
@@ -48,7 +48,7 @@ export const listProjectsToolConfig = {
   },
 };
 
-export function makeListProjectsHandler(client: OrbitClient) {
+export function makeListProjectsHandler(client: OrbotoClient) {
   return async (): Promise<CallToolResult> => {
     const projects = await client.get<ProjectRow[]>('/projects');
     const rows = projects.map((p) => ({

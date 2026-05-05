@@ -17,7 +17,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbitClient } from '../orbit-client.js';
+import type { OrbotoClient } from '../orboto-client.js';
 import { resolveTicketByKey } from './shared.js';
 
 interface ChecklistItemRow {
@@ -49,7 +49,7 @@ export const getChecklistsToolConfig = {
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
-export function makeGetChecklistsHandler(client: OrbitClient) {
+export function makeGetChecklistsHandler(client: OrbotoClient) {
   return async ({ ticketKey }: { ticketKey: string }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
     const checklists = await client.get<ChecklistRow[]>(`/tickets/${ticket.id}/checklists`);

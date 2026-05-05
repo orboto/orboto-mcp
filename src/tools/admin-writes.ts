@@ -9,7 +9,7 @@
  *
  * Gating: the API enforces super-admin via the `admin:*` permission
  * slugs. A non-admin's request lands a 403 from the API, which
- * surfaces as OrbitApiError on the MCP side. The tools themselves
+ * surfaces as OrbotoApiError on the MCP side. The tools themselves
  * don't double-check — that would race against the API anyway. We
  * just rewrite 403 into a clear message.
  *
@@ -20,7 +20,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { OrbitApiError, type OrbitClient } from '../orbit-client.js';
+import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 
 interface UserRow {
   id: string;
@@ -65,7 +65,7 @@ interface BackupRun {
 
 function rewrite403(action: string): (err: unknown) => never {
   return (err) => {
-    if (err instanceof OrbitApiError && err.status === 403) {
+    if (err instanceof OrbotoApiError && err.status === 403) {
       throw new Error(`${action} requires super-admin permissions on this workspace.`);
     }
     throw err as Error;
@@ -87,7 +87,7 @@ export const listUsersToolConfig = {
   }).shape,
 };
 
-export function makeListUsersHandler(client: OrbitClient) {
+export function makeListUsersHandler(client: OrbotoClient) {
   return async ({ search, limit, showGhosts }: {
     search?: string; limit?: number; showGhosts?: boolean;
   }): Promise<CallToolResult> => {
@@ -142,7 +142,7 @@ export const getAuditLogToolConfig = {
   }).shape,
 };
 
-export function makeGetAuditLogHandler(client: OrbitClient) {
+export function makeGetAuditLogHandler(client: OrbotoClient) {
   return async ({ actorEmail, entityType, limit }: {
     actorEmail?: string; entityType?: string; limit?: number;
   }): Promise<CallToolResult> => {
@@ -203,7 +203,7 @@ export const triggerBackupToolConfig = {
   }).shape,
 };
 
-export function makeTriggerBackupHandler(client: OrbitClient) {
+export function makeTriggerBackupHandler(client: OrbotoClient) {
   return async ({ jobName }: { jobName: string }): Promise<CallToolResult> => {
     const jobs = await client.get<BackupJob[]>('/admin/backup/jobs')
       .catch(rewrite403('list_backup_jobs'));

@@ -22,7 +22,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-export function registerOrbitPrompts(server: McpServer): void {
+export function registerOrbotoPrompts(server: McpServer): void {
   // -------------------------------------------------------------------------
   // plan-sprint
   // -------------------------------------------------------------------------

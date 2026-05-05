@@ -9,7 +9,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbitClient } from '../orbit-client.js';
+import type { OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey, resolveTicketByKey, ticketLine, type TicketRow } from './shared.js';
 
 interface TicketPage {
@@ -44,7 +44,7 @@ export const listTicketsToolConfig = {
   annotations: { readOnlyHint: true },
 };
 
-export function makeListTicketsHandler(client: OrbitClient) {
+export function makeListTicketsHandler(client: OrbotoClient) {
   return async (input: {
     projectKey: string;
     statusCategory?: 'todo' | 'in_progress' | 'in_review' | 'done' | 'wont_fix';

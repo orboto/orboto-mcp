@@ -16,7 +16,7 @@
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbitClient } from './orbit-client.js';
+import type { OrbotoClient } from './orboto-client.js';
 
 interface LogEntry {
   toolName: string;
@@ -26,7 +26,7 @@ interface LogEntry {
   clientHint?: string;
 }
 
-async function postLogEntry(client: OrbitClient, entry: LogEntry): Promise<void> {
+async function postLogEntry(client: OrbotoClient, entry: LogEntry): Promise<void> {
   try {
     await client.post('/admin/mcp/instrument', entry);
   } catch {
@@ -46,7 +46,7 @@ async function postLogEntry(client: OrbitClient, entry: LogEntry): Promise<void>
  * know about instrumentation.
  */
 export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
-  client: OrbitClient,
+  client: OrbotoClient,
   toolName: string,
   clientHint: string | undefined,
   handler: (args: TArgs) => Promise<CallToolResult>,
@@ -116,7 +116,7 @@ type ToolHandler = (args: any) => Promise<CallToolResult>;
  */
 export function registerWithMetrics(
   server: McpServer,
-  client: OrbitClient,
+  client: OrbotoClient,
   clientHint: string | undefined,
 ) {
   return (canonicalName: string, config: ToolConfig, handler: ToolHandler): void => {

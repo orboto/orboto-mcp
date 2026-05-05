@@ -15,7 +15,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { OrbitApiError, type OrbitClient } from '../orbit-client.js';
+import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveTicketByKey } from './shared.js';
 
 interface ChecklistItem {
@@ -45,7 +45,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * is stable across the two surfaces.
  */
 async function resolveItemId(
-  client: OrbitClient,
+  client: OrbotoClient,
   ticketId: string,
   identifier: number | string,
 ): Promise<{ itemId: string; checklists: Checklist[] }> {
@@ -71,7 +71,7 @@ async function resolveItemId(
 // orboto_check / orboto_uncheck
 // ---------------------------------------------------------------------------
 
-function makeToggleHandler(client: OrbitClient, completed: boolean) {
+function makeToggleHandler(client: OrbotoClient, completed: boolean) {
   return async ({ ticketKey, item }: {
     ticketKey: string; item: number | string;
   }): Promise<CallToolResult> => {
@@ -117,8 +117,8 @@ export const uncheckToolConfig = {
   inputSchema: toggleInputSchema,
 };
 
-export const makeCheckHandler = (client: OrbitClient) => makeToggleHandler(client, true);
-export const makeUncheckHandler = (client: OrbitClient) => makeToggleHandler(client, false);
+export const makeCheckHandler = (client: OrbotoClient) => makeToggleHandler(client, true);
+export const makeUncheckHandler = (client: OrbotoClient) => makeToggleHandler(client, false);
 
 // ---------------------------------------------------------------------------
 // orboto_add_check
@@ -136,7 +136,7 @@ export const addCheckToolConfig = {
   }).shape,
 };
 
-export function makeAddCheckHandler(client: OrbitClient) {
+export function makeAddCheckHandler(client: OrbotoClient) {
   return async ({ ticketKey, content, listTitle, linkedTicketKey }: {
     ticketKey: string; content: string; listTitle?: string; linkedTicketKey?: string;
   }): Promise<CallToolResult> => {
@@ -201,7 +201,7 @@ export const newChecklistToolConfig = {
   }).shape,
 };
 
-export function makeNewChecklistHandler(client: OrbitClient) {
+export function makeNewChecklistHandler(client: OrbotoClient) {
   return async ({ ticketKey, title, triggersDone, items }: {
     ticketKey: string; title: string; triggersDone?: boolean; items?: string[];
   }): Promise<CallToolResult> => {
@@ -214,7 +214,7 @@ export function makeNewChecklistHandler(client: OrbitClient) {
     try {
       list = await client.post<Checklist>(`/tickets/${ticket.id}/checklists`, body);
     } catch (err) {
-      if (err instanceof OrbitApiError && err.status === 403) {
+      if (err instanceof OrbotoApiError && err.status === 403) {
         throw new Error(`Forbidden — you need ticket:edit on [${ticket.ticketKey}]'s project to add checklists.`);
       }
       throw err;

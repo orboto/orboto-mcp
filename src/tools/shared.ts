@@ -7,7 +7,7 @@
  * take UUIDs for the cascade-friendly join path. These helpers do
  * the key→UUID resolution in one place.
  */
-import { OrbitApiError, type OrbitClient } from '../orbit-client.js';
+import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 
 export interface ProjectRow {
   id: string;
@@ -18,13 +18,13 @@ export interface ProjectRow {
 }
 
 export async function resolveProjectByKey(
-  client: OrbitClient,
+  client: OrbotoClient,
   key: string,
 ): Promise<ProjectRow> {
   try {
     return await client.get<ProjectRow>(`/projects/by-key/${encodeURIComponent(key)}`);
   } catch (err) {
-    if (err instanceof OrbitApiError && err.status === 404) {
+    if (err instanceof OrbotoApiError && err.status === 404) {
       throw new Error(`Project "${key}" not found (or not visible to your account).`);
     }
     throw err;
@@ -65,7 +65,7 @@ export interface TicketRow {
  * (max 20 chars) and never contain `-`, so the split is unambiguous.
  */
 export async function resolveTicketByKey(
-  client: OrbitClient,
+  client: OrbotoClient,
   ticketKey: string,
 ): Promise<TicketRow> {
   const idx = ticketKey.indexOf('-');
@@ -80,7 +80,7 @@ export async function resolveTicketByKey(
       `/projects/${project.id}/tickets/by-key/${encodeURIComponent(numberPart)}`,
     );
   } catch (err) {
-    if (err instanceof OrbitApiError && err.status === 404) {
+    if (err instanceof OrbotoApiError && err.status === 404) {
       throw new Error(`Ticket "${ticketKey}" not found in project "${project.key}".`);
     }
     throw err;

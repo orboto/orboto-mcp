@@ -8,7 +8,7 @@
  *   - propagates the syntax flag (jql vs oql) verbatim
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { OrbitClient } from '../orbit-client.js';
+import { OrbotoClient } from '../orboto-client.js';
 import { makeQueryHandler } from './query.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -22,7 +22,7 @@ function mockFetch(json: unknown) {
 }
 
 describe('tools/query', () => {
-  const client = new OrbitClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
+  const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
 
   it('renders matched tickets + structured payload', async () => {
     const spy = mockFetch({

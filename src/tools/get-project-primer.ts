@@ -25,7 +25,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbitClient } from '../orbit-client.js';
+import type { OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey } from './shared.js';
 
 interface PrimerJsonResponse {
@@ -47,7 +47,7 @@ export const getProjectPrimerToolConfig = {
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
-export function makeGetProjectPrimerHandler(client: OrbitClient) {
+export function makeGetProjectPrimerHandler(client: OrbotoClient) {
   return async (
     { projectKey, maxTokens }: { projectKey: string; maxTokens?: number },
   ): Promise<CallToolResult> => {

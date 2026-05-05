@@ -26,8 +26,8 @@
  * ORB-584 — legacy `ORBIT_*` names are still accepted for one major
  * release with a deprecation warning to stderr. Removed in v1.0.
  */
-import { buildOrbitMcpServer } from './server.js';
-import { OrbitClient, preflightMcpSession } from './orbit-client.js';
+import { buildOrbotoMcpServer } from './server.js';
+import { OrbotoClient, preflightMcpSession } from './orboto-client.js';
 import { envOrLegacy, requireEnvOrLegacy } from './env-compat.js';
 
 async function main() {
@@ -44,7 +44,7 @@ async function main() {
     // Preflight BEFORE spinning up the transport — so a
     // mis-configured install fails loudly to stderr instead of
     // silently hanging on stdin waiting for JSON-RPC frames.
-    const preflightClient = new OrbitClient({ baseUrl, apiKey, userAgentSuffix });
+    const preflightClient = new OrbotoClient({ baseUrl, apiKey, userAgentSuffix });
     try {
       const { userEmail } = await preflightMcpSession(preflightClient);
       // eslint-disable-next-line no-console
@@ -55,7 +55,7 @@ async function main() {
       process.exit(1);
     }
 
-    const server = buildOrbitMcpServer({ baseUrl, apiKey, userAgentSuffix });
+    const server = buildOrbotoMcpServer({ baseUrl, apiKey, userAgentSuffix });
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
     const stdio = new StdioServerTransport();
     await server.connect(stdio);
@@ -69,7 +69,7 @@ async function main() {
     // Self-Hosted + Cloud-Managed mode. The bearer token comes from
     // the caller (Claude Desktop / Cursor) on every POST — a per-
     // session server is built so each session carries its own
-    // API-key scoped OrbitClient.
+    // API-key scoped OrbotoClient.
     const port = Number(envOrLegacy('ORBOTO_MCP_PORT', 'ORBIT_MCP_PORT') ?? '3100');
     const baseUrl = requireEnvOrLegacy('ORBOTO_API_URL', 'ORBIT_API_URL');
     const { createHttpServer } = await import('./http-transport.js');

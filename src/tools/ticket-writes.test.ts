@@ -8,7 +8,7 @@
  * PBAC cascade surfaces through the MCP layer.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { OrbitApiError, OrbitClient } from '../orbit-client.js';
+import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
 import {
   makeCreateTicketHandler, makeUpdateTicketHandler, makeMoveTicketHandler,
   makeCloseTicketHandler, makeCommentHandler, makeAssignHandler,
@@ -42,7 +42,7 @@ function stub(responses: Array<{
   return calls;
 }
 
-const client = new OrbitClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
+const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 
 const PROJ = { id: 'p1', key: 'ACME', name: 'Acme', description: null, status: 'active' };
 const TICKET = {
@@ -81,14 +81,14 @@ describe('orbit_create_ticket', () => {
     expect(calls[4].body).toMatchObject({ milestoneId: 'm1', parentTicketId: 't1' });
   });
 
-  it('surfaces a 403 from the API as an OrbitApiError', async () => {
+  it('surfaces a 403 from the API as an OrbotoApiError', async () => {
     stub([
       { json: PROJ },
       { ok: false, status: 403, json: { error: 'Forbidden — missing ticket:create' } },
     ]);
     await expect(
       makeCreateTicketHandler(client)({ projectKey: 'ACME', title: 'x' })
-    ).rejects.toBeInstanceOf(OrbitApiError);
+    ).rejects.toBeInstanceOf(OrbotoApiError);
   });
 });
 

@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { registerOrbitPrompts } from './prompts.js';
+import { registerOrbotoPrompts } from './prompts.js';
 
 interface PromptEntry {
   callback: (args: Record<string, string>) => { messages: Array<{ role: string; content: { type: string; text: string } }> };
@@ -17,7 +17,7 @@ interface PromptEntry {
 
 function buildServerWithPrompts() {
   const server = new McpServer({ name: 'test', version: '0.0.0' });
-  registerOrbitPrompts(server);
+  registerOrbotoPrompts(server);
   return server;
 }
 

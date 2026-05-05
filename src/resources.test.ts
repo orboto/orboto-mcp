@@ -13,8 +13,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { OrbitClient } from './orbit-client.js';
-import { registerOrbitResources } from './resources.js';
+import { OrbotoClient } from './orboto-client.js';
+import { registerOrbotoResources } from './resources.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
 afterEach(() => { vi.restoreAllMocks(); });
@@ -33,11 +33,11 @@ function stub(responses: Array<{ ok?: boolean; status?: number; json?: unknown }
   });
 }
 
-const client = new OrbitClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
+const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 
 function buildServerWithResources() {
   const server = new McpServer({ name: 'test', version: '0.0.0' });
-  registerOrbitResources(server, client);
+  registerOrbotoResources(server, client);
   return server;
 }
 

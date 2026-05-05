@@ -10,7 +10,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbitClient } from '../orbit-client.js';
+import type { OrbotoClient } from '../orboto-client.js';
 
 interface InstallationRow {
   id: string;
@@ -42,7 +42,7 @@ export const listGitAppInstallationsToolConfig = {
   },
 };
 
-export function makeListGitAppInstallationsHandler(client: OrbitClient) {
+export function makeListGitAppInstallationsHandler(client: OrbotoClient) {
   return async (): Promise<CallToolResult> => {
     const rows = await client.get<InstallationRow[]>('/admin/git-app-installations');
     const out = rows.map((r) => ({

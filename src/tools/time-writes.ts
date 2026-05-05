@@ -18,7 +18,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { OrbitApiError, type OrbitClient } from '../orbit-client.js';
+import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveTicketByKey } from './shared.js';
 
 interface ActiveTimer {
@@ -57,7 +57,7 @@ export const timerStartToolConfig = {
   }).shape,
 };
 
-export function makeTimerStartHandler(client: OrbitClient) {
+export function makeTimerStartHandler(client: OrbotoClient) {
   return async ({ ticketKey, description, replace }: {
     ticketKey: string; description?: string; replace?: boolean;
   }): Promise<CallToolResult> => {
@@ -83,7 +83,7 @@ export function makeTimerStartHandler(client: OrbitClient) {
       // 409 = a timer is already running on a different ticket.
       // Surface the API's hint about `replace` rather than letting
       // the model guess.
-      if (err instanceof OrbitApiError && err.status === 409) {
+      if (err instanceof OrbotoApiError && err.status === 409) {
         throw new Error(
           'A timer is already running on a different ticket. Pass replace=true to commit its elapsed time and start fresh on this one.',
         );
@@ -104,7 +104,7 @@ export const timerStopToolConfig = {
   inputSchema: z.object({}).shape,
 };
 
-export function makeTimerStopHandler(client: OrbitClient) {
+export function makeTimerStopHandler(client: OrbotoClient) {
   return async (): Promise<CallToolResult> => {
     try {
       const res = await client.post<{ durationMinutes: number }>('/time/timer/stop', {});
@@ -116,7 +116,7 @@ export function makeTimerStopHandler(client: OrbitClient) {
         structuredContent: { durationMinutes: res.durationMinutes },
       };
     } catch (err) {
-      if (err instanceof OrbitApiError && err.status === 404) {
+      if (err instanceof OrbotoApiError && err.status === 404) {
         return {
           content: [{ type: 'text', text: 'No active timer to stop.' }],
           structuredContent: { durationMinutes: 0, alreadyStopped: true },
@@ -143,7 +143,7 @@ export const logTimeToolConfig = {
   }).shape,
 };
 
-export function makeLogTimeHandler(client: OrbitClient) {
+export function makeLogTimeHandler(client: OrbotoClient) {
   return async ({ ticketKey, durationMinutes, description, loggedAt }: {
     ticketKey: string; durationMinutes: number; description?: string; loggedAt?: string;
   }): Promise<CallToolResult> => {

@@ -2,7 +2,7 @@
  * ORB-244 Phase C Group 2 — time-tracking tool tests.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { OrbitClient } from '../orbit-client.js';
+import { OrbotoClient } from '../orboto-client.js';
 import {
   makeTimerStartHandler, makeTimerStopHandler, makeLogTimeHandler,
 } from './time-writes.js';
@@ -30,7 +30,7 @@ function stub(responses: Array<{ ok?: boolean; status?: number; json?: unknown }
   return calls;
 }
 
-const client = new OrbitClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
+const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 const PROJ = { id: 'p1', key: 'ACME', name: 'Acme', description: null, status: 'active' };
 const TICKET = { id: 't1', projectId: 'p1', ticketKey: 'ACME-1', title: 'Bug' };
 

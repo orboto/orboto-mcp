@@ -8,7 +8,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbitClient } from '../orbit-client.js';
+import type { OrbotoClient } from '../orboto-client.js';
 
 interface MyTicketRow {
   id: string;
@@ -48,7 +48,7 @@ const CATEGORY_TO_LEGACY: Record<string, string> = {
   wont_fix: 'WONT_FIX',
 };
 
-export function makeMyTicketsHandler(client: OrbitClient) {
+export function makeMyTicketsHandler(client: OrbotoClient) {
   return async (input: {
     statusCategory?: 'todo' | 'in_progress' | 'in_review' | 'done' | 'wont_fix';
     limit?: number;

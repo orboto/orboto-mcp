@@ -21,7 +21,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { OrbitApiError, type OrbitClient } from '../orbit-client.js';
+import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey } from './shared.js';
 
 // ---------------------------------------------------------------------------
@@ -63,15 +63,15 @@ interface PrimerFactRow {
 
 function rewritePermissionError(action: string): (err: unknown) => never {
   return (err) => {
-    if (err instanceof OrbitApiError && err.status === 403) {
+    if (err instanceof OrbotoApiError && err.status === 403) {
       throw new Error(
         `${action} requires project:edit on the target project, or admin:system:write for workspace-wide facts.`,
       );
     }
-    if (err instanceof OrbitApiError && err.status === 404) {
+    if (err instanceof OrbotoApiError && err.status === 404) {
       throw new Error(`${action}: target not found (or not visible to your account).`);
     }
-    if (err instanceof OrbitApiError && err.status === 409) {
+    if (err instanceof OrbotoApiError && err.status === 409) {
       throw new Error(
         `${action}: a fact with that category + key already exists in this scope. Use orboto_primer_fact_supersede or orboto_primer_fact_update instead.`,
       );
@@ -121,7 +121,7 @@ export const primerFactListToolConfig = {
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
-export function makePrimerFactListHandler(client: OrbitClient) {
+export function makePrimerFactListHandler(client: OrbotoClient) {
   return async ({
     projectKey,
     category,
@@ -194,7 +194,7 @@ export const primerFactAddToolConfig = {
   }).shape,
 };
 
-export function makePrimerFactAddHandler(client: OrbitClient) {
+export function makePrimerFactAddHandler(client: OrbotoClient) {
   return async ({
     projectKey,
     category,
@@ -251,7 +251,7 @@ export const primerFactUpdateToolConfig = {
   }).shape,
 };
 
-export function makePrimerFactUpdateHandler(client: OrbitClient) {
+export function makePrimerFactUpdateHandler(client: OrbotoClient) {
   return async ({
     factId,
     value,
@@ -305,7 +305,7 @@ export const primerFactSupersedeToolConfig = {
   }).shape,
 };
 
-export function makePrimerFactSupersedeHandler(client: OrbitClient) {
+export function makePrimerFactSupersedeHandler(client: OrbotoClient) {
   return async ({
     oldFactId,
     category,
@@ -349,7 +349,7 @@ export const primerFactVerifyToolConfig = {
   }).shape,
 };
 
-export function makePrimerFactVerifyHandler(client: OrbitClient) {
+export function makePrimerFactVerifyHandler(client: OrbotoClient) {
   return async ({ factId }: { factId: string }): Promise<CallToolResult> => {
     const row = await client
       .post<PrimerFactRow>(`/primer-facts/${factId}/verify`, {})
@@ -386,7 +386,7 @@ export const primerFactDeleteToolConfig = {
   }).shape,
 };
 
-export function makePrimerFactDeleteHandler(client: OrbitClient) {
+export function makePrimerFactDeleteHandler(client: OrbotoClient) {
   return async ({ factId, reason }: { factId: string; reason?: string }): Promise<CallToolResult> => {
     // ORB-516 — pass the reason through so the audit-log entry
     // captures it. Old API versions silently ignore the querystring

@@ -15,7 +15,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbitClient } from '../orbit-client.js';
+import type { OrbotoClient } from '../orboto-client.js';
 import { ticketLine, type TicketRow } from './shared.js';
 
 interface QueryResponse {
@@ -45,7 +45,7 @@ export const queryToolConfig = {
   annotations: { readOnlyHint: true },
 };
 
-export function makeQueryHandler(client: OrbitClient) {
+export function makeQueryHandler(client: OrbotoClient) {
   return async (input: {
     oql: string;
     syntax?: 'oql' | 'jql';

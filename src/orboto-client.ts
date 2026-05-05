@@ -20,11 +20,11 @@
  * Every request adds `Authorization: Bearer <apiKey>` (from env) and
  * a `User-Agent: orbit-mcp/<version>` header for the admin UI to
  * distinguish MCP traffic from regular API traffic. Non-2xx responses
- * throw `OrbitApiError` so tool handlers can translate to MCP's
+ * throw `OrbotoApiError` so tool handlers can translate to MCP's
  * `{isError: true}` shape.
  */
 
-export interface OrbitClientConfig {
+export interface OrbotoClientConfig {
   /** Base URL of the Orboto API — e.g. `https://orboto.example.com` or
    *  `http://api:3000` when running inside docker-compose. No trailing
    *  slash; we'll strip one if the operator pastes it. */
@@ -37,22 +37,22 @@ export interface OrbitClientConfig {
   userAgentSuffix?: string;
 }
 
-export class OrbitApiError extends Error {
+export class OrbotoApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly body: string,
     public readonly url: string,
   ) {
     super(`Orboto API ${status}: ${body || '(empty body)'}`);
-    this.name = 'OrbitApiError';
+    this.name = 'OrbotoApiError';
   }
 }
 
-export class OrbitClient {
+export class OrbotoClient {
   private readonly baseUrl: string;
   private readonly headers: Record<string, string>;
 
-  constructor(config: OrbitClientConfig) {
+  constructor(config: OrbotoClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, '');
     // User-Agent shape: `orbit-mcp/0.51.0 (claude-desktop)`. The
     // suffix is optional metadata so the admin's MCP-usage panel
@@ -68,13 +68,13 @@ export class OrbitClient {
     };
   }
 
-  /** GET a JSON endpoint. Throws `OrbitApiError` on non-2xx. */
+  /** GET a JSON endpoint. Throws `OrbotoApiError` on non-2xx. */
   async get<T>(path: string): Promise<T> {
     const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
     const res = await fetch(url, { headers: this.headers });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new OrbitApiError(res.status, body, url);
+      throw new OrbotoApiError(res.status, body, url);
     }
     return (await res.json()) as T;
   }
@@ -89,7 +89,7 @@ export class OrbitClient {
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new OrbitApiError(res.status, body, url);
+      throw new OrbotoApiError(res.status, body, url);
     }
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
@@ -105,7 +105,7 @@ export class OrbitClient {
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new OrbitApiError(res.status, body, url);
+      throw new OrbotoApiError(res.status, body, url);
     }
     return (await res.json()) as T;
   }
@@ -116,7 +116,7 @@ export class OrbitClient {
     const res = await fetch(url, { method: 'DELETE', headers: this.headers });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new OrbitApiError(res.status, body, url);
+      throw new OrbotoApiError(res.status, body, url);
     }
   }
 }
@@ -128,7 +128,7 @@ export class OrbitClient {
  * `Error` on any failure so the caller can translate to an MCP
  * refuse-to-initialize response.
  */
-export async function preflightMcpSession(client: OrbitClient): Promise<{
+export async function preflightMcpSession(client: OrbotoClient): Promise<{
   userEmail: string;
 }> {
   interface StatusResponse {
@@ -140,7 +140,7 @@ export async function preflightMcpSession(client: OrbitClient): Promise<{
   try {
     status = await client.get<StatusResponse>('/system/mcp/status');
   } catch (err) {
-    if (err instanceof OrbitApiError && err.status === 401) {
+    if (err instanceof OrbotoApiError && err.status === 401) {
       throw new Error('MCP preflight failed: the provided API key is invalid or expired.');
     }
     throw err;

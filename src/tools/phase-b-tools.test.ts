@@ -8,7 +8,7 @@
  * break, which is exactly what we want.
  */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { OrbitClient } from '../orbit-client.js';
+import { OrbotoClient } from '../orboto-client.js';
 import { makeGetProjectHandler } from './get-project.js';
 import { makeListTicketsHandler } from './list-tickets.js';
 import { makeGetTicketHandler } from './get-ticket.js';
@@ -42,7 +42,7 @@ function stub(responses: Array<{ ok?: boolean; status?: number; json?: unknown }
   return calls;
 }
 
-const client = new OrbitClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
+const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 
 const PROJ = { id: 'p1', key: 'ACME', name: 'Acme', description: 'Customer portal', status: 'active' };
 

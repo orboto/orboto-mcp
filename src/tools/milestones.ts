@@ -8,7 +8,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { OrbitApiError, type OrbitClient } from '../orbit-client.js';
+import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey } from './shared.js';
 
 /** Matches MilestoneSchema in @orboto/shared-schema. `description` is
@@ -45,7 +45,7 @@ export const listMilestonesToolConfig = {
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
-export function makeListMilestonesHandler(client: OrbitClient) {
+export function makeListMilestonesHandler(client: OrbotoClient) {
   return async ({ projectKey }: { projectKey: string }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, projectKey);
     const milestones = await client.get<MilestoneRow[]>(`/projects/${project.id}/milestones`);
@@ -86,7 +86,7 @@ export const getMilestoneToolConfig = {
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
-export function makeGetMilestoneHandler(client: OrbitClient) {
+export function makeGetMilestoneHandler(client: OrbotoClient) {
   return async ({ projectKey, milestone: milestoneName }: {
     projectKey: string; milestone: string;
   }): Promise<CallToolResult> => {
@@ -101,7 +101,7 @@ export function makeGetMilestoneHandler(client: OrbitClient) {
     const progress = await client.get<MilestoneProgress>(
       `/projects/${project.id}/milestones/${m.id}/progress`,
     ).catch((err) => {
-      if (err instanceof OrbitApiError && err.status === 404) return null;
+      if (err instanceof OrbotoApiError && err.status === 404) return null;
       throw err;
     });
 

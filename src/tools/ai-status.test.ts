@@ -2,7 +2,7 @@
  * ORB-564 — `orbit_ai_status` tool mapping test.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { OrbitClient } from '../orbit-client.js';
+import { OrbotoClient } from '../orboto-client.js';
 import { makeAiStatusHandler } from './ai-status.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -16,7 +16,7 @@ function mockFetch(json: unknown) {
 }
 
 describe('tools/ai-status', () => {
-  const client = new OrbitClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
+  const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
 
   it('reports both flags when fully configured', async () => {
     mockFetch({ configured: true, embeddingsConfigured: true });

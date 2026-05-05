@@ -15,7 +15,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbitClient } from '../orbit-client.js';
+import type { OrbotoClient } from '../orboto-client.js';
 
 interface DocSpaceRow {
   id: string;
@@ -61,7 +61,7 @@ export const listDocSpacesToolConfig = {
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
-export function makeListDocSpacesHandler(client: OrbitClient) {
+export function makeListDocSpacesHandler(client: OrbotoClient) {
   return async (): Promise<CallToolResult> => {
     const spaces = await client.get<DocSpaceRow[]>('/spaces');
     const text = spaces.length === 0
@@ -104,7 +104,7 @@ export const getDocToolConfig = {
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
-export function makeGetDocHandler(client: OrbitClient) {
+export function makeGetDocHandler(client: OrbotoClient) {
   return async ({ docId }: { docId: string }): Promise<CallToolResult> => {
     const [doc, backlinks] = await Promise.all([
       client.get<DocRow>(`/docs/${docId}`),

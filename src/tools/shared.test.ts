@@ -7,7 +7,7 @@
  * tool test.
  */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { OrbitClient } from '../orbit-client.js';
+import { OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey, resolveTicketByKey, ticketLine } from './shared.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -30,7 +30,7 @@ function sequence(responses: Array<{ ok?: boolean; status?: number; json?: unkno
   return calls;
 }
 
-const client = new OrbitClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
+const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 
 describe('resolveProjectByKey', () => {
   it('returns the project on success', async () => {

@@ -7,7 +7,7 @@
  *
  * Per-request auth: every POST must carry `Authorization: Bearer
  * orb_*` in the header. We build one `McpServer` per session so each
- * session gets its own OrbitClient bound to that session's token —
+ * session gets its own OrbotoClient bound to that session's token —
  * no mid-session token mutation, no cross-session leakage.
  *
  * Sessions are indexed by the MCP-spec-mandated `mcp-session-id`
@@ -21,8 +21,8 @@ import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
-import { buildOrbitMcpServer } from './server.js';
-import { OrbitClient, preflightMcpSession } from './orbit-client.js';
+import { buildOrbotoMcpServer } from './server.js';
+import { OrbotoClient, preflightMcpSession } from './orboto-client.js';
 
 export interface HttpServerOptions {
   baseUrl: string;
@@ -133,12 +133,12 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
       // refuse the session at the transport level — much clearer
       // than letting the first tool call 403.
       try {
-        await preflightMcpSession(new OrbitClient({ baseUrl, apiKey: token, userAgentSuffix }));
+        await preflightMcpSession(new OrbotoClient({ baseUrl, apiKey: token, userAgentSuffix }));
       } catch (err) {
         return sendError(res, 403, (err as Error).message);
       }
 
-      const mcp = buildOrbitMcpServer({
+      const mcp = buildOrbotoMcpServer({
         baseUrl,
         apiKey: token,
         userAgentSuffix,
