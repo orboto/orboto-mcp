@@ -37,19 +37,19 @@ describe('plan-sprint prompt', () => {
     expect(out.messages[0].role).toBe('user');
     const text = out.messages[0].content.text;
     expect(text).toContain('project ACME');
-    expect(text).toContain('orbit_get_project');
-    expect(text).toContain('orbit_list_tickets');
-    expect(text).toContain('orbit_list_milestones');
+    expect(text).toContain('orboto_get_project');
+    expect(text).toContain('orboto_list_tickets');
+    expect(text).toContain('orboto_list_milestones');
   });
 });
 
 describe('triage-my-tickets prompt', () => {
-  it('takes no args and instructs to call orbit_my_tickets', () => {
+  it('takes no args and instructs to call orboto_my_tickets', () => {
     const server = buildServerWithPrompts();
     const handler = getPromptHandler(server, 'triage-my-tickets');
     const out = handler({});
     const text = out.messages[0].content.text;
-    expect(text).toContain('orbit_my_tickets');
+    expect(text).toContain('orboto_my_tickets');
     expect(text).toContain('top 3');
   });
 });
@@ -72,7 +72,7 @@ describe('estimate-ticket prompt', () => {
     const out = handler({ ticketKey: 'ACME-42' });
     const text = out.messages[0].content.text;
     expect(text).toContain('ACME-42');
-    expect(text).toContain('orbit_search');
+    expect(text).toContain('orboto_search');
     expect(text).toContain('loggedMinutes');
   });
 });

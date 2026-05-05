@@ -86,7 +86,7 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
   const client = new OrbitClient(opts);
 
   const server = new McpServer(
-    { name: 'orbit', version: '0.51.0' },
+    { name: 'orboto', version: '0.51.0' },
     {
       // `instructions` appears in the system-prompt-style block some
       // MCP clients inject before the user's first message. Keep it
@@ -113,70 +113,70 @@ export function buildOrbitMcpServer(opts: BuildServerOptions): McpServer {
 
   // Tools — alphabetical-ish by concept. Each tool file owns its
   // input/output schema; the server just glues names to handlers.
-  reg('orbit_ai_status', aiStatusToolConfig, makeAiStatusHandler(client));
-  reg('orbit_list_projects', listProjectsToolConfig, makeListProjectsHandler(client));
-  reg('orbit_get_project', getProjectToolConfig, makeGetProjectHandler(client));
-  reg('orbit_get_project_primer', getProjectPrimerToolConfig, makeGetProjectPrimerHandler(client));
-  reg('orbit_list_tickets', listTicketsToolConfig, makeListTicketsHandler(client));
-  reg('orbit_get_ticket', getTicketToolConfig, makeGetTicketHandler(client));
-  reg('orbit_get_checklists', getChecklistsToolConfig, makeGetChecklistsHandler(client));
-  reg('orbit_my_tickets', myTicketsToolConfig, makeMyTicketsHandler(client));
-  reg('orbit_list_milestones', listMilestonesToolConfig, makeListMilestonesHandler(client));
-  reg('orbit_get_milestone', getMilestoneToolConfig, makeGetMilestoneHandler(client));
-  reg('orbit_search', searchToolConfig, makeSearchHandler(client));
-  reg('orbit_query', queryToolConfig, makeQueryHandler(client));
-  reg('orbit_list_doc_spaces', listDocSpacesToolConfig, makeListDocSpacesHandler(client));
-  reg('orbit_get_doc', getDocToolConfig, makeGetDocHandler(client));
-  reg('orbit_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
-  reg('orbit_list_git_app_installations', listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler(client));
+  reg('orboto_ai_status', aiStatusToolConfig, makeAiStatusHandler(client));
+  reg('orboto_list_projects', listProjectsToolConfig, makeListProjectsHandler(client));
+  reg('orboto_get_project', getProjectToolConfig, makeGetProjectHandler(client));
+  reg('orboto_get_project_primer', getProjectPrimerToolConfig, makeGetProjectPrimerHandler(client));
+  reg('orboto_list_tickets', listTicketsToolConfig, makeListTicketsHandler(client));
+  reg('orboto_get_ticket', getTicketToolConfig, makeGetTicketHandler(client));
+  reg('orboto_get_checklists', getChecklistsToolConfig, makeGetChecklistsHandler(client));
+  reg('orboto_my_tickets', myTicketsToolConfig, makeMyTicketsHandler(client));
+  reg('orboto_list_milestones', listMilestonesToolConfig, makeListMilestonesHandler(client));
+  reg('orboto_get_milestone', getMilestoneToolConfig, makeGetMilestoneHandler(client));
+  reg('orboto_search', searchToolConfig, makeSearchHandler(client));
+  reg('orboto_query', queryToolConfig, makeQueryHandler(client));
+  reg('orboto_list_doc_spaces', listDocSpacesToolConfig, makeListDocSpacesHandler(client));
+  reg('orboto_get_doc', getDocToolConfig, makeGetDocHandler(client));
+  reg('orboto_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
+  reg('orboto_list_git_app_installations', listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler(client));
 
   // ORB-309 Phase C — write tools (Group 1: ticket mutations).
   // Each respects the API's PBAC cascade — a 403 surfaces as
   // OrbitApiError → MCP throws → client sees an isError response.
-  reg('orbit_create_ticket', createTicketToolConfig, makeCreateTicketHandler(client));
-  reg('orbit_update_ticket', updateTicketToolConfig, makeUpdateTicketHandler(client));
-  reg('orbit_move_ticket', moveTicketToolConfig, makeMoveTicketHandler(client));
-  reg('orbit_close_ticket', closeTicketToolConfig, makeCloseTicketHandler(client));
-  reg('orbit_comment', commentToolConfig, makeCommentHandler(client));
-  reg('orbit_assign', assignToolConfig, makeAssignHandler(client));
-  reg('orbit_unassign', unassignToolConfig, makeUnassignHandler(client));
-  reg('orbit_set_milestone', setMilestoneToolConfig, makeSetMilestoneHandler(client));
+  reg('orboto_create_ticket', createTicketToolConfig, makeCreateTicketHandler(client));
+  reg('orboto_update_ticket', updateTicketToolConfig, makeUpdateTicketHandler(client));
+  reg('orboto_move_ticket', moveTicketToolConfig, makeMoveTicketHandler(client));
+  reg('orboto_close_ticket', closeTicketToolConfig, makeCloseTicketHandler(client));
+  reg('orboto_comment', commentToolConfig, makeCommentHandler(client));
+  reg('orboto_assign', assignToolConfig, makeAssignHandler(client));
+  reg('orboto_unassign', unassignToolConfig, makeUnassignHandler(client));
+  reg('orboto_set_milestone', setMilestoneToolConfig, makeSetMilestoneHandler(client));
 
   // ORB-453 — ticket-dependency tools (3-way-sync gap filed after the
   // skill wrapper landed in ORB-452). Same idempotent-on-409/404
   // semantics as orbit_assign / orbit_unassign.
-  reg('orbit_add_ticket_dependency', addTicketDependencyToolConfig, makeAddTicketDependencyHandler(client));
-  reg('orbit_remove_ticket_dependency', removeTicketDependencyToolConfig, makeRemoveTicketDependencyHandler(client));
-  reg('orbit_list_ticket_dependencies', listTicketDependenciesToolConfig, makeListTicketDependenciesHandler(client));
+  reg('orboto_add_ticket_dependency', addTicketDependencyToolConfig, makeAddTicketDependencyHandler(client));
+  reg('orboto_remove_ticket_dependency', removeTicketDependencyToolConfig, makeRemoveTicketDependencyHandler(client));
+  reg('orboto_list_ticket_dependencies', listTicketDependenciesToolConfig, makeListTicketDependenciesHandler(client));
 
   // ORB-309 Phase C — Group 2: time tools.
-  reg('orbit_timer_start', timerStartToolConfig, makeTimerStartHandler(client));
-  reg('orbit_timer_stop', timerStopToolConfig, makeTimerStopHandler(client));
-  reg('orbit_log_time', logTimeToolConfig, makeLogTimeHandler(client));
+  reg('orboto_timer_start', timerStartToolConfig, makeTimerStartHandler(client));
+  reg('orboto_timer_stop', timerStopToolConfig, makeTimerStopHandler(client));
+  reg('orboto_log_time', logTimeToolConfig, makeLogTimeHandler(client));
 
   // ORB-309 Phase C — Group 3: checklist writes (ORB-234 surface).
-  reg('orbit_check', checkToolConfig, makeCheckHandler(client));
-  reg('orbit_uncheck', uncheckToolConfig, makeUncheckHandler(client));
-  reg('orbit_add_check', addCheckToolConfig, makeAddCheckHandler(client));
-  reg('orbit_new_checklist', newChecklistToolConfig, makeNewChecklistHandler(client));
+  reg('orboto_check', checkToolConfig, makeCheckHandler(client));
+  reg('orboto_uncheck', uncheckToolConfig, makeUncheckHandler(client));
+  reg('orboto_add_check', addCheckToolConfig, makeAddCheckHandler(client));
+  reg('orboto_new_checklist', newChecklistToolConfig, makeNewChecklistHandler(client));
 
   // ORB-309 Phase C — Group 4: admin-only tools. Each call hits a
   // route gated on super-admin / admin:* permissions; a non-admin
   // caller's 403 surfaces as a readable error from rewrite403().
-  reg('orbit_list_users', listUsersToolConfig, makeListUsersHandler(client));
-  reg('orbit_get_audit_log', getAuditLogToolConfig, makeGetAuditLogHandler(client));
-  reg('orbit_trigger_backup', triggerBackupToolConfig, makeTriggerBackupHandler(client));
+  reg('orboto_list_users', listUsersToolConfig, makeListUsersHandler(client));
+  reg('orboto_get_audit_log', getAuditLogToolConfig, makeGetAuditLogHandler(client));
+  reg('orboto_trigger_backup', triggerBackupToolConfig, makeTriggerBackupHandler(client));
 
   // ORB-510 / ORB-513 — primer-fact tools. Wraps the ORB-511 REST
   // surface so agents can record structured project facts that the
   // primer renderer (ORB-512) surfaces at session start. The skill
   // rule (ORB-514) tells agents *when* to record; these are the *how*.
-  reg('orbit_primer_fact_list', primerFactListToolConfig, makePrimerFactListHandler(client));
-  reg('orbit_primer_fact_add', primerFactAddToolConfig, makePrimerFactAddHandler(client));
-  reg('orbit_primer_fact_update', primerFactUpdateToolConfig, makePrimerFactUpdateHandler(client));
-  reg('orbit_primer_fact_supersede', primerFactSupersedeToolConfig, makePrimerFactSupersedeHandler(client));
-  reg('orbit_primer_fact_verify', primerFactVerifyToolConfig, makePrimerFactVerifyHandler(client));
-  reg('orbit_primer_fact_delete', primerFactDeleteToolConfig, makePrimerFactDeleteHandler(client));
+  reg('orboto_primer_fact_list', primerFactListToolConfig, makePrimerFactListHandler(client));
+  reg('orboto_primer_fact_add', primerFactAddToolConfig, makePrimerFactAddHandler(client));
+  reg('orboto_primer_fact_update', primerFactUpdateToolConfig, makePrimerFactUpdateHandler(client));
+  reg('orboto_primer_fact_supersede', primerFactSupersedeToolConfig, makePrimerFactSupersedeHandler(client));
+  reg('orboto_primer_fact_verify', primerFactVerifyToolConfig, makePrimerFactVerifyHandler(client));
+  reg('orboto_primer_fact_delete', primerFactDeleteToolConfig, makePrimerFactDeleteHandler(client));
 
   // ORB-310 Phase D — read-only `orbit://…` URI resources +
   // task-shaped Prompt templates the MCP client offers in its UI.
