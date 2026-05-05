@@ -59,6 +59,6 @@ Per [`CLAUDE.md`](../../CLAUDE.md), every API route change ships in one commit b
 
 1. `apps/api/` — the route + tests
 2. `apps/mcp/src/tools/` — the tool wrapper + unit test fixture (this package)
-3. `.claude/skills/orbit/` — the SKILL.md operation row + `scripts/orbit.mjs` shortcut where it makes sense
+3. `.claude/skills/orbit/` — the SKILL.md operation row + `scripts/orboto.mjs` shortcut where it makes sense
 
 Skipping any one drifts the consuming surfaces out of sync with the producing route. Adding a new tool here means: new file under `tools/`, register it in `server.ts`, add a unit test under `tools/<name>.test.ts`.
