@@ -3,7 +3,7 @@
  *
  * Builds an `McpServer` with the registered tool set + a handle to
  * the Orbit REST client. Transport is picked by the process entry
- * point (`index.ts`) based on `ORBIT_MCP_TRANSPORT=stdio|http`.
+ * point (`index.ts`) based on `ORBOTO_MCP_TRANSPORT=stdio|http`.
  *
  * Keeping the server factory transport-agnostic means `server.ts` is
  * the same object whether we ship stdio for Local-Proxy (Phase G

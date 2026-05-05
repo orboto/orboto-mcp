@@ -8,7 +8,7 @@ Model Context Protocol server for Orbit. Exposes 42 tools, 4 resources, and 5 pr
 
 ```
 src/
-  index.ts             entry point — picks transport from ORBIT_MCP_TRANSPORT
+  index.ts             entry point — picks transport from ORBOTO_MCP_TRANSPORT
   server.ts            McpServer factory + tool/resource/prompt registration
   http-transport.ts    Streamable HTTP transport for the Self-Hosted-Inline mode
   orbit-client.ts      tiny REST client wrapping the Orbit API
@@ -34,8 +34,8 @@ docker compose -f docker-compose.local.yml up -d
 pnpm --filter @orbit/api dev
 
 # Terminal 2 — MCP server
-ORBIT_API_URL=http://localhost:3000 \
-ORBIT_API_KEY=orb_… \
+ORBOTO_API_URL=http://localhost:3000 \
+ORBOTO_API_KEY=orb_… \
 pnpm --filter @orbit/mcp dev
 ```
 
@@ -47,11 +47,11 @@ See [`docs/env.md`](../../docs/env.md#mcp-server-orbitmcp) for the complete list
 
 | Var | Required | Purpose |
 |---|---|---|
-| `ORBIT_API_URL` | yes | API base URL (`http://api:3000` inside compose, public URL otherwise). |
-| `ORBIT_API_KEY` | stdio only | `orb_…` token; HTTP mode reads it per-request from the `Authorization` header instead. |
-| `ORBIT_MCP_TRANSPORT` | no | `stdio` (default) or `http`. |
-| `ORBIT_MCP_PORT` | http only | Listen port (default `3100`). |
-| `ORBIT_MCP_CLIENT` | no | User-Agent suffix sent on every Orbit API call. |
+| `ORBOTO_API_URL` | yes | API base URL (`http://api:3000` inside compose, public URL otherwise). |
+| `ORBOTO_API_KEY` | stdio only | `orb_…` token; HTTP mode reads it per-request from the `Authorization` header instead. |
+| `ORBOTO_MCP_TRANSPORT` | no | `stdio` (default) or `http`. |
+| `ORBOTO_MCP_PORT` | http only | Listen port (default `3100`). |
+| `ORBOTO_MCP_CLIENT` | no | User-Agent suffix sent on every Orbit API call. |
 
 ## Three-way sync
 

@@ -2,7 +2,7 @@
  * ORB-244 Phase A — Streamable HTTP transport for the MCP server.
  *
  * Used by the Self-Hosted-inline delivery variant: a separate
- * container alongside the API, listening on `ORBIT_MCP_PORT` (default
+ * container alongside the API, listening on `ORBOTO_MCP_PORT` (default
  * 3100). The reverse proxy routes `/mcp` to this port.
  *
  * Per-request auth: every POST must carry `Authorization: Bearer
