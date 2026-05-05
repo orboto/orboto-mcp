@@ -22,7 +22,7 @@ function mockFetch(json: unknown) {
 }
 
 describe('tools/query', () => {
-  const client = new OrbitClient({ baseUrl: 'https://orbit.example.com', apiKey: 'orb_test' });
+  const client = new OrbitClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
 
   it('renders matched tickets + structured payload', async () => {
     const spy = mockFetch({
@@ -49,7 +49,7 @@ describe('tools/query', () => {
     const result = await makeQueryHandler(client)({ oql: 'project = ORB' });
 
     expect(spy).toHaveBeenCalledWith(
-      'https://orbit.example.com/query',
+      'https://orboto.example.com/query',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ oql: 'project = ORB', syntax: 'oql', cursor: undefined, limit: 25 }),

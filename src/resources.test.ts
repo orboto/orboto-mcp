@@ -33,7 +33,7 @@ function stub(responses: Array<{ ok?: boolean; status?: number; json?: unknown }
   });
 }
 
-const client = new OrbitClient({ baseUrl: 'https://orbit.example.com', apiKey: 'orb_x' });
+const client = new OrbitClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 
 function buildServerWithResources() {
   const server = new McpServer({ name: 'test', version: '0.0.0' });

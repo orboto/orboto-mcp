@@ -30,7 +30,7 @@ function stub(responses: Array<{ ok?: boolean; status?: number; json?: unknown }
   return calls;
 }
 
-const client = new OrbitClient({ baseUrl: 'https://orbit.example.com', apiKey: 'orb_x' });
+const client = new OrbitClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 
 describe('orbit_list_users', () => {
   it('passes search + limit, surfaces user tags in text output', async () => {

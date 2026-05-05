@@ -30,7 +30,7 @@ function sequence(responses: Array<{ ok?: boolean; status?: number; json?: unkno
   return calls;
 }
 
-const client = new OrbitClient({ baseUrl: 'https://orbit.example.com', apiKey: 'orb_x' });
+const client = new OrbitClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 
 describe('resolveProjectByKey', () => {
   it('returns the project on success', async () => {
@@ -47,7 +47,7 @@ describe('resolveProjectByKey', () => {
   it('URL-encodes the key', async () => {
     const calls = sequence([{ json: { id: 'p1', key: 'AB CD', name: 'x', description: null, status: 'active' } }]);
     await resolveProjectByKey(client, 'AB CD');
-    expect(calls[0]).toBe('https://orbit.example.com/projects/by-key/AB%20CD');
+    expect(calls[0]).toBe('https://orboto.example.com/projects/by-key/AB%20CD');
   });
 });
 

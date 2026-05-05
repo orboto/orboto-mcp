@@ -25,7 +25,7 @@
  */
 
 export interface OrbitClientConfig {
-  /** Base URL of the Orbit API — e.g. `https://orbit.example.com` or
+  /** Base URL of the Orbit API — e.g. `https://orboto.example.com` or
    *  `http://api:3000` when running inside docker-compose. No trailing
    *  slash; we'll strip one if the operator pastes it. */
   baseUrl: string;

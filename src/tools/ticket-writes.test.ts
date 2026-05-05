@@ -42,7 +42,7 @@ function stub(responses: Array<{
   return calls;
 }
 
-const client = new OrbitClient({ baseUrl: 'https://orbit.example.com', apiKey: 'orb_x' });
+const client = new OrbitClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 
 const PROJ = { id: 'p1', key: 'ACME', name: 'Acme', description: null, status: 'active' };
 const TICKET = {
@@ -62,7 +62,7 @@ describe('orbit_create_ticket', () => {
       projectKey: 'ACME', title: 'New', priority: 'high',
     });
     expect(calls[1].method).toBe('POST');
-    expect(calls[1].url).toBe('https://orbit.example.com/projects/p1/tickets');
+    expect(calls[1].url).toBe('https://orboto.example.com/projects/p1/tickets');
     expect(calls[1].body).toMatchObject({ title: 'New', priority: 'high', type: 'task' });
     expect((res.content[0] as { text: string }).text).toContain('Created: [ACME-7]');
   });
