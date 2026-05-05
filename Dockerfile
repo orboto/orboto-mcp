@@ -32,16 +32,16 @@ COPY apps/mcp/tsconfig.json ./apps/mcp/tsconfig.json
 
 # Build shared-schema first (workspace dep), then rewrite its package.json
 # so prod node resolves dist/* — identical hack to the API Dockerfile.
-RUN pnpm --filter @orbit/shared-schema build
+RUN pnpm --filter @orboto/shared-schema build
 RUN node -e "const p=require('./packages/shared-schema/package.json'); p.main='./dist/index.js'; p.types='./dist/index.d.ts'; p.files=['dist']; require('fs').writeFileSync('./packages/shared-schema/package.json', JSON.stringify(p, null, 2));"
 
-RUN pnpm --filter @orbit/mcp build
+RUN pnpm --filter @orboto/mcp build
 
 # pnpm deploy — copies the package + workspace deps as concrete modules
 # under /deploy/mcp. --legacy preserves pre-pnpm-v10 behaviour (no
 # inject-workspace-packages requirement) since shared-schema has already
 # been rewired to its dist output above.
-RUN pnpm --filter @orbit/mcp deploy --legacy --prod /deploy/mcp
+RUN pnpm --filter @orboto/mcp deploy --legacy --prod /deploy/mcp
 
 # ── runner ──────────────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner

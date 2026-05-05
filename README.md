@@ -1,4 +1,4 @@
-# `@orbit/mcp`
+# `@orboto/mcp`
 
 Model Context Protocol server for Orbit. Exposes 42 tools, 4 resources, and 5 prompts so MCP-aware AI clients (Claude Desktop, Cursor, GitHub Copilot Chat) can read and write Orbit data as a regular API user.
 
@@ -21,9 +21,9 @@ src/
 ## Dev
 
 ```bash
-pnpm --filter @orbit/mcp dev          # tsx watch with stdio transport
-pnpm --filter @orbit/mcp build        # tsc → dist/
-pnpm --filter @orbit/mcp test         # vitest
+pnpm --filter @orboto/mcp dev          # tsx watch with stdio transport
+pnpm --filter @orboto/mcp build        # tsc → dist/
+pnpm --filter @orboto/mcp test         # vitest
 ```
 
 A live API instance is required — the dev mode preflights against `/users/me` on boot. Easiest setup:
@@ -31,12 +31,12 @@ A live API instance is required — the dev mode preflights against `/users/me` 
 ```bash
 # Terminal 1 — Orbit stack
 docker compose -f docker-compose.local.yml up -d
-pnpm --filter @orbit/api dev
+pnpm --filter @orboto/api dev
 
 # Terminal 2 — MCP server
 ORBOTO_API_URL=http://localhost:3000 \
 ORBOTO_API_KEY=orb_… \
-pnpm --filter @orbit/mcp dev
+pnpm --filter @orboto/mcp dev
 ```
 
 Mint the API key under Profile → API keys (the user must have the `mcp:use` permission — see `apps/api/src/db/seed.ts`).
