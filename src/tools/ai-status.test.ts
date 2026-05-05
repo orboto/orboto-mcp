@@ -16,7 +16,7 @@ function mockFetch(json: unknown) {
 }
 
 describe('tools/ai-status', () => {
-  const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'obo_test' });
+  const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
 
   it('reports both flags when fully configured', async () => {
     mockFetch({ configured: true, embeddingsConfigured: true });

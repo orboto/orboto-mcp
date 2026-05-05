@@ -15,7 +15,7 @@
  *
  * Config (env-only — no config file):
  *   ORBOTO_API_URL        required — base URL of the Orboto API
- *   ORBOTO_API_KEY        required — `obo_*` API key with `mcp:use`
+ *   ORBOTO_API_KEY        required — `orb_*` API key with `mcp:use`
  *                         scope (stdio mode). Per-session bearer token
  *                         is read from Authorization header in http mode.
  *   ORBOTO_MCP_TRANSPORT  optional — `stdio` (default) | `http`

@@ -15,7 +15,7 @@ import { withMetrics } from './with-metrics.js';
 beforeEach(() => { vi.restoreAllMocks(); });
 afterEach(() => { vi.restoreAllMocks(); });
 
-const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'obo_x' });
+const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 
 /** Capture every POST body the client makes and let the test inspect them. */
 function captureFetch() {

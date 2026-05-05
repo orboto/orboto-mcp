@@ -42,7 +42,7 @@ function stub(responses: Array<{ ok?: boolean; status?: number; json?: unknown }
   return calls;
 }
 
-const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'obo_x' });
+const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 
 const PROJ = { id: 'p1', key: 'ACME', name: 'Acme', description: 'Customer portal', status: 'active' };
 
