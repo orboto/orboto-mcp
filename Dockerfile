@@ -48,6 +48,14 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
+# ORB-668 — default container timezone. Alpine ships without
+# /usr/share/zoneinfo, so without tzdata installed, setting TZ=…
+# evaluates to UTC. Operator can override via a TZ service env var
+# at runtime; this just makes the out-of-the-box default match the
+# team's expectations instead of UTC.
+RUN apk add --no-cache tzdata
+ENV TZ=Europe/Berlin
+
 # Default to the HTTP transport — that's the container's reason to exist.
 # Operators running stdio mode locally don't go through this image at all
 # (they `node apps/mcp/dist/index.js` directly).
