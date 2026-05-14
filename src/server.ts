@@ -76,6 +76,37 @@ import {
   primerFactDeleteToolConfig, makePrimerFactDeleteHandler,
 } from './tools/primer-facts.js';
 
+// ORB-799 — wrapper-feature-parity gap-close.
+import { whoamiToolConfig, makeWhoamiHandler } from './tools/identity.js';
+import {
+  claimToolConfig, makeClaimHandler,
+  unclaimToolConfig, makeUnclaimHandler,
+} from './tools/claim.js';
+import {
+  createMilestoneToolConfig, makeCreateMilestoneHandler,
+  closeMilestoneToolConfig, makeCloseMilestoneHandler,
+  updateMilestoneToolConfig, makeUpdateMilestoneHandler,
+} from './tools/milestones.js';
+import {
+  listTicketStatusesToolConfig, makeListTicketStatusesHandler,
+  listLabelsToolConfig, makeListLabelsHandler,
+} from './tools/project-listings.js';
+import {
+  bulkPatchTicketsToolConfig, makeBulkPatchTicketsHandler,
+  bulkMoveTicketsToolConfig, makeBulkMoveTicketsHandler,
+  bulkCloseTicketsToolConfig, makeBulkCloseTicketsHandler,
+  bulkCommentTicketsToolConfig, makeBulkCommentTicketsHandler,
+  bulkAssignTicketsToolConfig, makeBulkAssignTicketsHandler,
+  bulkUnassignTicketsToolConfig, makeBulkUnassignTicketsHandler,
+} from './tools/bulk-writes.js';
+import {
+  askDocsToolConfig, makeAskDocsHandler,
+  ingestUrlToolConfig, makeIngestUrlHandler,
+  ingestFileToolConfig, makeIngestFileHandler,
+} from './tools/docs-ai.js';
+import { attachToTicketToolConfig, makeAttachToTicketHandler } from './tools/attach.js';
+import { setParentToolConfig, makeSetParentHandler } from './tools/set-parent.js';
+
 export interface BuildServerOptions extends OrbotoClientConfig {
   /** Optional — passed through to McpServer metadata. Clients
    *  sometimes surface this in their UI. */
@@ -177,6 +208,35 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_primer_fact_supersede', primerFactSupersedeToolConfig, makePrimerFactSupersedeHandler(client));
   reg('orboto_primer_fact_verify', primerFactVerifyToolConfig, makePrimerFactVerifyHandler(client));
   reg('orboto_primer_fact_delete', primerFactDeleteToolConfig, makePrimerFactDeleteHandler(client));
+
+  // ORB-799 — wrapper-feature-parity gap-close. Eight clusters:
+  //   1. Identity   (whoami)
+  //   2. Composite  (claim, unclaim)
+  //   3. Milestone CRUD (create, close, update)
+  //   4. Project listings (statuses, labels)
+  //   5. Bulk writes (patch, move, close, comment, assign, unassign)
+  //   6. Docs-AI (ask, ingest-url, ingest-file)
+  //   7. Attachments (attach-to-ticket)
+  //   8. Re-parenting (set-parent — symmetric to set_milestone)
+  reg('orboto_whoami', whoamiToolConfig, makeWhoamiHandler(client));
+  reg('orboto_claim', claimToolConfig, makeClaimHandler(client));
+  reg('orboto_unclaim', unclaimToolConfig, makeUnclaimHandler(client));
+  reg('orboto_create_milestone', createMilestoneToolConfig, makeCreateMilestoneHandler(client));
+  reg('orboto_close_milestone', closeMilestoneToolConfig, makeCloseMilestoneHandler(client));
+  reg('orboto_update_milestone', updateMilestoneToolConfig, makeUpdateMilestoneHandler(client));
+  reg('orboto_list_ticket_statuses', listTicketStatusesToolConfig, makeListTicketStatusesHandler(client));
+  reg('orboto_list_labels', listLabelsToolConfig, makeListLabelsHandler(client));
+  reg('orboto_bulk_patch_tickets', bulkPatchTicketsToolConfig, makeBulkPatchTicketsHandler(client));
+  reg('orboto_bulk_move_tickets', bulkMoveTicketsToolConfig, makeBulkMoveTicketsHandler(client));
+  reg('orboto_bulk_close_tickets', bulkCloseTicketsToolConfig, makeBulkCloseTicketsHandler(client));
+  reg('orboto_bulk_comment_tickets', bulkCommentTicketsToolConfig, makeBulkCommentTicketsHandler(client));
+  reg('orboto_bulk_assign_tickets', bulkAssignTicketsToolConfig, makeBulkAssignTicketsHandler(client));
+  reg('orboto_bulk_unassign_tickets', bulkUnassignTicketsToolConfig, makeBulkUnassignTicketsHandler(client));
+  reg('orboto_ask_docs', askDocsToolConfig, makeAskDocsHandler(client));
+  reg('orboto_ingest_url', ingestUrlToolConfig, makeIngestUrlHandler(client));
+  reg('orboto_ingest_file', ingestFileToolConfig, makeIngestFileHandler(client));
+  reg('orboto_attach_to_ticket', attachToTicketToolConfig, makeAttachToTicketHandler(client));
+  reg('orboto_set_parent', setParentToolConfig, makeSetParentHandler(client));
 
   // ORB-310 Phase D — read-only `orboto://…` URI resources +
   // task-shaped Prompt templates the MCP client offers in its UI.

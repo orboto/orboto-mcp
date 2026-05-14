@@ -92,6 +92,31 @@ describe('OrbotoClient', () => {
     const result = await client.post('/action', {});
     expect(result).toBeUndefined();
   });
+
+  // ORB-799 — postMultipart sends FormData with no Content-Type header
+  // (fetch chooses the boundary). The bearer + UA headers still apply.
+  it('postMultipart sends FormData body without Content-Type (boundary picked by fetch)', async () => {
+    const spy = mockFetch({ json: async () => ({ docId: 'd1' }) });
+    const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
+    const form = new FormData();
+    form.append('file', new Blob([new Uint8Array([0x4d, 0x44])], { type: 'text/markdown' }), 'note.md');
+    const result = await client.postMultipart<{ docId: string }>('/spaces/abc/docs/ingest-file', form);
+    expect(result).toEqual({ docId: 'd1' });
+    const [, init] = spy.mock.calls[0]!;
+    const headers = (init as { headers: Record<string, string> }).headers;
+    expect(headers.Authorization).toBe('Bearer orb_test');
+    // No Content-Type header — fetch sets multipart/form-data; boundary=…
+    expect(headers['Content-Type']).toBeUndefined();
+    expect((init as { method: string }).method).toBe('POST');
+  });
+
+  it('postMultipart throws OrbotoApiError on non-2xx', async () => {
+    mockFetch({ ok: false, status: 413, text: async () => 'payload too large' });
+    const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
+    const form = new FormData();
+    form.append('file', new Blob([new Uint8Array([0])], { type: 'application/octet-stream' }), 'x');
+    await expect(client.postMultipart('/x', form)).rejects.toBeInstanceOf(OrbotoApiError);
+  });
 });
 
 describe('preflightMcpSession', () => {

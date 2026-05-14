@@ -119,6 +119,27 @@ export class OrbotoClient {
       throw new OrbotoApiError(res.status, body, url);
     }
   }
+
+  /**
+   * POST a `multipart/form-data` payload — used by ingest-file +
+   * attachment upload tools (ORB-799). The fetch API picks the boundary
+   * automatically when we let it set `Content-Type`, so we deliberately
+   * do NOT spread `Content-Type: application/json` from the JSON helpers.
+   */
+  async postMultipart<T>(path: string, form: FormData): Promise<T> {
+    const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: this.headers, // no Content-Type — fetch sets the boundary
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new OrbotoApiError(res.status, body, url);
+    }
+    if (res.status === 204) return undefined as T;
+    return (await res.json()) as T;
+  }
 }
 
 /**
