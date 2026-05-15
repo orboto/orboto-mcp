@@ -119,7 +119,7 @@ function ticketStructured(t: TicketRow) {
 export const createTicketToolConfig = {
   title: 'Create a ticket',
   description:
-    'Create a new ticket in the given project. Returns the new ticket\'s key (e.g. "ACME-42") so callers can chain follow-ups. The caller must have `ticket:create` on the project. **Duplicate-detection safety-net (ORB-831):** if `similarWarnings` appears in the response with one or more entries, the ticket WAS created but you should review whether to close it as a duplicate of the listed ticket(s) instead. The warnings are advisory — never blocking — but each entry is a ticket the system thinks the new one overlaps with. Prefer `orboto_check_similar` BEFORE creating when you want a dry-run.',
+    'Create a new ticket in the given project. Returns the new ticket\'s key (e.g. "ACME-42") so callers can chain follow-ups. The caller must have `ticket:create` on the project. **Duplicate-detection safety-net (ORB-831):** if `similarWarnings` appears in the response with one or more entries, the ticket WAS created but you should review whether to close it as a duplicate of the listed ticket(s) instead. The warnings are advisory — never blocking — but each entry is a ticket the system thinks the new one overlaps with. Prefer `orboto_check_similar` BEFORE creating when you want a dry-run. **Language-mismatch warning (ORB-890):** if `languageWarning` appears, the ticket was written in a language different from the workspace default. Consider rewriting in the expected language so search + duplicate-detection stay consistent. Non-blocking.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
     title: z.string().min(1).max(255),
@@ -159,7 +159,10 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
       body.parentTicketId = parent.id;
     }
 
-    const created = await client.post<TicketRow & { similarWarnings?: SimilarWarning[] }>(
+    const created = await client.post<TicketRow & {
+      similarWarnings?: SimilarWarning[];
+      languageWarning?: LanguageWarning;
+    }>(
       `/projects/${project.id}/tickets`,
       body,
     );
@@ -184,19 +187,32 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
     // calling agent. The text block prepends a clearly-visible warning
     // when matches exist so a model scanning the result for "warning"
     // / "duplicate" notices and self-corrects.
+    // ORB-890 / ORB-891 — same surface for `languageWarning` when the
+    // detected language doesn't match the workspace default.
     const warnings = created.similarWarnings ?? [];
+    const langWarning = created.languageWarning;
     const baseText = ticketSummaryText('Created', created);
-    const text = warnings.length > 0
-      ? `${baseText}\n\n⚠ Potential duplicates found — review before treating this as new work:\n${
+    const parts: string[] = [baseText];
+    if (warnings.length > 0) {
+      parts.push(
+        `\n⚠ Potential duplicates found — review before treating this as new work:\n${
           warnings.map((w) => `  - [${w.ticketKey ?? w.id.slice(0, 8)}] "${w.title}" (${formatSimilarity(w)})`).join('\n')
-        }\n  If one of these covers the work, close [${created.ticketKey}] as a duplicate via orboto_close_ticket.`
-      : baseText;
+        }\n  If one of these covers the work, close [${created.ticketKey}] as a duplicate via orboto_close_ticket.`,
+      );
+    }
+    if (langWarning) {
+      parts.push(
+        `\n⚠ Language mismatch — this ticket reads as "${langWarning.detected}" but the workspace default is "${langWarning.expected}". Consider rewriting in ${langWarning.expected.toUpperCase()} to keep search + duplicate-detection consistent across the project.`,
+      );
+    }
+    const text = parts.join('\n');
 
     return {
       content: [{ type: 'text', text }],
       structuredContent: {
         ...ticketStructured(created),
         similarWarnings: warnings,
+        ...(langWarning ? { languageWarning: langWarning } : {}),
       },
     };
   };
@@ -211,6 +227,11 @@ interface SimilarWarning {
   statusCategory: string | null;
   similarity: number;
   matchMode: 'tsvector' | 'embedding';
+}
+
+interface LanguageWarning {
+  detected: string;
+  expected: string;
 }
 
 function formatSimilarity(w: SimilarWarning): string {

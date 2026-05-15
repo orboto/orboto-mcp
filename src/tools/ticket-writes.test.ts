@@ -129,6 +129,53 @@ describe('orboto_create_ticket', () => {
     expect(text).not.toContain('duplicates');
     expect(text).not.toContain('⚠');
   });
+
+  it('surfaces languageWarning from POST /tickets in both content + structuredContent (ORB-891)', async () => {
+    stub([
+      { json: PROJ },
+      {
+        json: {
+          ...TICKET, ticketKey: 'ACME-101', title: 'Authentifizierung schlägt fehl',
+          similarWarnings: [],
+          languageWarning: { detected: 'de', expected: 'en' },
+        },
+      },
+    ]);
+    const res = await makeCreateTicketHandler(client)({
+      projectKey: 'ACME', title: 'Authentifizierung schlägt fehl',
+    });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Created: [ACME-101]');
+    expect(text).toContain('Language mismatch');
+    expect(text).toContain('"de"');
+    expect(text).toContain('"en"');
+    const sc = res.structuredContent as { languageWarning?: { detected: string; expected: string } };
+    expect(sc.languageWarning).toEqual({ detected: 'de', expected: 'en' });
+  });
+
+  it('combines both similarWarnings and languageWarning when both are present (ORB-891)', async () => {
+    stub([
+      { json: PROJ },
+      {
+        json: {
+          ...TICKET, ticketKey: 'ACME-102', title: 'duplicate auth',
+          similarWarnings: [
+            { id: 't1', ticketKey: 'ACME-1', title: 'Auth breaks', statusName: 'Done', statusColor: '#7d7', statusCategory: 'done', similarity: 0.92, matchMode: 'embedding' },
+          ],
+          languageWarning: { detected: 'de', expected: 'en' },
+        },
+      },
+    ]);
+    const res = await makeCreateTicketHandler(client)({
+      projectKey: 'ACME', title: 'duplicate auth',
+    });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Potential duplicates found');
+    expect(text).toContain('Language mismatch');
+    const sc = res.structuredContent as { similarWarnings: unknown[]; languageWarning?: unknown };
+    expect(sc.similarWarnings).toHaveLength(1);
+    expect(sc.languageWarning).toEqual({ detected: 'de', expected: 'en' });
+  });
 });
 
 describe('orboto_update_ticket', () => {
