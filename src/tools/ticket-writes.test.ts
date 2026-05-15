@@ -90,6 +90,45 @@ describe('orboto_create_ticket', () => {
       makeCreateTicketHandler(client)({ projectKey: 'ACME', title: 'x' })
     ).rejects.toBeInstanceOf(OrbotoApiError);
   });
+
+  it('surfaces similarWarnings from POST /tickets in both content + structuredContent (ORB-887)', async () => {
+    stub([
+      { json: PROJ },
+      {
+        json: {
+          ...TICKET, ticketKey: 'ACME-99', title: 'Auth breaks',
+          similarWarnings: [
+            { id: 't42', ticketKey: 'ACME-42', title: 'Authentication breaks for SAML', statusName: 'In Progress', statusColor: '#fc0', statusCategory: 'in_progress', similarity: 0.91, matchMode: 'embedding' },
+            { id: 't13', ticketKey: 'ACME-13', title: 'Auth flow regressed', statusName: 'Done', statusColor: '#7d7', statusCategory: 'done', similarity: 0.72, matchMode: 'tsvector' },
+          ],
+        },
+      },
+    ]);
+    const res = await makeCreateTicketHandler(client)({
+      projectKey: 'ACME', title: 'Auth breaks',
+    });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Created: [ACME-99]');
+    expect(text).toContain('Potential duplicates found');
+    expect(text).toContain('ACME-42');
+    expect(text).toContain('91% AI match');
+    expect(text).toContain('ACME-13');
+    const sc = res.structuredContent as { similarWarnings: unknown[] };
+    expect(sc.similarWarnings).toHaveLength(2);
+  });
+
+  it('returns no warning block when similarWarnings is empty', async () => {
+    stub([
+      { json: PROJ },
+      { json: { ...TICKET, ticketKey: 'ACME-100', similarWarnings: [] } },
+    ]);
+    const res = await makeCreateTicketHandler(client)({
+      projectKey: 'ACME', title: 'totally unrelated work',
+    });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).not.toContain('duplicates');
+    expect(text).not.toContain('⚠');
+  });
 });
 
 describe('orboto_update_ticket', () => {
