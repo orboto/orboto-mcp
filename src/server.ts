@@ -106,7 +106,11 @@ import {
 } from './tools/docs-ai.js';
 import { attachToTicketToolConfig, makeAttachToTicketHandler } from './tools/attach.js';
 import { setParentToolConfig, makeSetParentHandler } from './tools/set-parent.js';
-import { updateProjectToolConfig, makeUpdateProjectHandler } from './tools/update-project.js';
+import {
+  updateProjectToolConfig, makeUpdateProjectHandler,
+  createProjectToolConfig, makeCreateProjectHandler,
+  archiveProjectToolConfig, makeArchiveProjectHandler,
+} from './tools/update-project.js';
 import { checkSimilarToolConfig, makeCheckSimilarHandler } from './tools/check-similar.js';
 
 export interface BuildServerOptions extends OrbotoClientConfig {
@@ -241,6 +245,8 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_attach_to_ticket', attachToTicketToolConfig, makeAttachToTicketHandler(client));
   reg('orboto_set_parent', setParentToolConfig, makeSetParentHandler(client));
   reg('orboto_update_project', updateProjectToolConfig, makeUpdateProjectHandler(client));
+  reg('orboto_create_project', createProjectToolConfig, makeCreateProjectHandler(client));
+  reg('orboto_archive_project', archiveProjectToolConfig, makeArchiveProjectHandler(client));
   reg('orboto_check_similar', checkSimilarToolConfig, makeCheckSimilarHandler(client));
 
   // ORB-310 Phase D — read-only `orboto://…` URI resources +

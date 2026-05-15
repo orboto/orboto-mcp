@@ -1,17 +1,22 @@
 /**
  * ORB-885 — `orboto_update_project`.
+ * ORB-830 — `orboto_create_project` + `orboto_archive_project`.
  *
- * Patch a project's metadata fields (name, description, key, status,
- * branchTemplate, customerId). Mirrors `PATCH /projects/:id` on the
- * API. The MCP read surface (`orboto_get_project`, `orboto_list_projects`)
- * shipped in ORB-244 Phase B but the write half was missing — discovered
- * while trying to set the description on the dogfooding ORB project
- * itself.
+ * Project-CRUD write surface for the MCP. The read half
+ * (`orboto_list_projects`, `orboto_get_project`) shipped in ORB-244
+ * Phase B; ORB-885 added `update_project`, ORB-830 closes the gap
+ * with create + archive so an agent never has to drop to a raw
+ * `POST /projects` to spin up a new project.
  *
- * Status mutation is allowed here (unlike `orboto_update_milestone`,
- * which delegates closing to a dedicated tool) because project status
- * is a four-state lifecycle (`draft` → `active` → `archived` / `closed`)
- * with no extra semantics — a single patch field covers it cleanly.
+ * Status mutation is allowed in `update_project` (unlike
+ * `orboto_update_milestone`, which delegates closing to a dedicated
+ * tool) because project status is a four-state lifecycle (`draft` →
+ * `active` → `archived` / `closed`) with no extra semantics — a
+ * single patch field covers it cleanly. `archive_project` is a
+ * thin convenience over `update_project({ status: 'archived' })`
+ * because "archive this project" is a workflow agents reach for
+ * often enough that an explicit verb beats teaching the model the
+ * patch shape.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -69,6 +74,102 @@ export function makeUpdateProjectHandler(client: OrbotoClient) {
         name: updated.name,
         description: updated.description,
         status: updated.status,
+      },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// orboto_create_project — ORB-830
+// ---------------------------------------------------------------------------
+
+export const createProjectToolConfig = {
+  title: 'Create a new project',
+  description:
+    'Create a new project in the workspace. `name` is required; `key` is optional and the API auto-derives one from the name when omitted (uppercase initials). Returns the new project\'s id + key + status (`active` by default). Caller must have `admin:project:create` or be a super-admin.',
+  inputSchema: z.object({
+    name: z.string().min(1).max(255).describe('Display name for the project.'),
+    key: z.string().min(2).max(10).regex(PROJECT_KEY_RE).optional()
+      .describe('Optional explicit key (e.g. "ACME"). A-Z0-9 only, 2-10 chars. Auto-derived from name when omitted.'),
+    description: z.string().nullable().optional().describe('Optional free-text description.'),
+    customerId: z.string().regex(UUID_RE).nullable().optional()
+      .describe('Optional UUID of a customer record to attach the project to.'),
+  }).shape,
+};
+
+export function makeCreateProjectHandler(client: OrbotoClient) {
+  return async ({ name, key, description, customerId }: {
+    name: string;
+    key?: string;
+    description?: string | null;
+    customerId?: string | null;
+  }): Promise<CallToolResult> => {
+    const body: Record<string, unknown> = { name };
+    if (key !== undefined) body.key = key;
+    if (description !== undefined) body.description = description;
+    if (customerId !== undefined) body.customerId = customerId;
+    const created = await client.post<ProjectRow>('/projects', body);
+    return {
+      content: [{
+        type: 'text',
+        text: `Created project ${created.key} — ${created.name} (status: ${created.status}).`,
+      }],
+      structuredContent: {
+        id: created.id,
+        key: created.key,
+        name: created.name,
+        description: created.description,
+        status: created.status,
+      },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// orboto_archive_project — ORB-830
+// ---------------------------------------------------------------------------
+
+export const archiveProjectToolConfig = {
+  title: 'Archive a project',
+  description:
+    'Archive a project — moves it out of the active rotation without deleting any data. Convenience wrapper around `orboto_update_project({ status: "archived" })` because "archive this project" is a workflow operators hit often. Archiving is reversible: pass the same project back through `orboto_update_project({ status: "active" })` to restore. Idempotent — re-archiving an already-archived project is a no-op success.',
+  inputSchema: z.object({
+    projectKey: z.string().min(1).describe('Project key (e.g. "ACME") of the project to archive.'),
+  }).shape,
+};
+
+export function makeArchiveProjectHandler(client: OrbotoClient) {
+  return async ({ projectKey }: { projectKey: string }): Promise<CallToolResult> => {
+    const project = await resolveProjectByKey(client, projectKey);
+    if (project.status === 'archived') {
+      return {
+        content: [{
+          type: 'text',
+          text: `Project ${project.key} is already archived (no-op).`,
+        }],
+        structuredContent: {
+          id: project.id,
+          key: project.key,
+          name: project.name,
+          description: project.description,
+          status: project.status,
+          alreadyArchived: true,
+        },
+      };
+    }
+    const updated = await client.patch<ProjectRow>(`/projects/${project.id}`, { status: 'archived' });
+    return {
+      content: [{
+        type: 'text',
+        text: `Archived project ${updated.key} — ${updated.name}.`,
+      }],
+      structuredContent: {
+        id: updated.id,
+        key: updated.key,
+        name: updated.name,
+        description: updated.description,
+        status: updated.status,
+        alreadyArchived: false,
       },
     };
   };

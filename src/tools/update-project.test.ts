@@ -3,7 +3,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
-import { makeUpdateProjectHandler } from './update-project.js';
+import {
+  makeUpdateProjectHandler,
+  makeCreateProjectHandler,
+  makeArchiveProjectHandler,
+} from './update-project.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
 afterEach(() => { vi.restoreAllMocks(); });
@@ -95,5 +99,106 @@ describe('orboto_update_project', () => {
         projectKey: 'GHOST', patch: { description: 'x' },
       }),
     ).rejects.toThrow(/Project "GHOST" not found/);
+  });
+});
+
+describe('orboto_create_project', () => {
+  it('POSTs name + key when both supplied', async () => {
+    const calls = stub([
+      { json: { id: 'new1', key: 'ACME', name: 'Acme', description: null, status: 'active' } },
+    ]);
+    const res = await makeCreateProjectHandler(client)({ name: 'Acme', key: 'ACME' });
+    expect(calls[0]).toMatchObject({
+      method: 'POST',
+      url: 'https://orboto.example.com/projects',
+      body: { name: 'Acme', key: 'ACME' },
+    });
+    expect(res.structuredContent).toMatchObject({ key: 'ACME', name: 'Acme', status: 'active' });
+  });
+
+  it('omits optional fields when not supplied so the API auto-derives the key', async () => {
+    const calls = stub([
+      { json: { id: 'new2', key: 'NN', name: 'No Name', description: null, status: 'active' } },
+    ]);
+    await makeCreateProjectHandler(client)({ name: 'No Name' });
+    expect(calls[0].body).toEqual({ name: 'No Name' });
+  });
+
+  it('passes description + customerId through verbatim', async () => {
+    const calls = stub([
+      { json: { id: 'new3', key: 'CUS', name: 'Custom', description: 'hello', status: 'active' } },
+    ]);
+    await makeCreateProjectHandler(client)({
+      name: 'Custom', description: 'hello', customerId: '11111111-2222-3333-4444-555555555555',
+    });
+    expect(calls[0].body).toEqual({
+      name: 'Custom',
+      description: 'hello',
+      customerId: '11111111-2222-3333-4444-555555555555',
+    });
+  });
+
+  it('surfaces a 409 (duplicate key) as OrbotoApiError', async () => {
+    stub([
+      { ok: false, status: 409, json: { error: 'project key already exists' } },
+    ]);
+    await expect(
+      makeCreateProjectHandler(client)({ name: 'Dup', key: 'ACME' }),
+    ).rejects.toBeInstanceOf(OrbotoApiError);
+  });
+
+  it('surfaces a 403 as OrbotoApiError', async () => {
+    stub([
+      { ok: false, status: 403, json: { error: 'forbidden' } },
+    ]);
+    await expect(
+      makeCreateProjectHandler(client)({ name: 'NoPerms' }),
+    ).rejects.toBeInstanceOf(OrbotoApiError);
+  });
+});
+
+describe('orboto_archive_project', () => {
+  it('resolves the project, then PATCHes status=archived', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: { ...PROJ, status: 'archived' } },
+    ]);
+    const res = await makeArchiveProjectHandler(client)({ projectKey: 'ACME' });
+    expect(calls[0].url).toContain('/projects/by-key/ACME');
+    expect(calls[1]).toMatchObject({
+      method: 'PATCH',
+      url: 'https://orboto.example.com/projects/p1',
+      body: { status: 'archived' },
+    });
+    expect(res.structuredContent).toMatchObject({ status: 'archived', alreadyArchived: false });
+  });
+
+  it('is idempotent — short-circuits with no PATCH when already archived', async () => {
+    const calls = stub([
+      { json: { ...PROJ, status: 'archived' } },
+    ]);
+    const res = await makeArchiveProjectHandler(client)({ projectKey: 'ACME' });
+    expect(calls).toHaveLength(1);                       // only the resolve, no PATCH
+    expect((res.content[0] as { text: string }).text).toMatch(/already archived/);
+    expect(res.structuredContent).toMatchObject({ alreadyArchived: true });
+  });
+
+  it('throws a clear error when the project is unknown', async () => {
+    stub([
+      { ok: false, status: 404, json: { error: 'not found' } },
+    ]);
+    await expect(
+      makeArchiveProjectHandler(client)({ projectKey: 'GHOST' }),
+    ).rejects.toThrow(/Project "GHOST" not found/);
+  });
+
+  it('surfaces a 403 on PATCH as OrbotoApiError', async () => {
+    stub([
+      { json: PROJ },
+      { ok: false, status: 403, json: { error: 'forbidden' } },
+    ]);
+    await expect(
+      makeArchiveProjectHandler(client)({ projectKey: 'ACME' }),
+    ).rejects.toBeInstanceOf(OrbotoApiError);
   });
 });
