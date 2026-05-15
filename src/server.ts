@@ -106,6 +106,7 @@ import {
 } from './tools/docs-ai.js';
 import { attachToTicketToolConfig, makeAttachToTicketHandler } from './tools/attach.js';
 import { setParentToolConfig, makeSetParentHandler } from './tools/set-parent.js';
+import { updateProjectToolConfig, makeUpdateProjectHandler } from './tools/update-project.js';
 
 export interface BuildServerOptions extends OrbotoClientConfig {
   /** Optional — passed through to McpServer metadata. Clients
@@ -238,6 +239,7 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_ingest_file', ingestFileToolConfig, makeIngestFileHandler(client));
   reg('orboto_attach_to_ticket', attachToTicketToolConfig, makeAttachToTicketHandler(client));
   reg('orboto_set_parent', setParentToolConfig, makeSetParentHandler(client));
+  reg('orboto_update_project', updateProjectToolConfig, makeUpdateProjectHandler(client));
 
   // ORB-310 Phase D — read-only `orboto://…` URI resources +
   // task-shaped Prompt templates the MCP client offers in its UI.
