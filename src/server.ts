@@ -112,6 +112,11 @@ import {
   archiveProjectToolConfig, makeArchiveProjectHandler,
 } from './tools/update-project.js';
 import { checkSimilarToolConfig, makeCheckSimilarHandler } from './tools/check-similar.js';
+import {
+  listAdminTranslationsToolConfig, makeListAdminTranslationsHandler,
+  approveTranslationToolConfig, makeApproveTranslationHandler,
+  revertTranslationToolConfig, makeAdminRevertTranslationHandler,
+} from './tools/admin-translations.js';
 
 export interface BuildServerOptions extends OrbotoClientConfig {
   /** Optional — passed through to McpServer metadata. Clients
@@ -248,6 +253,9 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_create_project', createProjectToolConfig, makeCreateProjectHandler(client));
   reg('orboto_archive_project', archiveProjectToolConfig, makeArchiveProjectHandler(client));
   reg('orboto_check_similar', checkSimilarToolConfig, makeCheckSimilarHandler(client));
+  reg('orboto_admin_translation_list', listAdminTranslationsToolConfig, makeListAdminTranslationsHandler(client));
+  reg('orboto_admin_translation_approve', approveTranslationToolConfig, makeApproveTranslationHandler(client));
+  reg('orboto_admin_translation_revert', revertTranslationToolConfig, makeAdminRevertTranslationHandler(client));
 
   // ORB-310 Phase D — read-only `orboto://…` URI resources +
   // task-shaped Prompt templates the MCP client offers in its UI.
