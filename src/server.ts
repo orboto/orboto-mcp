@@ -43,6 +43,11 @@ import {
   deleteDocToolConfig, makeDeleteDocHandler,
   moveDocToolConfig, makeMoveDocHandler,
 } from './tools/docs.js';
+import {
+  uploadDocAttachmentToolConfig, makeUploadDocAttachmentHandler,
+  listDocAttachmentsToolConfig, makeListDocAttachmentsHandler,
+  deleteDocAttachmentToolConfig, makeDeleteDocAttachmentHandler,
+} from './tools/doc-attachments.js';
 import { getTimerToolConfig, makeGetTimerHandler } from './tools/get-timer.js';
 import { getChecklistsToolConfig, makeGetChecklistsHandler } from './tools/get-checklists.js';
 import { listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler } from './tools/list-git-app-installations.js';
@@ -189,6 +194,10 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_update_doc', updateDocToolConfig, makeUpdateDocHandler(client));
   reg('orboto_delete_doc', deleteDocToolConfig, makeDeleteDocHandler(client));
   reg('orboto_move_doc', moveDocToolConfig, makeMoveDocHandler(client));
+  // ORB-914 — doc-attachments (upload + list + delete).
+  reg('orboto_upload_doc_attachment', uploadDocAttachmentToolConfig, makeUploadDocAttachmentHandler(client));
+  reg('orboto_list_doc_attachments', listDocAttachmentsToolConfig, makeListDocAttachmentsHandler(client));
+  reg('orboto_delete_doc_attachment', deleteDocAttachmentToolConfig, makeDeleteDocAttachmentHandler(client));
   reg('orboto_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
   reg('orboto_list_git_app_installations', listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler(client));
 
