@@ -338,3 +338,159 @@ export function makeListDocsInSpaceHandler(client: OrbotoClient) {
     };
   };
 }
+
+// ---------------------------------------------------------------------------
+// orboto_create_doc  (ORB-913)
+// ---------------------------------------------------------------------------
+
+export const createDocToolConfig = {
+  title: 'Create a doc page',
+  description:
+    'Create a new wiki page in `spaceId` with the supplied Markdown body. Unlike orboto_ingest_url / orboto_ingest_file (which derive content from an external source), this is the plain "I have the Markdown, make me a page" path. Title is required; content is optional (creates an empty page). Returns the new doc row including its UUID.',
+  inputSchema: z.object({
+    spaceId: z.string().uuid().describe('Target doc space (find via orboto_list_doc_spaces).'),
+    title: z.string().min(1).max(255),
+    content: z.string().optional().describe('Markdown body. Pass an empty string or omit for a blank page.'),
+    parentDocId: z.string().uuid().nullable().optional().describe('Nest under another doc.'),
+    visibility: z.enum(['public', 'workspace', 'members', 'specific']).optional().describe('Defaults to "workspace".'),
+    icon: z.string().nullish().describe('Single emoji shown in the tree.'),
+  }).shape,
+};
+
+export function makeCreateDocHandler(client: OrbotoClient) {
+  return async (input: {
+    spaceId: string; title: string; content?: string;
+    parentDocId?: string | null; visibility?: 'public' | 'workspace' | 'members' | 'specific';
+    icon?: string | null;
+  }): Promise<CallToolResult> => {
+    const body: Record<string, unknown> = { title: input.title };
+    if (input.content !== undefined) body.content = input.content;
+    if (input.parentDocId !== undefined) body.parentDocId = input.parentDocId;
+    if (input.visibility) body.visibility = input.visibility;
+    if (input.icon !== undefined) body.icon = input.icon;
+    const row = await client.post<DocRow>(`/spaces/${input.spaceId}/docs`, body);
+    return {
+      content: [{ type: 'text', text: `Created doc: ${row.title}\n  id: ${row.id}\n  slug: ${row.slug}\n  visibility: ${row.visibility}` }],
+      structuredContent: {
+        id: row.id,
+        title: row.title,
+        slug: row.slug,
+        spaceId: row.spaceId,
+        parentDocId: row.parentDocId,
+        visibility: row.visibility,
+      },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// orboto_update_doc  (ORB-913)
+// ---------------------------------------------------------------------------
+
+export const updateDocToolConfig = {
+  title: 'Update a doc page',
+  description:
+    'Patch a doc\'s title / content / visibility / parent / icon. Content-only updates do not require sending the title. Every body or title change snapshots the previous version into the revision history automatically — agents can roll back via orboto_restore_doc_revision (when that tool ships in Phase 5). Re-embeds the doc when content or title change.',
+  inputSchema: z.object({
+    docId: z.string().uuid(),
+    title: z.string().min(1).max(255).optional(),
+    content: z.string().optional().describe('Markdown body. Send the full new content; the API replaces, not appends.'),
+    parentDocId: z.string().uuid().nullable().optional(),
+    visibility: z.enum(['public', 'workspace', 'members', 'specific']).optional(),
+    icon: z.string().nullish(),
+  }).shape,
+};
+
+export function makeUpdateDocHandler(client: OrbotoClient) {
+  return async (input: {
+    docId: string; title?: string; content?: string;
+    parentDocId?: string | null; visibility?: 'public' | 'workspace' | 'members' | 'specific';
+    icon?: string | null;
+  }): Promise<CallToolResult> => {
+    const body: Record<string, unknown> = {};
+    if (input.title !== undefined) body.title = input.title;
+    if (input.content !== undefined) body.content = input.content;
+    if (input.parentDocId !== undefined) body.parentDocId = input.parentDocId;
+    if (input.visibility !== undefined) body.visibility = input.visibility;
+    if (input.icon !== undefined) body.icon = input.icon;
+    if (Object.keys(body).length === 0) {
+      throw new Error('Pass at least one field to update.');
+    }
+    const row = await client.patch<DocRow>(`/docs/${input.docId}`, body);
+    return {
+      content: [{ type: 'text', text: `Updated doc: ${row.title}\n  id: ${row.id}\n  updatedAt: ${row.updatedAt}` }],
+      structuredContent: {
+        id: row.id,
+        title: row.title,
+        spaceId: row.spaceId,
+        parentDocId: row.parentDocId,
+        visibility: row.visibility,
+        updatedAt: row.updatedAt,
+      },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// orboto_delete_doc  (ORB-913)
+// ---------------------------------------------------------------------------
+
+export const deleteDocToolConfig = {
+  title: 'Delete a doc page',
+  description:
+    'DESTRUCTIVE — removes the page from the tree. Revisions are NOT auto-cascaded; the API keeps them so an admin could in principle resurrect from history, but the page itself is gone from listings. System-generated primer docs refuse deletion (the regenerator re-creates them). Returns success silently; 404 is also silent (idempotent).',
+  inputSchema: z.object({
+    docId: z.string().uuid(),
+  }).shape,
+  annotations: { destructiveHint: true },
+};
+
+export function makeDeleteDocHandler(client: OrbotoClient) {
+  return async ({ docId }: { docId: string }): Promise<CallToolResult> => {
+    await client.delete(`/docs/${docId}`);
+    return {
+      content: [{ type: 'text', text: `Doc ${docId} deleted.` }],
+      structuredContent: { docId, deleted: true },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// orboto_move_doc  (ORB-913)
+// ---------------------------------------------------------------------------
+
+export const moveDocToolConfig = {
+  title: 'Move a doc page (reparent / reorder / cross-space)',
+  description:
+    'Reparent a doc, change its sort order, or move it into a different space. All three target fields are optional but at least one must be supplied. Distinct from orboto_update_doc\'s parentDocId because the API endpoint emits a different WS event for the tree-rebuild path connected clients care about.',
+  inputSchema: z.object({
+    docId: z.string().uuid(),
+    parentDocId: z.string().uuid().nullable().optional().describe('null = top-level; UUID = nest under that doc.'),
+    spaceId: z.string().uuid().optional().describe('Move into a different space. Caller must be member of both.'),
+    sortOrder: z.number().int().optional(),
+  }).shape,
+};
+
+export function makeMoveDocHandler(client: OrbotoClient) {
+  return async (input: {
+    docId: string; parentDocId?: string | null; spaceId?: string; sortOrder?: number;
+  }): Promise<CallToolResult> => {
+    const body: Record<string, unknown> = {};
+    if (input.parentDocId !== undefined) body.parentDocId = input.parentDocId;
+    if (input.spaceId !== undefined) body.spaceId = input.spaceId;
+    if (input.sortOrder !== undefined) body.sortOrder = input.sortOrder;
+    if (Object.keys(body).length === 0) {
+      throw new Error('Pass at least one of parentDocId / spaceId / sortOrder.');
+    }
+    const row = await client.post<DocRow>(`/docs/${input.docId}/move`, body);
+    return {
+      content: [{ type: 'text', text: `Moved doc ${row.title}\n  spaceId: ${row.spaceId}\n  parentDocId: ${row.parentDocId ?? '(root)'}\n  sortOrder: ${row.sortOrder}` }],
+      structuredContent: {
+        id: row.id,
+        spaceId: row.spaceId,
+        parentDocId: row.parentDocId,
+        sortOrder: row.sortOrder,
+      },
+    };
+  };
+}

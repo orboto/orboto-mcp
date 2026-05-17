@@ -14,6 +14,10 @@ import {
   makeUpdateDocSpaceHandler,
   makeDeleteDocSpaceHandler,
   makeListDocsInSpaceHandler,
+  makeCreateDocHandler,
+  makeUpdateDocHandler,
+  makeDeleteDocHandler,
+  makeMoveDocHandler,
 } from './docs.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -166,5 +170,111 @@ describe('orboto_list_docs_in_space', () => {
     const res = await makeListDocsInSpaceHandler(client)({ spaceId: PROJECT_SCOPED_SPACE.id });
     expect((res.content[0] as { text: string }).text).toContain('No docs');
     expect(res.structuredContent).toMatchObject({ docs: [] });
+  });
+});
+
+const DOC = {
+  id: 'd0000000-0000-0000-0000-000000000001',
+  spaceId: PROJECT_SCOPED_SPACE.id,
+  parentDocId: null,
+  title: 'Retry semantics',
+  content: '# Retry semantics\n\n200ms × 2^n.',
+  slug: 'retry-semantics',
+  visibility: 'workspace',
+  sortOrder: 0,
+  icon: null,
+  updatedAt: '2026-05-17T13:30:00.000Z',
+};
+
+describe('orboto_create_doc', () => {
+  it('POSTs to /spaces/:id/docs with title + content', async () => {
+    const calls = stubJSON([{ status: 201, json: DOC }]);
+    const res = await makeCreateDocHandler(client)({
+      spaceId: PROJECT_SCOPED_SPACE.id,
+      title: 'Retry semantics',
+      content: '# Retry semantics\n\n200ms × 2^n.',
+    });
+    expect(calls[0]).toMatchObject({
+      method: 'POST',
+      url: `https://orboto.example.com/spaces/${PROJECT_SCOPED_SPACE.id}/docs`,
+      body: { title: 'Retry semantics', content: '# Retry semantics\n\n200ms × 2^n.' },
+    });
+    expect(res.structuredContent).toMatchObject({ id: DOC.id, title: DOC.title });
+  });
+
+  it('passes parentDocId + visibility through', async () => {
+    const calls = stubJSON([{ status: 201, json: { ...DOC, parentDocId: 'p1' } }]);
+    await makeCreateDocHandler(client)({
+      spaceId: PROJECT_SCOPED_SPACE.id,
+      title: 'Sub-page',
+      parentDocId: 'a1111111-0000-0000-0000-000000000099',
+      visibility: 'specific',
+    });
+    expect(calls[0].body).toMatchObject({
+      title: 'Sub-page',
+      parentDocId: 'a1111111-0000-0000-0000-000000000099',
+      visibility: 'specific',
+    });
+  });
+});
+
+describe('orboto_update_doc', () => {
+  it('PATCHes only the content field when only content was supplied', async () => {
+    const calls = stubJSON([{ json: { ...DOC, content: 'new body' } }]);
+    await makeUpdateDocHandler(client)({ docId: DOC.id, content: 'new body' });
+    expect(calls[0]).toMatchObject({
+      method: 'PATCH',
+      url: `https://orboto.example.com/docs/${DOC.id}`,
+      body: { content: 'new body' },
+    });
+    expect(Object.keys(calls[0].body as object)).toEqual(['content']);
+  });
+
+  it('refuses the no-op call before hitting the API', async () => {
+    const calls = stubJSON([]);
+    await expect(makeUpdateDocHandler(client)({ docId: DOC.id })).rejects.toThrow(/at least one field/);
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe('orboto_delete_doc', () => {
+  it('DELETEs the doc id', async () => {
+    const calls = stubJSON([{ status: 204, json: undefined }]);
+    const res = await makeDeleteDocHandler(client)({ docId: DOC.id });
+    expect(calls[0]).toMatchObject({ method: 'DELETE', url: `https://orboto.example.com/docs/${DOC.id}` });
+    expect(res.structuredContent).toMatchObject({ deleted: true });
+  });
+
+  it('surfaces a 403 from the system-generated-doc guard', async () => {
+    stubJSON([{ ok: false, status: 403, json: { error: 'This doc is auto-managed…' } }]);
+    await expect(makeDeleteDocHandler(client)({ docId: DOC.id })).rejects.toBeInstanceOf(OrbotoApiError);
+  });
+});
+
+describe('orboto_move_doc', () => {
+  it('POSTs to /docs/:id/move with the supplied fields only', async () => {
+    const calls = stubJSON([{ json: { ...DOC, parentDocId: 'newParent', sortOrder: 5 } }]);
+    await makeMoveDocHandler(client)({
+      docId: DOC.id,
+      parentDocId: 'b1111111-0000-0000-0000-000000000001',
+      sortOrder: 5,
+    });
+    expect(calls[0]).toMatchObject({
+      method: 'POST',
+      url: `https://orboto.example.com/docs/${DOC.id}/move`,
+      body: { parentDocId: 'b1111111-0000-0000-0000-000000000001', sortOrder: 5 },
+    });
+  });
+
+  it('refuses an empty move', async () => {
+    const calls = stubJSON([]);
+    await expect(makeMoveDocHandler(client)({ docId: DOC.id })).rejects.toThrow(/at least one/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('allows reparenting to root (parentDocId=null)', async () => {
+    const calls = stubJSON([{ json: { ...DOC, parentDocId: null } }]);
+    await makeMoveDocHandler(client)({ docId: DOC.id, parentDocId: null });
+    expect(calls[0].body).toEqual({ parentDocId: null });
   });
 });

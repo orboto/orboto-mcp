@@ -38,6 +38,10 @@ import {
   updateDocSpaceToolConfig, makeUpdateDocSpaceHandler,
   deleteDocSpaceToolConfig, makeDeleteDocSpaceHandler,
   listDocsInSpaceToolConfig, makeListDocsInSpaceHandler,
+  createDocToolConfig, makeCreateDocHandler,
+  updateDocToolConfig, makeUpdateDocHandler,
+  deleteDocToolConfig, makeDeleteDocHandler,
+  moveDocToolConfig, makeMoveDocHandler,
 } from './tools/docs.js';
 import { getTimerToolConfig, makeGetTimerHandler } from './tools/get-timer.js';
 import { getChecklistsToolConfig, makeGetChecklistsHandler } from './tools/get-checklists.js';
@@ -180,6 +184,11 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_update_doc_space', updateDocSpaceToolConfig, makeUpdateDocSpaceHandler(client));
   reg('orboto_delete_doc_space', deleteDocSpaceToolConfig, makeDeleteDocSpaceHandler(client));
   reg('orboto_list_docs_in_space', listDocsInSpaceToolConfig, makeListDocsInSpaceHandler(client));
+  // ORB-913 — doc-page CRUD (plain create + update + delete + move).
+  reg('orboto_create_doc', createDocToolConfig, makeCreateDocHandler(client));
+  reg('orboto_update_doc', updateDocToolConfig, makeUpdateDocHandler(client));
+  reg('orboto_delete_doc', deleteDocToolConfig, makeDeleteDocHandler(client));
+  reg('orboto_move_doc', moveDocToolConfig, makeMoveDocHandler(client));
   reg('orboto_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
   reg('orboto_list_git_app_installations', listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler(client));
 
