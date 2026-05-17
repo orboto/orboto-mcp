@@ -52,6 +52,11 @@ import {
   exportDocMdToolConfig, makeExportDocMdHandler,
   exportDocPdfToolConfig, makeExportDocPdfHandler,
 } from './tools/doc-export.js';
+import {
+  listDocRevisionsToolConfig, makeListDocRevisionsHandler,
+  getDocRevisionToolConfig, makeGetDocRevisionHandler,
+  restoreDocRevisionToolConfig, makeRestoreDocRevisionHandler,
+} from './tools/doc-revisions.js';
 import { getTimerToolConfig, makeGetTimerHandler } from './tools/get-timer.js';
 import { getChecklistsToolConfig, makeGetChecklistsHandler } from './tools/get-checklists.js';
 import { listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler } from './tools/list-git-app-installations.js';
@@ -205,6 +210,11 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   // ORB-915 — doc export (Markdown + PDF).
   reg('orboto_export_doc_md', exportDocMdToolConfig, makeExportDocMdHandler(client));
   reg('orboto_export_doc_pdf', exportDocPdfToolConfig, makeExportDocPdfHandler(client));
+  // ORB-916 — doc revision history (list + get + restore). Closes
+  // the last slice of the doc-surface parity gap (epic ORB-911).
+  reg('orboto_list_doc_revisions', listDocRevisionsToolConfig, makeListDocRevisionsHandler(client));
+  reg('orboto_get_doc_revision', getDocRevisionToolConfig, makeGetDocRevisionHandler(client));
+  reg('orboto_restore_doc_revision', restoreDocRevisionToolConfig, makeRestoreDocRevisionHandler(client));
   reg('orboto_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
   reg('orboto_list_git_app_installations', listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler(client));
 
