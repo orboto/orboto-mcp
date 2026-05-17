@@ -34,6 +34,10 @@ import { queryToolConfig, makeQueryHandler } from './tools/query.js';
 import {
   listDocSpacesToolConfig, makeListDocSpacesHandler,
   getDocToolConfig, makeGetDocHandler,
+  createDocSpaceToolConfig, makeCreateDocSpaceHandler,
+  updateDocSpaceToolConfig, makeUpdateDocSpaceHandler,
+  deleteDocSpaceToolConfig, makeDeleteDocSpaceHandler,
+  listDocsInSpaceToolConfig, makeListDocsInSpaceHandler,
 } from './tools/docs.js';
 import { getTimerToolConfig, makeGetTimerHandler } from './tools/get-timer.js';
 import { getChecklistsToolConfig, makeGetChecklistsHandler } from './tools/get-checklists.js';
@@ -170,6 +174,12 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_query', queryToolConfig, makeQueryHandler(client));
   reg('orboto_list_doc_spaces', listDocSpacesToolConfig, makeListDocSpacesHandler(client));
   reg('orboto_get_doc', getDocToolConfig, makeGetDocHandler(client));
+  // ORB-912 — doc-spaces CRUD + list docs in a space. Closes the
+  // first slice of the MCP doc-surface parity gap (epic ORB-911).
+  reg('orboto_create_doc_space', createDocSpaceToolConfig, makeCreateDocSpaceHandler(client));
+  reg('orboto_update_doc_space', updateDocSpaceToolConfig, makeUpdateDocSpaceHandler(client));
+  reg('orboto_delete_doc_space', deleteDocSpaceToolConfig, makeDeleteDocSpaceHandler(client));
+  reg('orboto_list_docs_in_space', listDocsInSpaceToolConfig, makeListDocsInSpaceHandler(client));
   reg('orboto_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
   reg('orboto_list_git_app_installations', listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler(client));
 
