@@ -140,6 +140,50 @@ export class OrbotoClient {
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
   }
+
+  /**
+   * GET an endpoint that returns plain text (Markdown export, CSV
+   * downloads, etc.) — bypasses the `Accept: application/json` header
+   * + the JSON-only parsing in `get()`. Returns the raw response body
+   * as a string. (ORB-915.)
+   */
+  async getText(path: string): Promise<string> {
+    const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+    // Override Accept so the API doesn't think we want JSON.
+    const headers = { ...this.headers, Accept: '*/*' };
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new OrbotoApiError(res.status, body, url);
+    }
+    return await res.text();
+  }
+
+  /**
+   * POST an endpoint that returns a binary body (PDF export, ZIP
+   * download, etc.). Returns the raw bytes as a Uint8Array — caller
+   * decides whether to base64 it for an MCP resource attachment or
+   * spill it to disk. (ORB-915.)
+   */
+  async postBinary(path: string, body?: unknown): Promise<{ bytes: Uint8Array; contentType: string }> {
+    const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+    const headers: Record<string, string> = { ...this.headers, Accept: '*/*' };
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      throw new OrbotoApiError(res.status, errBody, url);
+    }
+    const ab = await res.arrayBuffer();
+    return {
+      bytes: new Uint8Array(ab),
+      contentType: res.headers.get('content-type') ?? 'application/octet-stream',
+    };
+  }
 }
 
 /**
