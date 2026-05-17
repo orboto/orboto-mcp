@@ -42,6 +42,8 @@ import {
   updateDocToolConfig, makeUpdateDocHandler,
   deleteDocToolConfig, makeDeleteDocHandler,
   moveDocToolConfig, makeMoveDocHandler,
+  duplicateDocSpaceToolConfig, makeDuplicateDocSpaceHandler,
+  resolveDocSmartLinksToolConfig, makeResolveDocSmartLinksHandler,
 } from './tools/docs.js';
 import {
   uploadDocAttachmentToolConfig, makeUploadDocAttachmentHandler,
@@ -226,6 +228,11 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_post_doc_comment', postDocCommentToolConfig, makePostDocCommentHandler(client));
   reg('orboto_resolve_doc_comment', resolveDocCommentToolConfig, makeResolveDocCommentHandler(client));
   reg('orboto_delete_doc_comment', deleteDocCommentToolConfig, makeDeleteDocCommentHandler(client));
+  // ORB-918 — duplicate-space + resolve-links. Closes the doc-surface
+  // parity epic (ORB-911) — every doc-API endpoint now has an MCP
+  // pendant.
+  reg('orboto_duplicate_doc_space', duplicateDocSpaceToolConfig, makeDuplicateDocSpaceHandler(client));
+  reg('orboto_resolve_doc_smart_links', resolveDocSmartLinksToolConfig, makeResolveDocSmartLinksHandler(client));
   reg('orboto_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
   reg('orboto_list_git_app_installations', listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler(client));
 

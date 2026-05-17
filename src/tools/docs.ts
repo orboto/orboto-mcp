@@ -494,3 +494,104 @@ export function makeMoveDocHandler(client: OrbotoClient) {
     };
   };
 }
+
+// ---------------------------------------------------------------------------
+// orboto_duplicate_doc_space  (ORB-918)
+// ---------------------------------------------------------------------------
+
+export const duplicateDocSpaceToolConfig = {
+  title: 'Duplicate a doc space (clone the space + every doc inside it)',
+  description:
+    'Fork a doc space along with its entire doc tree. The new space\'s name becomes `<source> (copy)`, parent-child relationships in the tree are preserved via UUID remap. Useful when an agent wants to iterate on a runbook space without mutating the original.',
+  inputSchema: z.object({
+    spaceId: z.string().uuid().describe('Source space to duplicate.'),
+  }).shape,
+};
+
+export function makeDuplicateDocSpaceHandler(client: OrbotoClient) {
+  return async ({ spaceId }: { spaceId: string }): Promise<CallToolResult> => {
+    const row = await client.post<DocSpaceRow>(`/spaces/${spaceId}/duplicate`, {});
+    return {
+      content: [{
+        type: 'text',
+        text: `Duplicated space ${spaceId} → ${row.name}\n  id: ${row.id}\n  slug: ${row.slug}`,
+      }],
+      structuredContent: {
+        sourceSpaceId: spaceId,
+        newSpaceId: row.id,
+        name: row.name,
+        slug: row.slug,
+        type: row.type,
+        projectId: row.projectId,
+      },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// orboto_resolve_doc_smart_links  (ORB-918)
+// ---------------------------------------------------------------------------
+
+interface SmartLinkResolution {
+  type: 'doc' | 'ticket' | 'milestone' | 'project' | 'commit';
+  id: string;
+  title: string;
+  url: string;
+  projectKey?: string | null;
+  ticketKey?: string | null;
+  commitShort?: string | null;
+  commitAuthor?: string | null;
+  commitProvider?: 'github' | 'gitlab' | 'azure_devops' | 'bitbucket_cloud' | 'bitbucket_server' | 'gitea' | 'ssh' | null;
+}
+
+export const resolveDocSmartLinksToolConfig = {
+  title: 'Batch-resolve smart-link references to display metadata',
+  description:
+    'Resolve `[[doc:UUID]]` / `[[ticket:UUID]]` / `[[milestone:UUID]]` / `[[project:UUID]]` / commit-hash references to their current title + URL. Visibility-filtered — items the caller is not allowed to see come back as missing (the rendering frontend falls back to the literal label in that case). Useful when reading a doc body that contains many tokens and you want to display them with current titles in one round-trip rather than N+1 get-* calls. Max 200 items per call.',
+  inputSchema: z.object({
+    items: z.array(z.object({
+      type: z.enum(['doc', 'ticket', 'milestone', 'project', 'commit']),
+      id: z.string().min(1).max(64).describe('UUID for the entity types; full or short hex hash for commit.'),
+    })).min(1).max(200),
+  }).shape,
+  annotations: { readOnlyHint: true, idempotentHint: true },
+};
+
+export function makeResolveDocSmartLinksHandler(client: OrbotoClient) {
+  return async ({ items }: {
+    items: Array<{ type: 'doc' | 'ticket' | 'milestone' | 'project' | 'commit'; id: string }>;
+  }): Promise<CallToolResult> => {
+    const resolved = await client.post<SmartLinkResolution[]>('/docs/resolve-links', { items });
+    const resolvedKeys = new Set(resolved.map((r) => `${r.type}:${r.id}`));
+    const missing = items.filter((i) => !resolvedKeys.has(`${i.type}:${i.id}`));
+    const lines = resolved.map((r) => {
+      const extra = r.type === 'ticket' && r.ticketKey
+        ? `  [${r.ticketKey}]`
+        : r.type === 'commit' && r.commitShort
+          ? `  (${r.commitShort})`
+          : '';
+      return `- ${r.type}:${r.id}  →  ${r.title}${extra}  ·  ${r.url}`;
+    });
+    if (missing.length > 0) {
+      lines.push('', `Unresolved (visibility or missing) — ${missing.length}:`);
+      for (const m of missing) lines.push(`  - ${m.type}:${m.id}`);
+    }
+    return {
+      content: [{ type: 'text', text: lines.join('\n') || 'No resolvable references.' }],
+      structuredContent: {
+        resolved: resolved.map((r) => ({
+          type: r.type,
+          id: r.id,
+          title: r.title,
+          url: r.url,
+          projectKey: r.projectKey ?? null,
+          ticketKey: r.ticketKey ?? null,
+          commitShort: r.commitShort ?? null,
+          commitAuthor: r.commitAuthor ?? null,
+          commitProvider: r.commitProvider ?? null,
+        })),
+        unresolved: missing,
+      },
+    };
+  };
+}

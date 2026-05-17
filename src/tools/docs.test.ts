@@ -278,3 +278,79 @@ describe('orboto_move_doc', () => {
     expect(calls[0].body).toEqual({ parentDocId: null });
   });
 });
+
+import {
+  makeDuplicateDocSpaceHandler,
+  makeResolveDocSmartLinksHandler,
+} from './docs.js';
+
+describe('orboto_duplicate_doc_space', () => {
+  it('POSTs /spaces/:id/duplicate and surfaces the new space id', async () => {
+    const calls = stubJSON([{
+      status: 201,
+      json: { ...PROJECT_SCOPED_SPACE, id: 'newspace0-0000-0000-0000-000000000001', name: 'Backend Runbooks (copy)', slug: 'backend-runbooks-copy' },
+    }]);
+    const res = await makeDuplicateDocSpaceHandler(client)({ spaceId: PROJECT_SCOPED_SPACE.id });
+    expect(calls[0]).toMatchObject({
+      method: 'POST',
+      url: `https://orboto.example.com/spaces/${PROJECT_SCOPED_SPACE.id}/duplicate`,
+    });
+    expect(res.structuredContent).toMatchObject({
+      sourceSpaceId: PROJECT_SCOPED_SPACE.id,
+      newSpaceId: 'newspace0-0000-0000-0000-000000000001',
+      name: 'Backend Runbooks (copy)',
+    });
+  });
+
+  it('bubbles up a 404 for an unknown source space', async () => {
+    stubJSON([{ ok: false, status: 404, json: { error: 'Not found' } }]);
+    await expect(
+      makeDuplicateDocSpaceHandler(client)({ spaceId: '00000000-0000-0000-0000-000000000000' }),
+    ).rejects.toBeInstanceOf(OrbotoApiError);
+  });
+});
+
+describe('orboto_resolve_doc_smart_links', () => {
+  it('POSTs the items array and surfaces resolved + unresolved entries', async () => {
+    const calls = stubJSON([{
+      json: [
+        { type: 'ticket', id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', title: 'Auth bug', url: '/p/orb/t/ORB-42', ticketKey: 'ORB-42', projectKey: 'ORB' },
+        // Note: the doc UUID below is in the input below but absent from the response — verifies "unresolved" surfacing.
+      ],
+    }]);
+    const res = await makeResolveDocSmartLinksHandler(client)({
+      items: [
+        { type: 'ticket', id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' },
+        { type: 'doc', id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' },
+      ],
+    });
+    expect(calls[0]).toMatchObject({
+      method: 'POST',
+      url: 'https://orboto.example.com/docs/resolve-links',
+      body: {
+        items: [
+          { type: 'ticket', id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' },
+          { type: 'doc', id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' },
+        ],
+      },
+    });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Auth bug');
+    expect(text).toContain('Unresolved');
+    expect(text).toContain('doc:bbbbbbbb');
+    expect(res.structuredContent).toMatchObject({
+      resolved: [{ type: 'ticket', ticketKey: 'ORB-42' }],
+      unresolved: [{ type: 'doc' }],
+    });
+  });
+
+  it('handles the all-resolved case without an Unresolved section', async () => {
+    stubJSON([{
+      json: [{ type: 'doc', id: 'd', title: 'Found', url: '/x' }],
+    }]);
+    const res = await makeResolveDocSmartLinksHandler(client)({
+      items: [{ type: 'doc', id: 'd' }],
+    });
+    expect((res.content[0] as { text: string }).text).not.toContain('Unresolved');
+  });
+});
