@@ -57,6 +57,12 @@ import {
   getDocRevisionToolConfig, makeGetDocRevisionHandler,
   restoreDocRevisionToolConfig, makeRestoreDocRevisionHandler,
 } from './tools/doc-revisions.js';
+import {
+  listDocCommentsToolConfig, makeListDocCommentsHandler,
+  postDocCommentToolConfig, makePostDocCommentHandler,
+  resolveDocCommentToolConfig, makeResolveDocCommentHandler,
+  deleteDocCommentToolConfig, makeDeleteDocCommentHandler,
+} from './tools/doc-comments.js';
 import { getTimerToolConfig, makeGetTimerHandler } from './tools/get-timer.js';
 import { getChecklistsToolConfig, makeGetChecklistsHandler } from './tools/get-checklists.js';
 import { listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler } from './tools/list-git-app-installations.js';
@@ -215,6 +221,11 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_list_doc_revisions', listDocRevisionsToolConfig, makeListDocRevisionsHandler(client));
   reg('orboto_get_doc_revision', getDocRevisionToolConfig, makeGetDocRevisionHandler(client));
   reg('orboto_restore_doc_revision', restoreDocRevisionToolConfig, makeRestoreDocRevisionHandler(client));
+  // ORB-917 — doc comments (list + post + resolve + delete).
+  reg('orboto_list_doc_comments', listDocCommentsToolConfig, makeListDocCommentsHandler(client));
+  reg('orboto_post_doc_comment', postDocCommentToolConfig, makePostDocCommentHandler(client));
+  reg('orboto_resolve_doc_comment', resolveDocCommentToolConfig, makeResolveDocCommentHandler(client));
+  reg('orboto_delete_doc_comment', deleteDocCommentToolConfig, makeDeleteDocCommentHandler(client));
   reg('orboto_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
   reg('orboto_list_git_app_installations', listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler(client));
 
