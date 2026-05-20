@@ -1,8 +1,8 @@
 # ORB-939 — npm publish for @orboto/mcp.
 #
-# This file LIVES in the Orboto/orboto monorepo at
+# This file LIVES in the orboto/orboto monorepo at
 # `apps/mcp/.github/workflows/publish-npm.yml` and gets subtree-split
-# into the public mirror `Orboto/orboto-mcp` at `.github/workflows/
+# into the public mirror `orboto/orboto-mcp` at `.github/workflows/
 # publish-npm.yml` by the parent repo's `split-mcp.yml` workflow.
 # Edit the file in the parent repo; the mirror is read-only.
 #
@@ -16,7 +16,7 @@
 # One-time setup on npmjs.com:
 #   1. @orboto/mcp package page → Settings → Trusted Publishers
 #   2. Provider: GitHub Actions
-#      Owner:    Orboto
+#      Owner:    orboto
 #      Repo:     orboto-mcp
 #      Workflow: publish-npm.yml
 #      Env:      (blank)

@@ -49,9 +49,9 @@
     "agents",
     "ai"
   ],
-  "homepage": "https://github.com/Orboto/orboto-mcp",
+  "homepage": "https://github.com/orboto/orboto-mcp",
   "bugs": {
-    "url": "https://github.com/Orboto/orboto/issues"
+    "url": "https://github.com/orboto/orboto/issues"
   },
   "publishConfig": {
     "access": "public",

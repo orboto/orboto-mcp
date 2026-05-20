@@ -1,6 +1,6 @@
 # @orboto/mcp
 
-Model Context Protocol server for [Orboto](https://github.com/Orboto/orboto) — a self-hosted ticket and project management platform. Connect Claude Desktop, Cursor, GitHub Copilot Chat, or any MCP-aware AI client and operate Orboto as a structured set of tools.
+Model Context Protocol server for [Orboto](https://github.com/orboto/orboto) — a self-hosted ticket and project management platform. Connect Claude Desktop, Cursor, GitHub Copilot Chat, or any MCP-aware AI client and operate Orboto as a structured set of tools.
 
 64+ tools cover tickets, projects, milestones, time tracking, documents, primer facts, alerts and absences. Every call respects the caller's permission set — what the API key behind the MCP session cannot do in the web UI, the MCP session cannot do either.
 
@@ -80,6 +80,6 @@ MIT. See [LICENSE.md](./LICENSE.md).
 
 ## Source + issues
 
-Source-of-truth is the [`apps/mcp/`](https://github.com/Orboto/orboto/tree/develop/apps/mcp) directory of the main [Orboto repository](https://github.com/Orboto/orboto). This package is a subtree-mirror that ships only the contents needed for an npm consumer.
+Source-of-truth is the [`apps/mcp/`](https://github.com/orboto/orboto/tree/develop/apps/mcp) directory of the main [Orboto repository](https://github.com/orboto/orboto). This package is a subtree-mirror that ships only the contents needed for an npm consumer.
 
-File issues or feature requests on the main repository: <https://github.com/Orboto/orboto/issues>.
+File issues or feature requests on the main repository: <https://github.com/orboto/orboto/issues>.
