@@ -71,6 +71,12 @@ import {
   updateCompanyClosureToolConfig, makeUpdateCompanyClosureHandler,
   updateAbsenceToolConfig, makeUpdateAbsenceHandler,
 } from './tools/absence-writes.js';
+import {
+  listCrossProjectLinksToolConfig, makeListCrossProjectLinksHandler,
+  addCrossProjectLinkToolConfig, makeAddCrossProjectLinkHandler,
+  updateCrossProjectLinkToolConfig, makeUpdateCrossProjectLinkHandler,
+  removeCrossProjectLinkToolConfig, makeRemoveCrossProjectLinkHandler,
+} from './tools/cross-project-links.ee.js';
 import { getTimerToolConfig, makeGetTimerHandler } from './tools/get-timer.js';
 import { getChecklistsToolConfig, makeGetChecklistsHandler } from './tools/get-checklists.js';
 import { listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler } from './tools/list-git-app-installations.js';
@@ -238,6 +244,10 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_update_public_holiday', updatePublicHolidayToolConfig, makeUpdatePublicHolidayHandler(client));
   reg('orboto_update_company_closure', updateCompanyClosureToolConfig, makeUpdateCompanyClosureHandler(client));
   reg('orboto_update_absence', updateAbsenceToolConfig, makeUpdateAbsenceHandler(client));
+  reg('orboto_list_cross_project_links', listCrossProjectLinksToolConfig, makeListCrossProjectLinksHandler(client));
+  reg('orboto_add_cross_project_link', addCrossProjectLinkToolConfig, makeAddCrossProjectLinkHandler(client));
+  reg('orboto_update_cross_project_link', updateCrossProjectLinkToolConfig, makeUpdateCrossProjectLinkHandler(client));
+  reg('orboto_remove_cross_project_link', removeCrossProjectLinkToolConfig, makeRemoveCrossProjectLinkHandler(client));
   // ORB-918 — duplicate-space + resolve-links. Closes the doc-surface
   // parity epic (ORB-911) — every doc-API endpoint now has an MCP
   // pendant.
