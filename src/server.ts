@@ -63,8 +63,14 @@ import {
   listDocCommentsToolConfig, makeListDocCommentsHandler,
   postDocCommentToolConfig, makePostDocCommentHandler,
   resolveDocCommentToolConfig, makeResolveDocCommentHandler,
+  updateDocCommentToolConfig, makeUpdateDocCommentHandler,
   deleteDocCommentToolConfig, makeDeleteDocCommentHandler,
 } from './tools/doc-comments.js';
+import {
+  updatePublicHolidayToolConfig, makeUpdatePublicHolidayHandler,
+  updateCompanyClosureToolConfig, makeUpdateCompanyClosureHandler,
+  updateAbsenceToolConfig, makeUpdateAbsenceHandler,
+} from './tools/absence-writes.js';
 import { getTimerToolConfig, makeGetTimerHandler } from './tools/get-timer.js';
 import { getChecklistsToolConfig, makeGetChecklistsHandler } from './tools/get-checklists.js';
 import { listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler } from './tools/list-git-app-installations.js';
@@ -227,7 +233,11 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_list_doc_comments', listDocCommentsToolConfig, makeListDocCommentsHandler(client));
   reg('orboto_post_doc_comment', postDocCommentToolConfig, makePostDocCommentHandler(client));
   reg('orboto_resolve_doc_comment', resolveDocCommentToolConfig, makeResolveDocCommentHandler(client));
+  reg('orboto_update_doc_comment', updateDocCommentToolConfig, makeUpdateDocCommentHandler(client));
   reg('orboto_delete_doc_comment', deleteDocCommentToolConfig, makeDeleteDocCommentHandler(client));
+  reg('orboto_update_public_holiday', updatePublicHolidayToolConfig, makeUpdatePublicHolidayHandler(client));
+  reg('orboto_update_company_closure', updateCompanyClosureToolConfig, makeUpdateCompanyClosureHandler(client));
+  reg('orboto_update_absence', updateAbsenceToolConfig, makeUpdateAbsenceHandler(client));
   // ORB-918 — duplicate-space + resolve-links. Closes the doc-surface
   // parity epic (ORB-911) — every doc-API endpoint now has an MCP
   // pendant.

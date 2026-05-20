@@ -215,6 +215,37 @@ export function makeResolveDocCommentHandler(client: OrbotoClient) {
 }
 
 // ---------------------------------------------------------------------------
+// orboto_update_doc_comment — ORB-933
+// ---------------------------------------------------------------------------
+
+export const updateDocCommentToolConfig = {
+  title: 'Edit your own doc comment',
+  description:
+    'Edit a doc comment\'s body. Author OR super-admin can edit; everyone else gets a 403. Doc-comments do not carry a revision history today (unlike ticket comments), so the prior content is overwritten in place. A no-op call (same content as before) returns the unchanged row.',
+  inputSchema: z.object({
+    docId: z.string().uuid(),
+    commentId: z.string().uuid(),
+    content: z.string().min(1).max(4000),
+  }).shape,
+};
+
+export function makeUpdateDocCommentHandler(client: OrbotoClient) {
+  return async ({ docId, commentId, content }: {
+    docId: string; commentId: string; content: string;
+  }): Promise<CallToolResult> => {
+    const row = await client.patch<DocCommentRow>(`/docs/${docId}/comments/${commentId}`, { content });
+    return {
+      content: [{ type: 'text', text: `Doc comment ${row.id} updated.` }],
+      structuredContent: {
+        id: row.id,
+        docId: row.docId,
+        content: row.content,
+      },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
 // orboto_delete_doc_comment
 // ---------------------------------------------------------------------------
 

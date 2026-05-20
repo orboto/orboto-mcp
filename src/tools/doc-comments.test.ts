@@ -12,6 +12,7 @@ import {
   makeListDocCommentsHandler,
   makePostDocCommentHandler,
   makeResolveDocCommentHandler,
+  makeUpdateDocCommentHandler,
   makeDeleteDocCommentHandler,
 } from './doc-comments.js';
 
@@ -190,6 +191,30 @@ describe('orboto_delete_doc_comment', () => {
     stubJSON([{ ok: false, status: 403, json: { error: 'Forbidden' } }]);
     await expect(
       makeDeleteDocCommentHandler(client)({ docId: DOC_ID, commentId: COMMENT_ID }),
+    ).rejects.toBeInstanceOf(OrbotoApiError);
+  });
+});
+
+describe('orboto_update_doc_comment', () => {
+  it('PATCHes content on the comment id', async () => {
+    const calls = stubJSON([{ json: { ...ROOT_COMMENT, content: 'Updated.' } }]);
+    const res = await makeUpdateDocCommentHandler(client)({
+      docId: DOC_ID,
+      commentId: COMMENT_ID,
+      content: 'Updated.',
+    });
+    expect(calls[0]).toMatchObject({
+      method: 'PATCH',
+      url: `https://orboto.example.com/docs/${DOC_ID}/comments/${COMMENT_ID}`,
+      body: { content: 'Updated.' },
+    });
+    expect((res.structuredContent as { content: string }).content).toBe('Updated.');
+  });
+
+  it('bubbles up a 403 when editing someone else\'s comment', async () => {
+    stubJSON([{ ok: false, status: 403, json: { error: 'Forbidden — only the author can edit this comment' } }]);
+    await expect(
+      makeUpdateDocCommentHandler(client)({ docId: DOC_ID, commentId: COMMENT_ID, content: 'X' }),
     ).rejects.toBeInstanceOf(OrbotoApiError);
   });
 });
