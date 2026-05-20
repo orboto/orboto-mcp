@@ -1,94 +1,85 @@
-# `@orboto/mcp`
+# @orboto/mcp
 
-Model Context Protocol server for Orboto. Exposes 64 tools, 4 resources, and 5 prompts so MCP-aware AI clients (Claude Desktop, Cursor, GitHub Copilot Chat) can read and write Orboto data as a regular API user.
+Model Context Protocol server for [Orboto](https://github.com/Orboto/orboto) — a self-hosted ticket and project management platform. Connect Claude Desktop, Cursor, GitHub Copilot Chat, or any MCP-aware AI client and operate Orboto as a structured set of tools.
 
-> **Operators**: head to [`docs/mcp-setup.md`](../../docs/mcp-setup.md) for the per-client setup walkthrough. The README below is for contributors hacking on the MCP package itself.
+64+ tools cover tickets, projects, milestones, time tracking, documents, primer facts, alerts and absences. Every call respects the caller's permission set — what the API key behind the MCP session cannot do in the web UI, the MCP session cannot do either.
 
-## Layout
+## Quickstart
 
-```
-src/
-  index.ts             entry point — picks transport from ORBOTO_MCP_TRANSPORT
-  server.ts            McpServer factory + tool/resource/prompt registration
-  http-transport.ts    Streamable HTTP transport for the Self-Hosted-Inline mode
-  orboto-client.ts     tiny REST client wrapping the Orboto API
-  resources.ts         registerResource() calls
-  prompts.ts           registerPrompt() calls
-  tools/               one file per tool category (tickets, time, primer-facts, …)
-  with-metrics.ts      lightweight metrics decorator wrapping every handler
-```
+You need an API key from your Orboto instance: **Profile → API keys → Generate**. The key starts with `orb_…`.
 
-## Dev
+### Claude Desktop
 
-```bash
-pnpm --filter @orboto/mcp dev          # tsx watch with stdio transport
-pnpm --filter @orboto/mcp build        # tsc → dist/
-pnpm --filter @orboto/mcp test         # vitest
-```
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%/Claude/claude_desktop_config.json` (Windows):
 
-A live API instance is required — the dev mode preflights against `/users/me` on boot. Easiest setup:
-
-```bash
-# Terminal 1 — Orboto stack
-docker compose -f docker-compose.local.yml up -d
-pnpm --filter @orboto/api dev
-
-# Terminal 2 — MCP server
-ORBOTO_API_URL=http://localhost:3000 \
-ORBOTO_API_KEY=orb_… \
-pnpm --filter @orboto/mcp dev
+```json
+{
+  "mcpServers": {
+    "orboto": {
+      "command": "npx",
+      "args": ["-y", "@orboto/mcp"],
+      "env": {
+        "ORBOTO_API_URL": "https://orboto.example.com/api",
+        "ORBOTO_API_KEY": "orb_…"
+      }
+    }
+  }
+}
 ```
 
-Mint the API key under Profile → API keys (the user must have the `mcp:use` permission — see `apps/api/src/db/seed.ts`).
+### Cursor / VS Code
 
-## Env vars
+Same shape under `.cursor/mcp.json` or `.vscode/mcp.json` in your workspace root (or the user-level equivalent).
 
-See [`docs/env.md`](../../docs/env.md#mcp-server-orbitmcp) for the complete list. Quick reference:
+### Verify
 
-| Var | Required | Purpose |
+Ask the AI: **"List my Orboto projects."** The model picks `orboto_list_projects`, the call goes through MCP → REST API → back, and your projects come back as a list. If you see "no projects matched" but you know you're a member of some, the auth is working — re-check who the API key belongs to in **Profile → API keys**.
+
+## Self-Hosted-Inline mode (HTTP)
+
+If your Orboto host runs the bundled MCP container (default on the official `docker-compose.yml`), every client on your network can use it directly via Streamable HTTP — no `npx` and no per-laptop install:
+
+```json
+{
+  "mcpServers": {
+    "orboto": {
+      "type": "streamable-http",
+      "url": "https://orboto.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer orb_…"
+      }
+    }
+  }
+}
+```
+
+The `/mcp` path on the main host is proxied to the bundled MCP container — no separate subdomain or cert needed. Both modes (stdio via npm, HTTP via host) hit the same tool surface.
+
+## Environment
+
+| Variable | Required | Effect |
 |---|---|---|
-| `ORBOTO_API_URL` | yes | API base URL (`http://api:3000` inside compose, public URL otherwise). |
-| `ORBOTO_API_KEY` | stdio only | `orb_…` token; HTTP mode reads it per-request from the `Authorization` header instead. |
-| `ORBOTO_MCP_TRANSPORT` | no | `stdio` (default) or `http`. |
-| `ORBOTO_MCP_PORT` | http only | Listen port (default `3100`). |
-| `ORBOTO_MCP_CLIENT` | no | User-Agent suffix sent on every Orboto API call. |
+| `ORBOTO_API_URL` | yes | Base URL of the Orboto REST API. Typically `https://<your-host>/api`. No trailing slash. |
+| `ORBOTO_API_KEY` | yes | API key starting with `orb_…` from your Orboto profile. |
+| `ORBOTO_MCP_TRANSPORT` | no | `stdio` (default) or `http`. Stdio is the right choice for `npx`-launched clients. |
+| `ORBOTO_MCP_PORT` | no | Listen port when transport is `http`. Default `3100`. |
+| `ORBOTO_MCP_CLIENT` | no | User-agent suffix that lands in the API audit log. Useful for filtering audit rows by client. |
 
-## Three-way sync
+## Version compatibility
 
-Per [`CLAUDE.md`](../../CLAUDE.md), every API route change ships in one commit bundle that updates:
+Each `@orboto/mcp` release matches a specific Orboto API version — the tag on this package is the same as the `v*` tag on the source Orboto repository. Tool schemas evolve with the API, so:
 
-1. `apps/api/` — the route + tests
-2. `apps/mcp/src/tools/` — the tool wrapper + unit test fixture (this package)
-3. `.claude/skills/orboto/` — the SKILL.md operation row + `scripts/orboto.mjs` shortcut where it makes sense
+- **Pin to your server's version** for reproducible setups: `npx @orboto/mcp@0.89.1` (or whichever your server is on).
+- **`@latest`** if you always run your Orboto host on the most recent release. On a mismatch (package newer than server), some newer tools may 404 at call time — but the older tools keep working.
 
-Skipping any one drifts the consuming surfaces out of sync with the producing route. Adding a new tool here means: new file under `tools/`, register it in `server.ts`, add a unit test under `tools/<name>.test.ts`.
+The MCP server logs the server version it talks to on startup, so you'll see the alignment in your client's MCP logs.
 
-## Tools — wrapper-feature parity (ORB-799)
+## License
 
-The MCP tool surface is feature-equivalent to the `orboto` Bash wrapper (`scripts/orboto.mjs` in `.claude/skills/orboto/`). Per the `feedback_prefer_mcp_in_claude_code` operator policy: in Claude Code sessions where the MCP server is active, prefer MCP tools over the wrapper. Wrapper-only by design:
+MIT. See [LICENSE.md](./LICENSE.md).
 
-- `init` — Repo bootstrap (writes CLAUDE.md / AGENTS.md skill pointer)
-- `self-update` — skill bundle version management
-- Raw `get / post / patch / put / delete <path>` — escape hatch; MCP is typed-only by design
+## Source + issues
 
-| Cluster | Tools |
-|---|---|
-| Identity | `orboto_whoami`, `orboto_ai_status` |
-| Discovery | `orboto_list_projects`, `orboto_get_project`, `orboto_get_project_primer`, `orboto_list_milestones`, `orboto_get_milestone`, `orboto_list_doc_spaces`, `orboto_get_doc`, `orboto_list_ticket_statuses`, `orboto_list_labels`, `orboto_list_git_app_installations`, `orboto_list_users` |
-| Ticket read | `orboto_get_ticket`, `orboto_list_tickets`, `orboto_my_tickets`, `orboto_search`, `orboto_query`, `orboto_get_checklists`, `orboto_get_timer`, `orboto_list_ticket_dependencies` |
-| Ticket write | `orboto_create_ticket`, `orboto_update_ticket`, `orboto_move_ticket`, `orboto_close_ticket`, `orboto_comment`, `orboto_assign`, `orboto_unassign`, `orboto_set_milestone`, `orboto_set_parent`, `orboto_add_ticket_dependency`, `orboto_remove_ticket_dependency` |
-| Composite | `orboto_claim` (assign self + in_progress + timer start), `orboto_unclaim` (unassign self + todo) |
-| Milestone CRUD | `orboto_create_milestone`, `orboto_close_milestone`, `orboto_update_milestone` |
-| Checklists | `orboto_check`, `orboto_uncheck`, `orboto_add_check`, `orboto_new_checklist` |
-| Time | `orboto_timer_start`, `orboto_timer_stop`, `orboto_log_time` |
-| Bulk | `orboto_bulk_patch_tickets`, `orboto_bulk_move_tickets`, `orboto_bulk_close_tickets`, `orboto_bulk_comment_tickets`, `orboto_bulk_assign_tickets`, `orboto_bulk_unassign_tickets` |
-| Docs-AI | `orboto_ask_docs`, `orboto_ingest_url`, `orboto_ingest_file` |
-| Attachments | `orboto_attach_to_ticket` |
-| Primer facts | `orboto_primer_fact_list`, `orboto_primer_fact_add`, `orboto_primer_fact_update`, `orboto_primer_fact_supersede`, `orboto_primer_fact_verify`, `orboto_primer_fact_delete` |
-| Admin | `orboto_get_audit_log`, `orboto_trigger_backup` |
+Source-of-truth is the [`apps/mcp/`](https://github.com/Orboto/orboto/tree/develop/apps/mcp) directory of the main [Orboto repository](https://github.com/Orboto/orboto). This package is a subtree-mirror that ships only the contents needed for an npm consumer.
 
-**Bulk semantics**: each `orboto_bulk_*` tool takes `ticketKeys: string[]` (up to 200), an optional `dryRun: boolean`, and returns `{ successful, failed: [{ ticketKey, error }], skipped, dryRun }`. Partial failure is the norm — branch on the structured outcome rather than relying on exit status.
-
-**File-upload tools** (`orboto_ingest_file`, `orboto_attach_to_ticket`): the model does not need local FS access. The bytes come over the wire as a base64 `contentBase64` field; the tool decodes + multipart-uploads internally.
-
-**`orboto_set_parent` vs `orboto_update_ticket`**: re-parenting an existing ticket is intentionally NOT part of the `orboto_update_ticket` patch shape. Use the dedicated tool (symmetric to `orboto_set_milestone`) — `parentTicketKey: null` detaches from any parent.
+File issues or feature requests on the main repository: <https://github.com/Orboto/orboto/issues>.

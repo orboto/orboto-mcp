@@ -1,12 +1,18 @@
 {
   "name": "@orboto/mcp",
-  "version": "0.51.0",
-  "description": "Orboto MCP server — exposes Orboto tickets, docs, and timers as Model Context Protocol tools for Claude Desktop / Cursor / Copilot.",
-  "main": "dist/index.js",
-  "bin": {
-    "orboto-mcp": "dist/index.js"
-  },
+  "version": "0.89.1",
+  "description": "Model Context Protocol server for Orboto — exposes tickets, projects, milestones, time, docs, primer-facts, alerts and absences as MCP tools for Claude Desktop / Cursor / Copilot Chat / any MCP-aware AI client.",
+  "license": "MIT",
   "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "orboto-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.md"
+  ],
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
@@ -17,7 +23,6 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@orboto/shared-schema": "workspace:*",
     "zod": "^3"
   },
   "devDependencies": {
@@ -28,5 +33,28 @@
     "tsx": "^4",
     "typescript": "^5",
     "vitest": "^1"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "orboto",
+    "mcp",
+    "model-context-protocol",
+    "tickets",
+    "project-management",
+    "claude",
+    "cursor",
+    "copilot",
+    "agents",
+    "ai"
+  ],
+  "homepage": "https://github.com/Orboto/orboto-mcp",
+  "bugs": {
+    "url": "https://github.com/Orboto/orboto/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

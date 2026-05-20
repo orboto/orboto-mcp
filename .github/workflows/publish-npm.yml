@@ -1,0 +1,94 @@
+# ORB-939 — npm publish for @orboto/mcp.
+#
+# This file LIVES in the Orboto/orboto monorepo at
+# `apps/mcp/.github/workflows/publish-npm.yml` and gets subtree-split
+# into the public mirror `Orboto/orboto-mcp` at `.github/workflows/
+# publish-npm.yml` by the parent repo's `split-mcp.yml` workflow.
+# Edit the file in the parent repo; the mirror is read-only.
+#
+# Tag-triggered. The parent repo's `scripts/release.mjs` produces a
+# tag like `v0.89.1`; once split-mcp.yml mirrors that tag to this
+# repo, this workflow runs and publishes the current `@orboto/mcp`
+# version to npm via OIDC (no NPM_TOKEN needed — npm verifies the
+# GitHub-issued OIDC token against the per-package "Trusted Publisher"
+# config on npmjs.com).
+#
+# One-time setup on npmjs.com:
+#   1. @orboto/mcp package page → Settings → Trusted Publishers
+#   2. Provider: GitHub Actions
+#      Owner:    Orboto
+#      Repo:     orboto-mcp
+#      Workflow: publish-npm.yml
+#      Env:      (blank)
+#
+# Provenance is ON because the mirror is public.
+
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  id-token: write  # required for OIDC publishing + provenance
+
+concurrency:
+  group: publish-npm-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish @orboto/mcp
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (full history so the pushed tag is reachable)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node + npm registry
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        # The mirror is a flat package (no monorepo / no workspace).
+        # pnpm is not needed; plain npm install works because the
+        # workspace dep `@orboto/shared-schema` was removed in the
+        # parent repo before splitting.
+        run: npm install --no-audit --no-fund
+
+      - name: Verify tag matches package version
+        # If the parent repo pushed v0.89.1 but the mirror's
+        # package.json still says 0.89.0, refuse — that's a release
+        # script that forgot to bump apps/mcp/package.json.
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(node -p "require('./package.json').version")
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag $GITHUB_REF_NAME (=$tag) does not match package version $pkg"
+            exit 1
+          fi
+          echo "Tag $GITHUB_REF_NAME matches package version ($tag)"
+
+      - name: Build
+        run: npm run build
+
+      # Node 22 LTS ships with npm 10.9 which signs provenance but
+      # cannot use OIDC for auth — trusted publishing was added in
+      # npm 11.5.1. Run npm@latest ephemerally via npx so we don't
+      # have to globally upgrade.
+      - name: Publish
+        run: npx -y npm@latest publish --access public --provenance
+
+      - name: Summary
+        run: |
+          echo "## Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- [\`@orboto/mcp@${GITHUB_REF_NAME#v}\`](https://www.npmjs.com/package/@orboto/mcp)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Published via OIDC trusted publisher with provenance attestation." >> $GITHUB_STEP_SUMMARY
