@@ -80,6 +80,6 @@ MIT. See [LICENSE.md](./LICENSE.md).
 
 ## Source + issues
 
-Source-of-truth is the [`apps/mcp/`](https://github.com/orboto/orboto/tree/develop/apps/mcp) directory of the main [Orboto repository](https://github.com/orboto/orboto). This package is a subtree-mirror that ships only the contents needed for an npm consumer.
+This repository ([`orboto/orboto-mcp`](https://github.com/orboto/orboto-mcp)) is a public subtree-mirror of the `apps/mcp/` directory from the main Orboto monorepo (private). Code changes land in the parent repo and are mirrored here on every tag push.
 
-File issues or feature requests on the main repository: <https://github.com/orboto/orboto/issues>.
+**File issues here**: <https://github.com/orboto/orboto-mcp/issues>. Bug reports, feature requests, and questions about `@orboto/mcp` belong on this repo — that's where triage happens. Pull requests against the mirror are closed since the code is read-only; please open a discussion on the issue instead and the fix lands in the parent repo.
