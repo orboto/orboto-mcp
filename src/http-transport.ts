@@ -48,9 +48,21 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   });
 }
 
-function sendError(res: ServerResponse, status: number, message: string): void {
-  res.writeHead(status, { 'content-type': 'application/json' });
+function sendError(res: ServerResponse, status: number, message: string, extraHeaders?: Record<string, string>): void {
+  res.writeHead(status, { 'content-type': 'application/json', ...(extraHeaders ?? {}) });
   res.end(JSON.stringify({ error: message }));
+}
+
+/** ORB-957 — RFC 6750 §3 WWW-Authenticate challenge for /mcp 401s.
+ *  MCP-aware clients (Claude Desktop, Cursor, VS Code Copilot) follow
+ *  the resource_metadata URL to auto-discover the OAuth flow. The
+ *  challenge points back at the API's
+ *  /.well-known/oauth-protected-resource which lives at the same
+ *  baseUrl this transport connects to. */
+function wwwAuthChallenge(baseUrl: string, error: string, description: string): string {
+  const origin = baseUrl.replace(/\/$/, '');
+  const resourceMetadata = `${origin}/.well-known/oauth-protected-resource`;
+  return `Bearer realm="orboto-mcp", error="${error}", error_description="${description.replace(/"/g, '\\"')}", resource_metadata="${resourceMetadata}"`;
 }
 
 export function createHttpServer({ baseUrl }: HttpServerOptions) {
@@ -88,12 +100,21 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
     // Extract the bearer token. Per-session auth — the same token
     // is used for the session's whole lifetime (reconnect without
     // re-init would land on a new session id and fresh auth anyway).
+    //
+    // Two acceptable token shapes:
+    //   orb_*          — service-account API key (operator-minted)
+    //   JWT (3 segs)   — OAuth-issued access token from the /oauth/
+    //                    authorize + /oauth/token flow (ORB-957)
+    // Both go to the API unchanged; the API's authenticate decorator
+    // distinguishes them.
     const authHeader = (req.headers.authorization ?? '') as string;
     const token = authHeader.startsWith('Bearer ')
       ? authHeader.slice(7).trim()
       : '';
     if (!token) {
-      sendError(res, 401, 'Authorization: Bearer <orb_*> required');
+      sendError(res, 401, 'Bearer token required', {
+        'WWW-Authenticate': wwwAuthChallenge(baseUrl, 'invalid_request', 'Bearer token required'),
+      });
       return;
     }
 
@@ -132,11 +153,15 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
 
       // Preflight: verify mcp:use + mcp_enabled. If either fails we
       // refuse the session at the transport level — much clearer
-      // than letting the first tool call 403.
+      // than letting the first tool call 403. WWW-Authenticate
+      // included on 401-shape failures so the client can auto-
+      // discover OAuth.
       try {
         await preflightMcpSession(new OrbotoClient({ baseUrl, apiKey: token, userAgentSuffix }));
       } catch (err) {
-        return sendError(res, 403, (err as Error).message);
+        return sendError(res, 401, (err as Error).message, {
+          'WWW-Authenticate': wwwAuthChallenge(baseUrl, 'invalid_token', (err as Error).message),
+        });
       }
 
       // ORB-940 — per-session subscription set + live-event bridge.
