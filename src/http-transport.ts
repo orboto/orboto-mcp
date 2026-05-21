@@ -23,6 +23,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { buildOrbotoMcpServer } from './server.js';
 import { OrbotoClient, preflightMcpSession } from './orboto-client.js';
+import { EventBridge } from './event-bridge.js';
 
 export interface HttpServerOptions {
   baseUrl: string;
@@ -138,19 +139,28 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
         return sendError(res, 403, (err as Error).message);
       }
 
+      // ORB-940 — per-session subscription set + live-event bridge.
+      // The set is mutated by resources/subscribe + resources/
+      // unsubscribe handlers inside the McpServer; the bridge reads
+      // it to decide which incoming API events deserve a push.
+      const subscriptions = new Set<string>();
       const mcp = buildOrbotoMcpServer({
         baseUrl,
         apiKey: token,
         userAgentSuffix,
+        subscriptions,
       });
+      const bridge = new EventBridge({ baseUrl, apiKey: token, mcp, subscriptions });
       const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (sid: string) => {
           sessions.set(sid, transport);
+          bridge.start();
         },
       });
       transport.onclose = () => {
         if (transport.sessionId) sessions.delete(transport.sessionId);
+        bridge.close();
       };
       await mcp.connect(transport);
       await transport.handleRequest(req, res, body);

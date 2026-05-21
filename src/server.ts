@@ -14,6 +14,7 @@
  * add `registerResource` / `registerPrompt` calls here too.
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { SubscribeRequestSchema, UnsubscribeRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoClient, type OrbotoClientConfig } from './orboto-client.js';
 import { registerOrbotoResources } from './resources.js';
 import { registerOrbotoPrompts } from './prompts.js';
@@ -164,6 +165,15 @@ export interface BuildServerOptions extends OrbotoClientConfig {
   /** Optional — passed through to McpServer metadata. Clients
    *  sometimes surface this in their UI. */
   clientDescription?: string;
+  /** ORB-940 — when present, the server registers
+   *  resources/subscribe + resources/unsubscribe handlers that
+   *  write into this set. The HTTP transport reads from it to
+   *  decide which events to push through. Stdio sessions can pass
+   *  their own set if they want live updates; without one, the
+   *  resources/subscribe capability stays advertised but no events
+   *  ever fire (which is correct — a stdio client without a
+   *  bridge wouldn't receive them anyway). */
+  subscriptions?: Set<string>;
 }
 
 export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
@@ -172,6 +182,13 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   const server = new McpServer(
     { name: 'orboto', version: '0.51.0' },
     {
+      // ORB-940 — advertise resources/subscribe so MCP-aware clients
+      // (Claude Desktop, Cursor) wire up live updates instead of
+      // polling. Even when no bridge is hooked up (stdio sessions)
+      // the capability stays on; subscriptions just stay quiet.
+      capabilities: {
+        resources: { subscribe: true, listChanged: true },
+      },
       // `instructions` appears in the system-prompt-style block some
       // MCP clients inject before the user's first message. Keep it
       // short + specific; avoid walls of text.
@@ -344,6 +361,23 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   // task-shaped Prompt templates the MCP client offers in its UI.
   registerOrbotoResources(server, client);
   registerOrbotoPrompts(server);
+
+  // ORB-940 — resources/subscribe + resources/unsubscribe. The Set
+  // is shared by reference with the transport's event-bridge, which
+  // is the actual sender of `notifications/resources/updated`. We
+  // resolve immediately with an empty result either way — the spec
+  // allows that, and the bridge does the real work.
+  if (opts.subscriptions) {
+    const subs = opts.subscriptions;
+    server.server.setRequestHandler(SubscribeRequestSchema, async (req) => {
+      subs.add(req.params.uri);
+      return {};
+    });
+    server.server.setRequestHandler(UnsubscribeRequestSchema, async (req) => {
+      subs.delete(req.params.uri);
+      return {};
+    });
+  }
 
   return server;
 }
