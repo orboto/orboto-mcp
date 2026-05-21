@@ -73,7 +73,16 @@ function wwwAuthChallenge(
 ): string {
   const host = (req.headers['x-forwarded-host'] as string | undefined)
     || (req.headers.host as string | undefined);
-  const proto = (req.headers['x-forwarded-proto'] as string | undefined) || 'https';
+  // Multi-layer proxies (Coolify's outer Caddy → web container's nginx
+  // → mcp container) sometimes lose the original scheme. Trust an
+  // explicit X-Forwarded-Proto header if present; otherwise default to
+  // https UNLESS the host is obviously localhost / a private IP (local
+  // dev). The MCP container only runs in TLS-terminated deployments,
+  // so https-by-default is right for production + lets local dev
+  // explicitly send X-Forwarded-Proto=http if needed.
+  const hostIsLocal = !!host && /^(localhost|127\.|::1|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
+  const protoHeader = req.headers['x-forwarded-proto'] as string | undefined;
+  const proto = protoHeader || (hostIsLocal ? 'http' : 'https');
   const origin = host
     ? `${proto}://${host}`
     : baseUrl.replace(/\/$/, '');
