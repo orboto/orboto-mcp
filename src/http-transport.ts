@@ -55,12 +55,28 @@ function sendError(res: ServerResponse, status: number, message: string, extraHe
 
 /** ORB-957 — RFC 6750 §3 WWW-Authenticate challenge for /mcp 401s.
  *  MCP-aware clients (Claude Desktop, Cursor, VS Code Copilot) follow
- *  the resource_metadata URL to auto-discover the OAuth flow. The
- *  challenge points back at the API's
- *  /.well-known/oauth-protected-resource which lives at the same
- *  baseUrl this transport connects to. */
-function wwwAuthChallenge(baseUrl: string, error: string, description: string): string {
-  const origin = baseUrl.replace(/\/$/, '');
+ *  the resource_metadata URL to auto-discover the OAuth flow.
+ *
+ *  The resource_metadata URL must point at the PUBLIC host the AI
+ *  client can reach — NOT the internal `http://api:3000` baseUrl the
+ *  MCP container uses to talk to the API. We derive the public URL
+ *  from the incoming request's Host + X-Forwarded-Proto headers,
+ *  which the reverse proxy (nginx → web container) sets for us.
+ *  Falls back to baseUrl only when the headers are missing (local
+ *  dev / direct connections).
+ */
+function wwwAuthChallenge(
+  req: IncomingMessage,
+  baseUrl: string,
+  error: string,
+  description: string,
+): string {
+  const host = (req.headers['x-forwarded-host'] as string | undefined)
+    || (req.headers.host as string | undefined);
+  const proto = (req.headers['x-forwarded-proto'] as string | undefined) || 'https';
+  const origin = host
+    ? `${proto}://${host}`
+    : baseUrl.replace(/\/$/, '');
   const resourceMetadata = `${origin}/.well-known/oauth-protected-resource`;
   return `Bearer realm="orboto-mcp", error="${error}", error_description="${description.replace(/"/g, '\\"')}", resource_metadata="${resourceMetadata}"`;
 }
@@ -113,7 +129,7 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
       : '';
     if (!token) {
       sendError(res, 401, 'Bearer token required', {
-        'WWW-Authenticate': wwwAuthChallenge(baseUrl, 'invalid_request', 'Bearer token required'),
+        'WWW-Authenticate': wwwAuthChallenge(req, baseUrl, 'invalid_request', 'Bearer token required'),
       });
       return;
     }
@@ -160,7 +176,7 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
         await preflightMcpSession(new OrbotoClient({ baseUrl, apiKey: token, userAgentSuffix }));
       } catch (err) {
         return sendError(res, 401, (err as Error).message, {
-          'WWW-Authenticate': wwwAuthChallenge(baseUrl, 'invalid_token', (err as Error).message),
+          'WWW-Authenticate': wwwAuthChallenge(req, baseUrl, 'invalid_token', (err as Error).message),
         });
       }
 
