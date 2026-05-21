@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Orboto-Enterprise-1.0
 /**
  * ORB-632 / ORB-945 — Cross-Project Linking MCP tools.
  *
