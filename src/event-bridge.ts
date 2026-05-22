@@ -98,6 +98,12 @@ export function eventToUris(event: BridgeEvent): string[] {
     return [];
   }
 
+  // ORB-970 — quorum lifecycle.
+  if (event.type === 'agent_quorum:opened' || event.type === 'agent_quorum:approved') {
+    const p = (event as { payload?: { topicKey?: string } }).payload;
+    return p?.topicKey ? [`orboto://quorum/${p.topicKey}`] : [];
+  }
+
   // ORB-706 — mention real-time push. Every notification row firing
   // for the calling user surfaces on `orboto://user/me/notifications`.
   // The API-side SSE bridge already filters notification:new events
