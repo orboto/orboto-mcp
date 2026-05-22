@@ -29,7 +29,7 @@ interface BridgeEvent {
   ticketId?: string;
   docId?: string;
   userId?: string;
-  payload?: { id?: string; ticketKey?: string; isPrivate?: boolean } | null;
+  payload?: { id?: string; ticketKey?: string; isPrivate?: boolean; statusCategory?: string } | null;
 }
 
 export interface EventBridgeOpts {
@@ -64,6 +64,13 @@ export function eventToUris(event: BridgeEvent): string[] {
     // to projectId, which the resource handler accepts via
     // resolveProjectByKey's lookup path.
     if (event.projectId) uris.push(`orboto://project/${event.projectId}`);
+    // ORB-962 — hand-off "wake on close". When a ticket:updated
+    // payload's statusCategory is `done`, emit an additional URI
+    // dedicated to close-events so subscribers don't have to filter
+    // every ticket:updated client-side.
+    if (event.type === 'ticket:updated' && key && event.payload?.statusCategory === 'done') {
+      uris.push(`orboto://handoff/closed/${key}`);
+    }
     return uris;
   }
 

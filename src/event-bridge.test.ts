@@ -84,6 +84,25 @@ describe('eventToUris', () => {
   it('returns [] for restore-progress / system-task events (infrastructure-only)', () => {
     expect(eventToUris({ type: 'restore:progress', userId: 'u1' } as never)).toEqual([]);
   });
+
+  it('emits orboto://handoff/closed/<key> on a ticket:updated to done (ORB-962)', () => {
+    const uris = eventToUris({
+      type: 'ticket:updated',
+      projectId: 'p1',
+      payload: { ticketKey: 'ORB-42', statusCategory: 'done' },
+    });
+    expect(uris).toContain('orboto://ticket/ORB-42');
+    expect(uris).toContain('orboto://handoff/closed/ORB-42');
+  });
+
+  it('does NOT emit handoff URI when a ticket:updated keeps a non-done status', () => {
+    const uris = eventToUris({
+      type: 'ticket:updated',
+      projectId: 'p1',
+      payload: { ticketKey: 'ORB-42', statusCategory: 'in_progress' },
+    });
+    expect(uris).not.toContain('orboto://handoff/closed/ORB-42');
+  });
 });
 
 describe('EventBridge.dispatch', () => {
