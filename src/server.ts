@@ -371,10 +371,16 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
     const subs = opts.subscriptions;
     server.server.setRequestHandler(SubscribeRequestSchema, async (req) => {
       subs.add(req.params.uri);
+      // ORB-940 follow-up — stderr-log every subscribe/unsubscribe so
+      // operators can see in the MCP container log whether the AI
+      // client actually opts into live updates (vs. just reading the
+      // resource once). Diagnostic only — never throw from here.
+      try { process.stderr.write(`[orboto-mcp] subscribe → ${req.params.uri} (total subs: ${subs.size})\n`); } catch { /* ignore */ }
       return {};
     });
     server.server.setRequestHandler(UnsubscribeRequestSchema, async (req) => {
       subs.delete(req.params.uri);
+      try { process.stderr.write(`[orboto-mcp] unsubscribe → ${req.params.uri} (remaining: ${subs.size})\n`); } catch { /* ignore */ }
       return {};
     });
   }

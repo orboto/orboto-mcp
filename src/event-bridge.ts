@@ -145,6 +145,7 @@ export class EventBridge {
       throw new Error(`SSE bridge handshake failed (status=${res.status})`);
     }
 
+    this.log(`SSE bridge connected → ${url}`);
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buf = '';
@@ -211,6 +212,7 @@ export class EventBridge {
     for (const uri of matched) {
       try {
         await this.opts.mcp.server.sendResourceUpdated({ uri });
+        this.log(`pushed resources/updated → ${uri} (event=${event.type})`);
         this.overflow += 1;
       } catch (err) {
         this.log(`sendResourceUpdated(${uri}) failed: ${(err as Error).message}`);
