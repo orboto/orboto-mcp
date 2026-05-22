@@ -20,6 +20,11 @@ import { registerOrbotoResources } from './resources.js';
 import { registerOrbotoPrompts } from './prompts.js';
 import { registerWithMetrics } from './with-metrics.js';
 import { aiStatusToolConfig, makeAiStatusHandler } from './tools/ai-status.js';
+import {
+  agentHeartbeatToolConfig, makeAgentHeartbeatHandler,
+  agentPresenceToolConfig, makeAgentPresenceHandler,
+  agentNotifyToolConfig, makeAgentNotifyHandler,
+} from './tools/agent-coordination.js';
 import { listProjectsToolConfig, makeListProjectsHandler } from './tools/list-projects.js';
 import { getProjectToolConfig, makeGetProjectHandler } from './tools/get-project.js';
 import { getProjectPrimerToolConfig, makeGetProjectPrimerHandler } from './tools/get-project-primer.js';
@@ -216,6 +221,11 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   // Tools — alphabetical-ish by concept. Each tool file owns its
   // input/output schema; the server just glues names to handlers.
   reg('orboto_ai_status', aiStatusToolConfig, makeAiStatusHandler(client));
+  // ORB-705 — Multi-Agent Coordination tools (heartbeat, presence,
+  // directed notify). Layered on the ORB-704 REST surface.
+  reg('orboto_agent_heartbeat', agentHeartbeatToolConfig, makeAgentHeartbeatHandler(client));
+  reg('orboto_agent_presence', agentPresenceToolConfig, makeAgentPresenceHandler(client));
+  reg('orboto_agent_notify', agentNotifyToolConfig, makeAgentNotifyHandler(client));
   reg('orboto_list_projects', listProjectsToolConfig, makeListProjectsHandler(client));
   reg('orboto_get_project', getProjectToolConfig, makeGetProjectHandler(client));
   reg('orboto_get_project_primer', getProjectPrimerToolConfig, makeGetProjectPrimerHandler(client));
