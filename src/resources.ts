@@ -50,6 +50,18 @@ interface SearchResponse {
   items: Array<{ type: string; ticketKey?: string | null; title: string; excerpt: string; url: string; projectName: string | null }>;
   total: number;
 }
+interface NotificationRow {
+  id: string;
+  type: string;
+  payload: Record<string, unknown>;
+  readAt: string | null;
+  createdAt: string;
+}
+interface NotificationsPage {
+  items: NotificationRow[];
+  nextCursor: string | null;
+  unreadCount: number;
+}
 
 export function registerOrbotoResources(server: McpServer, client: OrbotoClient): void {
   // -------------------------------------------------------------------------
@@ -170,6 +182,50 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
             return `- **${tag} ${ident}**${project}: ${h.title}\n  ${h.excerpt}`;
           }),
         ];
+      return {
+        contents: [{
+          uri: uri.href,
+          mimeType: 'text/markdown',
+          text: lines.join('\n'),
+        }],
+      };
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // orboto://user/me/notifications
+  //
+  // ORB-706 — read the calling user's recent notifications.
+  // Subscribable: every `notification:new` event for this user
+  // fires a `resources/updated` push. Used by agents that want to
+  // react to mentions / agent_message / status-change pings in
+  // real time.
+  // -------------------------------------------------------------------------
+  server.registerResource(
+    'user-notifications',
+    new ResourceTemplate('orboto://user/me/notifications', { list: undefined }),
+    {
+      title: 'My notifications',
+      description: 'Calling user\'s recent notifications. Subscribable — every new notification fires resources/updated. Use this to react to mentions, agent_message (ORB-705), and status-change pings in real time.',
+      mimeType: 'text/markdown',
+    },
+    async (uri) => {
+      const page = await client.get<NotificationsPage>('/notifications?limit=20');
+      const lines: string[] = [];
+      lines.push(`# My notifications`);
+      lines.push(`_${page.unreadCount} unread of ${page.items.length} shown._`);
+      lines.push('');
+      if (page.items.length === 0) {
+        lines.push('_No notifications._');
+      } else {
+        for (const n of page.items) {
+          const unread = n.readAt ? '' : ' **unread**';
+          const subject = typeof n.payload.subject === 'string'
+            ? n.payload.subject
+            : typeof n.payload.message === 'string' ? n.payload.message : n.type;
+          lines.push(`- [${n.type}]${unread} — ${subject} _(${n.createdAt})_`);
+        }
+      }
       return {
         contents: [{
           uri: uri.href,

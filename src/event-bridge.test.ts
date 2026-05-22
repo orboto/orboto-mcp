@@ -74,8 +74,15 @@ describe('eventToUris', () => {
     expect(eventToUris({ type: 'timer:changed', userId: 'u1' })).toEqual(['orboto://timer']);
   });
 
-  it('returns [] for user-scoped notification events that have no resource', () => {
-    expect(eventToUris({ type: 'notification:new', userId: 'u1' })).toEqual([]);
+  it('maps notification:new to the calling user\'s notifications resource (ORB-706)', () => {
+    // The mcp-events SSE handler already filters notification:new
+    // to only deliver to the matching user; the URI is per-user
+    // scoped by construction.
+    expect(eventToUris({ type: 'notification:new', userId: 'u1' })).toEqual(['orboto://user/me/notifications']);
+  });
+
+  it('returns [] for restore-progress / system-task events (infrastructure-only)', () => {
+    expect(eventToUris({ type: 'restore:progress', userId: 'u1' } as never)).toEqual([]);
   });
 });
 

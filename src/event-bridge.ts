@@ -79,8 +79,17 @@ export function eventToUris(event: BridgeEvent): string[] {
     return [`orboto://timer`];
   }
 
-  // notification:new / restore:progress / system-task:* are user-
-  // scoped but don't map to a public resource URI today. The MCP
+  // ORB-706 — mention real-time push. Every notification row firing
+  // for the calling user surfaces on `orboto://user/me/notifications`.
+  // The API-side SSE bridge already filters notification:new events
+  // to only deliver them to the matching user's session, so this
+  // URI is naturally per-user-scoped.
+  if (event.type === 'notification:new') {
+    return [`orboto://user/me/notifications`];
+  }
+
+  // restore:progress / system-task:* are user-scoped infrastructure
+  // events that don't map to a public resource URI today. The MCP
   // bridge ignores them — the user gets them via the in-app UI.
   return [];
 }
