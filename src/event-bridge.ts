@@ -86,6 +86,18 @@ export function eventToUris(event: BridgeEvent): string[] {
     return [`orboto://timer`];
   }
 
+  // ORB-964 — agent broadcast. Map to the scope-specific URI so
+  // subscribers can register interest in just the scope they care
+  // about. For workspace scope, scopeId is the empty string.
+  if (event.type === 'agent_broadcast:posted') {
+    const p = (event as { payload?: { scopeType?: string; scopeId?: string } }).payload;
+    if (p?.scopeType) {
+      const scopeId = p.scopeId ?? '';
+      return [`orboto://broadcast/${p.scopeType}/${scopeId}`];
+    }
+    return [];
+  }
+
   // ORB-706 — mention real-time push. Every notification row firing
   // for the calling user surfaces on `orboto://user/me/notifications`.
   // The API-side SSE bridge already filters notification:new events

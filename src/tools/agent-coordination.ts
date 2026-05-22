@@ -159,6 +159,41 @@ export const agentNotifyToolConfig = {
   annotations: { readOnlyHint: false, idempotentHint: false },
 };
 
+// ---------------------------------------------------------------------------
+// orboto_agent_broadcast (ORB-964)
+// ---------------------------------------------------------------------------
+
+export const agentBroadcastToolConfig = {
+  title: 'Scoped broadcast to other agents',
+  description:
+    'Fan-out a message to every subscribed agent in a scope. `scopeType=workspace` reaches every internal member; `scopeType=project` reaches members of `scopeId` (project UUID); `scopeType=topic` reaches everyone subscribed to the topic string. The recipient sees it via a `notifications/resources/updated` push on `orboto://broadcast/<scope>/<scope_id>`. Use for lead-agent → workers (workspace), project-team status updates (project), or ad-hoc cross-cutting coordination (topic). Retention is 24 h — late subscribers can replay via the resource read.',
+  inputSchema: z.object({
+    scopeType: z.enum(['workspace', 'project', 'topic']),
+    scopeId: z.string().default(''),
+    message: z.record(z.string(), z.unknown()),
+  }).shape,
+  outputSchema: z.object({ id: z.string().uuid() }).shape,
+  annotations: { readOnlyHint: false, idempotentHint: false },
+};
+
+export function makeAgentBroadcastHandler(client: OrbotoClient) {
+  return async (args: {
+    scopeType: 'workspace' | 'project' | 'topic';
+    scopeId?: string;
+    message: Record<string, unknown>;
+  }): Promise<CallToolResult> => {
+    const res = await client.post<{ id: string }>('/v1/agent/broadcast', {
+      scopeType: args.scopeType,
+      scopeId: args.scopeId ?? '',
+      message: args.message,
+    });
+    return {
+      content: [{ type: 'text', text: `broadcast posted — id=${res.id}` }],
+      structuredContent: { id: res.id },
+    };
+  };
+}
+
 export function makeAgentNotifyHandler(client: OrbotoClient) {
   return async (args: {
     targetEmail: string;

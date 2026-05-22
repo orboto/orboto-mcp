@@ -24,6 +24,7 @@ import {
   agentHeartbeatToolConfig, makeAgentHeartbeatHandler,
   agentPresenceToolConfig, makeAgentPresenceHandler,
   agentNotifyToolConfig, makeAgentNotifyHandler,
+  agentBroadcastToolConfig, makeAgentBroadcastHandler,
 } from './tools/agent-coordination.js';
 import { listProjectsToolConfig, makeListProjectsHandler } from './tools/list-projects.js';
 import { getProjectToolConfig, makeGetProjectHandler } from './tools/get-project.js';
@@ -226,6 +227,8 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_agent_heartbeat', agentHeartbeatToolConfig, makeAgentHeartbeatHandler(client));
   reg('orboto_agent_presence', agentPresenceToolConfig, makeAgentPresenceHandler(client));
   reg('orboto_agent_notify', agentNotifyToolConfig, makeAgentNotifyHandler(client));
+  // ORB-964 — scoped fan-out for multi-agent coordination.
+  reg('orboto_agent_broadcast', agentBroadcastToolConfig, makeAgentBroadcastHandler(client));
   reg('orboto_list_projects', listProjectsToolConfig, makeListProjectsHandler(client));
   reg('orboto_get_project', getProjectToolConfig, makeGetProjectHandler(client));
   reg('orboto_get_project_primer', getProjectPrimerToolConfig, makeGetProjectPrimerHandler(client));
