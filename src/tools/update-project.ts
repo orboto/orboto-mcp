@@ -28,11 +28,16 @@ import { resolveProjectByKey, type ProjectRow } from './shared.js';
 // generator from the API's runtime schema into the MCP package yet.
 const PROJECT_KEY_RE = /^[A-Z0-9]+$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// ORB-993/ORB-994 — the 18 detector-supported workspace/project locales.
+// Mirrors WORKSPACE_LOCALE_CODES in @orboto/shared-schema (kept in sync
+// manually, same as the rest of this tool's schema).
+const LOCALE_CODES = ['en', 'de', 'fr', 'es', 'it', 'nl', 'pt', 'ru', 'pl', 'tr', 'cs', 'da', 'sv', 'no', 'fi', 'ja', 'zh', 'ko'] as const;
+type LocaleCode = (typeof LOCALE_CODES)[number];
 
 export const updateProjectToolConfig = {
   title: 'Update a project\'s metadata',
   description:
-    'Patch a project (`name`, `description`, `key`, `status`, `branchTemplate`, `customerId`). At least one field must be set. Use `status: "archived"` or `"closed"` to take a project out of active rotation. Renaming the `key` also rewrites every ticket\'s `PROJ-N` reference — handle with care.',
+    'Patch a project (`name`, `description`, `key`, `status`, `branchTemplate`, `customerId`, `language`). At least one field must be set. Use `status: "archived"` or `"closed"` to take a project out of active rotation. Renaming the `key` also rewrites every ticket\'s `PROJ-N` reference — handle with care. `language` sets the project\'s expected ticket language (one of the 18 supported locales); pass null to inherit the workspace language.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Current project key (e.g. "ACME"). Case-insensitive.'),
     patch: z.object({
@@ -44,6 +49,8 @@ export const updateProjectToolConfig = {
       branchTemplate: z.string().max(100).nullable().optional(),
       customerId: z.string().regex(UUID_RE).nullable().optional()
         .describe('UUID of a customer record, or null to detach.'),
+      language: z.enum(LOCALE_CODES).nullable().optional()
+        .describe('Project content language (ORB-994). Wins over the workspace language for this project. null = inherit workspace.'),
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
   }).shape,
 };
@@ -58,6 +65,7 @@ export function makeUpdateProjectHandler(client: OrbotoClient) {
       status?: 'draft' | 'active' | 'archived' | 'closed';
       branchTemplate?: string | null;
       customerId?: string | null;
+      language?: LocaleCode | null;
     };
   }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, projectKey);
@@ -74,6 +82,7 @@ export function makeUpdateProjectHandler(client: OrbotoClient) {
         name: updated.name,
         description: updated.description,
         status: updated.status,
+        language: updated.language ?? null,
       },
     };
   };
@@ -94,20 +103,24 @@ export const createProjectToolConfig = {
     description: z.string().nullable().optional().describe('Optional free-text description.'),
     customerId: z.string().regex(UUID_RE).nullable().optional()
       .describe('Optional UUID of a customer record to attach the project to.'),
+    language: z.enum(LOCALE_CODES).nullable().optional()
+      .describe('Optional project content language (ORB-994), one of the 18 supported locales. Omit/null = inherit the workspace language.'),
   }).shape,
 };
 
 export function makeCreateProjectHandler(client: OrbotoClient) {
-  return async ({ name, key, description, customerId }: {
+  return async ({ name, key, description, customerId, language }: {
     name: string;
     key?: string;
     description?: string | null;
     customerId?: string | null;
+    language?: LocaleCode | null;
   }): Promise<CallToolResult> => {
     const body: Record<string, unknown> = { name };
     if (key !== undefined) body.key = key;
     if (description !== undefined) body.description = description;
     if (customerId !== undefined) body.customerId = customerId;
+    if (language !== undefined) body.language = language;
     const created = await client.post<ProjectRow>('/projects', body);
     return {
       content: [{
@@ -120,6 +133,7 @@ export function makeCreateProjectHandler(client: OrbotoClient) {
         name: created.name,
         description: created.description,
         status: created.status,
+        language: created.language ?? null,
       },
     };
   };

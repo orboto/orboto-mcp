@@ -15,6 +15,8 @@ export interface ProjectRow {
   name: string;
   description: string | null;
   status: string;
+  // ORB-994 — per-project content language, null = inherit workspace.
+  language?: string | null;
 }
 
 export async function resolveProjectByKey(
