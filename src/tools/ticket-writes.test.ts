@@ -176,6 +176,52 @@ describe('orboto_create_ticket', () => {
     expect(sc.similarWarnings).toHaveLength(1);
     expect(sc.languageWarning).toEqual({ detected: 'de', expected: 'en' });
   });
+
+  it('turns a strict-language 422 into a clear block result, not a thrown error (ORB-990)', async () => {
+    const blockBody = JSON.stringify({
+      error: 'Ticket language (de) does not match the workspace language (en).',
+      languageWarning: { code: 'language_mismatch', severity: 'block', detected: 'de', expected: 'en' },
+    });
+    let createUrl = '';
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const u = url.toString();
+      const m = init?.method ?? 'GET';
+      if (m === 'GET') {
+        return { ok: true, status: 200, statusText: 'OK', json: async () => PROJ, text: async () => '' } as unknown as Response;
+      }
+      createUrl = u; // the POST /tickets call
+      return { ok: false, status: 422, statusText: 'Unprocessable', json: async () => ({}), text: async () => blockBody } as unknown as Response;
+    });
+    const res = await makeCreateTicketHandler(client)({
+      projectKey: 'ACME', title: 'Authentifizierung schlägt fehl bei externen Nutzern',
+    });
+    // No override flag → no query param on the create call.
+    expect(createUrl).not.toContain('allowLanguageMismatch');
+    expect(res.isError).toBe(true);
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('blocked');
+    expect(text).toContain('allowLanguageMismatch=true');
+    const sc = res.structuredContent as { blocked: boolean; languageWarning: { severity: string } };
+    expect(sc.blocked).toBe(true);
+    expect(sc.languageWarning.severity).toBe('block');
+  });
+
+  it('passes allowLanguageMismatch as a query param when the override is set (ORB-990)', async () => {
+    let createUrl = '';
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const u = url.toString();
+      const m = init?.method ?? 'GET';
+      if (m === 'GET') {
+        return { ok: true, status: 200, statusText: 'OK', json: async () => PROJ, text: async () => '' } as unknown as Response;
+      }
+      createUrl = u;
+      return { ok: true, status: 201, statusText: 'Created', json: async () => ({ ...TICKET, ticketKey: 'ACME-9' }), text: async () => '' } as unknown as Response;
+    });
+    await makeCreateTicketHandler(client)({
+      projectKey: 'ACME', title: 'Authentifizierung schlägt fehl', allowLanguageMismatch: true,
+    });
+    expect(createUrl).toContain('allowLanguageMismatch=true');
+  });
 });
 
 describe('orboto_update_ticket', () => {

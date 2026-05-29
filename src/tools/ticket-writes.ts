@@ -119,7 +119,7 @@ function ticketStructured(t: TicketRow) {
 export const createTicketToolConfig = {
   title: 'Create a ticket',
   description:
-    'Create a new ticket in the given project. Returns the new ticket\'s key (e.g. "ACME-42") so callers can chain follow-ups. The caller must have `ticket:create` on the project. **Duplicate-detection safety-net (ORB-831):** if `similarWarnings` appears in the response with one or more entries, the ticket WAS created but you should review whether to close it as a duplicate of the listed ticket(s) instead. The warnings are advisory — never blocking — but each entry is a ticket the system thinks the new one overlaps with. Prefer `orboto_check_similar` BEFORE creating when you want a dry-run. **Language-mismatch warning (ORB-890):** if `languageWarning` appears, the ticket was written in a language different from the workspace default. Consider rewriting in the expected language so search + duplicate-detection stay consistent. Non-blocking. **Before a mass-create (ORB-989):** call `orboto_whoami` first — its `workspaceLocale` field is the language you should write every ticket in. If the same `languageWarning` repeats, stop and clarify the intended language rather than pushing through the whole batch.',
+    'Create a new ticket in the given project. Returns the new ticket\'s key (e.g. "ACME-42") so callers can chain follow-ups. The caller must have `ticket:create` on the project. **Duplicate-detection safety-net (ORB-831):** if `similarWarnings` appears in the response with one or more entries, the ticket WAS created but you should review whether to close it as a duplicate of the listed ticket(s) instead. The warnings are advisory — never blocking — but each entry is a ticket the system thinks the new one overlaps with. Prefer `orboto_check_similar` BEFORE creating when you want a dry-run. **Language-mismatch warning (ORB-890):** if `languageWarning` appears, the ticket was written in a language different from the workspace default. Consider rewriting in the expected language so search + duplicate-detection stay consistent. Non-blocking. **Before a mass-create (ORB-989):** call `orboto_whoami` first — its `workspaceLocale` field is the language you should write every ticket in. If the same `languageWarning` repeats, stop and clarify the intended language rather than pushing through the whole batch. **Strict mode (ORB-990):** if the workspace enforces ticket language, a mismatch is rejected (the tool returns a `blocked` result, not a created ticket) — rewrite in the workspace language, or set `allowLanguageMismatch: true` only when the language is genuinely intentional.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
     title: z.string().min(1).max(255),
@@ -132,6 +132,7 @@ export const createTicketToolConfig = {
     parentTicketKey: z.string().optional().describe('Parent ticket key (e.g. "ACME-10") — makes this a sub-ticket.'),
     dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD.'),
     isPrivate: z.boolean().optional(),
+    allowLanguageMismatch: z.boolean().optional().describe('Override strict ticket-language enforcement (ORB-990). Only set after a previous call was blocked AND you are sure the language is intentional — prefer rewriting in the workspace language.'),
   }).shape,
 };
 
@@ -142,6 +143,7 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
     priority?: 'blocker' | 'high' | 'normal' | 'low' | 'trivial';
     milestone?: string; assigneeEmails?: string[]; labels?: string[];
     parentTicketKey?: string; dueDate?: string; isPrivate?: boolean;
+    allowLanguageMismatch?: boolean;
   }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, input.projectKey);
 
@@ -159,13 +161,23 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
       body.parentTicketId = parent.id;
     }
 
-    const created = await client.post<TicketRow & {
+    // ORB-990 — strict ticket-language enforcement may reject this with
+    // a 422; surface that as a clear block result instead of a raw error.
+    const createPath = `/projects/${project.id}/tickets${input.allowLanguageMismatch ? '?allowLanguageMismatch=true' : ''}`;
+    let created: TicketRow & {
       similarWarnings?: SimilarWarning[];
       languageWarning?: LanguageWarning;
-    }>(
-      `/projects/${project.id}/tickets`,
-      body,
-    );
+    };
+    try {
+      created = await client.post<TicketRow & {
+        similarWarnings?: SimilarWarning[];
+        languageWarning?: LanguageWarning;
+      }>(createPath, body);
+    } catch (err) {
+      const blocked = languageBlockResult(err, 'Ticket create');
+      if (blocked) return blocked;
+      throw err;
+    }
 
     // Post-create steps: assignees + labels go through the dedicated
     // sub-routes, mirroring the wrapper's behaviour. Each is awaited
@@ -230,8 +242,34 @@ interface SimilarWarning {
 }
 
 interface LanguageWarning {
+  // ORB-990 — machine-readable code + severity.
+  code?: 'language_mismatch';
+  severity?: 'warn' | 'block';
   detected: string;
   expected: string;
+}
+
+/**
+ * ORB-990 — turn a strict-language 422 into a clear, non-throwing tool
+ * result. The backend body is `{ error, languageWarning }`; we surface
+ * the block reason and tell the agent how to proceed (rewrite, or retry
+ * with the override) instead of letting the raw API error bubble up.
+ * Returns null if the error isn't a language-enforcement 422.
+ */
+function languageBlockResult(err: unknown, verb: string): CallToolResult | null {
+  if (!(err instanceof OrbotoApiError) || err.status !== 422) return null;
+  let parsed: { error?: string; languageWarning?: LanguageWarning } = {};
+  try { parsed = JSON.parse(err.body) as typeof parsed; } catch { /* non-JSON body */ }
+  if (!parsed.languageWarning) return null;
+  const lw = parsed.languageWarning;
+  const text = `⛔ ${verb} blocked — strict ticket-language enforcement is on.\n` +
+    `This content reads as "${lw.detected}" but the workspace language is "${lw.expected}".\n` +
+    `Rewrite it in ${lw.expected.toUpperCase()}, or — only if you are sure the language is intentional — retry the same call with allowLanguageMismatch=true.`;
+  return {
+    content: [{ type: 'text', text }],
+    structuredContent: { blocked: true, languageWarning: lw },
+    isError: true,
+  };
 }
 
 function formatSimilarity(w: SimilarWarning): string {
@@ -259,21 +297,41 @@ export const updateTicketToolConfig = {
       isPrivate: z.boolean().optional(),
       estimatedTimeMinutes: z.number().int().nonnegative().optional(),
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
+    allowLanguageMismatch: z.boolean().optional().describe('Override strict ticket-language enforcement (ORB-990). Only set after a previous call was blocked AND the language is intentional.'),
   }).shape,
 };
 
 export function makeUpdateTicketHandler(client: OrbotoClient) {
-  return async ({ ticketKey, patch }: {
+  return async ({ ticketKey, patch, allowLanguageMismatch }: {
     ticketKey: string;
     patch: Record<string, unknown>;
+    allowLanguageMismatch?: boolean;
   }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
-    const updated = await client.patch<TicketRow>(
-      `/projects/${ticket.projectId}/tickets/${ticket.id}`, patch,
-    );
+    // ORB-990 — strict ticket-language enforcement may reject a
+    // title/description patch with a 422; surface a clear block result.
+    const patchPath = `/projects/${ticket.projectId}/tickets/${ticket.id}${allowLanguageMismatch ? '?allowLanguageMismatch=true' : ''}`;
+    let updated: TicketRow & { languageWarning?: LanguageWarning };
+    try {
+      updated = await client.patch<TicketRow & { languageWarning?: LanguageWarning }>(patchPath, patch);
+    } catch (err) {
+      const blocked = languageBlockResult(err, 'Ticket update');
+      if (blocked) return blocked;
+      throw err;
+    }
+    const langWarning = updated.languageWarning;
+    const parts = [ticketSummaryText('Updated', updated)];
+    if (langWarning) {
+      parts.push(
+        `\n⚠ Language mismatch — this ticket reads as "${langWarning.detected}" but the workspace default is "${langWarning.expected}". Consider rewriting in ${langWarning.expected.toUpperCase()} to keep search + duplicate-detection consistent.`,
+      );
+    }
     return {
-      content: [{ type: 'text', text: ticketSummaryText('Updated', updated) }],
-      structuredContent: ticketStructured(updated),
+      content: [{ type: 'text', text: parts.join('\n') }],
+      structuredContent: {
+        ...ticketStructured(updated),
+        ...(langWarning ? { languageWarning: langWarning } : {}),
+      },
     };
   };
 }
