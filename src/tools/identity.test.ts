@@ -30,7 +30,7 @@ const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey:
 describe('orboto_whoami', () => {
   it('returns the authenticated user shape from /users/me', async () => {
     const calls = stub([
-      { json: { id: 'u1', email: 'agent-e@orboto.io', fullName: 'Claude Agent E', isBot: true } },
+      { json: { id: 'u1', email: 'agent-e@orboto.io', fullName: 'Claude Agent E', isBot: true, workspaceLocale: 'en' } },
     ]);
     const res = await makeWhoamiHandler(client)();
     expect(calls[0].url).toBe('https://orboto.example.com/users/me');
@@ -40,8 +40,16 @@ describe('orboto_whoami', () => {
       email: 'agent-e@orboto.io',
       fullName: 'Claude Agent E',
       isBot: true,
+      workspaceLocale: 'en',
     });
     expect((res.content[0] as { text: string }).text).toContain('agent-e@orboto.io');
+  });
+
+  it('surfaces workspaceLocale in the text output when present (ORB-989)', async () => {
+    stub([{ json: { id: 'u4', email: 'agent@orboto.io', fullName: 'Agent', isBot: true, workspaceLocale: 'de' } }]);
+    const res = await makeWhoamiHandler(client)();
+    expect((res.content[0] as { text: string }).text).toContain('workspace language: de');
+    expect(res.structuredContent).toMatchObject({ workspaceLocale: 'de' });
   });
 
   it('handles missing fullName + missing isBot flag (treats as not-a-bot)', async () => {
@@ -52,6 +60,7 @@ describe('orboto_whoami', () => {
       email: 'human@orboto.io',
       fullName: null,
       isBot: false,
+      workspaceLocale: null,
     });
   });
 
