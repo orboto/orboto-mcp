@@ -14,6 +14,7 @@ import {
   makeUpdateDocSpaceHandler,
   makeDeleteDocSpaceHandler,
   makeListDocsInSpaceHandler,
+  makeGetDocHandler,
   makeCreateDocHandler,
   makeUpdateDocHandler,
   makeDeleteDocHandler,
@@ -142,6 +143,7 @@ describe('orboto_list_docs_in_space', () => {
     title: 'Architecture',
     content: '...',
     slug: 'architecture',
+    docKey: 'ORB-D1',
     visibility: 'workspace',
     sortOrder: 0,
     icon: null,
@@ -165,6 +167,14 @@ describe('orboto_list_docs_in_space', () => {
     expect(docs).toHaveLength(2);
   });
 
+  it('surfaces the doc key in the tree text + structured rows (ORB-1004)', async () => {
+    stubJSON([{ json: [ROOT] }]);
+    const res = await makeListDocsInSpaceHandler(client)({ spaceId: PROJECT_SCOPED_SPACE.id });
+    expect((res.content[0] as { text: string }).text).toContain('ORB-D1');
+    const docs = (res.structuredContent as { docs: Array<{ docKey: string | null }> }).docs;
+    expect(docs[0]!.docKey).toBe('ORB-D1');
+  });
+
   it('handles the empty-space case without rendering an empty list', async () => {
     stubJSON([{ json: [] }]);
     const res = await makeListDocsInSpaceHandler(client)({ spaceId: PROJECT_SCOPED_SPACE.id });
@@ -180,11 +190,29 @@ const DOC = {
   title: 'Retry semantics',
   content: '# Retry semantics\n\n200ms × 2^n.',
   slug: 'retry-semantics',
+  docKey: 'ORB-D7',
   visibility: 'workspace',
   sortOrder: 0,
   icon: null,
   updatedAt: '2026-05-17T13:30:00.000Z',
 };
+
+describe('orboto_get_doc (ORB-1004 key support)', () => {
+  it('fetches by UUID via /docs/:id', async () => {
+    const calls = stubJSON([{ json: DOC }, { json: [] }]);
+    const res = await makeGetDocHandler(client)({ docId: DOC.id });
+    expect(calls[0]!.url).toBe(`https://orboto.example.com/docs/${DOC.id}`);
+    expect((res.structuredContent as { doc: { docKey: string } }).doc.docKey).toBe('ORB-D7');
+  });
+
+  it('resolves a doc key via /docs/by-key/:key, then backlinks by UUID', async () => {
+    const calls = stubJSON([{ json: DOC }, { json: [] }]);
+    const res = await makeGetDocHandler(client)({ docId: 'ORB-D7' });
+    expect(calls[0]!.url).toBe('https://orboto.example.com/docs/by-key/ORB-D7');
+    expect(calls[1]!.url).toBe(`https://orboto.example.com/docs/${DOC.id}/backlinks`);
+    expect((res.content[0] as { text: string }).text).toContain('Key: ORB-D7');
+  });
+});
 
 describe('orboto_create_doc', () => {
   it('POSTs to /spaces/:id/docs with title + content', async () => {

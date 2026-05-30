@@ -40,6 +40,8 @@ interface DocRow {
   title: string;
   content: string;
   slug: string;
+  // ORB-1004 — human-readable, typeable doc key (`ORB-D12` / `DOC-5`).
+  docKey: string | null;
   visibility: string;
   icon: string | null;
   sortOrder: number;
@@ -100,26 +102,30 @@ export function makeListDocSpacesHandler(client: OrbotoClient) {
 // orboto_get_doc
 // ---------------------------------------------------------------------------
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const getDocToolConfig = {
-  title: 'Get a doc by id',
+  title: 'Get a doc by id or key',
   description:
-    'Return the doc content (Markdown) plus backlinks (other docs that reference this doc, or tickets/milestones the doc is linked from).',
+    'Return the doc content (Markdown) plus backlinks (other docs that reference this doc, or tickets/milestones the doc is linked from). Accepts either the doc UUID or its human-readable key (e.g. ORB-D12 / DOC-5).',
   inputSchema: z.object({
-    docId: z.string().uuid().describe('Doc UUID. Discover via orboto_list_doc_spaces or orboto_search.'),
+    docId: z.string().min(1).describe('Doc UUID or human-readable key (ORB-D12 / DOC-5). Discover via orboto_list_doc_spaces or orboto_search.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeGetDocHandler(client: OrbotoClient) {
   return async ({ docId }: { docId: string }): Promise<CallToolResult> => {
-    const [doc, backlinks] = await Promise.all([
-      client.get<DocRow>(`/docs/${docId}`),
-      client.get<DocBacklinkRow[]>(`/docs/${docId}/backlinks`).catch(() => [] as DocBacklinkRow[]),
-    ]);
+    // ORB-1004 — accept a doc key too; resolve via the by-key route, then
+    // use the resolved UUID for the backlinks fetch.
+    const doc = UUID_RE.test(docId)
+      ? await client.get<DocRow>(`/docs/${docId}`)
+      : await client.get<DocRow>(`/docs/by-key/${encodeURIComponent(docId)}`);
+    const backlinks = await client.get<DocBacklinkRow[]>(`/docs/${doc.id}/backlinks`).catch(() => [] as DocBacklinkRow[]);
 
     const lines = [
       `# ${doc.icon ? `${doc.icon} ` : ''}${doc.title}`,
-      `Visibility: ${doc.visibility}  ·  Updated: ${doc.updatedAt}`,
+      `${doc.docKey ? `Key: ${doc.docKey}  ·  ` : ''}Visibility: ${doc.visibility}  ·  Updated: ${doc.updatedAt}`,
       '',
       doc.content || '_(empty)_',
     ];
@@ -140,6 +146,7 @@ export function makeGetDocHandler(client: OrbotoClient) {
       structuredContent: {
         doc: {
           id: doc.id,
+          docKey: doc.docKey,
           title: doc.title,
           content: doc.content,
           visibility: doc.visibility,
@@ -316,7 +323,8 @@ export function makeListDocsInSpaceHandler(client: OrbotoClient) {
       for (const c of children) {
         const indent = '  '.repeat(depth);
         const iconPart = c.icon ? `${c.icon} ` : '';
-        lines.push(`${indent}- ${iconPart}${c.title}  (id: ${c.id})`);
+        // ORB-1004 — show the typeable key (falls back to UUID).
+        lines.push(`${indent}- ${iconPart}${c.title}  (${c.docKey ?? c.id})`);
         walk(c.id, depth + 1);
       }
     };
@@ -326,6 +334,7 @@ export function makeListDocsInSpaceHandler(client: OrbotoClient) {
       structuredContent: {
         docs: rows.map((r) => ({
           id: r.id,
+          docKey: r.docKey,
           title: r.title,
           slug: r.slug,
           parentDocId: r.parentDocId,
@@ -346,7 +355,7 @@ export function makeListDocsInSpaceHandler(client: OrbotoClient) {
 export const createDocToolConfig = {
   title: 'Create a doc page',
   description:
-    'Create a new wiki page in `spaceId` with the supplied Markdown body. Unlike orboto_ingest_url / orboto_ingest_file (which derive content from an external source), this is the plain "I have the Markdown, make me a page" path. Title is required; content is optional (creates an empty page). Returns the new doc row including its UUID.',
+    'Create a new wiki page in `spaceId` with the supplied Markdown body. Unlike orboto_ingest_url / orboto_ingest_file (which derive content from an external source), this is the plain "I have the Markdown, make me a page" path. Title is required; content is optional (creates an empty page). Returns the new doc row including its UUID and its human-readable doc key (e.g. ORB-D12).',
   inputSchema: z.object({
     spaceId: z.string().uuid().describe('Target doc space (find via orboto_list_doc_spaces).'),
     title: z.string().min(1).max(255),
@@ -370,9 +379,10 @@ export function makeCreateDocHandler(client: OrbotoClient) {
     if (input.icon !== undefined) body.icon = input.icon;
     const row = await client.post<DocRow>(`/spaces/${input.spaceId}/docs`, body);
     return {
-      content: [{ type: 'text', text: `Created doc: ${row.title}\n  id: ${row.id}\n  slug: ${row.slug}\n  visibility: ${row.visibility}` }],
+      content: [{ type: 'text', text: `Created doc: ${row.title}\n  key: ${row.docKey ?? '(none)'}\n  id: ${row.id}\n  slug: ${row.slug}\n  visibility: ${row.visibility}` }],
       structuredContent: {
         id: row.id,
+        docKey: row.docKey,
         title: row.title,
         slug: row.slug,
         spaceId: row.spaceId,
