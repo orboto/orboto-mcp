@@ -47,6 +47,7 @@ import {
   wikiRecordToolConfig, makeWikiRecordHandler,
   wikiAppendSectionToolConfig, makeWikiAppendSectionHandler,
   wikiFlagStaleToolConfig, makeWikiFlagStaleHandler,
+  wikiSaveAnswerToolConfig, makeWikiSaveAnswerHandler,
 } from './tools/wiki.js';
 import {
   listDocSpacesToolConfig, makeListDocSpacesHandler,
@@ -303,6 +304,7 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_wiki_record', wikiRecordToolConfig, makeWikiRecordHandler(client));
   reg('orboto_wiki_append_section', wikiAppendSectionToolConfig, makeWikiAppendSectionHandler(client));
   reg('orboto_wiki_flag_stale', wikiFlagStaleToolConfig, makeWikiFlagStaleHandler(client));
+  reg('orboto_wiki_save_answer', wikiSaveAnswerToolConfig, makeWikiSaveAnswerHandler(client));
   reg('orboto_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
   reg('orboto_list_git_app_installations', listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler(client));
 

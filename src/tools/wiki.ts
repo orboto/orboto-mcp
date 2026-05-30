@@ -163,6 +163,29 @@ export function makeWikiAppendSectionHandler(client: OrbotoClient) {
   };
 }
 
+// --- orboto_wiki_save_answer -----------------------------------------------
+
+export const wikiSaveAnswerToolConfig = {
+  title: 'Save a Q&A answer as a wiki page',
+  description:
+    'Turn an answer (e.g. from orboto_wiki_ask) into a curated wiki page with smart-links to its citations. Idempotent per (space, question): re-saving the same question updates the page instead of duplicating it. Wraps POST /ai/save-answer-to-wiki.',
+  inputSchema: z.object({
+    spaceId: z.string().uuid(),
+    question: z.string().min(3).max(1000),
+    answer: z.string().min(1).max(50_000),
+    title: z.string().max(200).optional().describe('Page title; defaults to the question.'),
+    parentDocId: z.string().uuid().optional(),
+    citations: z.array(z.object({ docId: z.string().uuid(), title: z.string() })).max(50).optional().describe('Cited docs to smart-link (from orboto_wiki_ask).'),
+  }).shape,
+  annotations: { readOnlyHint: false, idempotentHint: true },
+};
+export function makeWikiSaveAnswerHandler(client: OrbotoClient) {
+  return async (input: { spaceId: string; question: string; answer: string; title?: string; parentDocId?: string; citations?: Array<{ docId: string; title: string }> }): Promise<CallToolResult> => {
+    const res = await client.post<{ docId: string; created: boolean }>(`/ai/save-answer-to-wiki`, { ...input, citations: input.citations ?? [] });
+    return text(res.created ? `Saved as a new wiki page (docId: ${res.docId}).` : `Updated the existing wiki page (docId: ${res.docId}).`, { docId: res.docId, created: res.created });
+  };
+}
+
 // --- orboto_wiki_flag_stale ------------------------------------------------
 
 export const wikiFlagStaleToolConfig = {

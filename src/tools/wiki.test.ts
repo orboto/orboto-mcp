@@ -14,6 +14,7 @@ import {
   makeWikiRecordHandler,
   makeWikiAppendSectionHandler,
   makeWikiFlagStaleHandler,
+  makeWikiSaveAnswerHandler,
 } from './wiki.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -101,6 +102,15 @@ describe('orboto_wiki_append_section', () => {
     stubJSON([{ json: { appended: false } }]);
     const res = await makeWikiAppendSectionHandler(client)({ docId: DOC, content: 'x' });
     expect((res.content[0] as { text: string }).text).toMatch(/already present/);
+  });
+});
+
+describe('orboto_wiki_save_answer', () => {
+  it('POSTs to save-answer-to-wiki and reports created vs updated', async () => {
+    const calls = stubJSON([{ json: { docId: DOC, created: true } }]);
+    const res = await makeWikiSaveAnswerHandler(client)({ spaceId: SPACE, question: 'how?', answer: 'like this' });
+    expect(calls[0]).toMatchObject({ method: 'POST', url: 'https://orboto.example.com/ai/save-answer-to-wiki', body: { spaceId: SPACE, question: 'how?', answer: 'like this', citations: [] } });
+    expect((res.content[0] as { text: string }).text).toMatch(/new wiki page/);
   });
 });
 
