@@ -38,7 +38,7 @@ interface PrimerJsonResponse {
 export const getProjectPrimerToolConfig = {
   title: 'Get project primer (AI Context Pack)',
   description:
-    'Returns the project\'s auto-generated session primer in a single call: active milestones, ticket counts, recently-closed milestones, top docs, structured primer facts, and recent activity. Repo briefings (CLAUDE.md / AGENTS.md) are included ONLY when the operator configured them AND the API host can read those files from disk — most deployments will not have them, so do not assume CLAUDE.md / AGENTS.md content is in the response. Token-budget aware — pass `maxTokens` to constrain the output. Input is the project key (e.g. "ORB"), case-insensitive.',
+    'Returns the project\'s auto-generated session primer in a single call: active milestones, ticket counts, recently-closed milestones, top docs, structured primer facts, and recent activity. Primer facts merge three scopes in order Workspace -> Project -> Personal: the Personal block ("Your preferences") is the calling user\'s own personal-scope facts, included only when that user has opted in (ai_preferences_enabled) and never showing another user\'s. Repo briefings (CLAUDE.md / AGENTS.md) are included ONLY when the operator configured them AND the API host can read those files from disk — most deployments will not have them, so do not assume CLAUDE.md / AGENTS.md content is in the response. Token-budget aware — pass `maxTokens` to constrain the output. Input is the project key (e.g. "ORB"), case-insensitive.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ORB"). Case-insensitive.'),
     maxTokens: z.number().int().positive().max(200000).optional()
