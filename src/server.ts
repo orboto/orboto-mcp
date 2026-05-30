@@ -39,6 +39,16 @@ import {
 import { searchToolConfig, makeSearchHandler } from './tools/search.js';
 import { queryToolConfig, makeQueryHandler } from './tools/query.js';
 import {
+  wikiIngestUrlToolConfig, makeWikiIngestUrlHandler,
+  wikiAskToolConfig, makeWikiAskHandler,
+  wikiLintToolConfig, makeWikiLintHandler,
+  wikiPlanUpdateToolConfig, makeWikiPlanUpdateHandler,
+  wikiApplyPlanToolConfig, makeWikiApplyPlanHandler,
+  wikiRecordToolConfig, makeWikiRecordHandler,
+  wikiAppendSectionToolConfig, makeWikiAppendSectionHandler,
+  wikiFlagStaleToolConfig, makeWikiFlagStaleHandler,
+} from './tools/wiki.js';
+import {
   listDocSpacesToolConfig, makeListDocSpacesHandler,
   getDocToolConfig, makeGetDocHandler,
   createDocSpaceToolConfig, makeCreateDocSpaceHandler,
@@ -283,6 +293,16 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   // pendant.
   reg('orboto_duplicate_doc_space', duplicateDocSpaceToolConfig, makeDuplicateDocSpaceHandler(client));
   reg('orboto_resolve_doc_smart_links', resolveDocSmartLinksToolConfig, makeResolveDocSmartLinksHandler(client));
+  // ORB-855 — LLM-Wiki tools (ingest / ask / lint / plan-apply / record /
+  // append-section / flag-stale). Thin wrappers over the Phase B/C/D routes.
+  reg('orboto_wiki_ingest_url', wikiIngestUrlToolConfig, makeWikiIngestUrlHandler(client));
+  reg('orboto_wiki_ask', wikiAskToolConfig, makeWikiAskHandler(client));
+  reg('orboto_wiki_lint', wikiLintToolConfig, makeWikiLintHandler(client));
+  reg('orboto_wiki_plan_update', wikiPlanUpdateToolConfig, makeWikiPlanUpdateHandler(client));
+  reg('orboto_wiki_apply_plan', wikiApplyPlanToolConfig, makeWikiApplyPlanHandler(client));
+  reg('orboto_wiki_record', wikiRecordToolConfig, makeWikiRecordHandler(client));
+  reg('orboto_wiki_append_section', wikiAppendSectionToolConfig, makeWikiAppendSectionHandler(client));
+  reg('orboto_wiki_flag_stale', wikiFlagStaleToolConfig, makeWikiFlagStaleHandler(client));
   reg('orboto_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
   reg('orboto_list_git_app_installations', listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler(client));
 

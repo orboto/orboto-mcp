@@ -235,6 +235,45 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
       };
     },
   );
+
+  // -------------------------------------------------------------------------
+  // ORB-855 — LLM-Wiki resources. The index + log are the space's singleton
+  // kind='index'/'log' docs; a page is any doc by id (namespaced under the
+  // space). A `page/` discriminator keeps the page template from colliding
+  // with the static index/log segments.
+  // -------------------------------------------------------------------------
+  const layerDoc = async (spaceId: string, kind: 'index' | 'log'): Promise<DocRow | null> => {
+    const list = await client.get<Array<DocRow & { kind?: string }>>(`/spaces/${spaceId}/docs`);
+    return list.find((d) => d.kind === kind) ?? null;
+  };
+
+  server.registerResource(
+    'wiki-index',
+    new ResourceTemplate('orboto://wiki/{spaceId}/index', { list: undefined }),
+    { title: 'LLM-Wiki index', description: 'The auto-maintained navigation index of an LLM-Wiki space.', mimeType: 'text/markdown' },
+    async (uri, vars) => {
+      const doc = await layerDoc(String(vars.spaceId), 'index');
+      return { contents: [{ uri: uri.href, mimeType: 'text/markdown', text: doc?.content || '_(no index)_' }] };
+    },
+  );
+  server.registerResource(
+    'wiki-log',
+    new ResourceTemplate('orboto://wiki/{spaceId}/log', { list: undefined }),
+    { title: 'LLM-Wiki activity log', description: 'The append-only activity log of an LLM-Wiki space.', mimeType: 'text/markdown' },
+    async (uri, vars) => {
+      const doc = await layerDoc(String(vars.spaceId), 'log');
+      return { contents: [{ uri: uri.href, mimeType: 'text/markdown', text: doc?.content || '_(no log)_' }] };
+    },
+  );
+  server.registerResource(
+    'wiki-page',
+    new ResourceTemplate('orboto://wiki/{spaceId}/page/{docId}', { list: undefined }),
+    { title: 'LLM-Wiki page', description: 'A single wiki page by id within an LLM-Wiki space.', mimeType: 'text/markdown' },
+    async (uri, vars) => {
+      const doc = await client.get<DocRow>(`/docs/${String(vars.docId)}`);
+      return { contents: [{ uri: uri.href, mimeType: 'text/markdown', text: `# ${doc.title}\n\n${doc.content || '_(empty)_'}` }] };
+    },
+  );
 }
 
 function renderTicketMarkdown(

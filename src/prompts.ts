@@ -191,4 +191,65 @@ export function registerOrbotoPrompts(server: McpServer): void {
       }],
     }),
   );
+
+  // -------------------------------------------------------------------------
+  // ORB-855 — wiki-ingest: guided URL ingest flow.
+  // -------------------------------------------------------------------------
+  server.registerPrompt(
+    'wiki-ingest',
+    {
+      title: 'Ingest a URL into the wiki',
+      description: 'Guided flow: import a URL into an LLM-Wiki space and confirm what the curation produced.',
+      argsSchema: { spaceId: z.string().min(1).describe('Target wiki space id.'), url: z.string().min(1).describe('Public URL to import.') },
+    },
+    ({ spaceId, url }) => ({
+      messages: [{
+        role: 'user',
+        content: {
+          type: 'text',
+          text: [
+            `Ingest ${url} into wiki space ${spaceId}.`,
+            '',
+            'Steps:',
+            `1. Call \`orboto_wiki_ingest_url\` with spaceId="${spaceId}" and url="${url}".`,
+            '2. If the space runs review-gate, the curation lands as a pending plan — tell the operator to review it in the space (sidebar). If auto-apply, the pages were written directly.',
+            '3. Read `orboto://wiki/' + spaceId + '/log` to confirm what changed and summarise the new / updated pages in 2-3 sentences.',
+            '',
+            'If ingest fails (bad URL, space not wiki-enabled), report the error plainly and stop.',
+          ].join('\n'),
+        },
+      }],
+    }),
+  );
+
+  // -------------------------------------------------------------------------
+  // ORB-855 — wiki-maintain: guided lint + fix flow.
+  // -------------------------------------------------------------------------
+  server.registerPrompt(
+    'wiki-maintain',
+    {
+      title: 'Maintain a wiki (lint + fix)',
+      description: 'Run the lint pass on an LLM-Wiki space and propose fixes for the open issues.',
+      argsSchema: { spaceId: z.string().min(1).describe('Wiki space id to maintain.') },
+    },
+    ({ spaceId }) => ({
+      messages: [{
+        role: 'user',
+        content: {
+          type: 'text',
+          text: [
+            `Maintain wiki space ${spaceId}.`,
+            '',
+            'Steps:',
+            `1. Call \`orboto_wiki_lint\` with spaceId="${spaceId}" to get the open issues.`,
+            '2. Group them by kind (orphans, missing cross-references, stale, contradictions, undocumented, unprocessed sources).',
+            '3. For each issue with a clear fix, propose the concrete change. For a fix the operator approves, use `orboto_wiki_plan_update` to draft it and `orboto_wiki_apply_plan` to commit — never apply destructive rewrites without confirmation.',
+            '4. Summarise what you fixed and what still needs a human decision.',
+            '',
+            'If there are no open issues, say the wiki is clean and stop.',
+          ].join('\n'),
+        },
+      }],
+    }),
+  );
 }
