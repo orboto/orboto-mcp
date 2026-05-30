@@ -50,6 +50,12 @@ import {
   wikiSaveAnswerToolConfig, makeWikiSaveAnswerHandler,
 } from './tools/wiki.js';
 import {
+  personalFactListToolConfig, makePersonalFactListHandler,
+  personalFactAddToolConfig, makePersonalFactAddHandler,
+  personalFactUpdateToolConfig, makePersonalFactUpdateHandler,
+  personalFactDeleteToolConfig, makePersonalFactDeleteHandler,
+} from './tools/personal-facts.js';
+import {
   listDocSpacesToolConfig, makeListDocSpacesHandler,
   getDocToolConfig, makeGetDocHandler,
   createDocSpaceToolConfig, makeCreateDocSpaceHandler,
@@ -305,6 +311,11 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_wiki_append_section', wikiAppendSectionToolConfig, makeWikiAppendSectionHandler(client));
   reg('orboto_wiki_flag_stale', wikiFlagStaleToolConfig, makeWikiFlagStaleHandler(client));
   reg('orboto_wiki_save_answer', wikiSaveAnswerToolConfig, makeWikiSaveAnswerHandler(client));
+  // ORB-862 — personal AI-preference facts (owner-scoped).
+  reg('orboto_personal_fact_list', personalFactListToolConfig, makePersonalFactListHandler(client));
+  reg('orboto_personal_fact_add', personalFactAddToolConfig, makePersonalFactAddHandler(client));
+  reg('orboto_personal_fact_update', personalFactUpdateToolConfig, makePersonalFactUpdateHandler(client));
+  reg('orboto_personal_fact_delete', personalFactDeleteToolConfig, makePersonalFactDeleteHandler(client));
   reg('orboto_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
   reg('orboto_list_git_app_installations', listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler(client));
 
