@@ -3,8 +3,9 @@
  *
  * `orboto_list_doc_spaces` and `orboto_get_doc` share this file for the
  * same reason the milestone tools do — cheap neighbours on the same
- * API root. Docs are referenced by UUID even in the MCP surface
- * because they have no human-readable key (no per-space short-id).
+ * API root. Docs carry a human-readable key (`ORB-D12` / `DOC-5`,
+ * ORB-1004) and spaces carry one too (`ORB-S1` / `SPACE-5`, ORB-1015);
+ * both resolve by key or UUID.
  *
  * ORB-912 (epic ORB-911) added the write-path neighbours so an
  * MCP-aware client can do the full space lifecycle without falling
@@ -27,6 +28,8 @@ interface DocSpaceRow {
   id: string;
   name: string;
   slug: string;
+  // ORB-1015 — human-readable, typeable space key (`ORB-S1` / `SPACE-5`).
+  key: string | null;
   description: string | null;
   icon: string | null;
   type: string; // 'global' | 'project' per DocSpaceTypeEnum
@@ -79,7 +82,7 @@ export function makeListDocSpacesHandler(client: OrbotoClient) {
         // populated when type === 'project'. We use the type flag so
         // the text rendering doesn't depend on an extra API join.
         const scope = s.type === 'project' ? 'project-scoped' : 'workspace-wide';
-        return `- ${s.name} (${scope}) — id: ${s.id}`;
+        return `- ${s.name} (${scope}) - ${s.key ?? s.id}`;
       }).join('\n');
     return {
       content: [{ type: 'text', text }],
@@ -88,6 +91,7 @@ export function makeListDocSpacesHandler(client: OrbotoClient) {
           id: s.id,
           name: s.name,
           slug: s.slug,
+          key: s.key ?? null,
           type: s.type,
           description: s.description,
           projectId: s.projectId,
