@@ -109,6 +109,7 @@ import {
   updateTicketToolConfig, makeUpdateTicketHandler,
   moveTicketToolConfig, makeMoveTicketHandler,
   closeTicketToolConfig, makeCloseTicketHandler,
+  deleteTicketToolConfig, makeDeleteTicketHandler,
   commentToolConfig, makeCommentHandler,
   assignToolConfig, makeAssignHandler,
   unassignToolConfig, makeUnassignHandler,
@@ -326,6 +327,7 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_update_ticket', updateTicketToolConfig, makeUpdateTicketHandler(client));
   reg('orboto_move_ticket', moveTicketToolConfig, makeMoveTicketHandler(client));
   reg('orboto_close_ticket', closeTicketToolConfig, makeCloseTicketHandler(client));
+  reg('orboto_delete_ticket', deleteTicketToolConfig, makeDeleteTicketHandler(client));
   reg('orboto_comment', commentToolConfig, makeCommentHandler(client));
   reg('orboto_assign', assignToolConfig, makeAssignHandler(client));
   reg('orboto_unassign', unassignToolConfig, makeUnassignHandler(client));

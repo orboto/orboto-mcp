@@ -403,6 +403,31 @@ export function makeCloseTicketHandler(client: OrbotoClient) {
 }
 
 // ---------------------------------------------------------------------------
+// orboto_delete_ticket
+// ---------------------------------------------------------------------------
+
+export const deleteTicketToolConfig = {
+  title: 'Permanently delete a ticket',
+  description:
+    'DESTRUCTIVE, IRREVERSIBLE hard-delete of a ticket (by key): the row and its history are gone, and a `ticket.deleted` event + webhook fire. Strongly prefer moving the ticket to `wont_fix` (orboto_move_ticket) or closing it instead — wont_fix keeps the history and analytics intact. Only hard-delete a ticket that should truly never have existed (accidental duplicate, spam). Caller must have `ticket:delete`.',
+  inputSchema: z.object({
+    ticketKey: z.string().min(3),
+  }).shape,
+};
+
+export function makeDeleteTicketHandler(client: OrbotoClient) {
+  return async ({ ticketKey }: { ticketKey: string }): Promise<CallToolResult> => {
+    const ticket = await resolveTicketByKey(client, ticketKey);
+    await client.delete(`/projects/${ticket.projectId}/tickets/${ticket.id}`);
+    const key = ticket.ticketKey ?? ticketKey;
+    return {
+      content: [{ type: 'text', text: `Permanently deleted ${key}. This cannot be undone.` }],
+      structuredContent: { deleted: true, ticketKey: key, id: ticket.id },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
 // orboto_comment
 // ---------------------------------------------------------------------------
 

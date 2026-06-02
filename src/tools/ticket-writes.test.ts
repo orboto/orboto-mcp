@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
 import {
   makeCreateTicketHandler, makeUpdateTicketHandler, makeMoveTicketHandler,
-  makeCloseTicketHandler, makeCommentHandler, makeAssignHandler,
+  makeCloseTicketHandler, makeDeleteTicketHandler, makeCommentHandler, makeAssignHandler,
   makeUnassignHandler, makeSetMilestoneHandler,
   makeAddTicketDependencyHandler, makeRemoveTicketDependencyHandler,
   makeListTicketDependenciesHandler,
@@ -276,6 +276,21 @@ describe('orboto_close_ticket', () => {
     await makeCloseTicketHandler(client)({ ticketKey: 'ACME-1' });
     expect(calls).toHaveLength(3);
     expect(calls[2].method).toBe('PATCH');
+  });
+});
+
+describe('orboto_delete_ticket', () => {
+  it('resolves the key then hard-DELETEs the ticket by id', async () => {
+    const calls = stub([
+      { json: PROJ },          // resolveTicketByKey: project by-key
+      { json: TICKET },        // resolveTicketByKey: ticket by-key
+      { status: 204 },         // DELETE /projects/p1/tickets/t1
+    ]);
+    const res = await makeDeleteTicketHandler(client)({ ticketKey: 'ACME-1' });
+    expect(calls).toHaveLength(3);
+    expect(calls[2].method).toBe('DELETE');
+    expect(calls[2].url).toContain('/projects/p1/tickets/t1');
+    expect(res.structuredContent).toMatchObject({ deleted: true, ticketKey: 'ACME-1', id: 't1' });
   });
 });
 
