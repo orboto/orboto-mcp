@@ -37,6 +37,9 @@ export interface TicketRow {
   id: string;
   projectId: string;
   milestoneId: string | null;
+  /** ORB-1023 — resolved milestone name on enriched responses (by-id + lists);
+   *  null when no milestone, undefined on the bare by-key resolver row. */
+  milestoneName?: string | null;
   parentTicketId?: string | null;
   ticketKey: string | null;
   ticketNumber: number | null;

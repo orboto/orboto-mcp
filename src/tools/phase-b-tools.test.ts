@@ -129,12 +129,15 @@ describe('orboto_get_ticket', () => {
       { json: { items: [], nextCursor: null } },
       { json: [] }, // checklists — flat array
       NO_CHILDREN, // children via /tickets?parentTicketId=… filter
+      // ORB-1023 — enriched by-id refetch (always last)
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-5', title: 'Bug', status: 'TODO', statusName: 'To Do', statusCategory: 'todo', type: 'bug', priority: 'normal' } },
     ]);
     await makeGetTicketHandler(client)({ ticketKey: 'ACME-5' });
-    // Calls: by-key project, by-key ticket, comments, checklists, children (no git, no parent).
-    expect(calls).toHaveLength(5);
+    // Calls: by-key project, by-key ticket, comments, checklists, children, enriched by-id (no git, no parent).
+    expect(calls).toHaveLength(6);
     expect(calls[2]).toContain('/tickets/t1/comments?limit=');
     expect(calls[4]).toContain('parentTicketId=t1');
+    expect(calls[5]).toContain('/projects/p1/tickets/t1');
     expect(calls.some((c) => c.includes('/git-activity'))).toBe(false);
   });
 
@@ -150,6 +153,7 @@ describe('orboto_get_ticket', () => {
       },
       { json: [] },
       NO_CHILDREN,
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-6', title: 'X', status: 'TODO', statusName: 'To Do', statusCategory: 'todo', type: 'task', priority: 'normal' } },
     ]);
     const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-6' });
     const sc = res.structuredContent as {
@@ -186,6 +190,7 @@ describe('orboto_get_ticket', () => {
         }],
       },
       NO_CHILDREN,
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-8', title: 'Epic', status: 'IN_PROGRESS', statusName: 'In Progress', statusCategory: 'in_progress', type: 'task', priority: 'normal' } },
     ]);
     const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-8' });
     const text = (res.content[0] as { text: string }).text;
@@ -203,6 +208,8 @@ describe('orboto_get_ticket', () => {
       { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-1', title: 'Epic foo', status: 'IN_PROGRESS', statusName: 'In Progress', statusCategory: 'in_progress' } },
       // Children of ACME-5 (none)
       NO_CHILDREN,
+      // Enriched by-id refetch
+      { json: { id: 't5', projectId: 'p1', ticketKey: 'ACME-5', title: 'Phase A', status: 'DONE', statusName: 'Done', statusCategory: 'done', type: 'task', priority: 'normal' } },
     ]);
     const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-5' });
     const sc = res.structuredContent as {
@@ -228,9 +235,29 @@ describe('orboto_get_ticket', () => {
       { json: [] },
       { json: [{ type: 'pr', title: 'fix', state: 'open', externalId: '1', authorName: 'x', createdAt: 'now', url: 'x' }] },
       NO_CHILDREN,
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-7', title: 'Feature', status: 'IN_PROGRESS', statusName: 'In Progress', statusCategory: 'in_progress', type: 'task', priority: 'normal' } },
     ]);
     await makeGetTicketHandler(client)({ ticketKey: 'ACME-7' });
     expect(calls.some((c) => c.includes('/git-activity'))).toBe(true);
+  });
+
+  it('ORB-1023: surfaces milestone (name, not UUID) + statusCategory from the enriched by-id refetch', async () => {
+    stub([
+      { json: PROJ },
+      // Bare by-key resolver row: milestoneId set, but no milestoneName /
+      // statusCategory — this is the shape that dropped the milestone.
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-9', title: 'Bug', status: 'DONE', milestoneId: 'm1', gitActivityCount: 0, parentTicketId: null } },
+      { json: { items: [], nextCursor: null } }, // comments
+      { json: [] },                               // checklists
+      NO_CHILDREN,                                // children
+      // Enriched by-id refetch: carries statusCategory + the resolved name.
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-9', title: 'Bug', status: 'DONE', statusName: 'Done', statusCategory: 'done', type: 'bug', priority: 'normal', milestoneId: 'm1', milestoneName: 'Sprint 7' } },
+    ]);
+    const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-9' });
+    const sc = res.structuredContent as { milestone: { id: string; name: string } | null; statusCategory: string | null };
+    expect(sc.milestone).toEqual({ id: 'm1', name: 'Sprint 7' });
+    expect(sc.statusCategory).toBe('done');
+    expect((res.content[0] as { text: string }).text).toContain('Milestone: Sprint 7');
   });
 });
 

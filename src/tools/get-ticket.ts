@@ -90,7 +90,7 @@ export function makeGetTicketHandler(client: OrbotoClient) {
     const gitCount = (ticket as unknown as { gitActivityCount?: number }).gitActivityCount ?? 0;
     const parentId = ticket.parentTicketId ?? null;
 
-    const [commentsPage, checklists, gitActivity, parent, childrenPage] = await Promise.all([
+    const [commentsPage, checklists, gitActivity, parent, childrenPage, enriched] = await Promise.all([
       client.get<CursorPage<CommentRow>>(
         `/tickets/${ticket.id}/comments?limit=${COMMENT_PAGE_SIZE}`,
       ).catch(swallow404<CursorPage<CommentRow>>({ items: [], nextCursor: null })),
@@ -109,27 +109,40 @@ export function makeGetTicketHandler(client: OrbotoClient) {
       client.get<CursorPage<TicketSummaryRow>>(
         `/projects/${ticket.projectId}/tickets?parentTicketId=${ticket.id}&limit=50`,
       ).catch(swallow404<CursorPage<TicketSummaryRow>>({ items: [], nextCursor: null })),
+      // ORB-1023 — `resolveTicketByKey` hits the by-key endpoint, which
+      // returns a BARE ticket row (no statusCategory, assignees, labels,
+      // milestoneName). Re-fetch the enriched by-id shape so the response
+      // carries the full context. Kept LAST so existing call-order in tests
+      // (comments, checklists, git, parent, children) is unaffected. Falls
+      // back to the bare row on a 404.
+      client.get<TicketRow>(`/projects/${ticket.projectId}/tickets/${ticket.id}`).catch(swallow404<TicketRow | null>(null)),
     ]);
 
     const comments = commentsPage.items;
     const hasMoreComments = !!commentsPage.nextCursor;
     const children = childrenPage.items;
+    // ORB-1023 — prefer the enriched by-id row (statusCategory, assignees,
+    // labels, milestoneName); fall back to the bare resolver row.
+    const full = enriched ?? ticket;
 
     return {
-      content: [{ type: 'text', text: formatTicket(ticket, comments, hasMoreComments, checklists, gitActivity, parent, children) }],
+      content: [{ type: 'text', text: formatTicket(full, comments, hasMoreComments, checklists, gitActivity, parent, children) }],
       structuredContent: {
-        key: ticket.ticketKey,
-        title: ticket.title,
-        status: ticket.statusName ?? ticket.status,
-        statusCategory: ticket.statusCategory ?? null,
-        priority: ticket.priority,
-        type: ticket.type,
-        dueDate: ticket.dueDate,
-        startDate: ticket.startDate,
-        isPrivate: ticket.isPrivate,
-        estimatedTimeMinutes: ticket.estimatedTimeMinutes,
-        loggedMinutes: ticket.loggedMinutes ?? 0,
-        description: ticket.description ?? null,
+        key: full.ticketKey,
+        title: full.title,
+        status: full.statusName ?? full.status,
+        statusCategory: full.statusCategory ?? null,
+        milestone: full.milestoneId
+          ? { id: full.milestoneId, name: full.milestoneName ?? null }
+          : null,
+        priority: full.priority,
+        type: full.type,
+        dueDate: full.dueDate,
+        startDate: full.startDate,
+        isPrivate: full.isPrivate,
+        estimatedTimeMinutes: full.estimatedTimeMinutes,
+        loggedMinutes: full.loggedMinutes ?? 0,
+        description: full.description ?? null,
         // Hierarchy — null when no parent, array of summary rows for
         // children (empty array when none). Sub-ticket consumers can
         // decide to call orboto_get_ticket on each for the full detail.
@@ -145,8 +158,8 @@ export function makeGetTicketHandler(client: OrbotoClient) {
           status: c.statusName ?? c.status,
           statusCategory: c.statusCategory ?? null,
         })),
-        assignees: ticket.assignees ?? [],
-        labels: (ticket.labels ?? []).map((l) => l.name),
+        assignees: full.assignees ?? [],
+        labels: (full.labels ?? []).map((l) => l.name),
         comments: comments.map((c) => ({
           author: c.userName ?? null,
           body: c.content,
@@ -205,6 +218,8 @@ function formatTicket(
   const header = [
     `[${ticket.ticketKey}] ${ticket.title}`,
     `Status: ${ticket.statusName ?? ticket.status}  Priority: ${ticket.priority}  Type: ${ticket.type}`,
+    // ORB-1023 — show the milestone name (not the UUID) when set.
+    ticket.milestoneId ? `Milestone: ${ticket.milestoneName ?? '(unnamed)'}` : null,
     ticket.dueDate ? `Due: ${ticket.dueDate}` : null,
     parent ? `Parent: [${parent.ticketKey}] ${parent.title} (${parent.statusName ?? parent.status})` : null,
     children.length > 0
