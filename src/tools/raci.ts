@@ -99,7 +99,7 @@ export function makeRaciHandler(client: OrbotoClient) {
 export const setRaciToolConfig = {
   title: 'Set a RACI role',
   description:
-    "Set a person's RACI role on a ticket: R (Responsible), A (Accountable, max one per ticket), C (Consulted), or I (Informed). Resolves the user by email within the ticket's project. Requires the project to have RACI enabled and the caller to have ticket:edit. Setting a second Accountable is rejected with the name of the current one.",
+    "Set a person's RACI role on a ticket: R (Responsible), A (Accountable, max one per ticket), C (Consulted), or I (Informed). Resolves the user by email within the ticket's project. Requires the project to have RACI enabled and the caller to have the ticket:manage_raci permission. Setting a second Accountable is rejected with the name of the current one.",
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key (e.g. "ORB-42").'),
     userEmail: z.string().email().describe('Email of a project member.'),
