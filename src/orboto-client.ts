@@ -110,6 +110,20 @@ export class OrbotoClient {
     return (await res.json()) as T;
   }
 
+  async put<T>(path: string, body: unknown): Promise<T> {
+    const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { ...this.headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new OrbotoApiError(res.status, body, url);
+    }
+    return (await res.json()) as T;
+  }
+
   /** DELETE. No response body expected on success. */
   async delete(path: string): Promise<void> {
     const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;

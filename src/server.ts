@@ -32,6 +32,7 @@ import { getProjectPrimerToolConfig, makeGetProjectPrimerHandler } from './tools
 import { listTicketsToolConfig, makeListTicketsHandler } from './tools/list-tickets.js';
 import { criticalPathToolConfig, makeCriticalPathHandler } from './tools/critical-path.js';
 import { analyticsToolConfig, makeAnalyticsHandler } from './tools/analytics.js';
+import { raciToolConfig, makeRaciHandler, setRaciToolConfig, makeSetRaciHandler } from './tools/raci.js';
 import { getTicketToolConfig, makeGetTicketHandler } from './tools/get-ticket.js';
 import { myTicketsToolConfig, makeMyTicketsHandler } from './tools/my-tickets.js';
 import {
@@ -336,6 +337,10 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_assign', assignToolConfig, makeAssignHandler(client));
   reg('orboto_unassign', unassignToolConfig, makeUnassignHandler(client));
   reg('orboto_set_milestone', setMilestoneToolConfig, makeSetMilestoneHandler(client));
+
+  // ORB-1037 — RACI agent surfaces: read the matrix + set a person's role.
+  reg('orboto_raci', raciToolConfig, makeRaciHandler(client));
+  reg('orboto_set_raci', setRaciToolConfig, makeSetRaciHandler(client));
 
   // ORB-453 — ticket-dependency tools (3-way-sync gap filed after the
   // skill wrapper landed in ORB-452). Same idempotent-on-409/404
