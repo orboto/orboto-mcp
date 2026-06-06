@@ -159,6 +159,9 @@ export function makeGetTicketHandler(client: OrbotoClient) {
           statusCategory: c.statusCategory ?? null,
         })),
         assignees: full.assignees ?? [],
+        // ORB-1034 — RACI roster (R/A/C/I); empty array when the project
+        // has RACI disabled (everyone is implicitly Responsible).
+        raci: (full.raci ?? []).map((r) => ({ userId: r.userId, fullName: r.fullName, role: r.role })),
         labels: (full.labels ?? []).map((l) => l.name),
         comments: comments.map((c) => ({
           author: c.userName ?? null,
@@ -228,6 +231,17 @@ function formatTicket(
     ticket.assignees && ticket.assignees.length > 0
       ? `Assignees: ${ticket.assignees.map((a) => a.fullName || a.email).join(', ')}`
       : 'Assignees: (unassigned)',
+    // ORB-1034 — RACI summary, shown only when the project uses RACI and
+    // someone holds a non-Responsible role (Accountable / Consulted / Informed).
+    ticket.raci && ticket.raci.some((r) => r.role !== 'R')
+      ? `RACI: ${(['A', 'R', 'C', 'I'] as const)
+          .map((role) => {
+            const people = ticket.raci!.filter((r) => r.role === role);
+            return people.length ? `${role}: ${people.map((p) => p.fullName || p.email).join(', ')}` : null;
+          })
+          .filter(Boolean)
+          .join(' · ')}`
+      : null,
     ticket.labels && ticket.labels.length > 0
       ? `Labels: ${ticket.labels.map((l) => l.name).join(', ')}`
       : null,

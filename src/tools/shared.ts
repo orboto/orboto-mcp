@@ -59,6 +59,9 @@ export interface TicketRow {
   createdAt?: string;
   updatedAt?: string;
   assignees?: Array<{ id: string; email: string; fullName: string }>;
+  // ORB-1034 — full RACI roster (R/A/C/I). Present when the project has RACI
+  // enabled; `assignees` above stays the Responsible+Accountable subset.
+  raci?: Array<{ userId: string; email: string; fullName: string; role: 'R' | 'A' | 'C' | 'I' }>;
   labels?: Array<{ id: string; name: string }>;
   commentCount?: number;
   checklistProgress?: { done: number; total: number };
