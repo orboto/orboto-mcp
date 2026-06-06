@@ -30,6 +30,7 @@ import { listProjectsToolConfig, makeListProjectsHandler } from './tools/list-pr
 import { getProjectToolConfig, makeGetProjectHandler } from './tools/get-project.js';
 import { getProjectPrimerToolConfig, makeGetProjectPrimerHandler } from './tools/get-project-primer.js';
 import { listTicketsToolConfig, makeListTicketsHandler } from './tools/list-tickets.js';
+import { criticalPathToolConfig, makeCriticalPathHandler } from './tools/critical-path.js';
 import { getTicketToolConfig, makeGetTicketHandler } from './tools/get-ticket.js';
 import { myTicketsToolConfig, makeMyTicketsHandler } from './tools/my-tickets.js';
 import {
@@ -251,6 +252,7 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_get_project', getProjectToolConfig, makeGetProjectHandler(client));
   reg('orboto_get_project_primer', getProjectPrimerToolConfig, makeGetProjectPrimerHandler(client));
   reg('orboto_list_tickets', listTicketsToolConfig, makeListTicketsHandler(client));
+  reg('orboto_critical_path', criticalPathToolConfig, makeCriticalPathHandler(client));
   reg('orboto_get_ticket', getTicketToolConfig, makeGetTicketHandler(client));
   reg('orboto_get_checklists', getChecklistsToolConfig, makeGetChecklistsHandler(client));
   reg('orboto_my_tickets', myTicketsToolConfig, makeMyTicketsHandler(client));
