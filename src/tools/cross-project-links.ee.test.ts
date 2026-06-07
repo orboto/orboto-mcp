@@ -63,7 +63,7 @@ const OUTGOING_LINK = {
     statusCategory: 'in_progress',
     projectId: 'p-ocp',
     projectKey: 'OCP',
-    projectName: 'Orboto Control Plane',
+    projectName: 'orboto Control Plane',
   },
 };
 

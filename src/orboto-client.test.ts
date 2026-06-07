@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase A — Orboto REST client unit tests.
+ * ORB-244 Phase A — orboto REST client unit tests.
  *
  * We mock `fetch` and cover the shape we promise to every tool
  * handler: correct base URL, bearer header, User-Agent string,

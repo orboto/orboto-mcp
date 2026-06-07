@@ -25,7 +25,7 @@ interface AiStatusResponse {
 }
 
 export const aiStatusToolConfig = {
-  title: 'Check whether the Orboto workspace has AI configured',
+  title: 'Check whether the orboto workspace has AI configured',
   description:
     'Pre-flight check for AI-gated operations. Returns two flags: `configured` (chat / completion provider set up — required by `ask-docs`, summarisation, ticket polish, suggest-title, suggest-priority, suggest-labels, translate, NL search, retro generation, daily digest, milestone risk, ticket split) and `embeddingsConfigured` (embedding provider set up — required by RAG features like `ask-docs` and similar-tickets rerank). Anthropic-only deployments return `{ configured: true, embeddingsConfigured: false }` because Anthropic does not produce embeddings. Call this before invoking AI-gated skill shortcuts so you can plan around a workspace that has AI disabled.',
   inputSchema: z.object({}).shape,

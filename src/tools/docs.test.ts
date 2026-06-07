@@ -87,7 +87,7 @@ describe('orboto_create_doc_space', () => {
 
   it('resolves a projectKey to the UUID before POSTing (ORB-1042)', async () => {
     const calls = stubJSON([
-      { json: { id: PROJECT_SCOPED_SPACE.projectId, key: 'ORB', name: 'Orboto', status: 'active' } }, // by-key resolve
+      { json: { id: PROJECT_SCOPED_SPACE.projectId, key: 'ORB', name: 'orboto', status: 'active' } }, // by-key resolve
       { status: 201, json: PROJECT_SCOPED_SPACE },
     ]);
     await makeCreateDocSpaceHandler(client)({ name: 'Backend Runbooks', type: 'project', projectKey: 'ORB' });

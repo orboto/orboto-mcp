@@ -46,7 +46,7 @@ function stub(responses: Array<{ ok?: boolean; status?: number; json?: unknown }
 
 const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 
-const projectStub = { id: 'p-uuid-1234', key: 'ORB', name: 'Orboto', description: null, status: 'active' };
+const projectStub = { id: 'p-uuid-1234', key: 'ORB', name: 'orboto', description: null, status: 'active' };
 const factStub = {
   id: 'f-uuid-1111',
   projectId: 'p-uuid-1234',

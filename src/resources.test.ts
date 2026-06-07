@@ -9,7 +9,7 @@
  * the test fails loudly, but that's the point — we want to know.
  *
  * Each test exercises the URI → handler-output path with the
- * stubbed Orboto REST client.
+ * stubbed orboto REST client.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';

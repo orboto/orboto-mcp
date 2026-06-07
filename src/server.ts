@@ -2,7 +2,7 @@
  * ORB-244 Phase A/B — MCP server factory.
  *
  * Builds an `McpServer` with the registered tool set + a handle to
- * the Orboto REST client. Transport is picked by the process entry
+ * the orboto REST client. Transport is picked by the process entry
  * point (`index.ts`) based on `ORBOTO_MCP_TRANSPORT=stdio|http`.
  *
  * Keeping the server factory transport-agnostic means `server.ts` is
@@ -223,15 +223,15 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
       // MCP clients inject before the user's first message. Keep it
       // short + specific; avoid walls of text.
       instructions: [
-        'Orboto is a ticket + project management system.',
+        'orboto is a ticket + project management system.',
         'Use `orboto_list_projects` first to discover what the user can see.',
         'Ticket keys look like `PROJ-123`; the first segment is the project key.',
         'For "what am I working on?" prefer `orboto_my_tickets`; for "anything about X?" prefer `orboto_search`.',
         'Checklists: `orboto_get_ticket` includes them inline; use `orboto_get_checklists` when you only need the items. A linked-ticket suffix (`↪ [ACME-99]`) means the item is automatically checked/unchecked as that ticket\'s status moves.',
         'Sub-tickets: `orboto_get_ticket` surfaces `parentTicket` + `children`; walk an epic via `orboto_list_tickets` with `parentTicketKey`. Use sub-tickets for steps large enough to need their own commit / time tracking / review, and checklists for one-liners inside a single ticket\'s scope. Only materialise sub-tickets / checklist items when the parent is actively being worked — pure planning tickets keep their phase plan inside the description, not as empty TODO sub-tickets that clutter every team member\'s `my-tickets` list.',
         'Big features (Epic + 3 or more phase tickets, multi-week scope): create a milestone FIRST via `orboto_create_milestone`, then file the Epic via `orboto_create_ticket(type: "epic")`, then every phase ticket as a child of the Epic. Hang Epic + every child on the same milestone via `orboto_set_milestone` straight after creation. Three small fixes or a single ticket do NOT need their own milestone — those land in `Feature Backlog` / `Bugs` / a thematic existing milestone.',
-        'When you write a git commit that touches a ticket, put the ticket key (e.g. `ORB-42`) in parentheses at the END of the subject line — `feat(auth): add token rotation (ORB-42)`. This is what the Orboto git-activity parser looks for; skipping it means the commit never gets linked to the ticket.',
-        'Resources (`orboto://ticket/<key>`, `orboto://doc/<id>`, `orboto://project/<key>`, `orboto://search/<query>`) return read-only Markdown — useful when the client UI lets the user pin content rather than re-asking. The `orboto://` URI scheme stays as the canonical resource prefix even after the Orboto rebrand because clients pin URIs in their UI; renaming the scheme would invalidate every saved bookmark. Prompts (`plan-sprint`, `triage-my-tickets`, `summarize-project`, `estimate-ticket`, `find-duplicates`) are one-click guided workflows the client surfaces; each emits a goal + tool sequence the model executes.',
+        'When you write a git commit that touches a ticket, put the ticket key (e.g. `ORB-42`) in parentheses at the END of the subject line — `feat(auth): add token rotation (ORB-42)`. This is what the orboto git-activity parser looks for; skipping it means the commit never gets linked to the ticket.',
+        'Resources (`orboto://ticket/<key>`, `orboto://doc/<id>`, `orboto://project/<key>`, `orboto://search/<query>`) return read-only Markdown — useful when the client UI lets the user pin content rather than re-asking. The `orboto://` URI scheme stays as the canonical resource prefix even after the orboto rebrand because clients pin URIs in their UI; renaming the scheme would invalidate every saved bookmark. Prompts (`plan-sprint`, `triage-my-tickets`, `summarize-project`, `estimate-ticket`, `find-duplicates`) are one-click guided workflows the client surfaces; each emits a goal + tool sequence the model executes.',
         'All writes respect the caller\'s project-level permissions — a 403 means the API rejected the write, not the MCP server.',
       ].join(' '),
     },

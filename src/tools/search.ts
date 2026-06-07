@@ -40,7 +40,7 @@ interface SearchResponse {
 }
 
 export const searchToolConfig = {
-  title: 'Search across Orboto',
+  title: 'Search across orboto',
   description:
     'Full-text search across tickets, comments, and docs. Honours the caller\'s visibility — private tickets and internal comments never appear unless the caller can already see them.',
   inputSchema: z.object({

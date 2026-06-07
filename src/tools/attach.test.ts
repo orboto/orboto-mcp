@@ -119,10 +119,10 @@ describe('orboto_attach_to_ticket', () => {
     const base64 = Buffer.from('PNGBYTES').toString('base64');
     const res = await makeAttachToTicketHandler(client)({
       ticketKey: 'ACME-1', filename: 'logo.png', contentBase64: base64,
-      altText: 'Brand mark for Orboto',
+      altText: 'Brand mark for orboto',
     });
     expect(res.structuredContent).toMatchObject({
-      markdown: '![Brand mark for Orboto](/attachments/att1)',
+      markdown: '![Brand mark for orboto](/attachments/att1)',
     });
   });
 });

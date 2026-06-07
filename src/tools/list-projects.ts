@@ -1,7 +1,7 @@
 /**
  * ORB-244 Phase A reference tool — `orboto_list_projects`.
  *
- * Maps to `GET /projects` in the Orboto API, which already filters by
+ * Maps to `GET /projects` in the orboto API, which already filters by
  * the caller's visibility via the PBAC cascade. The MCP server is a
  * transport adapter — it doesn't re-implement the ACL.
  *
@@ -25,9 +25,9 @@ interface ProjectRow {
 export const listProjectsToolConfig = {
   title: 'List projects',
   description:
-    'Return every Orboto project the authenticated user can see. Useful as the first step of any workflow ("which project should I look at?").',
+    'Return every orboto project the authenticated user can see. Useful as the first step of any workflow ("which project should I look at?").',
   // Empty input schema — the tool has no required arguments; the
-  // Orboto API already scopes results by the calling user's PBAC
+  // orboto API already scopes results by the calling user's PBAC
   // cascade.
   inputSchema: z.object({}).shape,
   // Well-formed output schema so MCP clients that honour it can
