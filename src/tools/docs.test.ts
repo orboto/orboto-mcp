@@ -85,6 +85,27 @@ describe('orboto_create_doc_space', () => {
     });
   });
 
+  it('resolves a projectKey to the UUID before POSTing (ORB-1042)', async () => {
+    const calls = stubJSON([
+      { json: { id: PROJECT_SCOPED_SPACE.projectId, key: 'ORB', name: 'Orboto', status: 'active' } }, // by-key resolve
+      { status: 201, json: PROJECT_SCOPED_SPACE },
+    ]);
+    await makeCreateDocSpaceHandler(client)({ name: 'Backend Runbooks', type: 'project', projectKey: 'ORB' });
+    expect(calls[0].url).toContain('/projects/by-key/ORB');
+    expect(calls[1]).toMatchObject({
+      method: 'POST',
+      url: 'https://orboto.example.com/spaces',
+      body: { name: 'Backend Runbooks', type: 'project', projectId: PROJECT_SCOPED_SPACE.projectId },
+    });
+  });
+
+  it('errors when type=project and neither projectKey nor projectId is given', async () => {
+    stubJSON([]);
+    await expect(
+      makeCreateDocSpaceHandler(client)({ name: 'Orphan', type: 'project' }),
+    ).rejects.toThrow(/projectKey/);
+  });
+
   it('passes through 403 from the API as OrbotoApiError', async () => {
     stubJSON([{ ok: false, status: 403, json: { error: 'Only super-admins can create global spaces' } }]);
     await expect(

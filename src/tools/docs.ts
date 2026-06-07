@@ -23,6 +23,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { resolveProjectByKey } from './shared.js';
 
 interface DocSpaceRow {
   id: string;
@@ -178,11 +179,12 @@ export function makeGetDocHandler(client: OrbotoClient) {
 export const createDocSpaceToolConfig = {
   title: 'Create a doc space',
   description:
-    'Create a new wiki space. `type=global` creates a workspace-wide space (super-admin only); `type=project` requires `projectId` and creates a space scoped to that project. The slug is derived from `name` when omitted. Returns the new space row.',
+    'Create a new wiki space. `type=global` creates a workspace-wide space (super-admin only); `type=project` creates a space scoped to a project — pass `projectKey` (e.g. "ORB"); a raw `projectId` UUID is still accepted for back-compat. The slug is derived from `name` when omitted. Returns the new space row.',
   inputSchema: z.object({
     name: z.string().min(1).max(100).describe('Display name.'),
     type: z.enum(['global', 'project']).describe('Scope: workspace-wide or project-scoped.'),
-    projectId: z.string().uuid().optional().describe('Required when type=project.'),
+    projectKey: z.string().min(1).optional().describe('Project key (e.g. "ORB"). Required when type=project (or pass projectId).'),
+    projectId: z.string().uuid().optional().describe('Project UUID. Back-compat alternative to projectKey when type=project.'),
     description: z.string().nullish(),
     icon: z.string().nullish().describe('Single emoji (e.g. "📘") used in the sidebar tree.'),
     slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional().describe('URL slug. Auto-derived from name when omitted.'),
@@ -191,11 +193,22 @@ export const createDocSpaceToolConfig = {
 
 export function makeCreateDocSpaceHandler(client: OrbotoClient) {
   return async (input: {
-    name: string; type: 'global' | 'project'; projectId?: string;
+    name: string; type: 'global' | 'project'; projectKey?: string; projectId?: string;
     description?: string | null; icon?: string | null; slug?: string;
   }): Promise<CallToolResult> => {
     const body: Record<string, unknown> = { name: input.name, type: input.type };
-    if (input.projectId) body.projectId = input.projectId;
+    if (input.type === 'project') {
+      // Prefer the key (agent-facing surfaces speak keys); fall back to a raw
+      // UUID for back-compat.
+      let projectId = input.projectId;
+      if (!projectId && input.projectKey) {
+        projectId = (await resolveProjectByKey(client, input.projectKey)).id;
+      }
+      if (!projectId) throw new Error('type=project requires projectKey (or a projectId UUID).');
+      body.projectId = projectId;
+    } else if (input.projectId) {
+      body.projectId = input.projectId;
+    }
     if (input.description !== undefined) body.description = input.description;
     if (input.icon !== undefined) body.icon = input.icon;
     if (input.slug) body.slug = input.slug;

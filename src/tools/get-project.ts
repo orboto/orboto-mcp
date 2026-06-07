@@ -75,6 +75,9 @@ export function makeGetProjectHandler(client: OrbotoClient) {
       content: [{ type: 'text', text: lines.join('\n') }],
       structuredContent: {
         project: {
+          // ORB-1042 — surface the UUID for the rare APIs that still need it
+          // (most agent surfaces accept the key).
+          id: project.id,
           key: project.key,
           name: project.name,
           status: project.status,
