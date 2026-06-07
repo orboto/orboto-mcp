@@ -3,7 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
-import { makeListTicketStatusesHandler, makeListLabelsHandler } from './project-listings.js';
+import { makeListTicketStatusesHandler, makeListLabelsHandler, makeCreateLabelHandler } from './project-listings.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
 afterEach(() => { vi.restoreAllMocks(); });
@@ -91,5 +91,29 @@ describe('orboto_list_labels', () => {
     await expect(
       makeListLabelsHandler(client)({ projectKey: 'ACME' }),
     ).rejects.toBeInstanceOf(OrbotoApiError);
+  });
+});
+
+describe('orboto_create_label (ORB-1041)', () => {
+  it('creates a new label via POST when the name is free', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: [{ id: 'l1', name: 'bug', color: '#f00' }] },        // existing labels
+      { json: { id: 'l2', name: 'security', color: '#6366f1' } },  // POST result
+    ]);
+    const res = await makeCreateLabelHandler(client)({ projectKey: 'ACME', name: 'security' });
+    const post = calls.find((c) => c.method === 'POST')!;
+    expect(post.url).toContain('/projects/p1/labels');
+    expect(res.structuredContent).toMatchObject({ projectKey: 'ACME', label: { name: 'security' } });
+  });
+
+  it('is idempotent: returns the existing label without POSTing', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: [{ id: 'l1', name: 'Bug', color: '#f00' }] },
+    ]);
+    const res = await makeCreateLabelHandler(client)({ projectKey: 'ACME', name: 'bug' });
+    expect(calls.some((c) => c.method === 'POST')).toBe(false);
+    expect(res.structuredContent).toMatchObject({ alreadyExists: true, label: { name: 'Bug' } });
   });
 });

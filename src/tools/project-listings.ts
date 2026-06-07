@@ -106,3 +106,40 @@ export function makeListLabelsHandler(client: OrbotoClient) {
     };
   };
 }
+
+// ---------------------------------------------------------------------------
+// orboto_create_label — ORB-1041
+// ---------------------------------------------------------------------------
+
+export const createLabelToolConfig = {
+  title: 'Create a project label',
+  description:
+    'Create a label in a project so it can be assigned to tickets. Closes the gap where `orboto_create_ticket` errors on an unknown label name (labels are not auto-created). Idempotent: if a label with the same name already exists, it is returned instead of erroring. Needs project:edit.',
+  inputSchema: z.object({
+    projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
+    name: z.string().min(1).max(100).describe('Label name.'),
+    color: z.string().optional().describe('Hex colour like "#6366f1". Defaults to indigo.'),
+  }).shape,
+};
+
+export function makeCreateLabelHandler(client: OrbotoClient) {
+  return async ({ projectKey, name, color }: { projectKey: string; name: string; color?: string }): Promise<CallToolResult> => {
+    const project = await resolveProjectByKey(client, projectKey);
+    // Idempotent: return an existing same-name label rather than erroring.
+    const existing = await client.get<LabelRow[]>(`/projects/${project.id}/labels`);
+    const match = existing.find((l) => l.name.toLowerCase() === name.toLowerCase());
+    if (match) {
+      return {
+        content: [{ type: 'text', text: `Label "${match.name}" already exists in ${project.key}.` }],
+        structuredContent: { projectKey: project.key, label: { name: match.name, color: match.color }, alreadyExists: true },
+      };
+    }
+    const body: { name: string; color?: string } = { name };
+    if (color) body.color = color;
+    const created = await client.post<LabelRow>(`/projects/${project.id}/labels`, body);
+    return {
+      content: [{ type: 'text', text: `Created label "${created.name}" (${created.color}) in ${project.key}.` }],
+      structuredContent: { projectKey: project.key, label: { name: created.name, color: created.color } },
+    };
+  };
+}

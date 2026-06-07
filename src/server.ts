@@ -160,6 +160,7 @@ import {
 import {
   listTicketStatusesToolConfig, makeListTicketStatusesHandler,
   listLabelsToolConfig, makeListLabelsHandler,
+  createLabelToolConfig, makeCreateLabelHandler,
 } from './tools/project-listings.js';
 import {
   bulkPatchTicketsToolConfig, makeBulkPatchTicketsHandler,
@@ -395,6 +396,7 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_update_milestone', updateMilestoneToolConfig, makeUpdateMilestoneHandler(client));
   reg('orboto_list_ticket_statuses', listTicketStatusesToolConfig, makeListTicketStatusesHandler(client));
   reg('orboto_list_labels', listLabelsToolConfig, makeListLabelsHandler(client));
+  reg('orboto_create_label', createLabelToolConfig, makeCreateLabelHandler(client));
   reg('orboto_bulk_patch_tickets', bulkPatchTicketsToolConfig, makeBulkPatchTicketsHandler(client));
   reg('orboto_bulk_move_tickets', bulkMoveTicketsToolConfig, makeBulkMoveTicketsHandler(client));
   reg('orboto_bulk_close_tickets', bulkCloseTicketsToolConfig, makeBulkCloseTicketsHandler(client));
