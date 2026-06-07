@@ -17,6 +17,8 @@ export interface ProjectRow {
   status: string;
   // ORB-994 — per-project content language, null = inherit workspace.
   language?: string | null;
+  // ORB-1040 — RACI opt-in. Agents must not raise/set RACI unless true.
+  raciEnabled?: boolean;
 }
 
 export async function resolveProjectByKey(

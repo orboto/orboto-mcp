@@ -61,6 +61,8 @@ export function makeGetProjectHandler(client: OrbotoClient) {
       ...milestones.map((m) => `  - ${m.name} [${m.status}]${m.endDate ? ` due ${m.endDate}` : ''}`),
       '',
       `Labels: ${labels.map((l) => l.name).join(', ') || '(none)'}`,
+      // ORB-1040 — only mention RACI when the project opted in.
+      project.raciEnabled ? 'RACI: enabled' : null,
       '',
       `Members (${members.length}):`,
       ...members.map((m) => {
@@ -77,6 +79,9 @@ export function makeGetProjectHandler(client: OrbotoClient) {
           name: project.name,
           status: project.status,
           description: project.description,
+          // ORB-1040 — RACI is opt-in; agents must not raise/set RACI here
+          // unless this is true.
+          raciEnabled: project.raciEnabled ?? false,
         },
         milestones,
         labels,
