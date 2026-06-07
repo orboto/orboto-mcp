@@ -224,6 +224,11 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
       // short + specific; avoid walls of text.
       instructions: [
         'orboto is a ticket + project management system.',
+        // ORB-1046 — front-load the workflow discipline. MCP clients don't read
+        // the repo's CLAUDE.md and often skip the primer, so this injected
+        // block is the one place every session reliably sees the rules.
+        'Workflow is STRICT: claim -> commit -> close, one ticket = one commit, every time (not only when reminded). Before touching code, claim an existing ticket or create one (`orboto_claim` / `orboto_create_ticket`) — never do silent, unticketed work. When the task is done make exactly ONE commit (with the ticket key in the subject, see below), push it, then move the ticket to in_review/done with a one-line summary (`orboto_move_ticket` + `orboto_comment`). Do not leave finished work uncommitted.',
+        'When starting on a project, call `orboto_get_project_primer(<PROJECT_KEY>)` once to load its conventions (tech stack, commands, gotchas, expected ticket language).',
         'Use `orboto_list_projects` first to discover what the user can see.',
         'Ticket keys look like `PROJ-123`; the first segment is the project key.',
         'For "what am I working on?" prefer `orboto_my_tickets`; for "anything about X?" prefer `orboto_search`.',
