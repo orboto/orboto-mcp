@@ -116,6 +116,8 @@ import {
   commentToolConfig, makeCommentHandler,
   assignToolConfig, makeAssignHandler,
   unassignToolConfig, makeUnassignHandler,
+  labelTicketToolConfig, makeLabelTicketHandler,
+  unlabelTicketToolConfig, makeUnlabelTicketHandler,
   setMilestoneToolConfig, makeSetMilestoneHandler,
   addTicketDependencyToolConfig, makeAddTicketDependencyHandler,
   removeTicketDependencyToolConfig, makeRemoveTicketDependencyHandler,
@@ -337,6 +339,8 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   reg('orboto_comment', commentToolConfig, makeCommentHandler(client));
   reg('orboto_assign', assignToolConfig, makeAssignHandler(client));
   reg('orboto_unassign', unassignToolConfig, makeUnassignHandler(client));
+  reg('orboto_label_ticket', labelTicketToolConfig, makeLabelTicketHandler(client));
+  reg('orboto_unlabel_ticket', unlabelTicketToolConfig, makeUnlabelTicketHandler(client));
   reg('orboto_set_milestone', setMilestoneToolConfig, makeSetMilestoneHandler(client));
 
   // ORB-1037 — RACI agent surfaces: read the matrix + set a person's role.

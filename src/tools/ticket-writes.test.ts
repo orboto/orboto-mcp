@@ -15,6 +15,7 @@ import {
   makeUnassignHandler, makeSetMilestoneHandler,
   makeAddTicketDependencyHandler, makeRemoveTicketDependencyHandler,
   makeListTicketDependenciesHandler,
+  makeLabelTicketHandler, makeUnlabelTicketHandler,
 } from './ticket-writes.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -452,5 +453,40 @@ describe('orboto_add_ticket_dependency / remove / list — ORB-453', () => {
     expect(text).toContain('[ACME-2] Other');
     expect(text).toContain('Blocks');
     expect(text).toContain('_(none)_');
+  });
+});
+
+describe('orboto_label_ticket / orboto_unlabel_ticket (ORB-1043)', () => {
+  const LABELS = [{ id: 'lb1', name: 'bug' }, { id: 'lb2', name: 'Security' }];
+
+  it('label resolves the name and POSTs to /tickets/:id/labels/:labelId', async () => {
+    const calls = stub([
+      { json: PROJ },                 // resolveTicketByKey: project
+      { json: TICKET },               // resolveTicketByKey: ticket
+      { json: LABELS },               // GET labels
+      { status: 204 },                // POST attach
+    ]);
+    await makeLabelTicketHandler(client)({ ticketKey: 'ACME-1', label: 'security' });
+    const post = calls.find((c) => c.method === 'POST')!;
+    expect(post.url).toContain(`/projects/tickets/${TICKET.id}/labels/lb2`);
+  });
+
+  it('unlabel DELETEs the resolved label', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: LABELS },
+      { status: 204 },
+    ]);
+    await makeUnlabelTicketHandler(client)({ ticketKey: 'ACME-1', label: 'bug' });
+    const del = calls.find((c) => c.method === 'DELETE')!;
+    expect(del.url).toContain(`/projects/tickets/${TICKET.id}/labels/lb1`);
+  });
+
+  it('errors on an unknown label name, pointing to create_label', async () => {
+    stub([{ json: PROJ }, { json: TICKET }, { json: LABELS }]);
+    await expect(
+      makeLabelTicketHandler(client)({ ticketKey: 'ACME-1', label: 'nope' }),
+    ).rejects.toThrow(/orboto_create_label/);
   });
 });

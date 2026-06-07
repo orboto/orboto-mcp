@@ -547,6 +547,62 @@ export function makeUnassignHandler(client: OrbotoClient) {
 }
 
 // ---------------------------------------------------------------------------
+// orboto_label_ticket / orboto_unlabel_ticket — ORB-1043
+// ---------------------------------------------------------------------------
+
+async function resolveLabelId(client: OrbotoClient, projectId: string, name: string): Promise<string> {
+  const labels = await client.get<Array<{ id: string; name: string }>>(`/projects/${projectId}/labels`);
+  const match = labels.find((l) => l.name.toLowerCase() === name.toLowerCase());
+  if (!match) {
+    throw new Error(`No label named "${name}" in this project. Create it first with orboto_create_label.`);
+  }
+  return match.id;
+}
+
+export const labelTicketToolConfig = {
+  title: 'Add a label to a ticket',
+  description:
+    'Attach an existing label (by name) to an existing ticket (by key). The label must already exist — create it with orboto_create_label first. Idempotent: a label already on the ticket is a no-op. Needs ticket:edit.',
+  inputSchema: z.object({
+    ticketKey: z.string().min(3),
+    label: z.string().min(1).describe('Label name (must exist on the project).'),
+  }).shape,
+};
+
+export function makeLabelTicketHandler(client: OrbotoClient) {
+  return async ({ ticketKey, label }: { ticketKey: string; label: string }): Promise<CallToolResult> => {
+    const ticket = await resolveTicketByKey(client, ticketKey);
+    const labelId = await resolveLabelId(client, ticket.projectId, label);
+    await client.post(`/projects/tickets/${ticket.id}/labels/${labelId}`, {});
+    return {
+      content: [{ type: 'text', text: `Added label "${label}" to [${ticket.ticketKey}].` }],
+      structuredContent: { ticketKey: ticket.ticketKey, label },
+    };
+  };
+}
+
+export const unlabelTicketToolConfig = {
+  title: 'Remove a label from a ticket',
+  description: 'Detach a label (by name) from a ticket (by key). Idempotent: a label not on the ticket is a no-op. Needs ticket:edit.',
+  inputSchema: z.object({
+    ticketKey: z.string().min(3),
+    label: z.string().min(1).describe('Label name.'),
+  }).shape,
+};
+
+export function makeUnlabelTicketHandler(client: OrbotoClient) {
+  return async ({ ticketKey, label }: { ticketKey: string; label: string }): Promise<CallToolResult> => {
+    const ticket = await resolveTicketByKey(client, ticketKey);
+    const labelId = await resolveLabelId(client, ticket.projectId, label);
+    await client.delete(`/projects/tickets/${ticket.id}/labels/${labelId}`);
+    return {
+      content: [{ type: 'text', text: `Removed label "${label}" from [${ticket.ticketKey}].` }],
+      structuredContent: { ticketKey: ticket.ticketKey, label, removed: true },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
 // orboto_set_milestone
 // ---------------------------------------------------------------------------
 
