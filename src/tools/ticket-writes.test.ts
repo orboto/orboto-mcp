@@ -389,6 +389,35 @@ describe('orboto_set_milestone', () => {
     await makeSetMilestoneHandler(client)({ ticketKey: 'ACME-1', milestone: null });
     expect(calls[2].body).toEqual({ milestoneId: null });
   });
+
+  it('resolves a milestone passed as a UUID + sends that id (ORB-1058)', async () => {
+    const MS_UUID = '11111111-1111-1111-1111-111111111111';
+    const calls = stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: [{ id: MS_UUID, name: 'v1' }] },
+      { json: { ...TICKET, milestoneId: MS_UUID } },
+    ]);
+    await makeSetMilestoneHandler(client)({ ticketKey: 'ACME-1', milestone: MS_UUID });
+    expect(calls[3].body).toEqual({ milestoneId: MS_UUID });
+  });
+
+  it('rejects an ambiguous milestone name listing every candidate UUID (ORB-1058)', async () => {
+    stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: [{ id: 'm1', name: 'dup' }, { id: 'm2', name: 'dup' }] },
+    ]);
+    let err: Error | undefined;
+    try {
+      await makeSetMilestoneHandler(client)({ ticketKey: 'ACME-1', milestone: 'dup' });
+    } catch (e) {
+      err = e as Error;
+    }
+    expect(err?.message).toMatch(/ambiguous/i);
+    expect(err?.message).toContain('m1');
+    expect(err?.message).toContain('m2');
+  });
 });
 
 describe('orboto_add_ticket_dependency / remove / list — ORB-453', () => {

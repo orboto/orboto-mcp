@@ -212,10 +212,15 @@ export function makeCreateMilestoneHandler(client: OrbotoClient) {
 // orboto_close_milestone — ORB-799
 // ---------------------------------------------------------------------------
 
-/** Resolve a milestone by name or UUID against the includeClosed list,
- *  so closing an already-completed milestone (re-close) or archiving a
- *  completed milestone both work without the caller pre-fetching. */
-async function resolveMilestoneByNameOrId(
+/** Resolve a milestone by name OR UUID against the includeClosed list,
+ *  so closing an already-completed milestone (re-close), archiving a
+ *  completed milestone, and re-pointing a ticket onto any milestone all
+ *  work without the caller pre-fetching. UUID is the unambiguous handle:
+ *  a name that matches more than one milestone throws (listing the
+ *  candidate UUIDs) rather than silently returning the first match
+ *  (ORB-1058). Milestones have no public key column today, only
+ *  UUID + name — see CLAUDE.md. */
+export async function resolveMilestoneByNameOrId(
   client: OrbotoClient,
   projectId: string,
   nameOrId: string,
@@ -223,13 +228,24 @@ async function resolveMilestoneByNameOrId(
   const all = await client.get<MilestoneRow[]>(
     `/projects/${projectId}/milestones?includeClosed=true`,
   );
-  const m = UUID_RE.test(nameOrId)
-    ? all.find((x) => x.id === nameOrId)
-    : all.find((x) => x.name === nameOrId);
-  if (!m) {
+  if (UUID_RE.test(nameOrId)) {
+    const byId = all.find((x) => x.id === nameOrId);
+    if (!byId) {
+      throw new Error(`No milestone with id "${nameOrId}" in the project (including closed/archived).`);
+    }
+    return byId;
+  }
+  const matches = all.filter((x) => x.name === nameOrId);
+  if (matches.length === 0) {
     throw new Error(`Milestone "${nameOrId}" not found in the project (including closed/archived).`);
   }
-  return m;
+  if (matches.length > 1) {
+    const list = matches.map((m) => `"${m.name}" (${m.id})`).join(', ');
+    throw new Error(
+      `Milestone name "${nameOrId}" is ambiguous — ${matches.length} milestones match: ${list}. Pass the milestone's UUID instead.`,
+    );
+  }
+  return matches[0];
 }
 
 export const closeMilestoneToolConfig = {

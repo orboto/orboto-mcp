@@ -30,6 +30,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey, resolveTicketByKey, type TicketRow } from './shared.js';
+import { resolveMilestoneByNameOrId } from './milestones.js';
 
 // ---------------------------------------------------------------------------
 // Local helpers
@@ -52,7 +53,6 @@ interface MemberRow {
   role: { name: string };
 }
 
-interface MilestoneRow { id: string; name: string }
 interface LabelRow { id: string; name: string }
 
 async function resolveAssigneeId(
@@ -66,15 +66,15 @@ async function resolveAssigneeId(
   return m.userId;
 }
 
+/** Resolve a milestone reference (name OR UUID) to its id. Delegates to
+ *  the shared resolver so UUID lookups + ambiguous-name rejection behave
+ *  identically here and on the milestone CRUD tools (ORB-1058). */
 async function resolveMilestoneId(
   client: OrbotoClient,
   projectId: string,
-  milestoneName: string,
+  milestoneNameOrId: string,
 ): Promise<string> {
-  const milestones = await client.get<MilestoneRow[]>(`/projects/${projectId}/milestones`);
-  const m = milestones.find((x) => x.name === milestoneName);
-  if (!m) throw new Error(`Milestone "${milestoneName}" not found in project.`);
-  return m.id;
+  return (await resolveMilestoneByNameOrId(client, projectId, milestoneNameOrId)).id;
 }
 
 async function resolveLabelIds(
@@ -126,7 +126,7 @@ export const createTicketToolConfig = {
     description: z.string().optional(),
     type: z.enum(['task', 'bug', 'story', 'epic']).optional().describe('Default: task.'),
     priority: z.enum(['blocker', 'high', 'normal', 'low', 'trivial']).optional().describe('Default: normal.'),
-    milestone: z.string().optional().describe('Milestone name. Looked up in the project; unknown = error.'),
+    milestone: z.string().optional().describe('Milestone name or UUID. Looked up in the project (incl. closed); unknown = error, ambiguous name = error (pass the UUID).'),
     assigneeEmails: z.array(z.string().email()).optional().describe('Project-member emails to assign on creation.'),
     labels: z.array(z.string()).optional().describe('Label names — must already exist on the project.'),
     parentTicketKey: z.string().optional().describe('Parent ticket key (e.g. "ACME-10") — makes this a sub-ticket.'),
@@ -609,10 +609,10 @@ export function makeUnlabelTicketHandler(client: OrbotoClient) {
 export const setMilestoneToolConfig = {
   title: 'Set a ticket\'s milestone',
   description:
-    'Move a ticket onto a different milestone (or off all milestones with milestone=null/undefined). Resolves the milestone by name within the ticket\'s project.',
+    'Move a ticket onto a different milestone (or off all milestones with milestone=null/undefined). Resolves the milestone by name OR UUID within the ticket\'s project (including closed/archived). If two milestones share a name, pass the UUID — an ambiguous name is rejected, not silently guessed.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    milestone: z.string().nullable().optional().describe('Milestone name. Pass null to remove from any milestone.'),
+    milestone: z.string().nullable().optional().describe('Milestone name or UUID. Pass the UUID when the name is ambiguous. Pass null to remove from any milestone.'),
   }).shape,
 };
 
