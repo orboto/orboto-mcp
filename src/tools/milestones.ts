@@ -31,12 +31,16 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 interface MilestoneRow {
   id: string;
   projectId: string;
+  milestoneKey?: string | null;
   name: string;
   status: string;
   startDate: string | null;
   endDate: string | null;
   isPrivate: boolean;
 }
+
+/** ORB-1059 - a milestone key looks like `ORB-M3`. */
+const MILESTONE_KEY_RE = /^[A-Za-z0-9]+-M\d+$/i;
 
 /** `/progress` response — one row per status, plus total count.
  *  Keys in `byStatus` are the legacy status enum (TODO / IN_PROGRESS
@@ -234,6 +238,14 @@ export async function resolveMilestoneByNameOrId(
       throw new Error(`No milestone with id "${nameOrId}" in the project (including closed/archived).`);
     }
     return byId;
+  }
+  // ORB-1059 - accept the human-readable key (`ORB-M3`), case-insensitive.
+  if (MILESTONE_KEY_RE.test(nameOrId)) {
+    const byKey = all.find((x) => x.milestoneKey?.toLowerCase() === nameOrId.toLowerCase());
+    if (!byKey) {
+      throw new Error(`No milestone with key "${nameOrId}" in the project (including closed/archived).`);
+    }
+    return byKey;
   }
   const matches = all.filter((x) => x.name === nameOrId);
   if (matches.length === 0) {

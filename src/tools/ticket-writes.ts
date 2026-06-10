@@ -126,7 +126,7 @@ export const createTicketToolConfig = {
     description: z.string().optional(),
     type: z.enum(['task', 'bug', 'story', 'epic']).optional().describe('Default: task.'),
     priority: z.enum(['blocker', 'high', 'normal', 'low', 'trivial']).optional().describe('Default: normal.'),
-    milestone: z.string().optional().describe('Milestone name or UUID. Looked up in the project (incl. closed); unknown = error, ambiguous name = error (pass the UUID).'),
+    milestone: z.string().optional().describe('Milestone key (e.g. "ORB-M3"), name, or UUID. Looked up in the project (incl. closed); unknown = error, ambiguous name = error (pass the key/UUID).'),
     assigneeEmails: z.array(z.string().email()).optional().describe('Project-member emails to assign on creation.'),
     labels: z.array(z.string()).optional().describe('Label names — must already exist on the project.'),
     parentTicketKey: z.string().optional().describe('Parent ticket key (e.g. "ACME-10") — makes this a sub-ticket.'),
@@ -609,10 +609,10 @@ export function makeUnlabelTicketHandler(client: OrbotoClient) {
 export const setMilestoneToolConfig = {
   title: 'Set a ticket\'s milestone',
   description:
-    'Move a ticket onto a different milestone (or off all milestones with milestone=null/undefined). Resolves the milestone by name OR UUID within the ticket\'s project (including closed/archived). If two milestones share a name, pass the UUID — an ambiguous name is rejected, not silently guessed.',
+    'Move a ticket onto a different milestone (or off all milestones with milestone=null/undefined). Resolves the milestone by key (e.g. "ORB-M3"), name, OR UUID within the ticket\'s project (including closed/archived). If two milestones share a name, pass the key or UUID - an ambiguous name is rejected, not silently guessed.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    milestone: z.string().nullable().optional().describe('Milestone name or UUID. Pass the UUID when the name is ambiguous. Pass null to remove from any milestone.'),
+    milestone: z.string().nullable().optional().describe('Milestone key (e.g. "ORB-M3"), name, or UUID. Pass the key/UUID when the name is ambiguous. Pass null to remove from any milestone.'),
   }).shape,
 };
 
