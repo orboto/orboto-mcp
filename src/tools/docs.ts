@@ -36,6 +36,8 @@ interface DocSpaceRow {
   type: string; // 'global' | 'project' per DocSpaceTypeEnum
   projectId: string | null;
   isPublic: boolean;
+  visibility?: string | null;
+  guestsVisible?: boolean | null;
 }
 interface DocRow {
   id: string;
@@ -222,6 +224,8 @@ export function makeCreateDocSpaceHandler(client: OrbotoClient) {
         type: row.type,
         projectId: row.projectId,
         isPublic: row.isPublic,
+        visibility: row.visibility ?? null,
+        guestsVisible: row.guestsVisible ?? null,
       },
     };
   };
@@ -234,13 +238,16 @@ export function makeCreateDocSpaceHandler(client: OrbotoClient) {
 export const updateDocSpaceToolConfig = {
   title: 'Update a doc space',
   description:
-    'Patch a space\'s name / description / icon / isPublic / slug. `type` and `projectId` are immutable. Auto-generated project primer spaces (`isSystemGenerated: true`) refuse `name` / `slug` edits — only description / icon / isPublic stay editable on those.',
+    'Patch a space\'s name / description / icon / slug, and (ORB-1080) its visibility settings: `visibility` (workspace = every internal member, restricted = explicit allowlist via memberIds), `guestsVisible` (external users see the space only when true). Visibility fields require space-management rights (global spaces: super-admin; project spaces: project:edit) - plain membership gets a 403 for those. `isPublic` is deprecated (replaced by guestsVisible). `type` and `projectId` are immutable; auto-generated primer spaces refuse name/slug edits.',
   inputSchema: z.object({
     spaceId: z.string().uuid().describe('Space UUID (find via orboto_list_doc_spaces).'),
     name: z.string().min(1).max(100).optional(),
     description: z.string().nullish(),
     icon: z.string().nullish(),
-    isPublic: z.boolean().optional(),
+    isPublic: z.boolean().optional().describe('DEPRECATED - use guestsVisible.'),
+    visibility: z.enum(['workspace', 'restricted']).optional().describe('Space-level read gate. Requires manage rights.'),
+    guestsVisible: z.boolean().optional().describe('Explicit guest (external user) opt-in. Requires manage rights.'),
+    memberIds: z.array(z.string().uuid()).optional().describe('Replaces the restricted-space allowlist. Requires manage rights.'),
     slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional(),
   }).shape,
 };
@@ -249,6 +256,7 @@ export function makeUpdateDocSpaceHandler(client: OrbotoClient) {
   return async (input: {
     spaceId: string; name?: string; description?: string | null;
     icon?: string | null; isPublic?: boolean; slug?: string;
+    visibility?: 'workspace' | 'restricted'; guestsVisible?: boolean; memberIds?: string[];
   }): Promise<CallToolResult> => {
     const body: Record<string, unknown> = {};
     if (input.name !== undefined) body.name = input.name;
@@ -256,6 +264,10 @@ export function makeUpdateDocSpaceHandler(client: OrbotoClient) {
     if (input.icon !== undefined) body.icon = input.icon;
     if (input.isPublic !== undefined) body.isPublic = input.isPublic;
     if (input.slug !== undefined) body.slug = input.slug;
+    // ORB-1080 — visibility settings (manage-gated server-side).
+    if (input.visibility !== undefined) body.visibility = input.visibility;
+    if (input.guestsVisible !== undefined) body.guestsVisible = input.guestsVisible;
+    if (input.memberIds !== undefined) body.memberIds = input.memberIds;
     if (Object.keys(body).length === 0) {
       throw new Error('Pass at least one field to update.');
     }
@@ -269,6 +281,8 @@ export function makeUpdateDocSpaceHandler(client: OrbotoClient) {
         type: row.type,
         projectId: row.projectId,
         isPublic: row.isPublic,
+        visibility: row.visibility ?? null,
+        guestsVisible: row.guestsVisible ?? null,
       },
     };
   };
