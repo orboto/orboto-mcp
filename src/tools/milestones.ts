@@ -71,13 +71,15 @@ export function makeListMilestonesHandler(client: OrbotoClient) {
       ? `No milestones in project ${project.key}.`
       : milestones.map((m) => {
         const range = [m.startDate, m.endDate].filter(Boolean).join(' → ') || 'no dates';
-        return `- ${m.name} [${m.status}] (${range})`;
+        const key = m.milestoneKey ? `${m.milestoneKey} · ` : '';
+        return `- ${key}${m.name} [${m.status}] (${range})`;
       }).join('\n');
     return {
       content: [{ type: 'text', text }],
       structuredContent: {
         project: { key: project.key },
         milestones: milestones.map((m) => ({
+          milestoneKey: m.milestoneKey ?? null,
           name: m.name,
           status: m.status,
           startDate: m.startDate,
@@ -99,19 +101,19 @@ export const getMilestoneToolConfig = {
     'Return milestone metadata plus ticket-count breakdown by status (to do / in progress / done / …).',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
-    milestone: z.string().min(1).describe('Milestone name (case-sensitive).'),
+    milestone: z.string().min(1).describe('Milestone key (e.g. "ORB-M3"), name (case-sensitive), or UUID.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeGetMilestoneHandler(client: OrbotoClient) {
-  return async ({ projectKey, milestone: milestoneName }: {
+  return async ({ projectKey, milestone }: {
     projectKey: string; milestone: string;
   }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, projectKey);
-    const milestones = await client.get<MilestoneRow[]>(`/projects/${project.id}/milestones`);
-    const m = milestones.find((x) => x.name === milestoneName);
-    if (!m) throw new Error(`Milestone "${milestoneName}" not found in project ${project.key}.`);
+    // ORB-1068 - resolve key / name / UUID through the shared resolver
+    // instead of an exact-name find, so `ORB-M19` works here too.
+    const m = await resolveMilestoneByNameOrId(client, project.id, milestone);
 
     // Progress comes from a separate endpoint; tolerate 404 gracefully
     // in case a future API rename drops it so the tool still returns
@@ -124,7 +126,7 @@ export function makeGetMilestoneHandler(client: OrbotoClient) {
     });
 
     const lines = [
-      `${m.name} [${m.status}]`,
+      `${m.milestoneKey ? `${m.milestoneKey} · ` : ''}${m.name} [${m.status}]`,
       `Dates: ${m.startDate ?? '(no start)'} → ${m.endDate ?? '(no end)'}`,
       m.isPrivate ? 'Private: yes' : null,
     ].filter((l): l is string => l !== null);
@@ -147,6 +149,8 @@ export function makeGetMilestoneHandler(client: OrbotoClient) {
       content: [{ type: 'text', text: lines.join('\n') }],
       structuredContent: {
         milestone: {
+          id: m.id,
+          milestoneKey: m.milestoneKey ?? null,
           name: m.name,
           status: m.status,
           startDate: m.startDate,
@@ -222,8 +226,8 @@ export function makeCreateMilestoneHandler(client: OrbotoClient) {
  *  work without the caller pre-fetching. UUID is the unambiguous handle:
  *  a name that matches more than one milestone throws (listing the
  *  candidate UUIDs) rather than silently returning the first match
- *  (ORB-1058). Milestones have no public key column today, only
- *  UUID + name — see CLAUDE.md. */
+ *  (ORB-1058). Accepts the human-readable milestone key (`ORB-M3`,
+ *  ORB-1059) as well as name and UUID. */
 export async function resolveMilestoneByNameOrId(
   client: OrbotoClient,
   projectId: string,

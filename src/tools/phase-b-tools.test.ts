@@ -276,20 +276,22 @@ describe('orboto_my_tickets', () => {
 });
 
 describe('milestone tools', () => {
-  it('list: returns structured milestones array', async () => {
+  it('list: returns structured milestones array incl. milestoneKey (ORB-1068)', async () => {
     stub([
       { json: PROJ },
-      { json: [{ id: 'm1', projectId: 'p1', name: 'v1', status: 'active', startDate: null, endDate: null, isPrivate: false }] },
+      { json: [{ id: 'm1', projectId: 'p1', milestoneKey: 'ACME-M1', name: 'v1', status: 'active', startDate: null, endDate: null, isPrivate: false }] },
     ]);
     const res = await makeListMilestonesHandler(client)({ projectKey: 'ACME' });
-    const sc = res.structuredContent as { milestones: Array<{ name: string }> };
+    const sc = res.structuredContent as { milestones: Array<{ name: string; milestoneKey: string | null }> };
     expect(sc.milestones[0].name).toBe('v1');
+    expect(sc.milestones[0].milestoneKey).toBe('ACME-M1');
+    expect((res.content[0] as { text: string }).text).toContain('ACME-M1 · v1');
   });
 
   it('get: maps byStatus into percent + per-category counts', async () => {
     const calls = stub([
       { json: PROJ },
-      { json: [{ id: 'm1', projectId: 'p1', name: 'v1', status: 'active', startDate: null, endDate: null, isPrivate: false }] },
+      { json: [{ id: 'm1', projectId: 'p1', milestoneKey: 'ACME-M1', name: 'v1', status: 'active', startDate: null, endDate: null, isPrivate: false }] },
       { json: { total: 10, byStatus: { DONE: 5, IN_PROGRESS: 3, TODO: 2 } } },
     ]);
     const res = await makeGetMilestoneHandler(client)({ projectKey: 'ACME', milestone: 'v1' });
@@ -297,6 +299,22 @@ describe('milestone tools', () => {
     const text = (res.content[0] as { text: string }).text;
     expect(text).toContain('50% done (5/10)');
     expect(text).toContain('to do: 2 · in progress: 3');
+    const sc = res.structuredContent as { milestone: { id: string; milestoneKey: string | null } };
+    expect(sc.milestone.id).toBe('m1');
+    expect(sc.milestone.milestoneKey).toBe('ACME-M1');
+  });
+
+  it('get: resolves the milestone by its key, case-insensitive (ORB-1068)', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: [{ id: 'm1', projectId: 'p1', milestoneKey: 'ACME-M19', name: 'Phase 35', status: 'active', startDate: null, endDate: null, isPrivate: false }] },
+      { json: { total: 12, byStatus: { TODO: 12 } } },
+    ]);
+    const res = await makeGetMilestoneHandler(client)({ projectKey: 'ACME', milestone: 'acme-m19' });
+    // The resolver spans closed milestones too.
+    expect(calls[1]).toContain('includeClosed=true');
+    const sc = res.structuredContent as { milestone: { name: string } };
+    expect(sc.milestone.name).toBe('Phase 35');
   });
 });
 

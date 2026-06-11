@@ -17,6 +17,7 @@ import { resolveProjectByKey } from './shared.js';
 
 interface MilestoneRow {
   id: string;
+  milestoneKey?: string | null;
   name: string;
   status: string;
   startDate: string | null;
@@ -58,7 +59,7 @@ export function makeGetProjectHandler(client: OrbotoClient) {
       project.description ? `Description: ${project.description}` : null,
       '',
       `Milestones (${milestones.length}):`,
-      ...milestones.map((m) => `  - ${m.name} [${m.status}]${m.endDate ? ` due ${m.endDate}` : ''}`),
+      ...milestones.map((m) => `  - ${m.milestoneKey ? `${m.milestoneKey} · ` : ''}${m.name} [${m.status}]${m.endDate ? ` due ${m.endDate}` : ''}`),
       '',
       `Labels: ${labels.map((l) => l.name).join(', ') || '(none)'}`,
       // ORB-1040 — only mention RACI when the project opted in.
