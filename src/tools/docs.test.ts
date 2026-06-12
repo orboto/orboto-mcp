@@ -268,6 +268,22 @@ describe('orboto_create_doc', () => {
 });
 
 describe('orboto_update_doc', () => {
+  // ORB-1084 — write tools accept the human-readable doc key: the key
+  // resolves via /docs/by-key, then the PATCH targets the UUID.
+  it('resolves a doc key to the UUID before writing', async () => {
+    const calls = stubJSON([
+      { json: DOC },                                  // by-key resolve
+      { json: { ...DOC, content: 'appended' } },      // the PATCH
+    ]);
+    await makeUpdateDocHandler(client)({ docId: 'DOC-4', content: 'appended' });
+    expect(calls[0]).toMatchObject({ method: 'GET', url: 'https://orboto.example.com/docs/by-key/DOC-4' });
+    expect(calls[1]).toMatchObject({
+      method: 'PATCH',
+      url: `https://orboto.example.com/docs/${DOC.id}`,
+      body: { content: 'appended' },
+    });
+  });
+
   it('PATCHes only the content field when only content was supplied', async () => {
     const calls = stubJSON([{ json: { ...DOC, content: 'new body' } }]);
     await makeUpdateDocHandler(client)({ docId: DOC.id, content: 'new body' });

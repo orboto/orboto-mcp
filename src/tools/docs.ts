@@ -111,6 +111,15 @@ export function makeListDocSpacesHandler(client: OrbotoClient) {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// ORB-1084 — every docId-taking tool accepts the human-readable doc
+// key (ORB-D12 / DOC-5) as well; writes were UUID-only while no tool
+// exposed the full UUID, so agents could read but never write.
+export async function resolveDocId(client: OrbotoClient, docIdOrKey: string): Promise<string> {
+  if (UUID_RE.test(docIdOrKey)) return docIdOrKey;
+  const doc = await client.get<{ id: string }>(`/docs/by-key/${encodeURIComponent(docIdOrKey)}`);
+  return doc.id;
+}
+
 export const getDocToolConfig = {
   title: 'Get a doc by id or key',
   description:
@@ -132,7 +141,7 @@ export function makeGetDocHandler(client: OrbotoClient) {
 
     const lines = [
       `# ${doc.icon ? `${doc.icon} ` : ''}${doc.title}`,
-      `${doc.docKey ? `Key: ${doc.docKey}  ·  ` : ''}Visibility: ${doc.visibility}  ·  Updated: ${doc.updatedAt}`,
+      `${doc.docKey ? `Key: ${doc.docKey}  ·  ` : ''}ID: ${doc.id}  ·  Visibility: ${doc.visibility}  ·  Updated: ${doc.updatedAt}`,
       '',
       doc.content || '_(empty)_',
     ];
@@ -433,7 +442,7 @@ export const updateDocToolConfig = {
   description:
     'Patch a doc\'s title / content / visibility / parent / icon. Content-only updates do not require sending the title. Every body or title change snapshots the previous version into the revision history automatically — agents can roll back via orboto_restore_doc_revision (when that tool ships in Phase 5). Re-embeds the doc when content or title change.',
   inputSchema: z.object({
-    docId: z.string().uuid(),
+    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     title: z.string().min(1).max(255).optional(),
     content: z.string().optional().describe('Markdown body. Send the full new content; the API replaces, not appends.'),
     parentDocId: z.string().uuid().nullable().optional(),
@@ -448,6 +457,7 @@ export function makeUpdateDocHandler(client: OrbotoClient) {
     parentDocId?: string | null; visibility?: 'public' | 'workspace' | 'members' | 'specific';
     icon?: string | null;
   }): Promise<CallToolResult> => {
+    input.docId = await resolveDocId(client, input.docId);
     const body: Record<string, unknown> = {};
     if (input.title !== undefined) body.title = input.title;
     if (input.content !== undefined) body.content = input.content;
@@ -481,13 +491,14 @@ export const deleteDocToolConfig = {
   description:
     'DESTRUCTIVE — removes the page from the tree. Revisions are NOT auto-cascaded; the API keeps them so an admin could in principle resurrect from history, but the page itself is gone from listings. System-generated primer docs refuse deletion (the regenerator re-creates them). Returns success silently; 404 is also silent (idempotent).',
   inputSchema: z.object({
-    docId: z.string().uuid(),
+    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
   }).shape,
   annotations: { destructiveHint: true },
 };
 
 export function makeDeleteDocHandler(client: OrbotoClient) {
   return async ({ docId }: { docId: string }): Promise<CallToolResult> => {
+    docId = await resolveDocId(client, docId);
     await client.delete(`/docs/${docId}`);
     return {
       content: [{ type: 'text', text: `Doc ${docId} deleted.` }],
@@ -505,7 +516,7 @@ export const moveDocToolConfig = {
   description:
     'Reparent a doc, change its sort order, or move it into a different space. All three target fields are optional but at least one must be supplied. Distinct from orboto_update_doc\'s parentDocId because the API endpoint emits a different WS event for the tree-rebuild path connected clients care about.',
   inputSchema: z.object({
-    docId: z.string().uuid(),
+    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     parentDocId: z.string().uuid().nullable().optional().describe('null = top-level; UUID = nest under that doc.'),
     spaceId: z.string().uuid().optional().describe('Move into a different space. Caller must be member of both.'),
     sortOrder: z.number().int().optional(),
@@ -516,6 +527,7 @@ export function makeMoveDocHandler(client: OrbotoClient) {
   return async (input: {
     docId: string; parentDocId?: string | null; spaceId?: string; sortOrder?: number;
   }): Promise<CallToolResult> => {
+    input.docId = await resolveDocId(client, input.docId);
     const body: Record<string, unknown> = {};
     if (input.parentDocId !== undefined) body.parentDocId = input.parentDocId;
     if (input.spaceId !== undefined) body.spaceId = input.spaceId;

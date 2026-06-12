@@ -18,6 +18,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { resolveDocId } from './docs.js';
 
 interface DocCommentRow {
   id: string;
@@ -48,7 +49,7 @@ export const listDocCommentsToolConfig = {
   description:
     'Return comments on a doc page, oldest-first so the reply tree reads top-to-bottom. Each row carries the author name + content + resolved state. Cursor-paged — pass `cursor` from the previous call\'s nextCursor to walk older pages.',
   inputSchema: z.object({
-    docId: z.string().uuid(),
+    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     limit: z.number().int().min(1).max(100).optional(),
     cursor: z.string().optional(),
   }).shape,
@@ -59,6 +60,7 @@ export function makeListDocCommentsHandler(client: OrbotoClient) {
   return async ({ docId, limit, cursor }: {
     docId: string; limit?: number; cursor?: string;
   }): Promise<CallToolResult> => {
+    docId = await resolveDocId(client, docId);
     const qs = new URLSearchParams();
     if (limit !== undefined) qs.set('limit', String(limit));
     if (cursor) qs.set('cursor', cursor);
@@ -140,7 +142,7 @@ export const postDocCommentToolConfig = {
   description:
     'Add a comment to a doc page. Pass `parentCommentId` to reply (the API flattens reply chains past one level so a reply-of-reply lands as a sibling of the original reply). Optional `anchor` (`{text, before, after}`) attaches the comment to a specific highlight in the body — the frontend uses the surrounding context to re-locate the anchor even after the doc has been edited. Mentions in the content body (`@username`) fire notifications automatically.',
   inputSchema: z.object({
-    docId: z.string().uuid(),
+    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     content: z.string().min(1).max(4000),
     parentCommentId: z.string().uuid().optional().describe('Reply to an existing comment.'),
     anchor: z.object({
@@ -156,6 +158,7 @@ export function makePostDocCommentHandler(client: OrbotoClient) {
     docId: string; content: string; parentCommentId?: string;
     anchor?: { text: string; before: string; after: string };
   }): Promise<CallToolResult> => {
+    docId = await resolveDocId(client, docId);
     const body: Record<string, unknown> = { content };
     if (parentCommentId) body.parentCommentId = parentCommentId;
     if (anchor) body.anchor = anchor;
@@ -186,7 +189,7 @@ export const resolveDocCommentToolConfig = {
   description:
     'Toggle a comment thread\'s resolved state. Pass `resolved=true` to fold the conversation, `resolved=false` to reopen. Always acts on the thread ROOT — resolving from a reply folds the whole conversation, same as the web UI.',
   inputSchema: z.object({
-    docId: z.string().uuid(),
+    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     commentId: z.string().uuid(),
     resolved: z.boolean(),
   }).shape,
@@ -196,6 +199,7 @@ export function makeResolveDocCommentHandler(client: OrbotoClient) {
   return async ({ docId, commentId, resolved }: {
     docId: string; commentId: string; resolved: boolean;
   }): Promise<CallToolResult> => {
+    docId = await resolveDocId(client, docId);
     const row = await client.post<DocCommentRow>(
       `/docs/${docId}/comments/${commentId}/resolve`,
       { resolved },
@@ -223,7 +227,7 @@ export const updateDocCommentToolConfig = {
   description:
     'Edit a doc comment\'s body. Author OR super-admin can edit; everyone else gets a 403. Doc-comments do not carry a revision history today (unlike ticket comments), so the prior content is overwritten in place. A no-op call (same content as before) returns the unchanged row.',
   inputSchema: z.object({
-    docId: z.string().uuid(),
+    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     commentId: z.string().uuid(),
     content: z.string().min(1).max(4000),
   }).shape,
@@ -233,6 +237,7 @@ export function makeUpdateDocCommentHandler(client: OrbotoClient) {
   return async ({ docId, commentId, content }: {
     docId: string; commentId: string; content: string;
   }): Promise<CallToolResult> => {
+    docId = await resolveDocId(client, docId);
     const row = await client.patch<DocCommentRow>(`/docs/${docId}/comments/${commentId}`, { content });
     return {
       content: [{ type: 'text', text: `Doc comment ${row.id} updated.` }],
@@ -254,7 +259,7 @@ export const deleteDocCommentToolConfig = {
   description:
     'DESTRUCTIVE — drops the comment + (via FK cascade) every reply under it. Only the author can delete their own comments; super-admins can delete anyone\'s. Returns success silently; 403 surfaces as an OrbotoApiError.',
   inputSchema: z.object({
-    docId: z.string().uuid(),
+    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     commentId: z.string().uuid(),
   }).shape,
   annotations: { destructiveHint: true },
@@ -264,6 +269,7 @@ export function makeDeleteDocCommentHandler(client: OrbotoClient) {
   return async ({ docId, commentId }: {
     docId: string; commentId: string;
   }): Promise<CallToolResult> => {
+    docId = await resolveDocId(client, docId);
     await client.delete(`/docs/${docId}/comments/${commentId}`);
     return {
       content: [{ type: 'text', text: `Comment ${commentId} deleted from doc ${docId}.` }],

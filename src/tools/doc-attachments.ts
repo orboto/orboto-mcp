@@ -19,6 +19,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { resolveDocId } from './docs.js';
 
 interface AttachmentResponse {
   id: string;
@@ -78,7 +79,7 @@ export const uploadDocAttachmentToolConfig = {
   description:
     'Upload a file as an attachment on a wiki doc and return its Markdown image (or link) line + the stable download URL. Bytes come in as base64 (`contentBase64`) so this works without local FS access on the agent side. Set `embed=true` to also PATCH the doc body to append the Markdown line — useful for dropping a screenshot into a page in one call. MIME / extension policy is enforced server-side: blocked types (HTML, SVG, executables) surface a 415.',
   inputSchema: z.object({
-    docId: z.string().uuid(),
+    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     filename: z.string().min(1).describe('Display filename, e.g. "architecture-diagram.png".'),
     contentBase64: z.string().min(1).describe('File content, base64-encoded.'),
     altText: z.string().optional().describe('Alt-text for the Markdown image line. Defaults to filename.'),
@@ -91,6 +92,7 @@ export function makeUploadDocAttachmentHandler(client: OrbotoClient) {
     docId: string; filename: string; contentBase64: string;
     altText?: string; embed?: boolean;
   }): Promise<CallToolResult> => {
+    docId = await resolveDocId(client, docId);
     let arrayBuffer: ArrayBuffer;
     try {
       // Buffer → fresh ArrayBuffer copy (see attach.ts for the Blob
@@ -154,13 +156,14 @@ export const listDocAttachmentsToolConfig = {
   description:
     'Return the doc\'s attachments newest-first, with stable download URLs the agent can hand to the user. Empty list = no attachments.',
   inputSchema: z.object({
-    docId: z.string().uuid(),
+    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeListDocAttachmentsHandler(client: OrbotoClient) {
   return async ({ docId }: { docId: string }): Promise<CallToolResult> => {
+    docId = await resolveDocId(client, docId);
     const rows = await client.get<AttachmentResponse[]>(`/docs/${docId}/attachments`);
     if (rows.length === 0) {
       return {
@@ -199,7 +202,7 @@ export const deleteDocAttachmentToolConfig = {
   description:
     'DESTRUCTIVE — drops the file row + deletes the underlying S3 object. Does NOT rewrite the doc body, so embedded Markdown lines pointing at the deleted URL will surface as broken images / links. Walk those by hand if needed.',
   inputSchema: z.object({
-    docId: z.string().uuid(),
+    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     attachmentId: z.string().uuid(),
   }).shape,
   annotations: { destructiveHint: true },
@@ -209,6 +212,7 @@ export function makeDeleteDocAttachmentHandler(client: OrbotoClient) {
   return async ({ docId, attachmentId }: {
     docId: string; attachmentId: string;
   }): Promise<CallToolResult> => {
+    docId = await resolveDocId(client, docId);
     await client.delete(`/docs/${docId}/attachments/${attachmentId}`);
     return {
       content: [{ type: 'text', text: `Attachment ${attachmentId} removed from doc ${docId}.` }],

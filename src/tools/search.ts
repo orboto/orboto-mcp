@@ -79,7 +79,9 @@ export function makeSearchHandler(client: OrbotoClient) {
       ? `No hits for "${input.query}".`
       : `Hits${headerHint}:\n\n` + res.items.map((h) => {
         const tag = h.type.toUpperCase();
-        const ident = h.ticketKey ?? h.id.slice(0, 8);
+        // ORB-1084 — non-ticket hits carry the FULL id: the truncated
+        // form was unusable as input for the doc write tools.
+        const ident = h.ticketKey ?? h.id;
         const project = h.projectName ? ` · ${h.projectName}` : '';
         return `- [${tag} ${ident}${project}] ${h.title}\n  ${h.excerpt}`;
       }).join('\n\n');
@@ -92,6 +94,7 @@ export function makeSearchHandler(client: OrbotoClient) {
         hasMore,
         hits: res.items.map((h) => ({
           type: h.type,
+          id: h.id, // ORB-1084 — full id, usable as write-tool input
           title: h.title,
           excerpt: h.excerpt,
           ticketKey: h.ticketKey ?? null,

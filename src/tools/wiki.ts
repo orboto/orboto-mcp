@@ -9,6 +9,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { resolveDocId } from './docs.js';
 
 function text(t: string, structured?: Record<string, unknown>): CallToolResult {
   return { content: [{ type: 'text', text: t }], ...(structured ? { structuredContent: structured } : {}) };
@@ -151,13 +152,14 @@ export const wikiAppendSectionToolConfig = {
   description:
     'Append a Markdown section to a doc. Idempotent: appending identical content a second time is a no-op, so this is safe to call repeatedly (e.g. across multiple ingests). Wraps POST /docs/:id/append-section.',
   inputSchema: z.object({
-    docId: z.string().uuid().describe('The page to append to.'),
+    docId: z.string().min(1).describe('The page to append to - UUID or doc key (ORB-D12 / DOC-5).'),
     content: z.string().min(1).max(50_000).describe('Markdown section to append.'),
   }).shape,
   annotations: { readOnlyHint: false, idempotentHint: true },
 };
 export function makeWikiAppendSectionHandler(client: OrbotoClient) {
   return async (input: { docId: string; content: string }): Promise<CallToolResult> => {
+    input.docId = await resolveDocId(client, input.docId);
     const res = await client.post<{ appended: boolean }>(`/docs/${input.docId}/append-section`, { content: input.content });
     return text(res.appended ? 'Section appended.' : 'No change — an identical section is already present.', { appended: res.appended });
   };
@@ -175,7 +177,7 @@ export const wikiSaveAnswerToolConfig = {
     answer: z.string().min(1).max(50_000),
     title: z.string().max(200).optional().describe('Page title; defaults to the question.'),
     parentDocId: z.string().uuid().optional(),
-    citations: z.array(z.object({ docId: z.string().uuid(), title: z.string() })).max(50).optional().describe('Cited docs to smart-link (from orboto_wiki_ask).'),
+    citations: z.array(z.object({ docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'), title: z.string() })).max(50).optional().describe('Cited docs to smart-link (from orboto_wiki_ask).'),
   }).shape,
   annotations: { readOnlyHint: false, idempotentHint: true },
 };
@@ -193,13 +195,14 @@ export const wikiFlagStaleToolConfig = {
   description:
     'Set or clear the "may be outdated" flag on a page. The flag surfaces passively as a pill in the UI; it does not change the content. Pass stale=false to clear. Wraps POST /docs/:id/flag-stale.',
   inputSchema: z.object({
-    docId: z.string().uuid(),
+    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     stale: z.boolean().optional().describe('true to flag (default), false to clear.'),
   }).shape,
   annotations: { readOnlyHint: false, idempotentHint: true },
 };
 export function makeWikiFlagStaleHandler(client: OrbotoClient) {
   return async (input: { docId: string; stale?: boolean }): Promise<CallToolResult> => {
+    input.docId = await resolveDocId(client, input.docId);
     const res = await client.post<{ staleFlagged: boolean }>(`/docs/${input.docId}/flag-stale`, { stale: input.stale ?? true });
     return text(res.staleFlagged ? 'Page flagged as possibly outdated.' : 'Stale flag cleared.', { staleFlagged: res.staleFlagged });
   };

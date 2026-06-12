@@ -18,6 +18,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { resolveDocId } from './docs.js';
 
 interface RevisionListRow {
   id: string;
@@ -55,7 +56,7 @@ export const listDocRevisionsToolConfig = {
   description:
     'Return saved revisions for a doc page, newest-first. Each row carries the revision id, title at snapshot time, editor user id, and editedAt timestamp; the body content is NOT in this list (use orboto_get_doc_revision to fetch one). Cursor-paged — pass `cursor` to walk older pages.',
   inputSchema: z.object({
-    docId: z.string().uuid(),
+    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     limit: z.number().int().min(1).max(100).optional().describe('Page size. Defaults to API default (25).'),
     cursor: z.string().optional().describe('Opaque cursor from a previous call\'s nextCursor.'),
   }).shape,
@@ -66,6 +67,7 @@ export function makeListDocRevisionsHandler(client: OrbotoClient) {
   return async ({ docId, limit, cursor }: {
     docId: string; limit?: number; cursor?: string;
   }): Promise<CallToolResult> => {
+    docId = await resolveDocId(client, docId);
     const qs = new URLSearchParams();
     if (limit !== undefined) qs.set('limit', String(limit));
     if (cursor) qs.set('cursor', cursor);
@@ -110,7 +112,7 @@ export const getDocRevisionToolConfig = {
   description:
     'Return the full content + title of one saved revision. Use this to diff against the current doc before deciding whether to restore.',
   inputSchema: z.object({
-    docId: z.string().uuid(),
+    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     revisionId: z.string().uuid(),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
@@ -120,6 +122,7 @@ export function makeGetDocRevisionHandler(client: OrbotoClient) {
   return async ({ docId, revisionId }: {
     docId: string; revisionId: string;
   }): Promise<CallToolResult> => {
+    docId = await resolveDocId(client, docId);
     const rev = await client.get<FullRevisionRow>(`/docs/${docId}/revisions/${revisionId}`);
     return {
       content: [{
@@ -147,7 +150,7 @@ export const restoreDocRevisionToolConfig = {
   description:
     'Roll back the doc to the saved revision. The API snapshots the CURRENT body to a fresh revision row first, so the restore itself is also undoable. Returns the post-restore doc state.',
   inputSchema: z.object({
-    docId: z.string().uuid(),
+    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     revisionId: z.string().uuid(),
   }).shape,
   annotations: { destructiveHint: true },
@@ -157,6 +160,7 @@ export function makeRestoreDocRevisionHandler(client: OrbotoClient) {
   return async ({ docId, revisionId }: {
     docId: string; revisionId: string;
   }): Promise<CallToolResult> => {
+    docId = await resolveDocId(client, docId);
     const doc = await client.post<DocRow>(`/docs/${docId}/revisions/${revisionId}/restore`, {});
     return {
       content: [{
