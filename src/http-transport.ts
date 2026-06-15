@@ -194,7 +194,7 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
       // unsubscribe handlers inside the McpServer; the bridge reads
       // it to decide which incoming API events deserve a push.
       const subscriptions = new Set<string>();
-      const mcp = buildOrbotoMcpServer({
+      const mcp = await buildOrbotoMcpServer({
         baseUrl,
         apiKey: token,
         userAgentSuffix,

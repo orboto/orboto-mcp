@@ -60,7 +60,7 @@ async function main() {
       process.exit(1);
     }
 
-    const server = buildOrbotoMcpServer({ baseUrl, apiKey, userAgentSuffix });
+    const server = await buildOrbotoMcpServer({ baseUrl, apiKey, userAgentSuffix });
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
     const stdio = new StdioServerTransport();
     await server.connect(stdio);

@@ -213,8 +213,46 @@ export interface BuildServerOptions extends OrbotoClientConfig {
   subscriptions?: Set<string>;
 }
 
-export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
+/** ORB-1090 — the workspace's configurable working-rules, used as the
+ *  fallback when the live fetch fails (offline / pre-1086 instance).
+ *  On success these are replaced by the live assembled blocks so admin
+ *  edits propagate to every new MCP connection. */
+const FALLBACK_WORKING_RULES = [
+  'Workflow is STRICT: claim -> commit -> close, one ticket = one commit, every time (not only when reminded). Before touching code, claim an existing ticket or create one (`orboto_claim` / `orboto_create_ticket`) — never do silent, unticketed work. When the task is done make exactly ONE commit (with the ticket key in the subject), push it, then move the ticket to in_review/done with a one-line summary (`orboto_move_ticket` + `orboto_comment`). Do not leave finished work uncommitted.',
+  'When you write a git commit that touches a ticket, put the ticket key (e.g. `ORB-42`) in parentheses at the END of the subject line — `feat(auth): add token rotation (ORB-42)`. The orboto git-activity parser links the commit by that key.',
+  'Use sub-tickets for steps large enough to need their own commit / time tracking / review, and checklists for one-liners inside a single ticket\'s scope. Big features (Epic + 3+ phase tickets): create a milestone FIRST, then the Epic, then phase tickets as children on that milestone.',
+].join(' ');
+
+// Static MCP operational hints — tool/resource/prompt usage that does
+// not change per workspace. The configurable working-rules are appended
+// live below.
+const STATIC_MCP_HINTS = [
+  'orboto is a ticket + project management system.',
+  'When starting on a project, call `orboto_get_project_primer(<PROJECT_KEY>)` once to load its conventions (tech stack, commands, gotchas, expected ticket language).',
+  'Use `orboto_list_projects` first to discover what the user can see.',
+  'Ticket keys look like `PROJ-123`; the first segment is the project key.',
+  'For "what am I working on?" prefer `orboto_my_tickets`; for "anything about X?" prefer `orboto_search`.',
+  'Checklists: `orboto_get_ticket` includes them inline; use `orboto_get_checklists` when you only need the items. A linked-ticket suffix (`↪ [ACME-99]`) means the item is automatically checked/unchecked as that ticket\'s status moves.',
+  'Resources (`orboto://ticket/<key>`, `orboto://doc/<id>`, `orboto://project/<key>`, `orboto://search/<query>`) return read-only Markdown. The `orboto://` URI scheme stays canonical. Prompts (`plan-sprint`, `triage-my-tickets`, `summarize-project`, `estimate-ticket`, `find-duplicates`) are one-click guided workflows.',
+  'All writes respect the caller\'s project-level permissions — a 403 means the API rejected the write, not the MCP server.',
+].join(' ');
+
+export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<McpServer> {
   const client = new OrbotoClient(opts);
+
+  // ORB-1090 — fetch the workspace's configurable working-rules at
+  // connect so admin edits propagate to every new MCP session. The
+  // instructions block is the one place every MCP client reliably sees
+  // the rules (clients don't read the repo's CLAUDE.md). Best-effort:
+  // fall back to the built-in rules if the instance predates ORB-1086
+  // or the fetch fails.
+  let workingRules = FALLBACK_WORKING_RULES;
+  try {
+    const res = await client.get<{ instructions: string }>('/agent-instructions');
+    if (res?.instructions?.trim()) workingRules = res.instructions.trim();
+  } catch {
+    // keep the fallback
+  }
 
   const server = new McpServer(
     { name: 'orboto', version: '0.51.0' },
@@ -227,25 +265,10 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
         resources: { subscribe: true, listChanged: true },
       },
       // `instructions` appears in the system-prompt-style block some
-      // MCP clients inject before the user's first message. Keep it
-      // short + specific; avoid walls of text.
-      instructions: [
-        'orboto is a ticket + project management system.',
-        // ORB-1046 — front-load the workflow discipline. MCP clients don't read
-        // the repo's CLAUDE.md and often skip the primer, so this injected
-        // block is the one place every session reliably sees the rules.
-        'Workflow is STRICT: claim -> commit -> close, one ticket = one commit, every time (not only when reminded). Before touching code, claim an existing ticket or create one (`orboto_claim` / `orboto_create_ticket`) — never do silent, unticketed work. When the task is done make exactly ONE commit (with the ticket key in the subject, see below), push it, then move the ticket to in_review/done with a one-line summary (`orboto_move_ticket` + `orboto_comment`). Do not leave finished work uncommitted.',
-        'When starting on a project, call `orboto_get_project_primer(<PROJECT_KEY>)` once to load its conventions (tech stack, commands, gotchas, expected ticket language).',
-        'Use `orboto_list_projects` first to discover what the user can see.',
-        'Ticket keys look like `PROJ-123`; the first segment is the project key.',
-        'For "what am I working on?" prefer `orboto_my_tickets`; for "anything about X?" prefer `orboto_search`.',
-        'Checklists: `orboto_get_ticket` includes them inline; use `orboto_get_checklists` when you only need the items. A linked-ticket suffix (`↪ [ACME-99]`) means the item is automatically checked/unchecked as that ticket\'s status moves.',
-        'Sub-tickets: `orboto_get_ticket` surfaces `parentTicket` + `children`; walk an epic via `orboto_list_tickets` with `parentTicketKey`. Use sub-tickets for steps large enough to need their own commit / time tracking / review, and checklists for one-liners inside a single ticket\'s scope. Only materialise sub-tickets / checklist items when the parent is actively being worked — pure planning tickets keep their phase plan inside the description, not as empty TODO sub-tickets that clutter every team member\'s `my-tickets` list.',
-        'Big features (Epic + 3 or more phase tickets, multi-week scope): create a milestone FIRST via `orboto_create_milestone`, then file the Epic via `orboto_create_ticket(type: "epic")`, then every phase ticket as a child of the Epic. Hang Epic + every child on the same milestone via `orboto_set_milestone` straight after creation. Three small fixes or a single ticket do NOT need their own milestone — those land in `Feature Backlog` / `Bugs` / a thematic existing milestone.',
-        'When you write a git commit that touches a ticket, put the ticket key (e.g. `ORB-42`) in parentheses at the END of the subject line — `feat(auth): add token rotation (ORB-42)`. This is what the orboto git-activity parser looks for; skipping it means the commit never gets linked to the ticket.',
-        'Resources (`orboto://ticket/<key>`, `orboto://doc/<id>`, `orboto://project/<key>`, `orboto://search/<query>`) return read-only Markdown — useful when the client UI lets the user pin content rather than re-asking. The `orboto://` URI scheme stays as the canonical resource prefix even after the orboto rebrand because clients pin URIs in their UI; renaming the scheme would invalidate every saved bookmark. Prompts (`plan-sprint`, `triage-my-tickets`, `summarize-project`, `estimate-ticket`, `find-duplicates`) are one-click guided workflows the client surfaces; each emits a goal + tool sequence the model executes.',
-        'All writes respect the caller\'s project-level permissions — a 403 means the API rejected the write, not the MCP server.',
-      ].join(' '),
+      // MCP clients inject before the user's first message. Static
+      // operational hints + the live, workspace-configurable working
+      // rules (ORB-1086).
+      instructions: `${STATIC_MCP_HINTS}\n\nWorking rules for this workspace:\n${workingRules}`,
     },
   );
 
