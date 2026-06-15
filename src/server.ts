@@ -20,6 +20,7 @@ import { registerOrbotoResources } from './resources.js';
 import { registerOrbotoPrompts } from './prompts.js';
 import { registerWithMetrics } from './with-metrics.js';
 import { aiStatusToolConfig, makeAiStatusHandler } from './tools/ai-status.js';
+import { sessionStartToolConfig, makeSessionStartHandler } from './tools/session-start.js';
 import {
   listAgentInstructionsToolConfig, makeListAgentInstructionsHandler,
   createAgentInstructionToolConfig, makeCreateAgentInstructionHandler,
@@ -281,6 +282,8 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   // Tools — alphabetical-ish by concept. Each tool file owns its
   // input/output schema; the server just glues names to handlers.
   reg('orboto_ai_status', aiStatusToolConfig, makeAiStatusHandler(client));
+  // ORB-1093 — session-start / post-compact re-orientation digest.
+  reg('orboto_session_start', sessionStartToolConfig, makeSessionStartHandler(client));
   // ORB-1089 — manage the configurable coding-agent rule blocks (admin:ai:write).
   reg('orboto_list_agent_instructions', listAgentInstructionsToolConfig, makeListAgentInstructionsHandler(client));
   reg('orboto_create_agent_instruction', createAgentInstructionToolConfig, makeCreateAgentInstructionHandler(client));
