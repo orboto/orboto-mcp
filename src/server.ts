@@ -21,6 +21,13 @@ import { registerOrbotoPrompts } from './prompts.js';
 import { registerWithMetrics } from './with-metrics.js';
 import { aiStatusToolConfig, makeAiStatusHandler } from './tools/ai-status.js';
 import {
+  listAgentInstructionsToolConfig, makeListAgentInstructionsHandler,
+  createAgentInstructionToolConfig, makeCreateAgentInstructionHandler,
+  updateAgentInstructionToolConfig, makeUpdateAgentInstructionHandler,
+  resetAgentInstructionToolConfig, makeResetAgentInstructionHandler,
+  deleteAgentInstructionToolConfig, makeDeleteAgentInstructionHandler,
+} from './tools/agent-instructions.js';
+import {
   agentHeartbeatToolConfig, makeAgentHeartbeatHandler,
   agentPresenceToolConfig, makeAgentPresenceHandler,
   agentNotifyToolConfig, makeAgentNotifyHandler,
@@ -251,6 +258,12 @@ export function buildOrbotoMcpServer(opts: BuildServerOptions): McpServer {
   // Tools — alphabetical-ish by concept. Each tool file owns its
   // input/output schema; the server just glues names to handlers.
   reg('orboto_ai_status', aiStatusToolConfig, makeAiStatusHandler(client));
+  // ORB-1089 — manage the configurable coding-agent rule blocks (admin:ai:write).
+  reg('orboto_list_agent_instructions', listAgentInstructionsToolConfig, makeListAgentInstructionsHandler(client));
+  reg('orboto_create_agent_instruction', createAgentInstructionToolConfig, makeCreateAgentInstructionHandler(client));
+  reg('orboto_update_agent_instruction', updateAgentInstructionToolConfig, makeUpdateAgentInstructionHandler(client));
+  reg('orboto_reset_agent_instruction', resetAgentInstructionToolConfig, makeResetAgentInstructionHandler(client));
+  reg('orboto_delete_agent_instruction', deleteAgentInstructionToolConfig, makeDeleteAgentInstructionHandler(client));
   // ORB-705 — Multi-Agent Coordination tools (heartbeat, presence,
   // directed notify). Layered on the ORB-704 REST surface.
   reg('orboto_agent_heartbeat', agentHeartbeatToolConfig, makeAgentHeartbeatHandler(client));
