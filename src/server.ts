@@ -140,6 +140,7 @@ import {
   checkToolConfig, makeCheckHandler,
   uncheckToolConfig, makeUncheckHandler,
   addCheckToolConfig, makeAddCheckHandler,
+  removeCheckToolConfig, makeRemoveCheckHandler,
   newChecklistToolConfig, makeNewChecklistHandler,
 } from './tools/checklist-writes.js';
 import {
@@ -407,6 +408,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_check', checkToolConfig, makeCheckHandler(client));
   reg('orboto_uncheck', uncheckToolConfig, makeUncheckHandler(client));
   reg('orboto_add_check', addCheckToolConfig, makeAddCheckHandler(client));
+  reg('orboto_remove_check', removeCheckToolConfig, makeRemoveCheckHandler(client));
   reg('orboto_new_checklist', newChecklistToolConfig, makeNewChecklistHandler(client));
 
   // ORB-309 Phase C — Group 4: admin-only tools. Each call hits a

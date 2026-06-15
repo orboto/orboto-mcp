@@ -121,6 +121,32 @@ export const makeCheckHandler = (client: OrbotoClient) => makeToggleHandler(clie
 export const makeUncheckHandler = (client: OrbotoClient) => makeToggleHandler(client, false);
 
 // ---------------------------------------------------------------------------
+// orboto_remove_check (ORB-1095) — agent parity for DELETE
+// /checklist-items/:id. The surfaces could append but not remove.
+// ---------------------------------------------------------------------------
+
+export const removeCheckToolConfig = {
+  title: 'Remove a checklist item',
+  description:
+    'Delete a checklist item from a ticket. `item` is either a 1-based index (global across all checklists on the ticket, top to bottom) or the item\'s UUID — same semantics as orboto_check. Destructive: the item is gone, not just unchecked.',
+  inputSchema: toggleInputSchema,
+  annotations: { destructiveHint: true },
+};
+
+export function makeRemoveCheckHandler(client: OrbotoClient) {
+  return async ({ ticketKey, item }: { ticketKey: string; item: number | string }): Promise<CallToolResult> => {
+    const ticket = await resolveTicketByKey(client, ticketKey);
+    const { itemId, checklists } = await resolveItemId(client, ticket.id, item);
+    const before = checklists.flatMap((c) => c.items).find((i) => i.id === itemId);
+    await client.delete(`/checklist-items/${itemId}`);
+    return {
+      content: [{ type: 'text', text: `Removed from [${ticket.ticketKey}]: ${before?.content ?? '(item)'}` }],
+      structuredContent: { ticketKey: ticket.ticketKey, itemId, removed: true, content: before?.content ?? null },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
 // orboto_add_check
 // ---------------------------------------------------------------------------
 

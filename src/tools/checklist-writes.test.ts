@@ -6,6 +6,7 @@ import { OrbotoClient } from '../orboto-client.js';
 import {
   makeCheckHandler, makeUncheckHandler,
   makeAddCheckHandler, makeNewChecklistHandler,
+  makeRemoveCheckHandler,
 } from './checklist-writes.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -92,6 +93,21 @@ describe('orboto_check / orboto_uncheck', () => {
     await expect(
       makeCheckHandler(client)({ ticketKey: 'ACME-1', item: 99 })
     ).rejects.toThrow(/out of range — ticket has 2 items/);
+  });
+});
+
+describe('orboto_remove_check (ORB-1095)', () => {
+  it('resolves a 1-based index → item UUID, then DELETEs it', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: [SAMPLE_LIST] },        // GET checklists for index lookup
+      { json: {} },                   // DELETE
+    ]);
+    const res = await makeRemoveCheckHandler(client)({ ticketKey: 'ACME-1', item: 2 });
+    expect(calls[3].method).toBe('DELETE');
+    expect(calls[3].url).toContain('/checklist-items/i2');
+    expect(res.structuredContent).toMatchObject({ itemId: 'i2', removed: true, content: 'Docs' });
   });
 });
 
