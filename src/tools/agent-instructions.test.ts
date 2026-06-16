@@ -38,33 +38,43 @@ describe('agent-instruction MCP tools (ORB-1089)', () => {
   it('list GETs the admin surface and returns blocks + assembled', async () => {
     const calls = stubJSON([{ json: { blocks: [BLOCK], assembled: 'do the thing' } }]);
     const res = await makeListAgentInstructionsHandler(client)();
-    expect(calls[0]).toMatchObject({ method: 'GET', url: 'https://orboto.example.com/admin/agent-instructions' });
+    expect(calls[0].method).toBe('GET');
+    expect(calls[0].url).toContain('/agent-instructions/blocks?scope=workspace');
     expect(res.structuredContent).toMatchObject({ assembled: 'do the thing' });
+  });
+
+  it('create at project scope carries scope + projectId', async () => {
+    const calls = stubJSON([{ status: 201, json: BLOCK }]);
+    await makeCreateAgentInstructionHandler(client)({ title: 'P', body: 'b', scope: 'project', projectId: '22222222-2222-2222-2222-222222222222' });
+    expect(calls[0].url).toContain('scope=project');
+    expect(calls[0].url).toContain('projectId=22222222-2222-2222-2222-222222222222');
   });
 
   it('create POSTs title + body', async () => {
     const calls = stubJSON([{ status: 201, json: BLOCK }]);
     await makeCreateAgentInstructionHandler(client)({ title: 'Rule', body: 'do the thing' });
-    expect(calls[0]).toMatchObject({ method: 'POST', url: 'https://orboto.example.com/admin/agent-instructions', body: { title: 'Rule', body: 'do the thing' } });
+    expect(calls[0].method).toBe('POST');
+    expect(calls[0].url).toContain('/agent-instructions/blocks?scope=workspace');
+    expect(calls[0].body).toEqual({ title: 'Rule', body: 'do the thing' });
   });
 
   it('update PATCHes by id without the id in the body', async () => {
     const calls = stubJSON([{ json: { ...BLOCK, enabled: false } }]);
     await makeUpdateAgentInstructionHandler(client)({ id: BLOCK.id, enabled: false });
-    expect(calls[0]).toMatchObject({ method: 'PATCH', url: `https://orboto.example.com/admin/agent-instructions/${BLOCK.id}`, body: { enabled: false } });
+    expect(calls[0]).toMatchObject({ method: 'PATCH', url: `https://orboto.example.com/agent-instructions/blocks/${BLOCK.id}`, body: { enabled: false } });
     expect(calls[0].body).not.toHaveProperty('id');
   });
 
   it('reset POSTs to the reset sub-path', async () => {
     const calls = stubJSON([{ json: BLOCK }]);
     await makeResetAgentInstructionHandler(client)({ id: BLOCK.id });
-    expect(calls[0]).toMatchObject({ method: 'POST', url: `https://orboto.example.com/admin/agent-instructions/${BLOCK.id}/reset` });
+    expect(calls[0]).toMatchObject({ method: 'POST', url: `https://orboto.example.com/agent-instructions/blocks/${BLOCK.id}/reset` });
   });
 
   it('delete DELETEs by id', async () => {
     const calls = stubJSON([{ json: {} }]);
     const res = await makeDeleteAgentInstructionHandler(client)({ id: BLOCK.id });
-    expect(calls[0]).toMatchObject({ method: 'DELETE', url: `https://orboto.example.com/admin/agent-instructions/${BLOCK.id}` });
+    expect(calls[0]).toMatchObject({ method: 'DELETE', url: `https://orboto.example.com/agent-instructions/blocks/${BLOCK.id}` });
     expect(res.structuredContent).toMatchObject({ deleted: true });
   });
 });
