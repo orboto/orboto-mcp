@@ -14,7 +14,7 @@ export const sessionStartToolConfig = {
   title: 'Re-orient: workspace rules + your in-progress work',
   description:
     'Run at the START of a session and immediately AFTER any context compaction. Returns the workspace working-rules to follow, your in-progress tickets, and your running timer — the briefing that keeps you from losing the thread. Read-only; no side effects.',
-  inputSchema: z.object({}).shape,
+  inputSchema: z.object({ projectId: z.string().uuid().optional().describe('Include this project\'s rules too (workspace + project + your personal).') }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
@@ -23,10 +23,11 @@ interface Ticket { ticketKey: string; title: string; status?: string; statusName
 interface Timer { ticketId?: string | null; ticketKey?: string; startedAt?: string }
 
 export function makeSessionStartHandler(client: OrbotoClient) {
-  return async (): Promise<CallToolResult> => {
+  return async (input: { projectId?: string } = {}): Promise<CallToolResult> => {
+    const rulesPath = input.projectId ? `/agent-instructions?projectId=${input.projectId}` : '/agent-instructions';
     const [me, rules, assigned, timer] = await Promise.all([
       client.get<Me>('/users/me').catch(() => null),
-      client.get<{ instructions: string }>('/agent-instructions').catch(() => ({ instructions: '' })),
+      client.get<{ instructions: string }>(rulesPath).catch(() => ({ instructions: '' })),
       client.get<{ items?: Ticket[] } | Ticket[]>('/users/me/assigned-tickets?limit=10').catch(() => ({ items: [] })),
       client.get<Timer>('/time/timer').catch(() => null),
     ]);
