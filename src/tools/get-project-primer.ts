@@ -56,14 +56,15 @@ export function makeGetProjectPrimerHandler(client: OrbotoClient) {
     if (maxTokens !== undefined) qs.set('max_tokens', String(maxTokens));
     const res = await client.get<PrimerJsonResponse>(`/projects/${project.id}/ai-primer?${qs.toString()}`);
 
-    const trimmedNote = res.truncatedSections.length > 0
-      ? `\n\n_(${res.truncatedSections.length} section(s) trimmed to fit max_tokens: ${res.truncatedSections.join(', ')})_`
-      : '';
+    // ORB-1104 — the trimmed-sections note is now appended in-band by
+    // assembleWithBudget, so res.markdown already carries it (and so do
+    // baked snapshots + the raw markdown route). No manual append here,
+    // otherwise it would double up.
     return {
       content: [
         {
           type: 'text',
-          text: res.markdown + trimmedNote,
+          text: res.markdown,
         },
       ],
     };
