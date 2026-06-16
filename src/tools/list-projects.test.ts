@@ -32,20 +32,42 @@ describe('tools/list-projects', () => {
     const result = await makeListProjectsHandler(client)();
     expect(result.content[0]).toEqual({
       type: 'text',
-      text: '- ACME — Acme (active)\n- TOOL — Internal Tools (draft)',
+      text: '- ACME — Acme (active)\n- TOOL — Internal Tools (draft)\n(2 project(s), complete.)',
     });
     expect(result.structuredContent).toEqual({
       projects: [
         { key: 'ACME', name: 'Acme', status: 'active', description: 'Customer portal' },
         { key: 'TOOL', name: 'Internal Tools', status: 'draft', description: null },
       ],
+      total: 2,
+      totalProjects: 2,
+      query: null,
     });
+  });
+
+  it('ORB-1109: filters by query and reports match count vs total', async () => {
+    mockFetch([
+      { id: 'p1', key: 'ACME', name: 'Acme', description: null, status: 'active' },
+      { id: 'p2', key: '10M', name: 'Math World', description: null, status: 'active' },
+      { id: 'p3', key: 'TOOL', name: 'Internal Tools', description: null, status: 'draft' },
+    ]);
+    const result = await makeListProjectsHandler(client)({ query: '10m' });
+    expect(result.content[0]).toEqual({ type: 'text', text: '- 10M — Math World (active)\n(1 project(s) matching "10m", complete.)' });
+    expect(result.structuredContent).toMatchObject({ total: 1, totalProjects: 3, query: '10m' });
+  });
+
+  it('ORB-1109: caps with limit and signals the list is partial', async () => {
+    mockFetch(Array.from({ length: 5 }, (_, i) => ({ id: `p${i}`, key: `P${i}`, name: `Proj ${i}`, description: null, status: 'active' })));
+    const result = await makeListProjectsHandler(client)({ limit: 2 });
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain('Showing first 2 of 5 match(es)');
+    expect(result.structuredContent).toMatchObject({ total: 5, totalProjects: 5 });
   });
 
   it('renders an empty-state text block when the API returns no rows', async () => {
     mockFetch([]);
     const result = await makeListProjectsHandler(client)();
     expect(result.content[0]).toEqual({ type: 'text', text: 'No projects visible to this user.' });
-    expect(result.structuredContent).toEqual({ projects: [] });
+    expect(result.structuredContent).toMatchObject({ projects: [], total: 0, totalProjects: 0 });
   });
 });
