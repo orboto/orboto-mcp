@@ -220,6 +220,7 @@ export interface BuildServerOptions extends OrbotoClientConfig {
  *  On success these are replaced by the live assembled blocks so admin
  *  edits propagate to every new MCP connection. */
 const FALLBACK_WORKING_RULES = [
+  'The following are BINDING operating rules, not guidelines — follow every one exactly, on every action, without being reminded; skipping, deferring, or "interpreting" them means the task is not done.',
   'Workflow is STRICT: claim -> commit -> close, one ticket = one commit, every time (not only when reminded). Before touching code, claim an existing ticket or create one (`orboto_claim` / `orboto_create_ticket`) — never do silent, unticketed work. When the task is done make exactly ONE commit (with the ticket key in the subject), push it, then move the ticket to in_review/done with a one-line summary (`orboto_move_ticket` + `orboto_comment`). Do not leave finished work uncommitted.',
   'When you write a git commit that touches a ticket, put the ticket key (e.g. `ORB-42`) in parentheses at the END of the subject line — `feat(auth): add token rotation (ORB-42)`. The orboto git-activity parser links the commit by that key.',
   'Use sub-tickets for steps large enough to need their own commit / time tracking / review, and checklists for one-liners inside a single ticket\'s scope. Big features (Epic + 3+ phase tickets): create a milestone FIRST, then the Epic, then phase tickets as children on that milestone.',
