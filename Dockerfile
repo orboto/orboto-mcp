@@ -64,6 +64,9 @@ ENV ORBIT_MCP_TRANSPORT=http \
 
 COPY --from=builder /deploy/mcp/node_modules ./node_modules
 COPY --from=builder /deploy/mcp/dist ./dist
+# ORB-1166 — version.ts reads package.json at runtime; the stripped image
+# must ship it or the require throws and crash-loops the container.
+COPY --from=builder /deploy/mcp/package.json ./package.json
 
 # wget already ships in the busybox base — used by the compose
 # healthcheck against /health. No extra apk install needed.
