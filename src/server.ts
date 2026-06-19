@@ -272,7 +272,19 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
       // MCP clients inject before the user's first message. Static
       // operational hints + the live, workspace-configurable working
       // rules (ORB-1086).
-      instructions: `${STATIC_MCP_HINTS}\n\nWorking rules for this workspace:\n${workingRules}`,
+      //
+      // ORB-1168 — MCP clients cap how much of this block they inject; a
+      // 5k+ string was being silently truncated mid-rule, so an MCP-only
+      // agent (no skill / no repo CLAUDE.md) got incomplete rules. Put
+      // the orientation, a pointer to the full rule set (the
+      // orboto_list_agent_instructions tool), and the core non-negotiables
+      // FIRST so they survive any truncation; the full workspace rules
+      // follow and only their tail is at risk.
+      instructions: [
+        STATIC_MCP_HINTS,
+        'The complete, authoritative binding rules for this workspace are available any time via the `orboto_session_start` tool — if the rules below look cut off, call it before your first write. Core non-negotiables: ticket-first (claim or create a ticket before touching code), one commit per ticket with the ticket key in the subject line, push after each commit, and never mark work done that is not actually done.',
+        `Working rules for this workspace:\n${workingRules}`,
+      ].join('\n\n'),
     },
   );
 
