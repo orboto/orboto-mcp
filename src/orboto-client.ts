@@ -23,6 +23,7 @@
  * throw `OrbotoApiError` so tool handlers can translate to MCP's
  * `{isError: true}` shape.
  */
+import { VERSION } from './version.js';
 
 export interface OrbotoClientConfig {
   /** Base URL of the orboto API — e.g. `https://orboto.example.com` or
@@ -54,13 +55,13 @@ export class OrbotoClient {
 
   constructor(config: OrbotoClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, '');
-    // User-Agent shape: `orboto-mcp/0.51.0 (claude-desktop)`. The
+    // User-Agent shape: `orboto-mcp/<version> (claude-desktop)`. The
     // suffix is optional metadata so the admin's MCP-usage panel
     // (Phase F) can group calls per client family without needing a
     // new DB column.
     const ua = config.userAgentSuffix
-      ? `orboto-mcp/0.51.0 (${config.userAgentSuffix})`
-      : 'orboto-mcp/0.51.0';
+      ? `orboto-mcp/${VERSION} (${config.userAgentSuffix})`
+      : `orboto-mcp/${VERSION}`;
     this.headers = {
       Authorization: `Bearer ${config.apiKey}`,
       'User-Agent': ua,

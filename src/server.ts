@@ -14,6 +14,7 @@
  * add `registerResource` / `registerPrompt` calls here too.
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { VERSION } from './version.js';
 import { SubscribeRequestSchema, UnsubscribeRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoClient, type OrbotoClientConfig } from './orboto-client.js';
 import { registerOrbotoResources } from './resources.js';
@@ -258,7 +259,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   }
 
   const server = new McpServer(
-    { name: 'orboto', version: '0.51.0' },
+    { name: 'orboto', version: VERSION },
     {
       // ORB-940 — advertise resources/subscribe so MCP-aware clients
       // (Claude Desktop, Cursor) wire up live updates instead of
