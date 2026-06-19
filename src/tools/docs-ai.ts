@@ -70,7 +70,7 @@ export const askDocsToolConfig = {
     'Run a natural-language question against the wiki via the workspace\'s RAG pipeline. Returns an `answer` (Markdown) + `citations` array `[{index, title, link, spaceName}]`. The model is the workspace\'s configured AI provider; retrieval requires the embedding provider too — call `orboto_ai_status` to verify both before relying on this. Restrict to a single doc space with `spaceId` when scoping a query (e.g. "only the runbooks space"). Latency is dominated by retrieval + LLM round-trip; expect 2-10s.',
   inputSchema: z.object({
     question: z.string().min(3),
-    spaceId: z.string().uuid().optional().describe('Limit RAG retrieval to one doc space.'),
+    spaceId: z.string().min(1).optional().describe('Limit RAG retrieval to one doc space - key (e.g. ORB-S1), name, or UUID.'),
     limit: z.number().int().min(1).max(20).optional().describe('Max chunks to retrieve (default: 5).'),
   }).shape,
 };
