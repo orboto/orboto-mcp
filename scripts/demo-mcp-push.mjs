@@ -14,7 +14,7 @@
  *
  * Usage (run via pnpm so the workspace's SDK resolves):
  *   pnpm --filter @orboto/mcp exec node scripts/demo-mcp-push.mjs \
- *     --url https://tasks.silentfuture.de/mcp \
+ *     --url https://orboto.example.com/mcp \
  *     --token orb_… \
  *     --ticket ORB-42
  *
@@ -41,7 +41,7 @@ function usage(reason) {
 
 example:
   pnpm --filter @orboto/mcp exec node scripts/demo-mcp-push.mjs \\
-    --url https://tasks.silentfuture.de/mcp \\
+    --url https://orboto.example.com/mcp \\
     --token orb_… \\
     --ticket ORB-42
 
