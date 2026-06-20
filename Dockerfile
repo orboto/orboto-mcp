@@ -59,8 +59,12 @@ ENV TZ=Europe/Berlin
 # Default to the HTTP transport — that's the container's reason to exist.
 # Operators running stdio mode locally don't go through this image at all
 # (they `node apps/mcp/dist/index.js` directly).
-ENV ORBIT_MCP_TRANSPORT=http \
-    ORBIT_MCP_PORT=3100
+# ORB-1172 — these MUST be ORBOTO_* (what src/index.ts reads). The old
+# ORBIT_* names were dead, so the image silently fell back to the stdio
+# default and never listened on :3100. The container-boot smoke test now
+# catches exactly this class of regression.
+ENV ORBOTO_MCP_TRANSPORT=http \
+    ORBOTO_MCP_PORT=3100
 
 COPY --from=builder /deploy/mcp/node_modules ./node_modules
 COPY --from=builder /deploy/mcp/dist ./dist
