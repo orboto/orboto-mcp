@@ -169,6 +169,21 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
       return;
     }
 
+    // ORB-1175 — the client presented a session id we don't know. The
+    // common cause is a deploy: the MCP container restarted and lost its
+    // in-memory `sessions` map, so every OAuth-connected client's existing
+    // session id is now unknown. Per the Streamable HTTP spec, answer 404
+    // to a request carrying an Mcp-Session-Id the server doesn't recognise
+    // — that is the signal MCP clients act on to transparently start a new
+    // session (re-initialise / re-auth) instead of surfacing an opaque
+    // execution error. WWW-Authenticate is included so OAuth clients can
+    // re-discover the flow if their token also needs refreshing.
+    if (sessionId && !isInitializeRequest(body)) {
+      return sendError(res, 404, 'Unknown or expired MCP session — reinitialize (the server restarted since this session began).', {
+        'WWW-Authenticate': wwwAuthChallenge(req, baseUrl, 'invalid_token', 'MCP session expired; reinitialize'),
+      });
+    }
+
     if (!sessionId && isInitializeRequest(body)) {
       // New session — mint a transport + server pair bound to this
       // request's token, register with the session map once
