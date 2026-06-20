@@ -114,8 +114,11 @@ describe('orboto_create_ticket', () => {
     expect(text).toContain('ACME-42');
     expect(text).toContain('91% AI match');
     expect(text).toContain('ACME-13');
-    const sc = res.structuredContent as { similarWarnings: unknown[] };
+    const sc = res.structuredContent as { similarWarnings: { ticketKey: string }[]; createdTicketKey: string };
     expect(sc.similarWarnings).toHaveLength(2);
+    // ORB-1176 — createdTicketKey is the NEW key, never a warning's key.
+    expect(sc.createdTicketKey).toBe('ACME-99');
+    expect(sc.similarWarnings.map((w) => w.ticketKey)).not.toContain(sc.createdTicketKey);
   });
 
   it('returns no warning block when similarWarnings is empty', async () => {
