@@ -53,7 +53,24 @@ interface LogEntry {
   durationMs: number;
   success: boolean;
   errorMessage?: string;
+  /** ORB-1180 — HTTP status of the failing API call (OrbotoApiError). */
+  statusCode?: number;
   clientHint?: string;
+}
+
+/**
+ * ORB-1180 — defensive secret-redaction on anything we persist to the
+ * admin MCP panel. The API error body is workspace error text (no
+ * secrets), but the non-API error path is `err.message` from arbitrary
+ * code and could carry a token / Authorization header / creds-in-URL.
+ * Strip the obvious shapes before the log row is written.
+ */
+function redactSecrets(text: string): string {
+  return text
+    .replace(/orb_[A-Za-z0-9_-]{8,}/g, 'orb_[redacted]')
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+    .replace(/eyJ[A-Za-z0-9._-]{10,}/g, '[redacted-jwt]')
+    .replace(/(https?:\/\/)[^/\s:@]+:[^/\s@]+@/gi, '$1[redacted]@');
 }
 
 async function postLogEntry(client: OrbotoClient, entry: LogEntry): Promise<void> {
@@ -95,7 +112,7 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
         durationMs: Date.now() - start,
         success: !isError,
         errorMessage: isError && result.content[0] && 'text' in result.content[0]
-          ? String(result.content[0].text).slice(0, 500)
+          ? redactSecrets(String(result.content[0].text)).slice(0, 500)
           : undefined,
         clientHint,
       });
@@ -108,7 +125,7 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
       // runtime's opaque "Error occurred during tool execution".
       if (err instanceof OrbotoApiError) {
         const text = formatApiError(err);
-        void postLogEntry(client, { toolName, durationMs, success: false, errorMessage: text.slice(0, 500), clientHint });
+        void postLogEntry(client, { toolName, durationMs, success: false, statusCode: err.status, errorMessage: redactSecrets(text).slice(0, 500), clientHint });
         return { isError: true, content: [{ type: 'text', text }] };
       }
       // Anything else is unexpected (a bug, not an API rejection) — log
@@ -117,7 +134,7 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
         toolName,
         durationMs,
         success: false,
-        errorMessage: (err instanceof Error ? err.message : String(err)).slice(0, 500),
+        errorMessage: redactSecrets(err instanceof Error ? err.message : String(err)).slice(0, 500),
         clientHint,
       });
       throw err;

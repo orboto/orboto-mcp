@@ -142,4 +142,32 @@ describe('withMetrics', () => {
     const result = await wrapped({});
     expect(result.content[0]).toEqual({ type: 'text', text: 'survives' });
   });
+
+  // ORB-1180 — admin-panel visibility: the failure log carries the
+  // structured HTTP status, and any secret-shaped text is redacted.
+  it('logs the structured statusCode on an OrbotoApiError', async () => {
+    const calls = captureFetch();
+    const wrapped = withMetrics(client, 'orboto_x', undefined, async () => {
+      throw new OrbotoApiError(403, '{"error":"Forbidden"}', 'https://orboto.example/x');
+    });
+    await wrapped({});
+    await new Promise((r) => setImmediate(r));
+    const body = calls[0].body as { success: boolean; statusCode: number; errorMessage: string };
+    expect(body.success).toBe(false);
+    expect(body.statusCode).toBe(403);
+    expect(body.errorMessage).toContain('403');
+  });
+
+  it('redacts secret-shaped text from the logged errorMessage', async () => {
+    const calls = captureFetch();
+    const wrapped = withMetrics(client, 'orboto_x', undefined, async () => {
+      throw new Error('failed with token orb_abcdef1234567890 and Bearer eyJabcdefghij.k.l');
+    });
+    await expect(wrapped({})).rejects.toThrow();
+    await new Promise((r) => setImmediate(r));
+    const body = calls[0].body as { errorMessage: string };
+    expect(body.errorMessage).not.toContain('orb_abcdef1234567890');
+    expect(body.errorMessage).toContain('orb_[redacted]');
+    expect(body.errorMessage).not.toContain('eyJabcdefghij.k.l');
+  });
 });
