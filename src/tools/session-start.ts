@@ -11,9 +11,9 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 
 export const sessionStartToolConfig = {
-  title: 'Re-orient: workspace rules + your in-progress work',
+  title: 'Load the rules you must follow + re-orient',
   description:
-    'Run at the START of a session and immediately AFTER any context compaction. Returns the workspace working-rules to follow, your in-progress tickets, and your running timer — the briefing that keeps you from losing the thread. Read-only; no side effects.',
+    'THE canonical way to LOAD the binding workspace rules you must follow as an agent. Run it as your FIRST action in a session and immediately AFTER any context compaction. Returns the complete assembled working-rules, your in-progress tickets, and your running timer. (Do NOT use orboto_list_agent_instructions to read the rules — that tool MANAGES/edits rule blocks for admins; this one is what you read to know how to work.) Read-only; no side effects.',
   inputSchema: z.object({ projectId: z.string().uuid().optional().describe('Include this project\'s rules too (workspace + project + your personal).') }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

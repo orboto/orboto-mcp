@@ -24,9 +24,9 @@ function renderBlock(b: BlockRow): string {
 }
 
 export const listAgentInstructionsToolConfig = {
-  title: 'List the workspace coding-agent rule blocks',
+  title: 'MANAGE the workspace coding-agent rule blocks (admin)',
   description:
-    'List the rule blocks at a scope: workspace (every agent; needs admin:ai:read), project (one project; needs project:edit), or personal (your own). Plus the assembled text for that context. To READ the rules to follow as an agent (not manage them) read the MCP server instructions / run session-start.',
+    'ADMIN/MANAGEMENT tool — lists the individual rule BLOCKS at a scope (workspace: needs admin:ai:read; project: needs project:edit; personal: your own) so they can be edited/toggled/reordered. This is NOT how you read the rules to follow. To LOAD the rules you must follow as an agent, call orboto_session_start instead — it returns the complete assembled rule set.',
   inputSchema: z.object({
     scope: z.enum(['workspace', 'project', 'personal']).default('workspace'),
     projectId: z.string().uuid().optional().describe('Required for scope=project.'),
