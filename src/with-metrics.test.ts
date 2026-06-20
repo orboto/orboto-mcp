@@ -9,7 +9,7 @@
  *   - The instrument POST is fire-and-forget — never delays the caller.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { OrbotoClient } from './orboto-client.js';
+import { OrbotoClient, OrbotoApiError } from './orboto-client.js';
 import { withMetrics } from './with-metrics.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -64,6 +64,37 @@ describe('withMetrics', () => {
     const body = calls[0].body as { success: boolean; errorMessage: string };
     expect(body.success).toBe(false);
     expect(body.errorMessage).toBe('kaboom');
+  });
+
+  // ORB-1174 — an OrbotoApiError becomes a structured, actionable isError
+  // result (not the runtime's opaque generic) so the agent can self-correct.
+  it('maps OrbotoApiError to a distinct, actionable isError result per status', async () => {
+    captureFetch();
+    const run = async (status: number, body: string) => {
+      const wrapped = withMetrics(client, 'orboto_x', undefined, async () => {
+        throw new OrbotoApiError(status, body, 'https://orboto.example/x');
+      });
+      const res = await wrapped({});
+      expect(res.isError).toBe(true);
+      return (res.content[0] as { text: string }).text;
+    };
+
+    const unauth = await run(401, '{"error":"Invalid API key"}');
+    expect(unauth).toContain('401');
+    expect(unauth).toMatch(/re-?authenticate/i);
+    expect(unauth).toContain('Invalid API key'); // the API's own message
+
+    const notFound = await run(404, '{"error":"Ticket not found"}');
+    expect(notFound).toContain('404');
+    expect(notFound).toMatch(/not found/i);
+
+    const server = await run(503, 'upstream down');
+    expect(server).toContain('503');
+    expect(server).toMatch(/retry/i);
+
+    // distinct messages, not the same opaque blob
+    expect(unauth).not.toBe(notFound);
+    expect(notFound).not.toBe(server);
   });
 
   it('treats result.isError=true as success: false (soft failure)', async () => {

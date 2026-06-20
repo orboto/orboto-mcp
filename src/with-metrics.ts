@@ -16,7 +16,37 @@
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbotoClient } from './orboto-client.js';
+import { OrbotoApiError, type OrbotoClient } from './orboto-client.js';
+
+/**
+ * ORB-1174 — turn an OrbotoApiError into an actionable, agent-visible
+ * tool-error message. Before this, a thrown error reached the MCP runtime
+ * as a generic "Error occurred during tool execution" — an MCP-only agent
+ * couldn't tell 401 (auth) from 404 (not found) from 500 (server) and so
+ * couldn't self-correct. We surface the status + a one-line hint + the
+ * API's own message. The API error body is workspace error text (no
+ * secrets); we still cap its length defensively.
+ */
+function formatApiError(err: OrbotoApiError): string {
+  let detail = err.body || '';
+  try {
+    const parsed = JSON.parse(err.body) as { error?: string; errorKey?: string };
+    if (parsed.error) detail = parsed.error;
+  } catch { /* body wasn't JSON — use it raw */ }
+  detail = detail.slice(0, 400);
+
+  const hint =
+    err.status === 401 ? 'Authentication failed — your token is invalid or expired. Re-authenticate (re-run the OAuth connect, or check the API key).'
+    : err.status === 403 ? 'Permission denied — your account lacks the required permission for this action.'
+    : err.status === 404 ? 'Not found — the referenced ticket / project / resource does not exist or you cannot see it.'
+    : err.status === 409 ? 'Conflict — the resource already exists or is in a state that blocks this change.'
+    : err.status === 422 ? 'Validation failed — the request was understood but rejected; adjust the input.'
+    : err.status === 429 ? 'Rate limited — slow down and retry shortly.'
+    : err.status >= 500 ? 'orboto server error — transient; retry shortly. If it persists the API may be mid-deploy.'
+    : 'Request rejected.';
+
+  return `orboto API error ${err.status}. ${hint}\nDetail: ${detail || '(no message)'}`;
+}
 
 interface LogEntry {
   toolName: string;
@@ -71,11 +101,21 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
       });
       return result;
     } catch (err) {
-      // Hard exception path — handler threw. Log and re-throw so
-      // the MCP runtime renders an isError response.
+      const durationMs = Date.now() - start;
+      // ORB-1174 — an OrbotoApiError carries a real HTTP status + message.
+      // Return it as a structured isError result so the agent + human see
+      // WHY (401 vs 404 vs 500) and can self-correct, instead of the
+      // runtime's opaque "Error occurred during tool execution".
+      if (err instanceof OrbotoApiError) {
+        const text = formatApiError(err);
+        void postLogEntry(client, { toolName, durationMs, success: false, errorMessage: text.slice(0, 500), clientHint });
+        return { isError: true, content: [{ type: 'text', text }] };
+      }
+      // Anything else is unexpected (a bug, not an API rejection) — log
+      // and re-throw so it surfaces loudly rather than being swallowed.
       void postLogEntry(client, {
         toolName,
-        durationMs: Date.now() - start,
+        durationMs,
         success: false,
         errorMessage: (err instanceof Error ? err.message : String(err)).slice(0, 500),
         clientHint,
