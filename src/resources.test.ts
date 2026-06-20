@@ -182,3 +182,24 @@ describe('orboto:// search resource', () => {
     expect(text).toContain('_No hits._');
   });
 });
+
+describe('orboto:// rules resource (ORB-1177)', () => {
+  it('returns the complete assembled workspace rules', async () => {
+    stub([{ json: { instructions: 'RULE 1: ticket-first.\nRULE 2: one commit per ticket.' } }]);
+    const server = buildServerWithResources();
+    const handler = getTemplateHandler(server, 'rules');
+    const out = await handler(new URL('orboto://rules'), {});
+    const text = out.contents[0]?.text;
+    expect(text).toContain('# orboto workspace agent rules');
+    expect(text).toContain('RULE 1: ticket-first.');
+    expect(text).toContain('RULE 2: one commit per ticket.');
+  });
+
+  it('degrades to a placeholder when no rules are configured', async () => {
+    stub([{ json: { instructions: '' } }]);
+    const server = buildServerWithResources();
+    const handler = getTemplateHandler(server, 'rules');
+    const out = await handler(new URL('orboto://rules'), {});
+    expect(out.contents[0]?.text).toContain('(no workspace rules configured)');
+  });
+});

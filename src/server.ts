@@ -237,9 +237,36 @@ const STATIC_MCP_HINTS = [
   'Ticket keys look like `PROJ-123`; the first segment is the project key.',
   'For "what am I working on?" prefer `orboto_my_tickets`; for "anything about X?" prefer `orboto_search`.',
   'Checklists: `orboto_get_ticket` includes them inline; use `orboto_get_checklists` when you only need the items. A linked-ticket suffix (`↪ [ACME-99]`) means the item is automatically checked/unchecked as that ticket\'s status moves.',
-  'Resources (`orboto://ticket/<key>`, `orboto://doc/<id>`, `orboto://project/<key>`, `orboto://search/<query>`) return read-only Markdown. The `orboto://` URI scheme stays canonical. Prompts (`plan-sprint`, `triage-my-tickets`, `summarize-project`, `estimate-ticket`, `find-duplicates`) are one-click guided workflows.',
+  'Resources (`orboto://rules`, `orboto://ticket/<key>`, `orboto://doc/<id>`, `orboto://project/<key>`, `orboto://search/<query>`) return read-only Markdown. The `orboto://` URI scheme stays canonical. `orboto://rules` returns the COMPLETE binding rules cap-independently (this instructions block may be truncated by the client). Prompts (`plan-sprint`, `triage-my-tickets`, `summarize-project`, `estimate-ticket`, `find-duplicates`) are one-click guided workflows.',
   'All writes respect the caller\'s project-level permissions — a 403 means the API rejected the write, not the MCP server.',
 ].join(' ');
+
+// ORB-1177 — MCP clients cap how much of the `instructions` block they
+// inject and silently truncate the overflow (ORB-1168 saw a 5k+ string
+// cut mid-rule). Enforce our own budget so the high-priority head (hints
+// + non-negotiables + the orboto_session_start / orboto://rules pointers)
+// always survives, and the workspace rules are cut at a WHOLE-LINE
+// boundary with an explicit pointer to the cap-independent full set,
+// rather than the client slicing mid-sentence. The complete rules are
+// always available via orboto_session_start + the orboto://rules resource.
+const INSTRUCTIONS_BUDGET = 4000;
+const RULES_HEADING = 'Working rules for this workspace:\n';
+const TRUNCATION_MARKER =
+  '\n\n[... rules truncated to fit the client cap — read the COMPLETE rules via the orboto_session_start tool or the orboto://rules resource ...]';
+
+export function assembleInstructions(head: string, workingRules: string, budget = INSTRUCTIONS_BUDGET): string {
+  const full = `${head}\n\n${RULES_HEADING}${workingRules}`;
+  if (full.length <= budget) return full;
+  const room = budget - head.length - RULES_HEADING.length - TRUNCATION_MARKER.length - 2; // 2 = the '\n\n' join
+  let kept = '';
+  if (room > 0) {
+    for (const line of workingRules.split('\n')) {
+      if (kept.length + line.length + 1 > room) break;
+      kept += (kept ? '\n' : '') + line;
+    }
+  }
+  return `${head}\n\n${RULES_HEADING}${kept}${TRUNCATION_MARKER}`;
+}
 
 export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<McpServer> {
   const client = new OrbotoClient(opts);
@@ -280,11 +307,13 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
       // orboto_session_start tool), and the core non-negotiables
       // FIRST so they survive any truncation; the full workspace rules
       // follow and only their tail is at risk.
-      instructions: [
-        STATIC_MCP_HINTS,
-        'FIRST ACTION this session: call the `orboto_session_start` tool — it returns the complete, authoritative binding rules you must follow (plus your in-progress work). Re-run it after any context compaction. If the rules below look cut off, `orboto_session_start` always has the full set. (Do NOT use `orboto_list_agent_instructions` to read the rules — that manages rule blocks for admins.) Core non-negotiables: ticket-first (claim or create a ticket before touching code), one commit per ticket with the ticket key in the subject line, push after each commit, and never mark work done that is not actually done.',
-        `Working rules for this workspace:\n${workingRules}`,
-      ].join('\n\n'),
+      instructions: assembleInstructions(
+        [
+          STATIC_MCP_HINTS,
+          'FIRST ACTION this session: call the `orboto_session_start` tool — it returns the complete, authoritative binding rules you must follow (plus your in-progress work). Re-run it after any context compaction. If the rules below look cut off, `orboto_session_start` and the `orboto://rules` resource always have the full set. (Do NOT use `orboto_list_agent_instructions` to read the rules — that manages rule blocks for admins.) Core non-negotiables: ticket-first (claim or create a ticket before touching code), one commit per ticket with the ticket key in the subject line, push after each commit, and never mark work done that is not actually done.',
+        ].join('\n\n'),
+        workingRules,
+      ),
     },
   );
 

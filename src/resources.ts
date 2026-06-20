@@ -65,6 +65,31 @@ interface NotificationsPage {
 
 export function registerOrbotoResources(server: McpServer, client: OrbotoClient): void {
   // -------------------------------------------------------------------------
+  // orboto://rules
+  //
+  // ORB-1177 — the COMPLETE assembled binding rules, cap-independent. The
+  // MCP `instructions` block is budgeted + may be truncated by the client
+  // (ORB-1168); this resource is never truncated, so a client can fetch
+  // the full rule set on demand. Same source orboto_session_start reads.
+  // -------------------------------------------------------------------------
+  server.registerResource(
+    'rules',
+    new ResourceTemplate('orboto://rules', { list: undefined }),
+    {
+      title: 'Workspace agent rules (complete)',
+      description: 'The complete, assembled binding rules you must follow as an agent in this workspace - cap-independent (the MCP instructions block may be truncated; this resource is not). orboto_session_start returns the same rules plus your in-progress work.',
+      mimeType: 'text/markdown',
+    },
+    async (uri) => {
+      const res = await client.get<{ instructions: string }>('/agent-instructions').catch(() => ({ instructions: '' }));
+      const rules = res?.instructions?.trim() || '(no workspace rules configured)';
+      return {
+        contents: [{ uri: uri.href, mimeType: 'text/markdown', text: `# orboto workspace agent rules\n\n${rules}` }],
+      };
+    },
+  );
+
+  // -------------------------------------------------------------------------
   // orboto://ticket/{ticketKey}
   // -------------------------------------------------------------------------
   server.registerResource(
