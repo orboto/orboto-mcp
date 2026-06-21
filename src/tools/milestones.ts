@@ -79,6 +79,8 @@ export function makeListMilestonesHandler(client: OrbotoClient) {
       structuredContent: {
         project: { key: project.key },
         milestones: milestones.map((m) => ({
+          // ORB-1179 — surface the uuid alongside the milestone key.
+          id: m.id,
           milestoneKey: m.milestoneKey ?? null,
           name: m.name,
           status: m.status,

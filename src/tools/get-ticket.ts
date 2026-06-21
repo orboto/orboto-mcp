@@ -128,6 +128,8 @@ export function makeGetTicketHandler(client: OrbotoClient) {
     return {
       content: [{ type: 'text', text: formatTicket(full, comments, hasMoreComments, checklists, gitActivity, parent, children) }],
       structuredContent: {
+        // ORB-1179 — surface the uuid alongside the key.
+        id: full.id,
         key: full.ticketKey,
         title: full.title,
         status: full.statusName ?? full.status,

@@ -36,8 +36,9 @@ describe('tools/list-projects', () => {
     });
     expect(result.structuredContent).toEqual({
       projects: [
-        { key: 'ACME', name: 'Acme', status: 'active', description: 'Customer portal' },
-        { key: 'TOOL', name: 'Internal Tools', status: 'draft', description: null },
+        // ORB-1179 — uuid surfaced alongside the key
+        { id: 'p1', key: 'ACME', name: 'Acme', status: 'active', description: 'Customer portal' },
+        { id: 'p2', key: 'TOOL', name: 'Internal Tools', status: 'draft', description: null },
       ],
       total: 2,
       totalProjects: 2,

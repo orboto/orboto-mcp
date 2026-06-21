@@ -101,6 +101,9 @@ export function makeListTicketsHandler(client: OrbotoClient) {
         count: page.items.length,
         hasMore: !!page.nextCursor,
         tickets: page.items.map((t) => ({
+          // ORB-1179 — surface the uuid alongside the key so a downstream
+          // write tool that only accepts a uuid has it without a lookup.
+          id: t.id,
           key: t.ticketKey,
           title: t.title,
           status: t.statusName ?? t.status,

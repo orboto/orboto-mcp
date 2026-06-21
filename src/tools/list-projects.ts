@@ -41,6 +41,8 @@ export const listProjectsToolConfig = {
   // breaking change for pinned client configs.
   outputSchema: z.object({
     projects: z.array(z.object({
+      // ORB-1179 — uuid alongside the key for downstream write tools.
+      id: z.string(),
       key: z.string(),
       name: z.string(),
       status: z.string(),
@@ -65,7 +67,7 @@ export function makeListProjectsHandler(client: OrbotoClient) {
       : projects;
     const cap = Math.min(limit ?? 50, 200);
     const shown = matched.slice(0, cap);
-    const rows = shown.map((p) => ({ key: p.key, name: p.name, status: p.status, description: p.description }));
+    const rows = shown.map((p) => ({ id: p.id, key: p.key, name: p.name, status: p.status, description: p.description }));
 
     // Text content is what the model reads; structured content is what
     // the client UI renders. The text stays description-free (compact)

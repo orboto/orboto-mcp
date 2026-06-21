@@ -101,7 +101,7 @@ export function makeListLabelsHandler(client: OrbotoClient) {
       content: [{ type: 'text', text }],
       structuredContent: {
         projectKey: project.key,
-        labels: labels.map((l) => ({ name: l.name, color: l.color })),
+        labels: labels.map((l) => ({ id: l.id, name: l.name, color: l.color })),
       },
     };
   };
