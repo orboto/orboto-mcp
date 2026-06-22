@@ -49,6 +49,14 @@ describe('orboto_analytics (ORB-1032)', () => {
     expect(res.structuredContent).toMatchObject({ report: 'flow-metrics', projectKey: 'ACME' });
   });
 
+  it('routes forecast (with milestone) to the forecast endpoint (ORB-1259)', async () => {
+    const calls = stub([{ json: PROJ }, { json: [{ id: 'm9', name: 'Sprint 9' }] }, { json: { confidence: 'ok' } }]);
+    const res = await makeAnalyticsHandler(client)({ projectKey: 'ACME', report: 'forecast', milestone: 'Sprint 9' });
+    expect(calls[2]).toContain('/projects/p1/analytics/forecast');
+    expect(calls[2]).toContain('milestoneId=m9');
+    expect(res.structuredContent).toMatchObject({ report: 'forecast', projectKey: 'ACME' });
+  });
+
   it('resolves a milestone + mode for earned-value', async () => {
     const calls = stub([{ json: PROJ }, { json: [{ id: 'm2', name: 'Sprint 7' }] }, { json: { available: true } }]);
     await makeAnalyticsHandler(client)({ projectKey: 'ACME', report: 'earned-value', milestone: 'Sprint 7', mode: 'money' });
