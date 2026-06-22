@@ -96,12 +96,15 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
   client: OrbotoClient,
   toolName: string,
   clientHint: string | undefined,
-  handler: (args: TArgs) => Promise<CallToolResult>,
-): (args: TArgs) => Promise<CallToolResult> {
-  return async (args: TArgs): Promise<CallToolResult> => {
+  // ORB-1252 — forward the SDK's `extra` (RequestHandlerExtra) so handlers can
+  // read the per-connection MCP sessionId (distinct per HTTP client even on a
+  // shared server). Backward-compatible: handlers that ignore it are unaffected.
+  handler: (args: TArgs, extra?: unknown) => Promise<CallToolResult>,
+): (args: TArgs, extra?: unknown) => Promise<CallToolResult> {
+  return async (args: TArgs, extra?: unknown): Promise<CallToolResult> => {
     const start = Date.now();
     try {
-      const result = await handler(args);
+      const result = await handler(args, extra);
       // Success path — but the handler can also signal a "soft"
       // failure via { isError: true } in the result. We treat that
       // as success=false in the log so dashboards reflect actual
@@ -153,7 +156,7 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ToolConfig = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ToolHandler = (args: any) => Promise<CallToolResult>;
+type ToolHandler = (args: any, extra?: any) => Promise<CallToolResult>;
 
 /**
  * Both `config` and the registerTool call use loose types — the SDK

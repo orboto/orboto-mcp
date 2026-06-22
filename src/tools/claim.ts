@@ -95,7 +95,7 @@ export const claimToolConfig = {
 export function makeClaimHandler(client: OrbotoClient) {
   return async ({ ticketKey, sole, force, noTimer, agentSessionToken }: {
     ticketKey: string; sole?: boolean; force?: boolean; noTimer?: boolean; agentSessionToken?: string;
-  }): Promise<CallToolResult> => {
+  }, extra?: { sessionId?: string }): Promise<CallToolResult> => {
     const me = await client.get<UserRow>('/users/me');
     const current = await resolveTicketByKey(client, ticketKey) as TicketWithAssignees;
     const currentAssignees = current.assignees ?? [];
@@ -151,10 +151,12 @@ export function makeClaimHandler(client: OrbotoClient) {
     // raised, so the assign/status work still counts as success.
     let timerStarted = false;
     let timerWarning: string | null = null;
-    // Bot/service accounts own their timer (per-instance, no auto-stop). Use the
-    // explicit token if given, else the auto per-process instance id. Human
-    // accounts fall through to the legacy auto-stop path.
-    const effectiveToken = agentSessionToken ?? (me.isBot ? MCP_AGENT_INSTANCE : undefined);
+    // Bot/service accounts own their timer (per-instance, no auto-stop). Instance
+    // id: explicit arg > per-connection MCP session id (distinct per client even
+    // on a shared HTTP server) > per-process id (stdio). Human accounts fall
+    // through to the legacy auto-stop path.
+    const mcpInstance = extra?.sessionId ? `mcp-${extra.sessionId}` : MCP_AGENT_INSTANCE;
+    const effectiveToken = agentSessionToken ?? (me.isBot ? mcpInstance : undefined);
     if (!noTimer) {
       try {
         if (effectiveToken) {
