@@ -57,6 +57,13 @@ describe('orboto_analytics (ORB-1032)', () => {
     expect(res.structuredContent).toMatchObject({ report: 'forecast', projectKey: 'ACME' });
   });
 
+  it('routes bottleneck to the analytics endpoint (ORB-1260)', async () => {
+    const calls = stub([{ json: PROJ }, { json: { bottleneckCategory: 'in_review' } }]);
+    const res = await makeAnalyticsHandler(client)({ projectKey: 'ACME', report: 'bottleneck' });
+    expect(calls[1]).toContain('/projects/p1/analytics/bottleneck');
+    expect(res.structuredContent).toMatchObject({ report: 'bottleneck', projectKey: 'ACME' });
+  });
+
   it('resolves a milestone + mode for earned-value', async () => {
     const calls = stub([{ json: PROJ }, { json: [{ id: 'm2', name: 'Sprint 7' }] }, { json: { available: true } }]);
     await makeAnalyticsHandler(client)({ projectKey: 'ACME', report: 'earned-value', milestone: 'Sprint 7', mode: 'money' });
