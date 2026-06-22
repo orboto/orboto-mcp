@@ -28,6 +28,13 @@ describe('orboto_analytics (ORB-1032)', () => {
     expect(res.structuredContent).toMatchObject({ report: 'overview', projectKey: 'ACME', data: { total: 5 } });
   });
 
+  it('routes estimation-accuracy to the analytics endpoint (ORB-1254)', async () => {
+    const calls = stub([{ json: PROJ }, { json: { cohorts: { combined: { confidence: 'insufficient' } } } }]);
+    const res = await makeAnalyticsHandler(client)({ projectKey: 'ACME', report: 'estimation-accuracy' });
+    expect(calls[1]).toContain('/projects/p1/analytics/estimation-accuracy');
+    expect(res.structuredContent).toMatchObject({ report: 'estimation-accuracy', projectKey: 'ACME' });
+  });
+
   it('resolves a milestone + mode for earned-value', async () => {
     const calls = stub([{ json: PROJ }, { json: [{ id: 'm2', name: 'Sprint 7' }] }, { json: { available: true } }]);
     await makeAnalyticsHandler(client)({ projectKey: 'ACME', report: 'earned-value', milestone: 'Sprint 7', mode: 'money' });

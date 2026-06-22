@@ -9,13 +9,13 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey } from './shared.js';
 
-const REPORTS = ['overview', 'burndown', 'velocity', 'cycle-time', 'workload', 'budget', 'earned-value'] as const;
+const REPORTS = ['overview', 'burndown', 'velocity', 'cycle-time', 'workload', 'budget', 'earned-value', 'estimation-accuracy'] as const;
 type Report = (typeof REPORTS)[number];
 
 export const analyticsToolConfig = {
   title: 'Project analytics',
   description:
-    "Read a project's analytics or Earned Value. `report`: overview, burndown, velocity, cycle-time, workload, budget, or earned-value. `milestone` scopes burndown + earned-value; `mode` (hours|money) applies to earned-value. Requires `analytics:view`; `budget` and the earned-value MONEY mode additionally require `budget:view` (you'll get a permission error otherwise).",
+    "Read a project's analytics or Earned Value. `report`: overview, burndown, velocity, cycle-time, workload, budget, earned-value, or estimation-accuracy. `estimation-accuracy` is the estimate-vs-actual calibration (multiplier + confidence per agents/humans/combined; degrades through tracked-effort -> cycle-time -> lead-time and reports insufficient rather than inventing a number) — reach for it for grounded effort estimation instead of free-reasoning from cycle time. `milestone` scopes burndown + earned-value; `mode` (hours|money) applies to earned-value. Requires `analytics:view`; `budget` and the earned-value MONEY mode additionally require `budget:view` (you'll get a permission error otherwise).",
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ORB").'),
     report: z.enum(REPORTS).describe('Which report to return.'),
