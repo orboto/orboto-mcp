@@ -81,12 +81,13 @@ export const claimToolConfig = {
     sole: z.boolean().optional().describe('Destructive take-over: remove every other assignee before adding self.'),
     force: z.boolean().optional().describe('Allow re-claiming a ticket whose status is already `done`.'),
     noTimer: z.boolean().optional().describe('Skip the timer-start step. Assign + status move still happen.'),
+    agentSessionToken: z.string().optional().describe('A stable per-agent-instance token. On a bot/service account this scopes the timer to your instance: concurrent per-instance timers, NO auto-stop (you own start AND stop). Omit on human accounts / for single-timer behaviour.'),
   }).shape,
 };
 
 export function makeClaimHandler(client: OrbotoClient) {
-  return async ({ ticketKey, sole, force, noTimer }: {
-    ticketKey: string; sole?: boolean; force?: boolean; noTimer?: boolean;
+  return async ({ ticketKey, sole, force, noTimer, agentSessionToken }: {
+    ticketKey: string; sole?: boolean; force?: boolean; noTimer?: boolean; agentSessionToken?: string;
   }): Promise<CallToolResult> => {
     const me = await client.get<UserRow>('/users/me');
     const current = await resolveTicketByKey(client, ticketKey) as TicketWithAssignees;
@@ -145,6 +146,13 @@ export function makeClaimHandler(client: OrbotoClient) {
     let timerWarning: string | null = null;
     if (!noTimer) {
       try {
+        if (agentSessionToken) {
+          // ORB-1252 — agent instance owns its timer: per-session, no auto-stop.
+          // Idempotent on the same ticket; 409 if this session already runs a
+          // different ticket (surfaced as a warning below).
+          await client.post('/time/timer/start', { ticketId: current.id, agentSessionToken });
+          timerStarted = true;
+        } else {
         const active = await client.get<ActiveTimer | null>('/time/timer').catch(() => null);
         if (active && active.ticketId && active.ticketId !== current.id) {
           const other = active.ticketTitle ? `"${active.ticketTitle}"` : active.ticketId;
@@ -162,6 +170,7 @@ export function makeClaimHandler(client: OrbotoClient) {
         if (!timerStarted && !timerWarning) {
           await client.post('/time/timer/start', { ticketId: current.id });
           timerStarted = true;
+        }
         }
       } catch (err) {
         if (err instanceof OrbotoApiError && err.status === 409) {
