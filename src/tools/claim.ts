@@ -43,7 +43,14 @@ interface UserRow {
   id: string;
   email: string;
   fullName: string | null;
+  isBot?: boolean;
 }
+
+// ORB-1252 — auto-derived per-instance timer token (zero config): one MCP
+// server process = one agent instance. On a bot/service account the timer is
+// scoped to it (concurrent per-instance, no auto-stop). An explicit
+// agentSessionToken arg overrides this.
+const MCP_AGENT_INSTANCE = `mcp-pid-${process.pid}`;
 
 interface ActiveTimer {
   id: string;
@@ -144,13 +151,17 @@ export function makeClaimHandler(client: OrbotoClient) {
     // raised, so the assign/status work still counts as success.
     let timerStarted = false;
     let timerWarning: string | null = null;
+    // Bot/service accounts own their timer (per-instance, no auto-stop). Use the
+    // explicit token if given, else the auto per-process instance id. Human
+    // accounts fall through to the legacy auto-stop path.
+    const effectiveToken = agentSessionToken ?? (me.isBot ? MCP_AGENT_INSTANCE : undefined);
     if (!noTimer) {
       try {
-        if (agentSessionToken) {
+        if (effectiveToken) {
           // ORB-1252 — agent instance owns its timer: per-session, no auto-stop.
           // Idempotent on the same ticket; 409 if this session already runs a
           // different ticket (surfaced as a warning below).
-          await client.post('/time/timer/start', { ticketId: current.id, agentSessionToken });
+          await client.post('/time/timer/start', { ticketId: current.id, agentSessionToken: effectiveToken });
           timerStarted = true;
         } else {
         const active = await client.get<ActiveTimer | null>('/time/timer').catch(() => null);
