@@ -28,21 +28,23 @@ export const listAgentInstructionsToolConfig = {
   description:
     'ADMIN/MANAGEMENT tool — lists the individual rule BLOCKS at a scope (workspace: needs admin:ai:read; project: needs project:edit; personal: your own) so they can be edited/toggled/reordered. This is NOT how you read the rules to follow. To LOAD the rules you must follow as an agent, call orboto_session_start instead — it returns the complete assembled rule set.',
   inputSchema: z.object({
-    scope: z.enum(['workspace', 'project', 'personal']).default('workspace'),
+    scope: z.enum(['workspace', 'customer', 'project', 'personal']).default('workspace'),
     projectId: z.string().uuid().optional().describe('Required for scope=project.'),
+    customerId: z.string().uuid().optional().describe('Required for scope=customer.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
-function scopeQs(scope: string, projectId?: string): string {
+function scopeQs(scope: string, projectId?: string, customerId?: string): string {
   const p = new URLSearchParams({ scope });
   if (projectId) p.set('projectId', projectId);
+  if (customerId) p.set('customerId', customerId);
   return p.toString();
 }
 
 export function makeListAgentInstructionsHandler(client: OrbotoClient) {
-  return async (input: { scope?: string; projectId?: string } = {}): Promise<CallToolResult> => {
-    const res = await client.get<{ blocks: BlockRow[]; assembled: string }>(`/agent-instructions/blocks?${scopeQs(input.scope ?? 'workspace', input.projectId)}`);
+  return async (input: { scope?: string; projectId?: string; customerId?: string } = {}): Promise<CallToolResult> => {
+    const res = await client.get<{ blocks: BlockRow[]; assembled: string }>(`/agent-instructions/blocks?${scopeQs(input.scope ?? 'workspace', input.projectId, input.customerId)}`);
     const text = res.blocks.length
       ? res.blocks.map(renderBlock).join('\n')
       : 'No rule blocks configured.';
@@ -56,12 +58,13 @@ export function makeListAgentInstructionsHandler(client: OrbotoClient) {
 export const createAgentInstructionToolConfig = {
   title: 'Add a custom coding-agent rule block',
   description:
-    'Create a custom rule block at a scope: workspace (every agent; admin:ai:write), project (one project; project:edit), or personal (your own). For scope=project pass projectId.',
+    'Create a custom rule block at a scope: workspace (every agent; admin:ai:write), customer (every project of one customer; customer:write), project (one project; project:edit), or personal (your own). For scope=customer pass customerId; for scope=project pass projectId.',
   inputSchema: z.object({
     title: z.string().min(1).max(120),
     body: z.string().min(1).max(8000).describe('The rule text the agent should follow.'),
-    scope: z.enum(['workspace', 'project', 'personal']).default('workspace'),
+    scope: z.enum(['workspace', 'customer', 'project', 'personal']).default('workspace'),
     projectId: z.string().uuid().optional().describe('Required for scope=project.'),
+    customerId: z.string().uuid().optional().describe('Required for scope=customer.'),
     enabled: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
   }).shape,
@@ -69,9 +72,9 @@ export const createAgentInstructionToolConfig = {
 };
 
 export function makeCreateAgentInstructionHandler(client: OrbotoClient) {
-  return async (input: { title: string; body: string; scope?: string; projectId?: string; enabled?: boolean; sortOrder?: number }): Promise<CallToolResult> => {
-    const { scope, projectId, ...body } = input;
-    const row = await client.post<BlockRow>(`/agent-instructions/blocks?${scopeQs(scope ?? 'workspace', projectId)}`, body);
+  return async (input: { title: string; body: string; scope?: string; projectId?: string; customerId?: string; enabled?: boolean; sortOrder?: number }): Promise<CallToolResult> => {
+    const { scope, projectId, customerId, ...body } = input;
+    const row = await client.post<BlockRow>(`/agent-instructions/blocks?${scopeQs(scope ?? 'workspace', projectId, customerId)}`, body);
     return { content: [{ type: 'text', text: `Created rule block "${row.title}" (id ${row.id}).` }], structuredContent: row as unknown as Record<string, unknown> };
   };
 }
