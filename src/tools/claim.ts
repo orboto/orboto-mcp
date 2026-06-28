@@ -34,6 +34,7 @@
  *     surface them as a `timerWarning` field on the structured
  *     response, same shape as the wrapper.
  */
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
@@ -46,11 +47,15 @@ interface UserRow {
   isBot?: boolean;
 }
 
-// ORB-1252 — auto-derived per-instance timer token (zero config): one MCP
-// server process = one agent instance. On a bot/service account the timer is
-// scoped to it (concurrent per-instance, no auto-stop). An explicit
-// agentSessionToken arg overrides this.
-const MCP_AGENT_INSTANCE = `mcp-pid-${process.pid}`;
+// ORB-1252 / ORB-1283 — auto-derived per-instance timer token (zero config):
+// one MCP server process = one agent instance. On a bot/service account the
+// timer is scoped to it (concurrent per-instance, no cross-instance stomp).
+// A per-process random UUID (minted once at module load) is used rather than
+// the PID, because PIDs are recycled by the OS — a fresh process could inherit
+// a recycled PID and collide with a previous instance's stale/abandoned timer.
+// Precedence at the call site: explicit agentSessionToken arg > per-connection
+// MCP session id (HTTP) > this per-process token (stdio).
+const MCP_AGENT_INSTANCE = `mcp-${randomUUID()}`;
 
 interface ActiveTimer {
   id: string;
