@@ -199,6 +199,25 @@ export class OrbotoClient {
       contentType: res.headers.get('content-type') ?? 'application/octet-stream',
     };
   }
+
+  /**
+   * GET an endpoint that returns a binary body (backup-run ZIP download,
+   * etc.). Same shape as postBinary, GET method. (ORB-1301.)
+   */
+  async getBinary(path: string): Promise<{ bytes: Uint8Array; contentType: string }> {
+    const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+    const headers: Record<string, string> = { ...this.headers, Accept: '*/*' };
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      throw new OrbotoApiError(res.status, errBody, url);
+    }
+    const ab = await res.arrayBuffer();
+    return {
+      bytes: new Uint8Array(ab),
+      contentType: res.headers.get('content-type') ?? 'application/octet-stream',
+    };
+  }
 }
 
 /**

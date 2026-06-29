@@ -155,6 +155,11 @@ import {
   triggerBackupToolConfig, makeTriggerBackupHandler,
 } from './tools/admin-writes.js';
 import {
+  createFullBackupToolConfig, makeCreateFullBackupHandler,
+  listBackupsToolConfig, makeListBackupsHandler,
+  downloadBackupToolConfig, makeDownloadBackupHandler,
+} from './tools/backup.js';
+import {
   primerFactListToolConfig, makePrimerFactListHandler,
   primerFactAddToolConfig, makePrimerFactAddHandler,
   primerFactUpdateToolConfig, makePrimerFactUpdateHandler,
@@ -470,6 +475,9 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_list_users', listUsersToolConfig, makeListUsersHandler(client));
   reg('orboto_get_audit_log', getAuditLogToolConfig, makeGetAuditLogHandler(client));
   reg('orboto_trigger_backup', triggerBackupToolConfig, makeTriggerBackupHandler(client));
+  reg('orboto_create_full_backup', createFullBackupToolConfig, makeCreateFullBackupHandler(client));
+  reg('orboto_list_backups', listBackupsToolConfig, makeListBackupsHandler(client));
+  reg('orboto_download_backup', downloadBackupToolConfig, makeDownloadBackupHandler(client));
 
   // ORB-510 / ORB-513 — primer-fact tools. Wraps the ORB-511 REST
   // surface so agents can record structured project facts that the
