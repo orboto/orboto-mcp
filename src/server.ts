@@ -123,6 +123,8 @@ import {
   closeTicketToolConfig, makeCloseTicketHandler,
   deleteTicketToolConfig, makeDeleteTicketHandler,
   commentToolConfig, makeCommentHandler,
+  updateCommentToolConfig, makeUpdateCommentHandler,
+  deleteCommentToolConfig, makeDeleteCommentHandler,
   assignToolConfig, makeAssignHandler,
   unassignToolConfig, makeUnassignHandler,
   labelTicketToolConfig, makeLabelTicketHandler,
@@ -425,6 +427,8 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_close_ticket', closeTicketToolConfig, makeCloseTicketHandler(client));
   reg('orboto_delete_ticket', deleteTicketToolConfig, makeDeleteTicketHandler(client));
   reg('orboto_comment', commentToolConfig, makeCommentHandler(client));
+  reg('orboto_update_comment', updateCommentToolConfig, makeUpdateCommentHandler(client));
+  reg('orboto_delete_comment', deleteCommentToolConfig, makeDeleteCommentHandler(client));
   reg('orboto_assign', assignToolConfig, makeAssignHandler(client));
   reg('orboto_unassign', unassignToolConfig, makeUnassignHandler(client));
   reg('orboto_label_ticket', labelTicketToolConfig, makeLabelTicketHandler(client));

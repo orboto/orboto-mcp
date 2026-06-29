@@ -479,6 +479,64 @@ export function makeCommentHandler(client: OrbotoClient) {
 }
 
 // ---------------------------------------------------------------------------
+// orboto_update_comment  (ORB-1285)
+// ---------------------------------------------------------------------------
+
+export const updateCommentToolConfig = {
+  title: 'Edit a ticket comment',
+  description:
+    'Edit the text of a comment you authored (super-admins can edit any). Markdown. The prior text is snapshotted into the comment\'s revision history. Pass the commentId — from orboto_comment\'s response or orboto_get_ticket.',
+  inputSchema: z.object({
+    ticketKey: z.string().min(3),
+    commentId: z.string().uuid(),
+    text: z.string().min(1).describe('New comment body (replaces the old text).'),
+  }).shape,
+  annotations: { idempotentHint: true },
+};
+
+export function makeUpdateCommentHandler(client: OrbotoClient) {
+  return async ({ ticketKey, commentId, text }: {
+    ticketKey: string; commentId: string; text: string;
+  }): Promise<CallToolResult> => {
+    const ticket = await resolveTicketByKey(client, ticketKey);
+    const updated = await client.patch<CommentResponse>(
+      `/tickets/${ticket.id}/comments/${commentId}`,
+      { content: text },
+    );
+    return {
+      content: [{ type: 'text', text: `Edited comment ${commentId.slice(0, 8)} on [${ticket.ticketKey}].` }],
+      structuredContent: { ticketKey: ticket.ticketKey, commentId: updated.id, editedAt: updated.createdAt },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// orboto_delete_comment  (ORB-1285)
+// ---------------------------------------------------------------------------
+
+export const deleteCommentToolConfig = {
+  title: 'Delete a ticket comment',
+  description:
+    'Delete a comment. You can always delete your own; deleting another user\'s comment needs the `comment:delete_others` permission in the project (super-admins always can). Pass the commentId — from orboto_comment\'s response or orboto_get_ticket.',
+  inputSchema: z.object({
+    ticketKey: z.string().min(3),
+    commentId: z.string().uuid(),
+  }).shape,
+  annotations: { destructiveHint: true },
+};
+
+export function makeDeleteCommentHandler(client: OrbotoClient) {
+  return async ({ ticketKey, commentId }: { ticketKey: string; commentId: string }): Promise<CallToolResult> => {
+    const ticket = await resolveTicketByKey(client, ticketKey);
+    await client.delete(`/tickets/${ticket.id}/comments/${commentId}`);
+    return {
+      content: [{ type: 'text', text: `Deleted comment ${commentId.slice(0, 8)} on [${ticket.ticketKey}].` }],
+      structuredContent: { ticketKey: ticket.ticketKey, commentId, deleted: true },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
 // orboto_assign / orboto_unassign
 // ---------------------------------------------------------------------------
 

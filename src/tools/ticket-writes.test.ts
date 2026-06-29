@@ -12,6 +12,7 @@ import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
 import {
   makeCreateTicketHandler, makeUpdateTicketHandler, makeMoveTicketHandler,
   makeCloseTicketHandler, makeDeleteTicketHandler, makeCommentHandler, makeAssignHandler,
+  makeUpdateCommentHandler, makeDeleteCommentHandler,
   makeUnassignHandler, makeSetMilestoneHandler,
   makeAddTicketDependencyHandler, makeRemoveTicketDependencyHandler,
   makeListTicketDependenciesHandler,
@@ -319,6 +320,32 @@ describe('orboto_comment', () => {
       ticketKey: 'ACME-1', text: 'shh', isInternal: true,
     });
     expect((res.content[0] as { text: string }).text).toContain('(internal)');
+  });
+});
+
+describe('orboto_update_comment / orboto_delete_comment (ORB-1285)', () => {
+  it('update PATCHes the comment by id with the new content', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: { id: 'c1', content: 'fixed', isInternal: false, createdAt: 'now' } },
+    ]);
+    await makeUpdateCommentHandler(client)({ ticketKey: 'ACME-1', commentId: 'c1', text: 'fixed' });
+    expect(calls[2].method).toBe('PATCH');
+    expect(calls[2].url).toContain('/tickets/t1/comments/c1');
+    expect(calls[2].body).toEqual({ content: 'fixed' });
+  });
+
+  it('delete DELETEs the comment by id', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: {} },
+    ]);
+    const res = await makeDeleteCommentHandler(client)({ ticketKey: 'ACME-1', commentId: 'c1' });
+    expect(calls[2].method).toBe('DELETE');
+    expect(calls[2].url).toContain('/tickets/t1/comments/c1');
+    expect((res.structuredContent as { deleted: boolean }).deleted).toBe(true);
   });
 });
 

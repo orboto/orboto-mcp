@@ -166,6 +166,7 @@ export function makeGetTicketHandler(client: OrbotoClient) {
         raci: (full.raci ?? []).map((r) => ({ userId: r.userId, fullName: r.fullName, role: r.role })),
         labels: (full.labels ?? []).map((l) => l.name),
         comments: comments.map((c) => ({
+          id: c.id, // ORB-1285 — needed to target a comment for edit/delete
           author: c.userName ?? null,
           body: c.content,
           createdAt: c.createdAt,
