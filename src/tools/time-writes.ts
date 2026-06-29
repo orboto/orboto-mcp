@@ -40,6 +40,7 @@ interface TimeEntry {
   durationMinutes: number;
   description: string | null;
   loggedAt: string;
+  agentLabel?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -164,6 +165,105 @@ export function makeLogTimeHandler(client: OrbotoClient) {
         description: entry.description,
         loggedAt: entry.loggedAt,
       },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// orboto_list_time_entries  (ORB-1292)
+// ---------------------------------------------------------------------------
+
+export const listTimeEntriesToolConfig = {
+  title: 'List a ticket\'s time entries',
+  description:
+    'List the time entries on a ticket (most recent first) with each entry\'s id, duration, date and agent label. Use this to FIND an over-tracked entry before fixing it with orboto_edit_time_entry / orboto_delete_time_entry.',
+  inputSchema: z.object({
+    ticketKey: z.string().min(3),
+    limit: z.number().int().positive().max(100).optional().describe('Default 25.'),
+  }).shape,
+};
+
+export function makeListTimeEntriesHandler(client: OrbotoClient) {
+  return async ({ ticketKey, limit }: { ticketKey: string; limit?: number }): Promise<CallToolResult> => {
+    const ticket = await resolveTicketByKey(client, ticketKey);
+    const page = await client.get<{ items: TimeEntry[]; nextCursor: string | null }>(
+      `/tickets/${ticket.id}/time-entries?limit=${limit ?? 25}`,
+    );
+    const lines = page.items.map((e) =>
+      `- ${e.durationMinutes} min — ${e.loggedAt}${e.agentLabel ? ` [${e.agentLabel}]` : ''}${e.description ? ` — ${e.description}` : ''} (id ${e.id})`,
+    );
+    return {
+      content: [{
+        type: 'text',
+        text: page.items.length ? `Time entries on [${ticket.ticketKey}]:\n${lines.join('\n')}` : `No time entries on [${ticket.ticketKey}].`,
+      }],
+      structuredContent: { ticketKey: ticket.ticketKey, entries: page.items, nextCursor: page.nextCursor },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// orboto_edit_time_entry  (ORB-1292)
+// ---------------------------------------------------------------------------
+
+export const editTimeEntryToolConfig = {
+  title: 'Edit / correct a time entry',
+  description:
+    'Correct a time entry - fix an over-tracked duration, edit its note, change its date, or re-target it to another ticket. Use THIS (not orboto_log_time) to fix a wrong entry: log_time is additive and only makes the total worse. Get the entryId from orboto_list_time_entries (or an orboto_log_time response). Blocked if the entry is locked by an approved timesheet.',
+  inputSchema: z.object({
+    ticketKey: z.string().min(3).describe('The ticket the entry currently belongs to.'),
+    entryId: z.string().uuid(),
+    durationMinutes: z.number().int().positive().optional(),
+    description: z.string().nullish(),
+    loggedAt: z.string().datetime().optional(),
+    moveToTicketKey: z.string().min(3).optional().describe('Re-target the entry to a different ticket.'),
+  }).shape,
+  annotations: { idempotentHint: true },
+};
+
+export function makeEditTimeEntryHandler(client: OrbotoClient) {
+  return async ({ ticketKey, entryId, durationMinutes, description, loggedAt, moveToTicketKey }: {
+    ticketKey: string; entryId: string; durationMinutes?: number; description?: string | null; loggedAt?: string; moveToTicketKey?: string;
+  }): Promise<CallToolResult> => {
+    const ticket = await resolveTicketByKey(client, ticketKey);
+    const body: Record<string, unknown> = {};
+    if (durationMinutes !== undefined) body.durationMinutes = durationMinutes;
+    if (description !== undefined) body.description = description;
+    if (loggedAt) body.loggedAt = loggedAt;
+    if (moveToTicketKey) {
+      const dest = await resolveTicketByKey(client, moveToTicketKey);
+      body.ticketId = dest.id;
+    }
+    const updated = await client.patch<TimeEntry>(`/tickets/${ticket.id}/time-entries/${entryId}`, body);
+    return {
+      content: [{ type: 'text', text: `Updated time entry ${entryId.slice(0, 8)} on [${ticket.ticketKey}] → ${updated.durationMinutes} min.` }],
+      structuredContent: { ticketKey: ticket.ticketKey, entryId: updated.id, durationMinutes: updated.durationMinutes, ticketId: updated.ticketId },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// orboto_delete_time_entry  (ORB-1292)
+// ---------------------------------------------------------------------------
+
+export const deleteTimeEntryToolConfig = {
+  title: 'Delete a time entry',
+  description:
+    'Delete a time entry - e.g. a bogus over-tracked entry that should not exist at all (prefer orboto_edit_time_entry when it should just have a different duration). You can delete your own; deleting another user\'s needs the `time:delete_others` permission. Blocked if locked by an approved timesheet. Get the entryId from orboto_list_time_entries.',
+  inputSchema: z.object({
+    ticketKey: z.string().min(3),
+    entryId: z.string().uuid(),
+  }).shape,
+  annotations: { destructiveHint: true },
+};
+
+export function makeDeleteTimeEntryHandler(client: OrbotoClient) {
+  return async ({ ticketKey, entryId }: { ticketKey: string; entryId: string }): Promise<CallToolResult> => {
+    const ticket = await resolveTicketByKey(client, ticketKey);
+    await client.delete(`/tickets/${ticket.id}/time-entries/${entryId}`);
+    return {
+      content: [{ type: 'text', text: `Deleted time entry ${entryId.slice(0, 8)} from [${ticket.ticketKey}].` }],
+      structuredContent: { ticketKey: ticket.ticketKey, entryId, deleted: true },
     };
   };
 }

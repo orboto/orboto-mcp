@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';
 import {
   makeTimerStartHandler, makeTimerStopHandler, makeLogTimeHandler,
+  makeListTimeEntriesHandler, makeEditTimeEntryHandler, makeDeleteTimeEntryHandler,
 } from './time-writes.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -112,5 +113,43 @@ describe('orboto_log_time', () => {
       ticketKey: 'ACME-1', durationMinutes: 30, loggedAt: '2026-04-20T10:00:00Z',
     });
     expect(calls[2].body).toEqual({ durationMinutes: 30, loggedAt: '2026-04-20T10:00:00Z' });
+  });
+});
+
+describe('orboto_list_time_entries / edit / delete (ORB-1292)', () => {
+  it('list GETs the ticket time entries and returns them structured', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: { items: [{ id: 'e1', ticketId: 't1', userId: 'u1', durationMinutes: 476, loggedAt: 'now' }], nextCursor: null } },
+    ]);
+    const res = await makeListTimeEntriesHandler(client)({ ticketKey: 'ACME-1' });
+    expect(calls[2].method).toBe('GET');
+    expect(calls[2].url).toContain('/tickets/t1/time-entries');
+    expect((res.structuredContent as { entries: unknown[] }).entries).toHaveLength(1);
+  });
+
+  it('edit PATCHes the entry by id with the new duration', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: { id: 'e1', ticketId: 't1', userId: 'u1', durationMinutes: 45, loggedAt: 'now' } },
+    ]);
+    await makeEditTimeEntryHandler(client)({ ticketKey: 'ACME-1', entryId: 'e1', durationMinutes: 45 });
+    expect(calls[2].method).toBe('PATCH');
+    expect(calls[2].url).toContain('/tickets/t1/time-entries/e1');
+    expect(calls[2].body).toEqual({ durationMinutes: 45 });
+  });
+
+  it('delete DELETEs the entry by id', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: {} },
+    ]);
+    const res = await makeDeleteTimeEntryHandler(client)({ ticketKey: 'ACME-1', entryId: 'e1' });
+    expect(calls[2].method).toBe('DELETE');
+    expect(calls[2].url).toContain('/tickets/t1/time-entries/e1');
+    expect((res.structuredContent as { deleted: boolean }).deleted).toBe(true);
   });
 });

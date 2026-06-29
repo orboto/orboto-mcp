@@ -138,6 +138,9 @@ import {
   timerStartToolConfig, makeTimerStartHandler,
   timerStopToolConfig, makeTimerStopHandler,
   logTimeToolConfig, makeLogTimeHandler,
+  listTimeEntriesToolConfig, makeListTimeEntriesHandler,
+  editTimeEntryToolConfig, makeEditTimeEntryHandler,
+  deleteTimeEntryToolConfig, makeDeleteTimeEntryHandler,
 } from './tools/time-writes.js';
 import {
   checkToolConfig, makeCheckHandler,
@@ -450,6 +453,9 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_timer_start', timerStartToolConfig, makeTimerStartHandler(client));
   reg('orboto_timer_stop', timerStopToolConfig, makeTimerStopHandler(client));
   reg('orboto_log_time', logTimeToolConfig, makeLogTimeHandler(client));
+  reg('orboto_list_time_entries', listTimeEntriesToolConfig, makeListTimeEntriesHandler(client));
+  reg('orboto_edit_time_entry', editTimeEntryToolConfig, makeEditTimeEntryHandler(client));
+  reg('orboto_delete_time_entry', deleteTimeEntryToolConfig, makeDeleteTimeEntryHandler(client));
 
   // ORB-309 Phase C — Group 3: checklist writes (ORB-234 surface).
   reg('orboto_check', checkToolConfig, makeCheckHandler(client));
