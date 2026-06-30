@@ -131,7 +131,7 @@ describe('orboto_primer_fact_list', () => {
     ]);
     await expect(
       makePrimerFactListHandler(client)({ projectKey: 'ORB' })
-    ).rejects.toThrow(/project:edit|admin:system:write/);
+    ).rejects.toThrow(/project:edit|admin:ai:write/);
   });
 
   it('input schema rejects an unknown category', () => {

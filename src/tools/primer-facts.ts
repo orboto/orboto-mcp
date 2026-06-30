@@ -65,7 +65,7 @@ function rewritePermissionError(action: string): (err: unknown) => never {
   return (err) => {
     if (err instanceof OrbotoApiError && err.status === 403) {
       throw new Error(
-        `${action} requires project:edit on the target project, or admin:system:write for workspace-wide facts.`,
+        `${action} requires project:edit on the target project, or admin:ai:write for workspace-wide facts.`,
       );
     }
     if (err instanceof OrbotoApiError && err.status === 404) {
