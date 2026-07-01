@@ -21,10 +21,10 @@ interface EmbeddingStatusResponse {
   model: string | null;
   dimensions: number;
   coverage: {
-    ticket: { embedded: number; total: number };
-    comment: { embedded: number; total: number };
-    doc: { embedded: number; total: number };
-    overall: { embedded: number; total: number; pending: number };
+    ticket: { embedded: number; total: number; embeddable: number };
+    comment: { embedded: number; total: number; embeddable: number };
+    doc: { embedded: number; total: number; embeddable: number };
+    overall: { embedded: number; total: number; embeddable: number; pending: number; noContent: number };
   };
   breaker: { tripped: boolean; trippedUntil: string | null; consecutiveFailures: number; lastTrippedReason: string | null };
   lastEmbeddedAt: string | null;
@@ -42,7 +42,9 @@ export const embeddingStatusToolConfig = {
     dimensions: z.number(),
     embedded: z.number(),
     total: z.number(),
+    embeddable: z.number(),
     pending: z.number(),
+    noContent: z.number(),
     breakerTripped: z.boolean(),
     breakerReason: z.string().nullable(),
     lastEmbeddedAt: z.string().nullable(),
@@ -62,9 +64,9 @@ export function makeEmbeddingStatusHandler(client: OrbotoClient) {
       lines.push('Embeddings: NOT configured — no embedding provider set in Admin → AI Settings.');
     } else {
       lines.push(`Embeddings: ${s.provider} / ${s.model} · ${s.dimensions} dims`);
-      lines.push(`Coverage: ${o.embedded} / ${o.total} embedded · ${o.pending} pending`);
+      lines.push(`Coverage: ${o.embedded} / ${o.embeddable} embeddable embedded · ${o.pending} pending${o.noContent > 0 ? ` · ${o.noContent} with no embeddable content (excluded)` : ''}`);
       lines.push(
-        `  tickets ${s.coverage.ticket.embedded}/${s.coverage.ticket.total} · comments ${s.coverage.comment.embedded}/${s.coverage.comment.total} · docs ${s.coverage.doc.embedded}/${s.coverage.doc.total}`,
+        `  tickets ${s.coverage.ticket.embedded}/${s.coverage.ticket.embeddable} · comments ${s.coverage.comment.embedded}/${s.coverage.comment.embeddable} · docs ${s.coverage.doc.embedded}/${s.coverage.doc.embeddable} (embeddable)`,
       );
       lines.push(
         `Circuit breaker: ${s.breaker.tripped ? `TRIPPED — ${s.breaker.lastTrippedReason ?? 'unknown reason'} (${s.breaker.consecutiveFailures} consecutive failures)` : 'ok'}`,
@@ -86,7 +88,9 @@ export function makeEmbeddingStatusHandler(client: OrbotoClient) {
         dimensions: s.dimensions,
         embedded: o.embedded,
         total: o.total,
+        embeddable: o.embeddable,
         pending: o.pending,
+        noContent: o.noContent,
         breakerTripped: s.breaker.tripped,
         breakerReason: s.breaker.lastTrippedReason,
         lastEmbeddedAt: s.lastEmbeddedAt,
