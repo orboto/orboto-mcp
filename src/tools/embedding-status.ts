@@ -28,6 +28,8 @@ interface EmbeddingStatusResponse {
   };
   breaker: { tripped: boolean; trippedUntil: string | null; consecutiveFailures: number; lastTrippedReason: string | null };
   lastEmbeddedAt: string | null;
+  stalled: boolean;
+  stalledMinutes: number | null;
 }
 
 export const embeddingStatusToolConfig = {
@@ -48,6 +50,8 @@ export const embeddingStatusToolConfig = {
     breakerTripped: z.boolean(),
     breakerReason: z.string().nullable(),
     lastEmbeddedAt: z.string().nullable(),
+    stalled: z.boolean(),
+    stalledMinutes: z.number().nullable(),
   }).shape,
   annotations: {
     readOnlyHint: true,
@@ -72,7 +76,12 @@ export function makeEmbeddingStatusHandler(client: OrbotoClient) {
         `Circuit breaker: ${s.breaker.tripped ? `TRIPPED — ${s.breaker.lastTrippedReason ?? 'unknown reason'} (${s.breaker.consecutiveFailures} consecutive failures)` : 'ok'}`,
       );
       lines.push(`Last embedded: ${s.lastEmbeddedAt ?? 'never'}`);
-      if (o.pending > 0 && !s.breaker.tripped) {
+      if (s.stalled) {
+        lines.push('');
+        lines.push(
+          `STALLED — ${o.pending} pending, breaker healthy, but nothing has embedded for ${s.stalledMinutes} min. The provider is likely failing transiently (e.g. Ollama down / model unloaded); those errors don't trip the breaker. Check the embedding provider, then re-run the backfill.`,
+        );
+      } else if (o.pending > 0 && !s.breaker.tripped) {
         lines.push('');
         lines.push(
           `${o.pending} pending with a healthy breaker — trigger a backfill from Admin → AI Settings, or check the embedding worker / provider throughput if the count isn't draining.`,
@@ -94,6 +103,8 @@ export function makeEmbeddingStatusHandler(client: OrbotoClient) {
         breakerTripped: s.breaker.tripped,
         breakerReason: s.breaker.lastTrippedReason,
         lastEmbeddedAt: s.lastEmbeddedAt,
+        stalled: s.stalled,
+        stalledMinutes: s.stalledMinutes,
       },
     };
   };
