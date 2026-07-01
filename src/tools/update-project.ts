@@ -95,7 +95,7 @@ export function makeUpdateProjectHandler(client: OrbotoClient) {
 export const createProjectToolConfig = {
   title: 'Create a new project',
   description:
-    'Create a new project in the workspace. `name` is required; `key` is optional and the API auto-derives one from the name when omitted (uppercase initials). Returns the new project\'s id + key + status (`active` by default). Caller must have `admin:project:create` or be a super-admin.',
+    'Create a new project in the workspace. `name` is required; `key` is optional and the API auto-derives one from the name when omitted (uppercase initials). Returns the new project\'s id + key + status (`active` by default). Caller must have `admin:project:create` or be a super-admin. Note: a new project is auto-provisioned with a general doc space (slug `<key>-general`, system-generated, for the AI primer + notes) — don\'t create a separate doc space for its docs, reuse that one (orboto_list_doc_spaces).',
   inputSchema: z.object({
     name: z.string().min(1).max(255).describe('Display name for the project.'),
     key: z.string().min(2).max(10).regex(PROJECT_KEY_RE).optional()

@@ -192,7 +192,7 @@ export function makeGetDocHandler(client: OrbotoClient) {
 export const createDocSpaceToolConfig = {
   title: 'Create a doc space',
   description:
-    'Create a new wiki space. `type=global` creates a workspace-wide space (super-admin only); `type=project` creates a space scoped to a project — pass `projectKey` (e.g. "ORB"); a raw `projectId` UUID is still accepted for back-compat. The slug is derived from `name` when omitted. Returns the new space row.',
+    'Create a new wiki space. IMPORTANT: every project ALREADY has an auto-generated general space (slug `<key>-general`, system-generated, holds the AI primer + manual notes) — do NOT create a second space just to hold a project\'s docs. Call orboto_list_doc_spaces first and reuse the existing project space; only create a new one for a genuinely separate collection. `type=global` creates a workspace-wide space (super-admin only); `type=project` creates a space scoped to a project — pass `projectKey` (e.g. "ORB"); a raw `projectId` UUID is still accepted for back-compat. The slug is derived from `name` when omitted. Returns the new space row.',
   inputSchema: z.object({
     name: z.string().min(1).max(100).describe('Display name.'),
     type: z.enum(['global', 'project']).describe('Scope: workspace-wide or project-scoped.'),
