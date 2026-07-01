@@ -163,6 +163,7 @@ describe('orboto_get_ticket', () => {
       children: unknown[];
     };
     expect(sc.comments[0]).toEqual({
+      id: 'c1', // ORB-1285 — comment id is surfaced for edit/delete targeting
       body: 'first thought',
       author: 'Ada',
       createdAt: 'now',
