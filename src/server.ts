@@ -84,6 +84,11 @@ import {
   resolveDocSmartLinksToolConfig, makeResolveDocSmartLinksHandler,
 } from './tools/docs.js';
 import {
+  searchDocsToolConfig, makeSearchDocsHandler,
+  editDocToolConfig, makeEditDocHandler,
+  editDocSectionToolConfig, makeEditDocSectionHandler,
+} from './tools/doc-edits.js';
+import {
   uploadDocAttachmentToolConfig, makeUploadDocAttachmentHandler,
   listDocAttachmentsToolConfig, makeListDocAttachmentsHandler,
   deleteDocAttachmentToolConfig, makeDeleteDocAttachmentHandler,
@@ -374,6 +379,14 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_query', queryToolConfig, makeQueryHandler(client));
   reg('orboto_list_doc_spaces', listDocSpacesToolConfig, makeListDocSpacesHandler(client));
   reg('orboto_get_doc', getDocToolConfig, makeGetDocHandler(client));
+  // ORB-1342 (epic ORB-1339) - context-efficient doc snippet search +
+  // targeted edits. Wrap GET /docs/search (ORB-1340) and POST
+  // /docs/:id/edits (ORB-1341). Prefer these over get_doc + update_doc for
+  // small changes to a large doc: find a passage by snippet, change it by
+  // diff, never transfer the full body in either direction.
+  reg('orboto_search_docs', searchDocsToolConfig, makeSearchDocsHandler(client));
+  reg('orboto_edit_doc', editDocToolConfig, makeEditDocHandler(client));
+  reg('orboto_edit_doc_section', editDocSectionToolConfig, makeEditDocSectionHandler(client));
   // ORB-912 — doc-spaces CRUD + list docs in a space. Closes the
   // first slice of the MCP doc-surface parity gap (epic ORB-911).
   reg('orboto_create_doc_space', createDocSpaceToolConfig, makeCreateDocSpaceHandler(client));
