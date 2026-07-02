@@ -14,6 +14,18 @@
  * header the transport generates on initialise. Closing the session
  * deletes the transport; a fresh initialise spins up a new one.
  *
+ * ORB-1353 - session resilience. The in-memory session map is wiped on every
+ * api restart/deploy, which used to invalidate every connected client at once
+ * (a real ZCode adapter then dead-looped on the resulting 404 for hours). Two
+ * server-side layers fix this: (1) the session registry is PERSISTED to the db
+ * via `/system/mcp/sessions`, so a request carrying a session id we no longer
+ * hold in memory is rehydrated under the SAME id after a restart; (2) an
+ * unknown session id under otherwise-valid auth is transparently AUTO-ADOPTED
+ * under a fresh id (MCP tool calls are stateless per-call, so re-establishing
+ * loses nothing). The ORB-1324 404 re-initialise contract stays ONLY for
+ * requests without valid auth; the kill-switch + mcp:use preflight still fires
+ * on every (re)hydration.
+ *
  * No Express dep — Node's built-in http server is enough for a
  * single-route MCP endpoint and keeps the production image small.
  */
@@ -26,8 +38,51 @@ import { buildOrbotoMcpServer } from './server.js';
 import { OrbotoClient, preflightMcpSession } from './orboto-client.js';
 import { EventBridge } from './event-bridge.js';
 
+/**
+ * ORB-1353 - persisted-session store. The transport calls these to survive an
+ * api restart: `register` persists a session (or records an adoption), `resolve`
+ * asks whether a presented id is a live session owned by the caller's token, and
+ * `remove` drops it on explicit close. The default implementation wraps the
+ * `/system/mcp/sessions` REST surface; tests inject a fake so the flow can be
+ * exercised without a database.
+ */
+export interface McpSessionStore {
+  register(
+    token: string,
+    meta: { sessionId: string; clientInfo?: string; userAgent?: string; adoptedFrom?: string },
+  ): Promise<void>;
+  /** True iff the id maps to a live session owned by this token (layer 1). */
+  resolve(token: string, sessionId: string): Promise<boolean>;
+  remove(token: string, sessionId: string): Promise<void>;
+}
+
+/** Default store backed by the api's `/system/mcp/sessions` endpoints. Each
+ *  call builds a short-lived OrbotoClient bound to the request's token so the
+ *  api scopes every read/write to that identity. */
+export function createApiSessionStore(baseUrl: string): McpSessionStore {
+  return {
+    async register(token, meta) {
+      const client = new OrbotoClient({ baseUrl, apiKey: token });
+      await client.post('/system/mcp/sessions', meta);
+    },
+    async resolve(token, sessionId) {
+      const client = new OrbotoClient({ baseUrl, apiKey: token });
+      const res = await client.get<{ found: boolean }>(
+        `/system/mcp/sessions/${encodeURIComponent(sessionId)}`,
+      );
+      return res.found === true;
+    },
+    async remove(token, sessionId) {
+      const client = new OrbotoClient({ baseUrl, apiKey: token });
+      await client.delete(`/system/mcp/sessions/${encodeURIComponent(sessionId)}`);
+    },
+  };
+}
+
 export interface HttpServerOptions {
   baseUrl: string;
+  /** Override the persisted-session store (tests inject a fake). */
+  sessionStore?: McpSessionStore;
 }
 
 /** ORB-941 - a live MCP session: its transport, the server bound to it
@@ -37,6 +92,81 @@ export interface McpSession {
   transport: StreamableHTTPServerTransport;
   mcp: McpServer;
   client: OrbotoClient;
+  bridge: EventBridge;
+  /** The token this session was (re)hydrated with - used for throttled
+   *  persistence touches so the retention window slides on activity. */
+  token: string;
+  /** Epoch ms of the last persistence touch, for throttling (ORB-1353). */
+  lastTouchAt: number;
+}
+
+/** How an unknown (not-in-memory) session id should be handled. Pure decision
+ *  so it can be unit-tested without a transport or database (ORB-1353):
+ *   - `reinit-404` - no valid auth (or MCP disabled): keep the ORB-1324 404
+ *                     so spec-conform clients re-initialise.
+ *   - `rehydrate` - valid auth + the id is a persisted session owned by the
+ *                     caller: rebuild a transport under the SAME id (layer 1).
+ *   - `adopt` - valid auth but the id is unknown to the store: mint a
+ *                     FRESH id and transparently re-establish (layer 2). */
+export type UnknownSessionAction = 'reinit-404' | 'rehydrate' | 'adopt';
+
+export function classifyUnknownSession(input: {
+  hasValidAuth: boolean;
+  isPersistedForCaller: boolean;
+}): UnknownSessionAction {
+  if (!input.hasValidAuth) return 'reinit-404';
+  return input.isPersistedForCaller ? 'rehydrate' : 'adopt';
+}
+
+/** Minimal view of the SDK transport's private web-standard delegate. The
+ *  Node wrapper exposes `sessionId` read-only and hides `_initialized`; to
+ *  rehydrate/adopt a session WITHOUT replaying the initialize handshake we set
+ *  both directly so the transport validates the client's in-flight non-init
+ *  request against the chosen id. MCP tool calls are stateless per-call, so
+ *  skipping the handshake loses nothing (the server never needs the client's
+ *  negotiated capabilities to answer tools/list or tools/call). */
+interface RawWebTransport {
+  sessionId?: string;
+  _initialized: boolean;
+}
+
+function forceInitialized(transport: StreamableHTTPServerTransport, sessionId: string): void {
+  const web = (transport as unknown as { _webStandardTransport: RawWebTransport })._webStandardTransport;
+  web.sessionId = sessionId;
+  web._initialized = true;
+}
+
+/** Rewrite the `mcp-session-id` on an in-flight Node request so the transport
+ *  validates it against an adopted (fresh) id. The SDK's transport builds its
+ *  Web Request from `rawHeaders`, so patching the parsed `headers` object alone
+ *  is not enough - both must be updated (ORB-1353). */
+function overrideSessionIdHeader(req: IncomingMessage, sessionId: string): void {
+  req.headers['mcp-session-id'] = sessionId;
+  const raw = req.rawHeaders;
+  let found = false;
+  for (let i = 0; i < raw.length; i += 2) {
+    if (raw[i]?.toLowerCase() === 'mcp-session-id') {
+      raw[i + 1] = sessionId;
+      found = true;
+    }
+  }
+  if (!found) raw.push('mcp-session-id', sessionId);
+}
+
+/** Idle-touch throttle: don't re-persist a live session more than once per
+ *  minute of activity. The api slides the row's TTL on every touch. */
+const TOUCH_THROTTLE_MS = 60_000;
+
+/** Extract a "name@version" label from an initialize request's clientInfo, for
+ *  observability of which adapter owns a session. Returns undefined when the
+ *  body carries no usable clientInfo. */
+export function clientInfoLabel(body: unknown): string | undefined {
+  const params = (body as { params?: { clientInfo?: { name?: unknown; version?: unknown } } } | null)?.params;
+  const ci = params?.clientInfo;
+  if (ci && typeof ci.name === 'string' && ci.name.length > 0) {
+    return typeof ci.version === 'string' && ci.version.length > 0 ? `${ci.name}@${ci.version}` : ci.name;
+  }
+  return undefined;
 }
 
 /**
@@ -142,11 +272,61 @@ function wwwAuthChallenge(
   return `Bearer realm="orboto-mcp", error="${error}", error_description="${description.replace(/"/g, '\\"')}", resource_metadata="${resourceMetadata}"`;
 }
 
-export function createHttpServer({ baseUrl }: HttpServerOptions) {
+export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
   // One transport + server per MCP session. The session-id comes from
   // the transport's `onsessioninitialized` hook, which fires after
   // the `initialize` request lands and we've minted a fresh id.
   const sessions = new Map<string, McpSession>();
+
+  // ORB-1353 - persisted-session store (survives api restarts). Defaults to
+  // the api-backed store; tests inject a fake.
+  const store = sessionStore ?? createApiSessionStore(baseUrl);
+
+  // Build the per-session core (client + subscription set + MCP server +
+  // event bridge) bound to a token. Shared by the new-session, rehydrate, and
+  // adopt paths so they can't drift apart.
+  async function buildSessionCore(token: string, userAgentSuffix: string | undefined) {
+    const sessionClient = new OrbotoClient({ baseUrl, apiKey: token, userAgentSuffix });
+    // ORB-940 - per-session subscription set + live-event bridge. The set is
+    // mutated by resources/subscribe + resources/unsubscribe handlers inside
+    // the McpServer; the bridge reads it to decide which incoming API events
+    // deserve a push.
+    //
+    // ORB-1353 subscription boundary: a rehydrated (layer 1) or adopted
+    // (layer 2) session ALWAYS starts with an empty subscription set + a fresh
+    // bridge. Live subscription state is per-session in-memory state tied to a
+    // now-dead SSE socket, so it cannot be carried across an api restart even
+    // for the same session id - per the MCP spec, re-subscribing after a
+    // session change is the client's job. Rehydrating under the SAME id keeps
+    // the deploy case coherent (the client's own session bookkeeping stays
+    // valid and its re-subscribe resumes pushes); adoption gives a new id so
+    // the client treats it as a fresh session and re-subscribes from scratch.
+    const subscriptions = new Set<string>();
+    const mcp = await buildOrbotoMcpServer({ baseUrl, apiKey: token, userAgentSuffix, subscriptions });
+    const bridge = new EventBridge({ baseUrl, apiKey: token, mcp, subscriptions });
+    return { sessionClient, subscriptions, mcp, bridge };
+  }
+
+  // Rehydrate/adopt: stand up a session bound to `token` and force it into the
+  // initialized state under `chosenSessionId` WITHOUT replaying the initialize
+  // handshake, so the client's in-flight non-init request validates against it.
+  async function establishForcedSession(
+    token: string,
+    userAgentSuffix: string | undefined,
+    chosenSessionId: string,
+  ): Promise<McpSession> {
+    const { sessionClient, mcp, bridge } = await buildSessionCore(token, userAgentSuffix);
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
+    transport.onclose = () => { sessions.delete(chosenSessionId); bridge.close(); };
+    await mcp.connect(transport);
+    forceInitialized(transport, chosenSessionId);
+    const session: McpSession = {
+      transport, mcp, client: sessionClient, bridge, token, lastTouchAt: Date.now(),
+    };
+    sessions.set(chosenSessionId, session);
+    bridge.start();
+    return session;
+  }
 
   // ORB-941 - MCP workspace kill-switch poll. The admin flips
   // `system_config.mcp_enabled` via the API; this container learns
@@ -231,9 +411,18 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
     // DELETE is the client's explicit session-close. We forward it
     // to the transport's handleRequest which tears down cleanly.
     if (req.method === 'DELETE') {
+      // ORB-1353 - drop the persisted row too so a closed session doesn't
+      // linger until the retention sweep. Best-effort + scoped to the caller.
+      void store.remove(token, sessionId).catch(() => { /* best-effort */ });
       const existing = sessions.get(sessionId);
-      if (!existing) return sendError(res, 404, 'Unknown session');
-      await existing.transport.handleRequest(req, res);
+      if (existing) {
+        await existing.transport.handleRequest(req, res);
+        return;
+      }
+      // Not in memory - e.g. the client is closing a session we only know from
+      // persistence after a restart. Acknowledge the close idempotently.
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
       return;
     }
 
@@ -245,71 +434,137 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
       return sendError(res, 400, 'Malformed JSON');
     }
 
+    const userAgentSuffix = (req.headers['user-agent'] as string | undefined)
+      ?.split('/')[0] || undefined;
+    const userAgent = req.headers['user-agent'] as string | undefined;
+
     if (sessionId && sessions.has(sessionId)) {
       // Existing session — hand straight to its transport.
-      const { transport } = sessions.get(sessionId)!;
-      await transport.handleRequest(req, res, body);
+      const session = sessions.get(sessionId)!;
+      await session.transport.handleRequest(req, res, body);
+      // ORB-1353 - slide the persistence TTL on activity so an actively-used
+      // session never idle-expires. Throttled + fire-and-forget so it adds no
+      // latency and no per-call write storm.
+      const now = Date.now();
+      if (now - session.lastTouchAt >= TOUCH_THROTTLE_MS) {
+        session.lastTouchAt = now;
+        void store.register(session.token, { sessionId }).catch(() => { /* best-effort */ });
+      }
       return;
     }
 
-    // ORB-1175 / ORB-1324 — the client presented a session id we don't know.
-    // The common cause is a deploy: the MCP container restarted and lost its
-    // in-memory `sessions` map, so every connected client's session id is now
-    // unknown. Per the Streamable HTTP spec, answer 404 to a request carrying
-    // an Mcp-Session-Id the server doesn't recognise — that is the signal an
-    // MCP client acts on to transparently re-initialise (re-send Initialize
-    // without a session id → our new-session branch below → it retries the
-    // pending call). NO WWW-Authenticate here: the token is fine, only the
-    // session is gone, and attaching an auth challenge (ORB-1175) made clients
-    // read this as a token problem and kick off a MANUAL OAuth re-auth instead
-    // of the automatic re-init — which is exactly why a routine deploy started
-    // requiring hand-holding. A genuinely expired token is still caught on the
-    // re-init path: the initialize preflight 401s + challenges then.
+    // ORB-1175 / ORB-1324 / ORB-1353 - the client presented a session id we
+    // don't hold in memory. The common cause is a deploy: the MCP container
+    // restarted and lost its in-memory `sessions` map, so every connected
+    // client's session id is now unknown. Three outcomes on a non-init request,
+    // decided by whether the token is valid and whether the id is a persisted
+    // session owned by that token:
+    //
+    //   - no valid auth (or MCP disabled / mcp:use missing) → keep the ORB-1324
+    //     404 so spec-conform clients transparently re-initialise (and hit the
+    //     clear preflight error on the re-init path). NO WWW-Authenticate: the
+    //     token, not the session, is the thing to fix only when it's actually
+    //     invalid - which the re-init preflight then challenges.
+    //   - valid auth + persisted session owned by caller → REHYDRATE under the
+    //     SAME id (layer 1): the deploy is invisible to a well-behaved client.
+    //   - valid auth + unknown id → AUTO-ADOPT under a fresh id (layer 2): a
+    //     buggy client that keeps replaying a dead id self-heals instead of
+    //     dead-looping on the 404. MCP tool calls are stateless per-call, so
+    //     silently re-establishing the session loses nothing.
+    //
+    // The preflight below enforces the kill-switch (ORB-941) + per-user mcp:use
+    // on EVERY rehydrate/adopt, exactly like a fresh session - a disabled
+    // workspace refuses adopted sessions (they fall to the 404).
     if (sessionId && !isInitializeRequest(body)) {
-      return sendError(res, 404, 'Unknown or expired MCP session — reinitialize (the server restarted since this session began).');
+      const preflightClient = new OrbotoClient({ baseUrl, apiKey: token, userAgentSuffix });
+      let authValid = false;
+      try {
+        await preflightMcpSession(preflightClient);
+        authValid = true;
+      } catch {
+        // Invalid token, MCP disabled, or mcp:use missing → refuse to
+        // re-establish; fall back to the re-initialise 404.
+        authValid = false;
+      }
+      let isPersisted = false;
+      if (authValid) {
+        try {
+          isPersisted = await store.resolve(token, sessionId);
+        } catch {
+          // Store hiccup - treat as not-persisted and let adoption handle it
+          // (auth is already valid, so re-establishing is safe).
+          isPersisted = false;
+        }
+      }
+      const action = classifyUnknownSession({ hasValidAuth: authValid, isPersistedForCaller: isPersisted });
+
+      if (action === 'reinit-404') {
+        return sendError(res, 404, 'Unknown or expired MCP session - reinitialize (the server restarted since this session began).');
+      }
+
+      if (action === 'rehydrate') {
+        const session = await establishForcedSession(token, userAgentSuffix, sessionId);
+        // Touch persistence so the TTL slides; same id, so no adoptedFrom.
+        void store.register(token, { sessionId, userAgent }).catch(() => { /* best-effort */ });
+        await session.transport.handleRequest(req, res, body);
+        return;
+      }
+
+      // action === 'adopt' - mint a fresh id and re-establish under it.
+      const newSessionId = randomUUID();
+      const session = await establishForcedSession(token, userAgentSuffix, newSessionId);
+      // Rewrite the in-flight request's session header so the transport
+      // validates it against the fresh id AND the response advertises the new
+      // id. A well-behaved client migrates to it; a client that keeps sending
+      // the dead id simply gets re-adopted each call - self-healing either way.
+      overrideSessionIdHeader(req, newSessionId);
+      // Record the adoption (old id, new id, client). Stderr here; the api
+      // upsert emits the Sentry breadcrumb (Sentry lives on the api side).
+      process.stderr.write(
+        `[orboto-mcp] auto-adopted stale session ${sessionId} → ${newSessionId} (client=${userAgent ?? 'unknown'})\n`,
+      );
+      void store
+        .register(token, { sessionId: newSessionId, userAgent, adoptedFrom: sessionId })
+        .catch(() => { /* best-effort */ });
+      await session.transport.handleRequest(req, res, body);
+      return;
     }
 
     if (!sessionId && isInitializeRequest(body)) {
       // New session — mint a transport + server pair bound to this
       // request's token, register with the session map once
       // `onsessioninitialized` fires.
-      const userAgentSuffix = (req.headers['user-agent'] as string | undefined)
-        ?.split('/')[0] || undefined;
 
-      // Preflight: verify mcp:use + mcp_enabled. If either fails we
-      // refuse the session at the transport level — much clearer
-      // than letting the first tool call 403. WWW-Authenticate
-      // included on 401-shape failures so the client can auto-
-      // discover OAuth.
-      // ORB-941 - keep the preflight client; it carries this session's
-      // token and is reused to poll the workspace kill-switch so an
-      // admin disabling MCP can gracefully close this session.
-      const sessionClient = new OrbotoClient({ baseUrl, apiKey: token, userAgentSuffix });
+      // Preflight: verify mcp:use + mcp_enabled BEFORE we stand up the server,
+      // so a refused session costs nothing. If either fails we refuse at the
+      // transport level - much clearer than letting the first tool call 403.
+      // WWW-Authenticate included on 401-shape failures so the client can
+      // auto-discover OAuth.
+      const preflightClient = new OrbotoClient({ baseUrl, apiKey: token, userAgentSuffix });
       try {
-        await preflightMcpSession(sessionClient);
+        await preflightMcpSession(preflightClient);
       } catch (err) {
         return sendError(res, 401, (err as Error).message, {
           'WWW-Authenticate': wwwAuthChallenge(req, baseUrl, 'invalid_token', (err as Error).message),
         });
       }
 
-      // ORB-940 — per-session subscription set + live-event bridge.
-      // The set is mutated by resources/subscribe + resources/
-      // unsubscribe handlers inside the McpServer; the bridge reads
-      // it to decide which incoming API events deserve a push.
-      const subscriptions = new Set<string>();
-      const mcp = await buildOrbotoMcpServer({
-        baseUrl,
-        apiKey: token,
-        userAgentSuffix,
-        subscriptions,
-      });
-      const bridge = new EventBridge({ baseUrl, apiKey: token, mcp, subscriptions });
+      const { sessionClient, mcp, bridge } = await buildSessionCore(token, userAgentSuffix);
+      // "name@version" of the client's declared clientInfo, for observability
+      // of which adapter owns the session.
+      const clientInfo = clientInfoLabel(body);
       const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (sid: string) => {
-          sessions.set(sid, { transport, mcp, client: sessionClient });
+          sessions.set(sid, {
+            transport, mcp, client: sessionClient, bridge, token, lastTouchAt: Date.now(),
+          });
           bridge.start();
+          // ORB-1353 - persist the freshly-minted session so it survives an
+          // api restart (a later request with this id then rehydrates).
+          void store
+            .register(token, { sessionId: sid, clientInfo, userAgent })
+            .catch(() => { /* best-effort */ });
         },
       });
       transport.onclose = () => {
@@ -328,5 +583,17 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
   // Stop the kill-switch poll when the HTTP server is torn down.
   server.on('close', () => clearInterval(killSwitchTimer));
 
+  // ORB-1353 - expose the in-memory registry + store for tests to drive the
+  // restart-simulation (clear `sessions` to mimic a process restart while the
+  // injected store keeps its persisted rows) and to close lingering sessions.
+  (server as unknown as { __mcp: McpServerInternals }).__mcp = { sessions, store };
+
   return server;
+}
+
+/** Test seam: the transport's in-memory session registry + persisted store,
+ *  attached to the returned http.Server as `__mcp` (ORB-1353). */
+export interface McpServerInternals {
+  sessions: Map<string, McpSession>;
+  store: McpSessionStore;
 }
