@@ -23,7 +23,7 @@ async function start(): Promise<string> {
 const NON_INIT = JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 });
 
 describe('ORB-1175 — stale MCP session recovery', () => {
-  it('returns 404 (re-initialise signal) for an unknown session id on a non-init request', async () => {
+  it('returns a clean 404 (re-initialise signal, no auth challenge) for an unknown session id on a non-init request', async () => {
     const base = await start();
     const res = await fetch(`${base}/mcp`, {
       method: 'POST',
@@ -31,8 +31,11 @@ describe('ORB-1175 — stale MCP session recovery', () => {
       body: NON_INIT,
     });
     expect(res.status).toBe(404);
-    // tells the client what to do + carries the OAuth re-discovery header
-    expect(res.headers.get('www-authenticate')).toContain('Bearer');
+    // ORB-1324 — NO WWW-Authenticate: the token is fine, only the session is
+    // gone. Attaching an auth challenge made clients kick off a manual OAuth
+    // re-auth instead of the automatic re-initialise the 404 already signals.
+    // (Token expiry is still caught on the re-init path's preflight.)
+    expect(res.headers.get('www-authenticate')).toBeNull();
     const body = await res.json() as { error: string };
     expect(body.error).toMatch(/reinitialize/i);
   });

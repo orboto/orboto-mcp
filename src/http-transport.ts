@@ -169,19 +169,21 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
       return;
     }
 
-    // ORB-1175 — the client presented a session id we don't know. The
-    // common cause is a deploy: the MCP container restarted and lost its
-    // in-memory `sessions` map, so every OAuth-connected client's existing
-    // session id is now unknown. Per the Streamable HTTP spec, answer 404
-    // to a request carrying an Mcp-Session-Id the server doesn't recognise
-    // — that is the signal MCP clients act on to transparently start a new
-    // session (re-initialise / re-auth) instead of surfacing an opaque
-    // execution error. WWW-Authenticate is included so OAuth clients can
-    // re-discover the flow if their token also needs refreshing.
+    // ORB-1175 / ORB-1324 — the client presented a session id we don't know.
+    // The common cause is a deploy: the MCP container restarted and lost its
+    // in-memory `sessions` map, so every connected client's session id is now
+    // unknown. Per the Streamable HTTP spec, answer 404 to a request carrying
+    // an Mcp-Session-Id the server doesn't recognise — that is the signal an
+    // MCP client acts on to transparently re-initialise (re-send Initialize
+    // without a session id → our new-session branch below → it retries the
+    // pending call). NO WWW-Authenticate here: the token is fine, only the
+    // session is gone, and attaching an auth challenge (ORB-1175) made clients
+    // read this as a token problem and kick off a MANUAL OAuth re-auth instead
+    // of the automatic re-init — which is exactly why a routine deploy started
+    // requiring hand-holding. A genuinely expired token is still caught on the
+    // re-init path: the initialize preflight 401s + challenges then.
     if (sessionId && !isInitializeRequest(body)) {
-      return sendError(res, 404, 'Unknown or expired MCP session — reinitialize (the server restarted since this session began).', {
-        'WWW-Authenticate': wwwAuthChallenge(req, baseUrl, 'invalid_token', 'MCP session expired; reinitialize'),
-      });
+      return sendError(res, 404, 'Unknown or expired MCP session — reinitialize (the server restarted since this session began).');
     }
 
     if (!sessionId && isInitializeRequest(body)) {
