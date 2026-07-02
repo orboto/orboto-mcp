@@ -38,6 +38,12 @@ describe('orboto_session_start (ORB-1093)', () => {
     expect(text).toContain('Running on ORB-42');
     expect(calls.some((c) => c.startsWith('/agent-instructions'))).toBe(true);
     expect(calls.some((c) => c.startsWith('/time/timer'))).toBe(true);
+    // ORB-1330 — the briefing must only ask for OPEN work; DONE tickets
+    // must never reach the "in-progress" section. Assert the status
+    // filter is on the wire so a future refactor can't silently widen it.
+    const assignedCall = calls.find((c) => c.startsWith('/users/me/assigned-tickets'));
+    expect(assignedCall).toBeDefined();
+    expect(assignedCall).toContain('statuses=IN_PROGRESS,IN_REVIEW');
   });
 
   it('handles the empty case (no tickets, no timer) without throwing', async () => {

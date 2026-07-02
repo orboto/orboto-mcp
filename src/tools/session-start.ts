@@ -28,7 +28,12 @@ export function makeSessionStartHandler(client: OrbotoClient) {
     const [me, rules, assigned, timer] = await Promise.all([
       client.get<Me>('/users/me').catch(() => null),
       client.get<{ instructions: string }>(rulesPath).catch(() => ({ instructions: '' })),
-      client.get<{ items?: Ticket[] } | Ticket[]>('/users/me/assigned-tickets?limit=10').catch(() => ({ items: [] })),
+      // ORB-1330 — a re-orientation briefing must only list OPEN work.
+      // Filter to in_progress + in_review so DONE tickets can't pose as
+      // "what you're working on" at the moment the agent has the least
+      // context and would otherwise re-claim / re-report finished work.
+      // Cap 20.
+      client.get<{ items?: Ticket[] } | Ticket[]>('/users/me/assigned-tickets?statuses=IN_PROGRESS,IN_REVIEW&limit=20').catch(() => ({ items: [] })),
       client.get<Timer>('/time/timer').catch(() => null),
     ]);
     const tickets: Ticket[] = Array.isArray(assigned) ? assigned : (assigned?.items ?? []);
