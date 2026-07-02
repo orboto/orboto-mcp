@@ -21,12 +21,64 @@ import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { buildOrbotoMcpServer } from './server.js';
 import { OrbotoClient, preflightMcpSession } from './orboto-client.js';
 import { EventBridge } from './event-bridge.js';
 
 export interface HttpServerOptions {
   baseUrl: string;
+}
+
+/** ORB-941 - a live MCP session: its transport, the server bound to it
+ *  (for out-of-band notifications), and the OrbotoClient carrying that
+ *  session's token (used to poll the workspace kill-switch). */
+export interface McpSession {
+  transport: StreamableHTTPServerTransport;
+  mcp: McpServer;
+  client: OrbotoClient;
+}
+
+/**
+ * ORB-941 - graceful close of every active MCP session when the
+ * workspace kill-switch (`system_config.mcp_enabled`) flips to disabled.
+ *
+ * The MCP spec has no standard `notifications/server/closing` method, so
+ * the closest correct behaviour is: emit a best-effort logging
+ * notification (visible to clients that negotiated the logging
+ * capability) explaining WHY, then close the transport. Closing the
+ * transport ends the SSE stream; the client's next request lands on the
+ * unknown-session 404 branch, which per the Streamable-HTTP spec
+ * triggers a transparent re-initialise - and our per-session preflight
+ * then refuses that re-init with the clear "administrator has disabled
+ * MCP access" error. So an in-flight session is dropped promptly and the
+ * client gets an actionable reason rather than an opaque hang.
+ *
+ * Exported for unit testing with fake sessions.
+ */
+export async function closeAllMcpSessions(
+  sessions: Iterable<McpSession>,
+  reason: string,
+): Promise<number> {
+  let closed = 0;
+  for (const { transport, mcp } of [...sessions]) {
+    try {
+      await mcp.server.sendLoggingMessage({
+        level: 'warning',
+        data: `orboto MCP: ${reason} Closing this session.`,
+      });
+    } catch {
+      // Client never negotiated the logging capability - skip the
+      // notice; the transport close below is what actually enforces it.
+    }
+    try {
+      await transport.close();
+    } catch {
+      // Already closing / closed - nothing to do.
+    }
+    closed++;
+  }
+  return closed;
 }
 
 /** Read the request body as JSON. Fails hard on empty body for POSTs
@@ -94,7 +146,38 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
   // One transport + server per MCP session. The session-id comes from
   // the transport's `onsessioninitialized` hook, which fires after
   // the `initialize` request lands and we've minted a fresh id.
-  const sessions = new Map<string, StreamableHTTPServerTransport>();
+  const sessions = new Map<string, McpSession>();
+
+  // ORB-941 - MCP workspace kill-switch poll. The admin flips
+  // `system_config.mcp_enabled` via the API; this container learns
+  // about it by polling `/system/mcp/status` while sessions are live,
+  // reusing an active session's own token (the flag is workspace-global,
+  // so any session's client can read it). On enabled=false every
+  // in-flight session is gracefully closed; new sessions are already
+  // refused at preflight. Only polls while sessions exist → zero cost
+  // when idle. Interval is env-tunable for tests.
+  const pollMs = Number(process.env.ORBOTO_MCP_KILLSWITCH_POLL_MS ?? 30_000);
+  async function pollKillSwitch(): Promise<void> {
+    if (sessions.size === 0) return;
+    for (const { client } of sessions.values()) {
+      try {
+        const status = await client.get<{ enabled: boolean }>('/system/mcp/status');
+        if (!status.enabled) {
+          await closeAllMcpSessions(
+            sessions.values(),
+            'the workspace administrator has disabled MCP access.',
+          );
+        }
+        // One good probe is authoritative for the whole workspace.
+        return;
+      } catch {
+        // This session's token may be expired/invalid - try the next.
+      }
+    }
+  }
+  const killSwitchTimer = setInterval(() => { void pollKillSwitch(); }, pollMs);
+  // Don't let the poll keep the process (or a test) alive on its own.
+  killSwitchTimer.unref?.();
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     // Health probe — stays cheap, zero-auth so docker healthchecks
@@ -150,7 +233,7 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
     if (req.method === 'DELETE') {
       const existing = sessions.get(sessionId);
       if (!existing) return sendError(res, 404, 'Unknown session');
-      await existing.handleRequest(req, res);
+      await existing.transport.handleRequest(req, res);
       return;
     }
 
@@ -164,7 +247,7 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
 
     if (sessionId && sessions.has(sessionId)) {
       // Existing session — hand straight to its transport.
-      const transport = sessions.get(sessionId)!;
+      const { transport } = sessions.get(sessionId)!;
       await transport.handleRequest(req, res, body);
       return;
     }
@@ -198,8 +281,12 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
       // than letting the first tool call 403. WWW-Authenticate
       // included on 401-shape failures so the client can auto-
       // discover OAuth.
+      // ORB-941 - keep the preflight client; it carries this session's
+      // token and is reused to poll the workspace kill-switch so an
+      // admin disabling MCP can gracefully close this session.
+      const sessionClient = new OrbotoClient({ baseUrl, apiKey: token, userAgentSuffix });
       try {
-        await preflightMcpSession(new OrbotoClient({ baseUrl, apiKey: token, userAgentSuffix }));
+        await preflightMcpSession(sessionClient);
       } catch (err) {
         return sendError(res, 401, (err as Error).message, {
           'WWW-Authenticate': wwwAuthChallenge(req, baseUrl, 'invalid_token', (err as Error).message),
@@ -221,7 +308,7 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
       const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (sid: string) => {
-          sessions.set(sid, transport);
+          sessions.set(sid, { transport, mcp, client: sessionClient });
           bridge.start();
         },
       });
@@ -237,6 +324,9 @@ export function createHttpServer({ baseUrl }: HttpServerOptions) {
     // Neither an init nor a known session — the client is confused.
     sendError(res, 400, 'Missing mcp-session-id header or initialize request');
   });
+
+  // Stop the kill-switch poll when the HTTP server is torn down.
+  server.on('close', () => clearInterval(killSwitchTimer));
 
   return server;
 }
