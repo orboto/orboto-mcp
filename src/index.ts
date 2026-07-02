@@ -15,9 +15,17 @@
  *
  * Config (env-only — no config file):
  *   ORBOTO_API_URL        required — base URL of the orboto API
- *   ORBOTO_API_KEY        required — `orb_*` API key with `mcp:use`
- *                         scope (stdio mode). Per-session bearer token
- *                         is read from Authorization header in http mode.
+ *   ORBOTO_API_KEY        optional — `orb_*` API key with `mcp:use`
+ *                         scope (stdio mode). Service-account fallback;
+ *                         when omitted, stdio mode bootstraps via OAuth
+ *                         (ORB-943) so a desktop user connects through the
+ *                         workspace login without pasting a token. Per-
+ *                         session bearer is read from the Authorization
+ *                         header in http mode.
+ *   ORBOTO_AUTH           optional — `pat` | `oauth`. Defaults to `pat`
+ *                         when ORBOTO_API_KEY is set, else `oauth`. Force
+ *                         `oauth` to run the browser bootstrap even with a
+ *                         key present.
  *   ORBOTO_MCP_TRANSPORT  optional — `stdio` (default) | `http`
  *   ORBOTO_MCP_PORT       optional — port for http transport, default 3100
  *   ORBOTO_MCP_CLIENT     optional — client hint for User-Agent (e.g.
@@ -25,6 +33,7 @@
  */
 import { buildOrbotoMcpServer } from './server.js';
 import { OrbotoClient, preflightMcpSession } from './orboto-client.js';
+import { bootstrapOAuth } from './oauth-bootstrap.js';
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -39,28 +48,54 @@ async function main() {
   const transport = (process.env.ORBOTO_MCP_TRANSPORT ?? 'stdio').toLowerCase();
 
   if (transport === 'stdio') {
-    // Local-Proxy mode — one MCP client, one process, one API key.
-    // All config read at boot; no per-request auth needed because the
-    // only user of this stdio pair is the client that spawned us.
+    // Local-Proxy mode — one MCP client, one process, one identity. The
+    // identity is either a static `orb_*` PAT (service-account fallback) OR,
+    // when no key is configured, an OAuth session bootstrapped through the
+    // workspace login (ORB-943) so a desktop user never pastes a token. All
+    // config read at boot; no per-request auth needed because the only user of
+    // this stdio pair is the client that spawned us.
     const baseUrl = requireEnv('ORBOTO_API_URL');
-    const apiKey = requireEnv('ORBOTO_API_KEY');
+    const apiKey = process.env.ORBOTO_API_KEY;
     const userAgentSuffix = process.env.ORBOTO_MCP_CLIENT;
+    const authMode = (process.env.ORBOTO_AUTH ?? (apiKey ? 'pat' : 'oauth')).toLowerCase();
+
+    if (authMode === 'pat' && !apiKey) {
+      // eslint-disable-next-line no-console
+      console.error('[orboto-mcp] ORBOTO_AUTH=pat requires ORBOTO_API_KEY. Unset it to use OAuth, or provide a key.');
+      process.exit(2);
+    }
+
+    // clientConfig carries either the PAT or the OAuth token provider; both
+    // shapes satisfy OrbotoClientConfig.
+    let clientConfig: { baseUrl: string; userAgentSuffix?: string; apiKey?: string; tokenProvider?: Awaited<ReturnType<typeof bootstrapOAuth>> };
+    if (authMode === 'oauth') {
+      try {
+        const tokenProvider = await bootstrapOAuth({ apiBaseUrl: baseUrl });
+        clientConfig = { baseUrl, userAgentSuffix, tokenProvider };
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(`[orboto-mcp] OAuth bootstrap failed: ${(err as Error).message}`);
+        process.exit(1);
+      }
+    } else {
+      clientConfig = { baseUrl, userAgentSuffix, apiKey };
+    }
 
     // Preflight BEFORE spinning up the transport — so a
     // mis-configured install fails loudly to stderr instead of
     // silently hanging on stdin waiting for JSON-RPC frames.
-    const preflightClient = new OrbotoClient({ baseUrl, apiKey, userAgentSuffix });
+    const preflightClient = new OrbotoClient(clientConfig);
     try {
       const { userEmail } = await preflightMcpSession(preflightClient);
       // eslint-disable-next-line no-console
-      console.error(`[orboto-mcp] authenticated as ${userEmail} → ${baseUrl}`);
+      console.error(`[orboto-mcp] authenticated as ${userEmail} (${authMode}) → ${baseUrl}`);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error(`[orboto-mcp] ${(err as Error).message}`);
       process.exit(1);
     }
 
-    const server = await buildOrbotoMcpServer({ baseUrl, apiKey, userAgentSuffix });
+    const server = await buildOrbotoMcpServer(clientConfig);
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
     const stdio = new StdioServerTransport();
     await server.connect(stdio);

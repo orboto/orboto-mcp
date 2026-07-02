@@ -6,11 +6,32 @@ Model Context Protocol server for [orboto](https://github.com/orboto/orboto) —
 
 ## Quickstart
 
-You need an API key from your orboto instance: **Profile → API keys → Generate**. The key starts with `orb_…`.
+There are two ways to authenticate the stdio proxy:
 
-### Claude Desktop
+- **OAuth login (recommended for people).** Omit `ORBOTO_API_KEY`. On first use the proxy opens your browser to the orboto login (which is your SSO login when SSO is configured), you approve once, and it keeps a short-lived, self-refreshing session cached on disk. Nothing to paste, nothing long-lived.
+- **API key (service accounts / CI).** Set `ORBOTO_API_KEY` to an `orb_…` key from **Profile → API keys → Generate**. Best for headless machines with no browser.
+
+### Claude Desktop — OAuth login (no token)
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%/Claude/claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "orboto": {
+      "command": "npx",
+      "args": ["-y", "@orboto/mcp"],
+      "env": {
+        "ORBOTO_API_URL": "https://orboto.example.com/api"
+      }
+    }
+  }
+}
+```
+
+The first launch opens your browser to authorize. The refresh token is cached at `~/.config/orboto/mcp-oauth.json` (mode `0600`), so subsequent launches reconnect silently. On a headless host with no browser, the proxy prints the authorization URL to stderr for manual paste, or fall back to the API-key form below.
+
+### Claude Desktop — API key (service accounts)
 
 ```json
 {
@@ -60,7 +81,10 @@ The `/mcp` path on the main host is proxied to the bundled MCP container — no 
 | Variable | Required | Effect |
 |---|---|---|
 | `ORBOTO_API_URL` | yes | Base URL of the orboto REST API. Typically `https://<your-host>/api`. No trailing slash. |
-| `ORBOTO_API_KEY` | yes | API key starting with `orb_…` from your orboto profile. |
+| `ORBOTO_API_KEY` | no | API key starting with `orb_…`. When set, the proxy authenticates with it (service-account path). When omitted, the stdio proxy bootstraps via OAuth (browser login). |
+| `ORBOTO_AUTH` | no | `pat` or `oauth`. Defaults to `pat` when `ORBOTO_API_KEY` is set, else `oauth`. Force `oauth` to run the browser login even with a key present. |
+| `ORBOTO_MCP_TOKEN_CACHE` | no | Override the OAuth token cache path (default `~/.config/orboto/mcp-oauth.json`). |
+| `ORBOTO_MCP_NO_BROWSER` | no | Set to `1` to print the authorization URL instead of auto-opening a browser (headless hosts). |
 | `ORBOTO_MCP_TRANSPORT` | no | `stdio` (default) or `http`. Stdio is the right choice for `npx`-launched clients. |
 | `ORBOTO_MCP_PORT` | no | Listen port when transport is `http`. Default `3100`. |
 | `ORBOTO_MCP_CLIENT` | no | User-agent suffix that lands in the API audit log. Useful for filtering audit rows by client. |

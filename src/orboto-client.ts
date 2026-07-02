@@ -25,14 +25,26 @@
  */
 import { VERSION } from './version.js';
 
+/** ORB-943 - the two ways the stdio proxy authenticates. A static `orb_*` PAT
+ *  (service-account fallback) OR a live OAuth token provider that mints
+ *  short-lived access tokens and refreshes them transparently. */
+export interface OAuthTokenProviderLike {
+  getAccessToken(): Promise<string>;
+  forceRefresh(): Promise<string>;
+}
+
 export interface OrbotoClientConfig {
   /** Base URL of the orboto API — e.g. `https://orboto.example.com` or
    *  `http://api:3000` when running inside docker-compose. No trailing
    *  slash; we'll strip one if the operator pastes it. */
   baseUrl: string;
   /** API key minted in Profile → API Keys with the `mcp:use` scope.
-   *  Format `orb_*`. */
-  apiKey: string;
+   *  Format `orb_*`. Mutually exclusive with `tokenProvider`. */
+  apiKey?: string;
+  /** ORB-943 - OAuth token source for the stdio local-proxy OAuth bootstrap.
+   *  When present, every request resolves a fresh bearer from it and a 401 is
+   *  retried once after `forceRefresh()`. Mutually exclusive with `apiKey`. */
+  tokenProvider?: OAuthTokenProviderLike;
   /** Optional user-agent suffix so admins can tell `claude-desktop`
    *  traffic apart from `cursor`. */
   userAgentSuffix?: string;
@@ -51,10 +63,19 @@ export class OrbotoApiError extends Error {
 
 export class OrbotoClient {
   private readonly baseUrl: string;
-  private readonly headers: Record<string, string>;
+  /** Headers common to every request EXCEPT Authorization, which is resolved
+   *  per-request so an OAuth token provider can rotate the bearer. */
+  private readonly baseHeaders: Record<string, string>;
+  private readonly apiKey?: string;
+  private readonly tokenProvider?: OAuthTokenProviderLike;
 
   constructor(config: OrbotoClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, '');
+    if (!config.apiKey && !config.tokenProvider) {
+      throw new Error('OrbotoClient requires either an apiKey or a tokenProvider');
+    }
+    this.apiKey = config.apiKey;
+    this.tokenProvider = config.tokenProvider;
     // User-Agent shape: `orboto-mcp/<version> (claude-desktop)`. The
     // suffix is optional metadata so the admin's MCP-usage panel
     // (Phase F) can group calls per client family without needing a
@@ -62,96 +83,108 @@ export class OrbotoClient {
     const ua = config.userAgentSuffix
       ? `orboto-mcp/${VERSION} (${config.userAgentSuffix})`
       : `orboto-mcp/${VERSION}`;
-    this.headers = {
-      Authorization: `Bearer ${config.apiKey}`,
+    this.baseHeaders = {
       'User-Agent': ua,
       Accept: 'application/json',
     };
   }
 
-  /** GET a JSON endpoint. Throws `OrbotoApiError` on non-2xx. */
-  async get<T>(path: string): Promise<T> {
-    const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
-    const res = await fetch(url, { headers: this.headers });
+  private async bearer(forceRefresh = false): Promise<string> {
+    if (this.tokenProvider) {
+      return forceRefresh ? this.tokenProvider.forceRefresh() : this.tokenProvider.getAccessToken();
+    }
+    return this.apiKey as string;
+  }
+
+  private fullUrl(path: string): string {
+    return `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+  }
+
+  /**
+   * Auth-aware fetch. Injects the resolved bearer and, when an OAuth token
+   * provider is in play, retries a single 401 after a forced refresh - so an
+   * access token that expired (or was rotated by the api) is renewed inline
+   * instead of surfacing a spurious auth error to the tool caller. Throws
+   * `OrbotoApiError` on a non-2xx (after the retry). Returns the raw Response
+   * so callers parse json/text/binary as they need.
+   */
+  private async authedFetch(
+    url: string,
+    init: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> },
+    accept?: string,
+  ): Promise<Response> {
+    const doFetch = async (token: string): Promise<Response> => {
+      const headers: Record<string, string> = {
+        ...this.baseHeaders,
+        ...(accept ? { Accept: accept } : {}),
+        ...(init.headers ?? {}),
+        Authorization: `Bearer ${token}`,
+      };
+      return fetch(url, { ...init, headers });
+    };
+    let res = await doFetch(await this.bearer());
+    if (res.status === 401 && this.tokenProvider) {
+      res = await doFetch(await this.bearer(true));
+    }
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       throw new OrbotoApiError(res.status, body, url);
     }
+    return res;
+  }
+
+  /** GET a JSON endpoint. Throws `OrbotoApiError` on non-2xx. */
+  async get<T>(path: string): Promise<T> {
+    const res = await this.authedFetch(this.fullUrl(path), { method: 'GET' });
     return (await res.json()) as T;
   }
 
   /** POST a JSON body. */
   async post<T>(path: string, body: unknown): Promise<T> {
-    const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
-    const res = await fetch(url, {
+    const res = await this.authedFetch(this.fullUrl(path), {
       method: 'POST',
-      headers: { ...this.headers, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new OrbotoApiError(res.status, body, url);
-    }
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
   }
 
   /** PATCH a JSON body. */
   async patch<T>(path: string, body: unknown): Promise<T> {
-    const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
-    const res = await fetch(url, {
+    const res = await this.authedFetch(this.fullUrl(path), {
       method: 'PATCH',
-      headers: { ...this.headers, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new OrbotoApiError(res.status, body, url);
-    }
     return (await res.json()) as T;
   }
 
   async put<T>(path: string, body: unknown): Promise<T> {
-    const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
-    const res = await fetch(url, {
+    const res = await this.authedFetch(this.fullUrl(path), {
       method: 'PUT',
-      headers: { ...this.headers, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new OrbotoApiError(res.status, body, url);
-    }
     return (await res.json()) as T;
   }
 
   /** DELETE. No response body expected on success. */
   async delete(path: string): Promise<void> {
-    const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
-    const res = await fetch(url, { method: 'DELETE', headers: this.headers });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new OrbotoApiError(res.status, body, url);
-    }
+    await this.authedFetch(this.fullUrl(path), { method: 'DELETE' });
   }
 
   /**
    * POST a `multipart/form-data` payload — used by ingest-file +
    * attachment upload tools (ORB-799). The fetch API picks the boundary
    * automatically when we let it set `Content-Type`, so we deliberately
-   * do NOT spread `Content-Type: application/json` from the JSON helpers.
+   * do NOT set `Content-Type: application/json` from the JSON helpers.
    */
   async postMultipart<T>(path: string, form: FormData): Promise<T> {
-    const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
-    const res = await fetch(url, {
+    const res = await this.authedFetch(this.fullUrl(path), {
       method: 'POST',
-      headers: this.headers, // no Content-Type — fetch sets the boundary
-      body: form,
+      body: form, // no Content-Type — fetch sets the boundary
     });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new OrbotoApiError(res.status, body, url);
-    }
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
   }
@@ -163,14 +196,7 @@ export class OrbotoClient {
    * as a string. (ORB-915.)
    */
   async getText(path: string): Promise<string> {
-    const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
-    // Override Accept so the API doesn't think we want JSON.
-    const headers = { ...this.headers, Accept: '*/*' };
-    const res = await fetch(url, { headers });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new OrbotoApiError(res.status, body, url);
-    }
+    const res = await this.authedFetch(this.fullUrl(path), { method: 'GET' }, '*/*');
     return await res.text();
   }
 
@@ -181,18 +207,11 @@ export class OrbotoClient {
    * spill it to disk. (ORB-915.)
    */
   async postBinary(path: string, body?: unknown): Promise<{ bytes: Uint8Array; contentType: string }> {
-    const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
-    const headers: Record<string, string> = { ...this.headers, Accept: '*/*' };
-    if (body !== undefined) headers['Content-Type'] = 'application/json';
-    const res = await fetch(url, {
+    const res = await this.authedFetch(this.fullUrl(path), {
       method: 'POST',
-      headers,
+      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
       body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => '');
-      throw new OrbotoApiError(res.status, errBody, url);
-    }
+    }, '*/*');
     const ab = await res.arrayBuffer();
     return {
       bytes: new Uint8Array(ab),
@@ -205,13 +224,7 @@ export class OrbotoClient {
    * etc.). Same shape as postBinary, GET method. (ORB-1301.)
    */
   async getBinary(path: string): Promise<{ bytes: Uint8Array; contentType: string }> {
-    const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
-    const headers: Record<string, string> = { ...this.headers, Accept: '*/*' };
-    const res = await fetch(url, { headers });
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => '');
-      throw new OrbotoApiError(res.status, errBody, url);
-    }
+    const res = await this.authedFetch(this.fullUrl(path), { method: 'GET' }, '*/*');
     const ab = await res.arrayBuffer();
     return {
       bytes: new Uint8Array(ab),
