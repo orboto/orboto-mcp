@@ -17,6 +17,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from './orboto-client.js';
+import { type NudgeState, shouldNudge, prependNudge } from './session-nudge.js';
 
 /**
  * ORB-1174 — turn an OrbotoApiError into an actionable, agent-visible
@@ -100,9 +101,18 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
   // read the per-connection MCP sessionId (distinct per HTTP client even on a
   // shared server). Backward-compatible: handlers that ignore it are unaffected.
   handler: (args: TArgs, extra?: unknown) => Promise<CallToolResult>,
+  // ORB-1331 — per-session/-process nudge state. When present, the first
+  // tool dispatch that is not `orboto_session_start` gets the one-time
+  // reminder prepended to its response. Optional so direct callers/tests
+  // that don't care are unaffected.
+  nudge?: NudgeState,
 ): (args: TArgs, extra?: unknown) => Promise<CallToolResult> {
   return async (args: TArgs, extra?: unknown): Promise<CallToolResult> => {
     const start = Date.now();
+    // ORB-1331 — decide (and advance the flag) once per dispatch, before
+    // the handler runs, so the "first tool call" is the first dispatch
+    // regardless of its outcome. Applied to the returned result below.
+    const wantsNudge = nudge ? shouldNudge(nudge, toolName) : false;
     try {
       const result = await handler(args, extra);
       // Success path — but the handler can also signal a "soft"
@@ -119,7 +129,7 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
           : undefined,
         clientHint,
       });
-      return result;
+      return wantsNudge ? prependNudge(result) : result;
     } catch (err) {
       const durationMs = Date.now() - start;
       // ORB-1174 — an OrbotoApiError carries a real HTTP status + message.
@@ -129,7 +139,10 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
       if (err instanceof OrbotoApiError) {
         const text = formatApiError(err);
         void postLogEntry(client, { toolName, durationMs, success: false, statusCode: err.status, errorMessage: redactSecrets(text).slice(0, 500), clientHint });
-        return { isError: true, content: [{ type: 'text', text }] };
+        // Still surface the reminder alongside the actionable error so a
+        // first-call failure doesn't swallow the one-time nudge.
+        const errResult: CallToolResult = { isError: true, content: [{ type: 'text', text }] };
+        return wantsNudge ? prependNudge(errResult) : errResult;
       }
       // Anything else is unexpected (a bug, not an API rejection) — log
       // and re-throw so it surfaces loudly rather than being swallowed.
@@ -170,13 +183,18 @@ export function registerWithMetrics(
   server: McpServer,
   client: OrbotoClient,
   clientHint: string | undefined,
+  // ORB-1331 — shared per-session/-process nudge state. Every tool
+  // registered through this closure reads/advances the same flag, so the
+  // one-time session-start reminder fires on whichever tool is called
+  // first (unless it is `orboto_session_start`).
+  nudge?: NudgeState,
 ) {
   return (toolName: string, config: ToolConfig, handler: ToolHandler): void => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (server.registerTool as any)(
       toolName,
       config,
-      withMetrics(client, toolName, clientHint, handler),
+      withMetrics(client, toolName, clientHint, handler, nudge),
     );
   };
 }

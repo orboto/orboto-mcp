@@ -20,6 +20,7 @@ import { OrbotoClient, type OrbotoClientConfig } from './orboto-client.js';
 import { registerOrbotoResources } from './resources.js';
 import { registerOrbotoPrompts } from './prompts.js';
 import { registerWithMetrics } from './with-metrics.js';
+import { createNudgeState } from './session-nudge.js';
 import { aiStatusToolConfig, makeAiStatusHandler } from './tools/ai-status.js';
 import { embeddingStatusToolConfig, makeEmbeddingStatusHandler } from './tools/embedding-status.js';
 import { aiUsageToolConfig, makeAiUsageHandler } from './tools/ai-usage.js';
@@ -338,11 +339,19 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
     },
   );
 
+  // ORB-1331 — one-time session-start nudge. The state object lives for
+  // the lifetime of THIS server instance: the HTTP transport builds one
+  // server per session and the stdio transport one per process, so a
+  // single flag object is per-session (HTTP) / process-local (stdio)
+  // without any session-lifecycle plumbing. Shared by reference into
+  // every tool's dispatch wrapper below.
+  const nudgeState = createNudgeState();
+
   // ORB-311 — every tool dispatch posts one row to /admin/mcp/instrument
   // via the withMetrics wrapper. `reg` is a one-line shim around
   // `server.registerTool` that adds the metrics layer at registration
   // time; per-tool files stay metrics-unaware.
-  const reg = registerWithMetrics(server, client, opts.userAgentSuffix);
+  const reg = registerWithMetrics(server, client, opts.userAgentSuffix, nudgeState);
 
   // Tools — alphabetical-ish by concept. Each tool file owns its
   // input/output schema; the server just glues names to handlers.

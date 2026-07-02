@@ -11,6 +11,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient, OrbotoApiError } from './orboto-client.js';
 import { withMetrics } from './with-metrics.js';
+import { createNudgeState, SESSION_START_NUDGE } from './session-nudge.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
 afterEach(() => { vi.restoreAllMocks(); });
@@ -156,6 +157,54 @@ describe('withMetrics', () => {
     expect(body.success).toBe(false);
     expect(body.statusCode).toBe(403);
     expect(body.errorMessage).toContain('403');
+  });
+
+  // ORB-1331 — the shared nudge state threads through the wrapper: the
+  // first non-session_start dispatch carries the one-time reminder,
+  // later dispatches are clean, and a session_start-first flow never
+  // sees it. structuredContent is left intact.
+  it('prepends the session-start nudge on the first non-session_start dispatch, once', async () => {
+    captureFetch();
+    const nudge = createNudgeState();
+    const handler = async () => ({
+      content: [{ type: 'text' as const, text: 'ok' }],
+      structuredContent: { a: 1 },
+    });
+    const list = withMetrics(client, 'orboto_list_projects', undefined, handler, nudge);
+
+    const first = await list({});
+    expect((first.content[0] as { text: string }).text).toBe(SESSION_START_NUDGE);
+    expect((first.content[1] as { text: string }).text).toBe('ok');
+    expect(first.structuredContent).toEqual({ a: 1 }); // untouched
+
+    const second = await list({});
+    expect((second.content[0] as { text: string }).text).toBe('ok'); // clean
+  });
+
+  it('does not nudge when the first dispatch IS orboto_session_start', async () => {
+    captureFetch();
+    const nudge = createNudgeState();
+    const handler = async () => ({ content: [{ type: 'text' as const, text: 'rules' }] });
+    const start = withMetrics(client, 'orboto_session_start', undefined, handler, nudge);
+    const list = withMetrics(client, 'orboto_list_projects', undefined, handler, nudge);
+
+    const first = await start({});
+    expect((first.content[0] as { text: string }).text).toBe('rules'); // no nudge
+
+    const second = await list({});
+    expect((second.content[0] as { text: string }).text).toBe('rules'); // still clean
+  });
+
+  it('surfaces the nudge alongside an OrbotoApiError on a first-call failure', async () => {
+    captureFetch();
+    const nudge = createNudgeState();
+    const wrapped = withMetrics(client, 'orboto_list_projects', undefined, async () => {
+      throw new OrbotoApiError(403, '{"error":"Forbidden"}', 'https://orboto.example/x');
+    }, nudge);
+    const res = await wrapped({});
+    expect(res.isError).toBe(true);
+    expect((res.content[0] as { text: string }).text).toBe(SESSION_START_NUDGE);
+    expect((res.content[1] as { text: string }).text).toContain('403');
   });
 
   it('redacts secret-shaped text from the logged errorMessage', async () => {
