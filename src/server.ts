@@ -212,6 +212,10 @@ import {
   approveTranslationToolConfig, makeApproveTranslationHandler,
   revertTranslationToolConfig, makeAdminRevertTranslationHandler,
 } from './tools/admin-translations.js';
+import {
+  listAgentDriftToolConfig, makeListAgentDriftHandler,
+  resolveAgentDriftToolConfig, makeResolveAgentDriftHandler,
+} from './tools/agent-drift.js';
 
 export interface BuildServerOptions extends OrbotoClientConfig {
   /** Optional — passed through to McpServer metadata. Clients
@@ -530,6 +534,8 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_admin_translation_list', listAdminTranslationsToolConfig, makeListAdminTranslationsHandler(client));
   reg('orboto_admin_translation_approve', approveTranslationToolConfig, makeApproveTranslationHandler(client));
   reg('orboto_admin_translation_revert', revertTranslationToolConfig, makeAdminRevertTranslationHandler(client));
+  reg('orboto_admin_agent_drift_list', listAgentDriftToolConfig, makeListAgentDriftHandler(client));
+  reg('orboto_admin_agent_drift_resolve', resolveAgentDriftToolConfig, makeResolveAgentDriftHandler(client));
 
   // ORB-310 Phase D — read-only `orboto://…` URI resources +
   // task-shaped Prompt templates the MCP client offers in its UI.
