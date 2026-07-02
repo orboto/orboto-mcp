@@ -255,6 +255,36 @@ describe('orboto_move_ticket', () => {
     await makeMoveTicketHandler(client)({ ticketKey: 'ACME-1', statusCategory: 'in_progress' });
     expect(calls[2].body).toEqual({ status: 'IN_PROGRESS' });
   });
+
+  it('surfaces summaryWarning from the move response in content + structuredContent (ORB-1332)', async () => {
+    stub([
+      { json: PROJ },
+      { json: TICKET },
+      {
+        json: {
+          ...TICKET, status: 'DONE', statusName: 'Done', statusCategory: 'done',
+          summaryWarning: { code: 'missing_transition_summary', message: 'Ticket moved to done without a summary comment - post what changed, the commit SHA, and how to verify.' },
+        },
+      },
+    ]);
+    const res = await makeMoveTicketHandler(client)({ ticketKey: 'ACME-1', statusCategory: 'done' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Moved: [ACME-1]');
+    expect(text).toContain('without a summary comment');
+    const sc = res.structuredContent as { summaryWarning?: { code: string } };
+    expect(sc.summaryWarning?.code).toBe('missing_transition_summary');
+  });
+
+  it('omits summaryWarning when the move response carries none', async () => {
+    stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: { ...TICKET, status: 'IN_PROGRESS', statusName: 'In Progress', statusCategory: 'in_progress' } },
+    ]);
+    const res = await makeMoveTicketHandler(client)({ ticketKey: 'ACME-1', statusCategory: 'in_progress' });
+    expect((res.content[0] as { text: string }).text).not.toContain('summary comment');
+    expect((res.structuredContent as { summaryWarning?: unknown }).summaryWarning).toBeUndefined();
+  });
 });
 
 describe('orboto_close_ticket', () => {
@@ -281,6 +311,22 @@ describe('orboto_close_ticket', () => {
     await makeCloseTicketHandler(client)({ ticketKey: 'ACME-1' });
     expect(calls).toHaveLength(3);
     expect(calls[2].method).toBe('PATCH');
+  });
+
+  it('surfaces summaryWarning when closing without a comment (ORB-1332)', async () => {
+    stub([
+      { json: PROJ },
+      { json: TICKET },
+      {
+        json: {
+          ...TICKET, status: 'DONE', statusName: 'Done', statusCategory: 'done',
+          summaryWarning: { code: 'missing_transition_summary', message: 'Ticket moved to done without a summary comment - post what changed, the commit SHA, and how to verify.' },
+        },
+      },
+    ]);
+    const res = await makeCloseTicketHandler(client)({ ticketKey: 'ACME-1' });
+    expect((res.content[0] as { text: string }).text).toContain('without a summary comment');
+    expect((res.structuredContent as { summaryWarning?: { code: string } }).summaryWarning?.code).toBe('missing_transition_summary');
   });
 });
 

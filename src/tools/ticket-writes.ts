@@ -254,6 +254,29 @@ interface LanguageWarning {
   expected: string;
 }
 
+// ORB-1332 — non-blocking advisory on a status move into in_review / done
+// with no summary comment from the actor. The move always succeeds.
+interface SummaryWarning {
+  code: 'missing_transition_summary';
+  message: string;
+}
+
+/** Append the summaryWarning (ORB-1332) to a move/close result — extra text
+ *  line + the structured field — so both the model's prose read and any
+ *  structured consumer see it. No-op when the backend didn't warn. */
+function withSummaryWarning(
+  result: CallToolResult,
+  warning: SummaryWarning | undefined,
+): CallToolResult {
+  if (!warning) return result;
+  const existing = result.content[0];
+  const baseText = existing && existing.type === 'text' ? existing.text : '';
+  return {
+    content: [{ type: 'text', text: `${baseText}\n⚠ ${warning.message}` }],
+    structuredContent: { ...(result.structuredContent ?? {}), summaryWarning: warning },
+  };
+}
+
 /**
  * ORB-990 — turn a strict-language 422 into a clear, non-throwing tool
  * result. The backend body is `{ error, languageWarning }`; we surface
@@ -348,7 +371,7 @@ export function makeUpdateTicketHandler(client: OrbotoClient) {
 export const moveTicketToolConfig = {
   title: 'Move a ticket between status categories',
   description:
-    'Move a ticket to a new status category — todo / in_progress / in_review / done / wont_fix. The API picks the project\'s first status with that category. Caller must have `ticket:change_status`.',
+    'Move a ticket to a new status category — todo / in_progress / in_review / done / wont_fix. The API picks the project\'s first status with that category. Caller must have `ticket:change_status`. **Summary warning (ORB-1332):** moving to `in_review` or `done` without having just posted a summary comment returns a non-blocking `summaryWarning` — the move still succeeds, but you should post what changed, the commit SHA, and how to verify. Use `orboto_close_ticket` with a `comment` (or comment first, then move) to avoid it.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     statusCategory: z.enum(STATUS_CATEGORIES),
@@ -360,14 +383,14 @@ export function makeMoveTicketHandler(client: OrbotoClient) {
     ticketKey: string; statusCategory: StatusCategory;
   }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
-    const updated = await client.patch<TicketRow>(
+    const updated = await client.patch<TicketRow & { summaryWarning?: SummaryWarning }>(
       `/projects/${ticket.projectId}/tickets/${ticket.id}`,
       { status: CATEGORY_TO_LEGACY[statusCategory] },
     );
-    return {
+    return withSummaryWarning({
       content: [{ type: 'text', text: ticketSummaryText('Moved', updated) }],
       structuredContent: ticketStructured(updated),
-    };
+    }, updated.summaryWarning);
   };
 }
 
@@ -378,10 +401,10 @@ export function makeMoveTicketHandler(client: OrbotoClient) {
 export const closeTicketToolConfig = {
   title: 'Close a ticket',
   description:
-    'Move a ticket to `done` and optionally post a closing comment in one call. Convenience wrapper around `orboto_move_ticket` + `orboto_comment` so the model doesn\'t need to chain two writes.',
+    'Move a ticket to `done` and optionally post a closing comment in one call. Convenience wrapper around `orboto_move_ticket` + `orboto_comment` so the model doesn\'t need to chain two writes. Passing a `comment` is the recommended way to close — it doubles as the transition summary and suppresses the ORB-1332 `summaryWarning`. Closing with no comment (and none posted in the last few minutes) returns a non-blocking `summaryWarning`; the close still succeeds.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    comment: z.string().min(1).optional().describe('Optional closing comment posted before the move.'),
+    comment: z.string().min(1).optional().describe('Optional closing comment posted before the move. Doubles as the transition summary (what changed, commit SHA, how to verify).'),
   }).shape,
 };
 
@@ -396,14 +419,14 @@ export function makeCloseTicketHandler(client: OrbotoClient) {
       // behaviour.
       await client.post(`/tickets/${ticket.id}/comments`, { content: comment });
     }
-    const updated = await client.patch<TicketRow>(
+    const updated = await client.patch<TicketRow & { summaryWarning?: SummaryWarning }>(
       `/projects/${ticket.projectId}/tickets/${ticket.id}`,
       { status: 'DONE' },
     );
-    return {
+    return withSummaryWarning({
       content: [{ type: 'text', text: ticketSummaryText('Closed', updated) }],
       structuredContent: ticketStructured(updated),
-    };
+    }, updated.summaryWarning);
   };
 }
 
