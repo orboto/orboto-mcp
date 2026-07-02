@@ -221,11 +221,13 @@ export class OrbotoClient {
 }
 
 /**
- * Preflight a new MCP session: verify the workspace has MCP enabled
- * AND the user holds the `mcp:use` permission. Called once per
- * session (stdio boot / HTTP initialize). Throws a descriptive
- * `Error` on any failure so the caller can translate to an MCP
- * refuse-to-initialize response.
+ * Preflight a new MCP session: verify the workspace has MCP enabled,
+ * the user holds the `mcp:use` permission, AND the user has not flipped
+ * their own MCP opt-out (ORB-942). Called once per session (stdio boot /
+ * HTTP initialize) and again on every rehydrate/adopt, so all three
+ * gates share one enforcement point. Throws a descriptive `Error` on any
+ * failure so the caller can translate to an MCP refuse-to-initialize
+ * response.
  */
 export async function preflightMcpSession(client: OrbotoClient): Promise<{
   userEmail: string;
@@ -233,6 +235,8 @@ export async function preflightMcpSession(client: OrbotoClient): Promise<{
   interface StatusResponse {
     enabled: boolean;
     mcpUseGranted: boolean;
+    // ORB-942 — the caller's own users.mcp_enabled flag.
+    userMcpEnabled: boolean;
     userEmail: string;
   }
   let status: StatusResponse;
@@ -249,6 +253,11 @@ export async function preflightMcpSession(client: OrbotoClient): Promise<{
   }
   if (!status.mcpUseGranted) {
     throw new Error(`MCP preflight failed: user ${status.userEmail} lacks the mcp:use permission. Ask an admin to grant it.`);
+  }
+  // ORB-942 — per-user opt-out. Distinct message pointing at the toggle so
+  // the user knows this is their own setting, not an admin / permission block.
+  if (!status.userMcpEnabled) {
+    throw new Error('MCP preflight failed: you have disabled MCP access for your account. Re-enable it in Profile - Connect an AI Client.');
   }
   return { userEmail: status.userEmail };
 }

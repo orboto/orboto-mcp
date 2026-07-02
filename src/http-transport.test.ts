@@ -137,8 +137,13 @@ describe('ORB-1353 - clientInfoLabel', () => {
 // preflight (/system/mcp/status), the working-rules fetch, and the event
 // bridge's SSE endpoint. DB-free - the persisted-session store is injected
 // separately so a "restart" is just clearing the in-memory registry.
-function fakeApi(opts: { enabled?: boolean; mcpUseGranted?: boolean } = {}) {
-  const state = { enabled: opts.enabled ?? true, mcpUseGranted: opts.mcpUseGranted ?? true };
+function fakeApi(opts: { enabled?: boolean; mcpUseGranted?: boolean; userMcpEnabled?: boolean } = {}) {
+  const state = {
+    enabled: opts.enabled ?? true,
+    mcpUseGranted: opts.mcpUseGranted ?? true,
+    // ORB-942 - per-user MCP opt-out. Defaults on so existing flows are unaffected.
+    userMcpEnabled: opts.userMcpEnabled ?? true,
+  };
   const api = createNodeServer((req, res) => {
     const url = req.url ?? '';
     if (url.startsWith('/system/mcp/status')) {
@@ -149,7 +154,12 @@ function fakeApi(opts: { enabled?: boolean; mcpUseGranted?: boolean } = {}) {
         return;
       }
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ enabled: state.enabled, mcpUseGranted: state.mcpUseGranted, userEmail: 'u@example.com' }));
+      res.end(JSON.stringify({
+        enabled: state.enabled,
+        mcpUseGranted: state.mcpUseGranted,
+        userMcpEnabled: state.userMcpEnabled,
+        userEmail: 'u@example.com',
+      }));
       return;
     }
     if (url.startsWith('/agent-instructions')) {
@@ -291,6 +301,19 @@ describe('ORB-1353 - persisted-session resilience (transport, fake api)', () => 
     const { base } = await startWithFakeApi(store.store, fakeApi({ enabled: false }));
 
     const res = await post(base, NON_INIT, { authorization: 'Bearer orb_carol', 'mcp-session-id': 'sess_stale' });
+    expect(res.status).toBe(404);
+    await res.text();
+    expect(store.register).not.toHaveBeenCalled();
+  });
+
+  it('refuses to adopt when the per-user MCP opt-out is OFF (ORB-942, returns 404)', async () => {
+    const store = fakeStore();
+    // Workspace is enabled but the caller flipped their own users.mcp_enabled
+    // off - the shared preflight refuses, so the stale id falls to the 404
+    // re-init branch and no session is (re)established.
+    const { base } = await startWithFakeApi(store.store, fakeApi({ enabled: true, userMcpEnabled: false }));
+
+    const res = await post(base, NON_INIT, { authorization: 'Bearer orb_dave', 'mcp-session-id': 'sess_stale' });
     expect(res.status).toBe(404);
     await res.text();
     expect(store.register).not.toHaveBeenCalled();

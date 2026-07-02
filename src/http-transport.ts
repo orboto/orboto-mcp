@@ -328,31 +328,46 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
     return session;
   }
 
-  // ORB-941 - MCP workspace kill-switch poll. The admin flips
-  // `system_config.mcp_enabled` via the API; this container learns
-  // about it by polling `/system/mcp/status` while sessions are live,
-  // reusing an active session's own token (the flag is workspace-global,
-  // so any session's client can read it). On enabled=false every
-  // in-flight session is gracefully closed; new sessions are already
-  // refused at preflight. Only polls while sessions exist → zero cost
-  // when idle. Interval is env-tunable for tests.
+  // ORB-941 / ORB-942 - MCP kill-switch poll. Two kill-switches ride the
+  // same `/system/mcp/status` probe while sessions are live:
+  //   - workspace-wide (`system_config.mcp_enabled`, ORB-941): an admin
+  //     flip closes EVERY in-flight session (any session's response is
+  //     authoritative for the whole workspace).
+  //   - per-user (`users.mcp_enabled`, ORB-942): a user flipping their own
+  //     opt-out closes only THAT user's sessions. Since the flag is
+  //     per-identity, each session is probed with its own token and the
+  //     `userMcpEnabled` field is read from the same response.
+  // New sessions (and rehydrate/adopt) are already refused at preflight, so
+  // the poll only needs to reap existing sessions. Only polls while sessions
+  // exist → zero cost when idle. Interval is env-tunable for tests.
   const pollMs = Number(process.env.ORBOTO_MCP_KILLSWITCH_POLL_MS ?? 30_000);
   async function pollKillSwitch(): Promise<void> {
     if (sessions.size === 0) return;
-    for (const { client } of sessions.values()) {
+    const userDisabled: McpSession[] = [];
+    for (const session of sessions.values()) {
       try {
-        const status = await client.get<{ enabled: boolean }>('/system/mcp/status');
+        const status = await session.client.get<{ enabled: boolean; userMcpEnabled: boolean }>(
+          '/system/mcp/status',
+        );
         if (!status.enabled) {
+          // Workspace-wide off wins and is authoritative for everyone -
+          // close all sessions and stop probing.
           await closeAllMcpSessions(
             sessions.values(),
             'the workspace administrator has disabled MCP access.',
           );
+          return;
         }
-        // One good probe is authoritative for the whole workspace.
-        return;
+        if (!status.userMcpEnabled) userDisabled.push(session);
       } catch {
         // This session's token may be expired/invalid - try the next.
       }
+    }
+    if (userDisabled.length > 0) {
+      await closeAllMcpSessions(
+        userDisabled,
+        'you have disabled MCP access for your account.',
+      );
     }
   }
   const killSwitchTimer = setInterval(() => { void pollKillSwitch(); }, pollMs);

@@ -120,10 +120,16 @@ describe('OrbotoClient', () => {
 });
 
 describe('preflightMcpSession', () => {
-  it('resolves {userEmail} when enabled + mcpUseGranted', async () => {
-    mockFetch({ json: async () => ({ enabled: true, mcpUseGranted: true, userEmail: 'a@b.c' }) });
+  it('resolves {userEmail} when enabled + mcpUseGranted + userMcpEnabled', async () => {
+    mockFetch({ json: async () => ({ enabled: true, mcpUseGranted: true, userMcpEnabled: true, userEmail: 'a@b.c' }) });
     const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
     await expect(preflightMcpSession(client)).resolves.toEqual({ userEmail: 'a@b.c' });
+  });
+
+  it('throws the per-user opt-out message when userMcpEnabled=false (ORB-942)', async () => {
+    mockFetch({ json: async () => ({ enabled: true, mcpUseGranted: true, userMcpEnabled: false, userEmail: 'a@b.c' }) });
+    const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
+    await expect(preflightMcpSession(client)).rejects.toThrow(/you have disabled MCP access for your account/);
   });
 
   it('throws a helpful message when the API returns 401 (bad token)', async () => {
