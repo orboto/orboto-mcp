@@ -312,12 +312,13 @@ function formatSimilarity(w: SimilarWarning): string {
 export const updateTicketToolConfig = {
   title: 'Update a ticket',
   description:
-    'Patch one or more fields on a ticket (title, description, type, priority, dueDate, startDate, isPrivate, estimatedTimeMinutes). Use `orboto_move_ticket` for status, `orboto_set_milestone` for milestone, and `orboto_assign` / `orboto_unassign` for members.',
+    'Patch one or more fields on a ticket (title, description, customerSummary, type, priority, dueDate, startDate, isPrivate, estimatedTimeMinutes). `customerSummary` is the customer-facing text shown in the customer project report instead of the internal description (leave empty to auto-summarize). Use `orboto_move_ticket` for status, `orboto_set_milestone` for milestone, and `orboto_assign` / `orboto_unassign` for members.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     patch: z.object({
       title: z.string().min(1).max(255).optional(),
       description: z.string().optional(),
+      customerSummary: z.string().max(2000).nullable().optional().describe('Customer-facing summary shown in the customer report instead of the internal description. Null/empty falls back to an AI distillation or the title.'),
       type: z.enum(['task', 'bug', 'story', 'epic']).optional(),
       priority: z.enum(['blocker', 'high', 'normal', 'low', 'trivial']).optional(),
       dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),

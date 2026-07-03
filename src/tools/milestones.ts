@@ -310,12 +310,13 @@ export function makeCloseMilestoneHandler(client: OrbotoClient) {
 export const updateMilestoneToolConfig = {
   title: 'Update a milestone\'s fields',
   description:
-    'Patch a milestone (`name`, `startDate`, `endDate`, `isPrivate`). At least one field must be set. Use `orboto_close_milestone` to flip status to completed/archived — this tool intentionally does NOT touch the status field so closing remains a clear semantic operation.',
+    'Patch a milestone (`name`, `customerSummary`, `startDate`, `endDate`, `isPrivate`). At least one field must be set. `customerSummary` is the customer-facing text shown in the customer project report instead of any internal text. Use `orboto_close_milestone` to flip status to completed/archived — this tool intentionally does NOT touch the status field so closing remains a clear semantic operation.',
   inputSchema: z.object({
     projectKey: z.string().min(1),
     milestone: z.string().min(1).describe('Milestone name or UUID to identify the target.'),
     patch: z.object({
       name: z.string().min(1).optional(),
+      customerSummary: z.string().max(2000).nullable().optional().describe('Customer-facing summary shown in the customer report instead of internal text.'),
       startDate: z.string().regex(DATE_RE).nullable().optional(),
       endDate: z.string().regex(DATE_RE).nullable().optional(),
       isPrivate: z.boolean().optional(),
@@ -327,7 +328,7 @@ export function makeUpdateMilestoneHandler(client: OrbotoClient) {
   return async ({ projectKey, milestone, patch }: {
     projectKey: string;
     milestone: string;
-    patch: { name?: string; startDate?: string | null; endDate?: string | null; isPrivate?: boolean };
+    patch: { name?: string; customerSummary?: string | null; startDate?: string | null; endDate?: string | null; isPrivate?: boolean };
   }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, projectKey);
     const found = await resolveMilestoneByNameOrId(client, project.id, milestone);
