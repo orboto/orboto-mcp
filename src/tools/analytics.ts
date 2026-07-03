@@ -9,17 +9,17 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey } from './shared.js';
 
-const REPORTS = ['overview', 'burndown', 'velocity', 'cycle-time', 'workload', 'budget', 'earned-value', 'estimation-accuracy', 'flow-time', 'flow-metrics', 'forecast', 'bottleneck'] as const;
+const REPORTS = ['overview', 'burndown', 'velocity', 'cycle-time', 'workload', 'budget', 'collaboration', 'earned-value', 'estimation-accuracy', 'flow-time', 'flow-metrics', 'forecast', 'bottleneck'] as const;
 type Report = (typeof REPORTS)[number];
 
 export const analyticsToolConfig = {
   title: 'Project analytics',
   description:
-    "Read a project's analytics or Earned Value. `report`: overview, burndown, velocity, cycle-time, workload, budget, earned-value, estimation-accuracy, flow-time, flow-metrics, forecast, or bottleneck. `bottleneck` shows which status clogs the flow (longest-dwell status + trend), delivery predictability (lead/cycle variance per agent/human/combined cohort), and the worst-aging open tickets with assignee. `forecast` is a Monte-Carlo delivery forecast (probabilistic 'done by X' date with p50/p85/p95 bands from historical throughput) - reach for it on 'when will this be done / how long for N tickets' questions instead of guessing from cycle time; `milestone` scopes its remaining set. `flow-metrics` gives Kanban flow: current WIP, weekly throughput, flow efficiency (active vs queue time), aging WIP, and a cumulative flow diagram. `flow-time` shows lead vs cycle vs effort side-by-side as median + p75/p90 (NOT just mean - the legacy cycle-time report's mean hid a 0-day median), split by agent/human cohort, size and type. `estimation-accuracy` is the estimate-vs-actual calibration (multiplier + confidence per agents/humans/combined; degrades through tracked-effort -> cycle-time -> lead-time and reports insufficient rather than inventing a number) — reach for estimation-accuracy + flow-time + forecast for grounded effort/duration answers instead of free-reasoning from cycle time. `milestone` scopes burndown + earned-value + forecast; `mode` (hours|money) applies to earned-value. Requires `analytics:view`; `budget` and the earned-value MONEY mode additionally require `budget:view` (you'll get a permission error otherwise).",
+    "Read a project's analytics or Earned Value. `report`: overview, burndown, velocity, cycle-time, workload, budget, collaboration, earned-value, estimation-accuracy, flow-time, flow-metrics, forecast, or bottleneck. `collaboration` classifies tickets human-only / agent-only / mixed from the agent-work stamps (time entries, comments, activities), with agent share of effort per project / milestone / member and a weekly trend - use it for 'who works with agents and what comes out of it' questions; `milestone` scopes it. `bottleneck` shows which status clogs the flow (longest-dwell status + trend), delivery predictability (lead/cycle variance per agent/human/combined cohort), and the worst-aging open tickets with assignee. `forecast` is a Monte-Carlo delivery forecast (probabilistic 'done by X' date with p50/p85/p95 bands from historical throughput) - reach for it on 'when will this be done / how long for N tickets' questions instead of guessing from cycle time; `milestone` scopes its remaining set. `flow-metrics` gives Kanban flow: current WIP, weekly throughput, flow efficiency (active vs queue time), aging WIP, and a cumulative flow diagram. `flow-time` shows lead vs cycle vs effort side-by-side as median + p75/p90 (NOT just mean - the legacy cycle-time report's mean hid a 0-day median), split by agent/human cohort, size and type. `estimation-accuracy` is the estimate-vs-actual calibration (multiplier + confidence per agents/humans/combined; degrades through tracked-effort -> cycle-time -> lead-time and reports insufficient rather than inventing a number) - reach for estimation-accuracy + flow-time + forecast for grounded effort/duration answers instead of free-reasoning from cycle time. `milestone` scopes burndown + earned-value + forecast; `mode` (hours|money) applies to earned-value. Requires `analytics:view`; `budget` and the earned-value MONEY mode additionally require `budget:view` (you'll get a permission error otherwise).",
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ORB").'),
     report: z.enum(REPORTS).describe('Which report to return.'),
-    milestone: z.string().optional().describe('Milestone name (burndown / earned-value / forecast).'),
+    milestone: z.string().optional().describe('Milestone name (burndown / earned-value / forecast / collaboration).'),
     mode: z.enum(['hours', 'money']).optional().describe('earned-value unit (default hours). Money needs budget:view.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
@@ -30,7 +30,7 @@ export function makeAnalyticsHandler(client: OrbotoClient) {
     const project = await resolveProjectByKey(client, input.projectKey);
 
     let milestoneId: string | undefined;
-    if (input.milestone && (input.report === 'burndown' || input.report === 'earned-value' || input.report === 'forecast')) {
+    if (input.milestone && (input.report === 'burndown' || input.report === 'earned-value' || input.report === 'forecast' || input.report === 'collaboration')) {
       const milestones = await client.get<Array<{ id: string; name: string }>>(`/projects/${project.id}/milestones`);
       const m = milestones.find((x) => x.name === input.milestone);
       if (!m) throw new Error(`Milestone "${input.milestone}" not found in project ${project.key}.`);
@@ -49,6 +49,8 @@ export function makeAnalyticsHandler(client: OrbotoClient) {
           return `/projects/${project.id}/analytics/burndown${milestoneId ? `?milestoneId=${milestoneId}` : ''}`;
         case 'forecast':
           return `/projects/${project.id}/analytics/forecast${milestoneId ? `?milestoneId=${milestoneId}` : ''}`;
+        case 'collaboration':
+          return `/projects/${project.id}/analytics/collaboration${milestoneId ? `?milestoneId=${milestoneId}` : ''}`;
         default:
           return `/projects/${project.id}/analytics/${input.report}`;
       }
