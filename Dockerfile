@@ -35,7 +35,7 @@ COPY apps/mcp/tsconfig.json ./apps/mcp/tsconfig.json
 RUN pnpm --filter @orboto/shared-schema build
 RUN node -e "const p=require('./packages/shared-schema/package.json'); p.main='./dist/index.js'; p.types='./dist/index.d.ts'; p.files=['dist']; require('fs').writeFileSync('./packages/shared-schema/package.json', JSON.stringify(p, null, 2));"
 
-RUN pnpm --filter @orboto/mcp build
+RUN NODE_OPTIONS=--max-old-space-size=4096 pnpm --filter @orboto/mcp build
 
 # pnpm deploy — copies the package + workspace deps as concrete modules
 # under /deploy/mcp. --legacy preserves pre-pnpm-v10 behaviour (no
