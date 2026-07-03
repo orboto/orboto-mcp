@@ -41,6 +41,9 @@ interface TimeEntry {
   description: string | null;
   loggedAt: string;
   agentLabel?: string | null;
+  // ORB-1368 - true when the entry was logged via an agent-flagged key or a
+  // bot account. Server-derived; distinct from agentLabel (which instance).
+  isAgentWork?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -189,9 +192,13 @@ export function makeListTimeEntriesHandler(client: OrbotoClient) {
     const page = await client.get<{ items: TimeEntry[]; nextCursor: string | null }>(
       `/tickets/${ticket.id}/time-entries?limit=${limit ?? 25}`,
     );
-    const lines = page.items.map((e) =>
-      `- ${e.durationMinutes} min — ${e.loggedAt}${e.agentLabel ? ` [${e.agentLabel}]` : ''}${e.description ? ` — ${e.description}` : ''} (id ${e.id})`,
-    );
+    const lines = page.items.map((e) => {
+      // ORB-1368 - agentLabel already flags a known agent instance; add a
+      // bare [agent] marker for agent work with no instance label (a bot's
+      // NULL-lane entry).
+      const agentMark = e.agentLabel ? ` [${e.agentLabel}]` : (e.isAgentWork ? ' [agent]' : '');
+      return `- ${e.durationMinutes} min - ${e.loggedAt}${agentMark}${e.description ? ` - ${e.description}` : ''} (id ${e.id})`;
+    });
     return {
       content: [{
         type: 'text',

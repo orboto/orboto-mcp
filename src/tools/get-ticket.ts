@@ -37,6 +37,8 @@ interface CommentRow {
   createdAt: string;
   editedAt?: string | null;
   userName?: string | null;
+  // ORB-1368 - true when authored via an agent-flagged key or a bot account.
+  isAgentWork?: boolean;
 }
 /** ORB-234 — checklist items can link to another ticket; when they do,
  *  `effectiveCompleted` tracks the linked ticket's status category

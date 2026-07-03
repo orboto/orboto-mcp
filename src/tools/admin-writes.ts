@@ -42,6 +42,8 @@ interface AuditEntry {
   entityType: string | null;
   entityId: string | null;
   details: Record<string, unknown>;
+  // ORB-1368 - true when the audited action was performed by an agent.
+  isAgentWork?: boolean;
   createdAt: string;
 }
 
@@ -167,10 +169,12 @@ export function makeGetAuditLogHandler(client: OrbotoClient) {
       ? 'No matching audit entries.'
       : page.items.map((e) => {
         const who = e.actorName ?? e.actorEmail ?? '(system)';
+        // ORB-1368 - mark agent-performed actions.
+        const agentMark = e.isAgentWork ? ' [agent]' : '';
         const what = e.entityType
           ? ` ${e.entityType}${e.entityId ? `:${e.entityId.slice(0, 8)}` : ''}`
           : '';
-        return `- ${e.createdAt} · ${who} → ${e.action}${what}`;
+        return `- ${e.createdAt} · ${who}${agentMark} → ${e.action}${what}`;
       }).join('\n');
 
     return {
