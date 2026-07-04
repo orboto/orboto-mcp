@@ -39,6 +39,9 @@ const PRIMER_FACT_CATEGORIES = [
   // ORB-1403 - explicit non-functional requirements (performance, security,
   // DSGVO, operations, i18n, ...) for the Pflichtenheft NFR chapter.
   'non_functional',
+  // ORB-1413 - glossary/terminology facts for the Pflichtenheft glossary
+  // chapter (chapter 11) only, so they no longer double-render via `other`.
+  'glossary',
   'other',
 ] as const;
 
@@ -183,7 +186,7 @@ export const primerFactAddToolConfig = {
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key, e.g. "ORB". Case-insensitive.'),
     category: PrimerFactCategoryEnum.describe(
-      'Category bucket. Pick the closest fit; categories are fixed. Use "non_functional" to capture an explicit non-functional requirement (performance / security / DSGVO / operations / i18n) - the key names the sub-area, the value is the requirement; these render verbatim in the requirements-spec NFR chapter.',
+      'Category bucket. Pick the closest fit; categories are fixed. Use "non_functional" to capture an explicit non-functional requirement (performance / security / DSGVO / operations / i18n) - the key names the sub-area, the value is the requirement; these render verbatim in the requirements-spec NFR chapter. Use "glossary" for a term/definition pair - these render only in the requirements-spec glossary chapter.',
     ),
     key: z.string().min(1).max(120).describe(
       'Short machine-readable identifier, e.g. "package-manager", "node-version", "css-framework". Lowercase + dashes preferred.',
