@@ -54,6 +54,7 @@ import {
 import { searchToolConfig, makeSearchHandler } from './tools/search.js';
 import { queryToolConfig, makeQueryHandler } from './tools/query.js';
 import { customerReportToolConfig, makeCustomerReportHandler } from './tools/customer-report.js';
+import { requirementsSpecToolConfig, makeRequirementsSpecHandler } from './tools/requirements-spec.js';
 import {
   wikiIngestUrlToolConfig, makeWikiIngestUrlHandler,
   wikiAskToolConfig, makeWikiAskHandler,
@@ -388,6 +389,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_search', searchToolConfig, makeSearchHandler(client));
   reg('orboto_query', queryToolConfig, makeQueryHandler(client));
   reg('orboto_customer_report', customerReportToolConfig, makeCustomerReportHandler(client));
+  reg('orboto_requirements_spec', requirementsSpecToolConfig, makeRequirementsSpecHandler(client));
   reg('orboto_list_doc_spaces', listDocSpacesToolConfig, makeListDocSpacesHandler(client));
   reg('orboto_get_doc', getDocToolConfig, makeGetDocHandler(client));
   // ORB-1342 (epic ORB-1339) - context-efficient doc snippet search +
