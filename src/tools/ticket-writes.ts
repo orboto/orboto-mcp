@@ -53,8 +53,6 @@ interface MemberRow {
   role: { name: string };
 }
 
-interface LabelRow { id: string; name: string }
-
 async function resolveAssigneeId(
   client: OrbotoClient,
   projectId: string,
@@ -75,22 +73,6 @@ async function resolveMilestoneId(
   milestoneNameOrId: string,
 ): Promise<string> {
   return (await resolveMilestoneByNameOrId(client, projectId, milestoneNameOrId)).id;
-}
-
-async function resolveLabelIds(
-  client: OrbotoClient,
-  projectId: string,
-  names: string[],
-): Promise<string[]> {
-  if (names.length === 0) return [];
-  const labels = await client.get<LabelRow[]>(`/projects/${projectId}/labels`);
-  const ids: string[] = [];
-  for (const name of names) {
-    const found = labels.find((l) => l.name === name);
-    if (!found) throw new Error(`Label "${name}" not found in project — create it first.`);
-    ids.push(found.id);
-  }
-  return ids;
 }
 
 /** Render the "ticket created/updated" line every mutation tool ends
@@ -127,8 +109,8 @@ export const createTicketToolConfig = {
     type: z.enum(['task', 'bug', 'story', 'epic']).optional().describe('Default: task.'),
     priority: z.enum(['blocker', 'high', 'normal', 'low', 'trivial']).optional().describe('Default: normal.'),
     milestone: z.string().optional().describe('Milestone key (e.g. "ORB-M3"), name, or UUID. Looked up in the project (incl. closed); unknown = error, ambiguous name = error (pass the key/UUID).'),
-    assigneeEmails: z.array(z.string().email()).optional().describe('Project-member emails to assign on creation.'),
-    labels: z.array(z.string()).optional().describe('Label names — must already exist on the project.'),
+    assigneeEmails: z.array(z.string().email()).optional().describe('Project-member emails to assign on creation. Attached atomically inside the create (ORB-1416) - a non-member email rolls the whole create back with a 400, no orphan ticket.'),
+    labels: z.array(z.string()).optional().describe('Label names - must already exist on the project. Attached atomically inside the create (ORB-1416) - an unknown label rolls the whole create back with a 400, no orphan ticket.'),
     parentTicketKey: z.string().optional().describe('Parent ticket key (e.g. "ACME-10") — makes this a sub-ticket.'),
     dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD.'),
     isPrivate: z.boolean().optional(),
@@ -160,6 +142,13 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
       const parent = await resolveTicketByKey(client, input.parentTicketKey);
       body.parentTicketId = parent.id;
     }
+    // ORB-1416 - labels + assignees attach INLINE in the create
+    // transaction so the whole thing is atomic (one round-trip). No more
+    // post-create attach loops: a bad label/assignee reference now rolls
+    // the create back on the API side (clean 400, no orphan ticket) rather
+    // than leaving a half-created ticket the agent retries into a dup.
+    if (input.labels && input.labels.length > 0) body.labelNames = input.labels;
+    if (input.assigneeEmails && input.assigneeEmails.length > 0) body.assigneeEmails = input.assigneeEmails;
 
     // ORB-990 — strict ticket-language enforcement may reject this with
     // a 422; surface that as a clear block result instead of a raw error.
@@ -177,22 +166,6 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
       const blocked = languageBlockResult(err, 'Ticket create');
       if (blocked) return blocked;
       throw err;
-    }
-
-    // Post-create steps: assignees + labels go through the dedicated
-    // sub-routes, mirroring the wrapper's behaviour. Each is awaited
-    // so a 403 here surfaces in the same MCP response.
-    if (input.assigneeEmails && input.assigneeEmails.length > 0) {
-      for (const email of input.assigneeEmails) {
-        const userId = await resolveAssigneeId(client, project.id, email);
-        await client.post(`/projects/${project.id}/tickets/${created.id}/assignees/${userId}`, {});
-      }
-    }
-    if (input.labels && input.labels.length > 0) {
-      const ids = await resolveLabelIds(client, project.id, input.labels);
-      for (const labelId of ids) {
-        await client.post(`/projects/tickets/${created.id}/labels/${labelId}`, {});
-      }
     }
 
     // ORB-831 / ORB-887 — surface the backend's `similarWarnings` to the

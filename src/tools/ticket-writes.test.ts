@@ -69,23 +69,28 @@ describe('orboto_create_ticket', () => {
     expect((res.content[0] as { text: string }).text).toContain('Created: [ACME-7]');
   });
 
-  it('attaches labels via the prefixed /projects/tickets/:id/labels/:labelId route (ORB-1417)', async () => {
+  it('attaches labels + assignees INLINE in the create body, with no separate attach POSTs (ORB-1416)', async () => {
     const calls = stub([
-      { json: PROJ },                                                     // resolveProjectByKey
-      { json: { ...TICKET, ticketKey: 'ACME-8', title: 'Labelled' } },   // POST create
-      { json: [{ id: 'lb2', name: 'bug' }, { id: 'lb9', name: 'ui' }] }, // resolveLabelIds: GET labels
-      { json: {} },                                                       // POST label attach
+      { json: PROJ },                                                        // resolveProjectByKey
+      { json: { ...TICKET, ticketKey: 'ACME-8', title: 'Labelled' } },      // POST create (the ONLY POST)
     ]);
     await makeCreateTicketHandler(client)({
-      projectKey: 'ACME', title: 'Labelled', labels: ['bug'],
+      projectKey: 'ACME', title: 'Labelled', labels: ['bug', 'ui'],
+      assigneeEmails: ['dev@example.com'],
     });
-    const labelPost = calls.find((c) => c.method === 'POST' && c.url.includes('/labels/'))!;
-    // The real route is POST /projects/tickets/:ticketId/labels/:labelId
-    // (labelRoutes is registered with prefix '/projects', route path has
-    // NO projectId segment). The wrong path (extra ${project.id}) 404s
-    // AFTER the ticket is already created, so the agent retries and dups.
-    expect(labelPost.url).toBe('https://orboto.example.com/projects/tickets/t1/labels/lb2');
-    expect(labelPost.url).not.toContain('/projects/p1/tickets/');
+    // Exactly one POST - the atomic create - carrying labels + assignees
+    // in its body. No follow-up /labels/ or /assignees/ round-trips, so a
+    // bad reference can't leave an orphan ticket the agent retries into a dup.
+    const posts = calls.filter((c) => c.method === 'POST');
+    expect(posts).toHaveLength(1);
+    expect(posts[0].url).toBe('https://orboto.example.com/projects/p1/tickets');
+    expect(posts[0].body).toMatchObject({
+      title: 'Labelled',
+      labelNames: ['bug', 'ui'],
+      assigneeEmails: ['dev@example.com'],
+    });
+    expect(calls.some((c) => c.url.includes('/labels/'))).toBe(false);
+    expect(calls.some((c) => c.url.includes('/assignees/'))).toBe(false);
   });
 
   it('resolves milestone name + parent ticket key', async () => {
