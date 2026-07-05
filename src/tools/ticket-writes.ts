@@ -191,7 +191,7 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
     if (input.labels && input.labels.length > 0) {
       const ids = await resolveLabelIds(client, project.id, input.labels);
       for (const labelId of ids) {
-        await client.post(`/projects/${project.id}/tickets/${created.id}/labels/${labelId}`, {});
+        await client.post(`/projects/tickets/${created.id}/labels/${labelId}`, {});
       }
     }
 
