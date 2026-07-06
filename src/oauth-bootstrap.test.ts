@@ -184,6 +184,28 @@ describe('createTokenProvider', () => {
     const p = createTokenProvider(noRefresh, vi.fn(), undefined, () => base.expiresAt);
     await expect(p.getAccessToken()).rejects.toThrow(/reconnect the client/);
   });
+
+  it('ORB-1419 - single-flights concurrent getAccessToken calls into ONE refresh', async () => {
+    // Two concurrent callers that both see an expired token must share a single
+    // in-flight refresh rather than each firing one (which would present the OLD
+    // refresh token twice and trip server-side reuse-detection).
+    let resolveRefresh: (v: OAuthTokenSet) => void = () => {};
+    const refresh = vi.fn().mockImplementation(
+      () => new Promise<OAuthTokenSet>((r) => { resolveRefresh = r; }),
+    );
+    const p = createTokenProvider(base, refresh, undefined, () => base.expiresAt);
+
+    const a = p.getAccessToken();
+    const b = p.getAccessToken();
+    // Both callers are now awaiting; only one refresh should have been started.
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(refresh).toHaveBeenCalledWith('rt0');
+
+    resolveRefresh({ accessToken: 'at-shared', refreshToken: 'rt1', expiresAt: 10_000_000, scope: 'mcp' });
+    expect(await a).toBe('at-shared');
+    expect(await b).toBe('at-shared');
+    expect(refresh).toHaveBeenCalledOnce();
+  });
 });
 
 describe('bootstrapOAuth cached-grant path', () => {
