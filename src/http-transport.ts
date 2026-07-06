@@ -391,10 +391,32 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
       return;
     }
 
-    // Reject non-POST + non-DELETE. GET on /mcp is legal per the
-    // spec (SSE resumption) but this first cut keeps it simple and
-    // returns 405 — resumption is a v2 concern.
+    // Reject non-POST + non-DELETE. GET on /mcp is legal per the spec
+    // (SSE resumption) but that is unimplemented here.
+    //
+    // ORB-1424 - an UNAUTHENTICATED GET/HEAD on /mcp is almost always an
+    // OAuth-discovery probe (rmcp/Codex hit the resource to read the
+    // WWW-Authenticate challenge). Answering a bare 405 there left the
+    // client without the resource_metadata pointer and logged a noisy
+    // "405 Method Not Allowed". Return 401 + WWW-Authenticate instead so
+    // the probe discovers the OAuth flow cleanly. An AUTHENTICATED GET
+    // (a real client attempting SSE resumption) still 405s - it already
+    // holds a token and needs no discovery pointer, so spec-conform
+    // clients (Claude Desktop / Cursor) do not regress.
     if (req.method !== 'POST' && req.method !== 'DELETE') {
+      const probeAuth = (req.headers.authorization ?? '') as string;
+      const hasBearer = probeAuth.startsWith('Bearer ') && probeAuth.slice(7).trim().length > 0;
+      if ((req.method === 'GET' || req.method === 'HEAD') && !hasBearer) {
+        const challenge = wwwAuthChallenge(req, baseUrl, 'invalid_request', 'Bearer token required');
+        if (req.method === 'HEAD') {
+          // HEAD carries no body per HTTP semantics.
+          res.writeHead(401, { 'content-type': 'application/json', 'WWW-Authenticate': challenge });
+          res.end();
+        } else {
+          sendError(res, 401, 'Bearer token required', { 'WWW-Authenticate': challenge });
+        }
+        return;
+      }
       res.writeHead(405, { allow: 'POST, DELETE' });
       res.end();
       return;

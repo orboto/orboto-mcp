@@ -66,6 +66,30 @@ describe('ORB-1175 — stale MCP session recovery', () => {
   });
 });
 
+describe('ORB-1424 - GET /mcp OAuth-discovery probe', () => {
+  it('an unauthenticated GET /mcp returns 401 + WWW-Authenticate (not 405) so discovery finds the resource metadata', async () => {
+    const base = await start();
+    const res = await fetch(`${base}/mcp`, { method: 'GET' });
+    expect(res.status).toBe(401);
+    const challenge = res.headers.get('www-authenticate');
+    expect(challenge).toBeTruthy();
+    expect(challenge).toContain('resource_metadata=');
+    expect(challenge).toContain('/.well-known/oauth-protected-resource');
+  });
+
+  it('an authenticated GET /mcp still 405s (SSE resumption unimplemented; no discovery needed)', async () => {
+    const base = await start();
+    const res = await fetch(`${base}/mcp`, {
+      method: 'GET',
+      headers: { authorization: 'Bearer orb_dummy' },
+    });
+    expect(res.status).toBe(405);
+    expect(res.headers.get('allow')).toBe('POST, DELETE');
+    // A held token needs no auth challenge on the 405.
+    expect(res.headers.get('www-authenticate')).toBeNull();
+  });
+});
+
 describe('ORB-941 - graceful close of in-flight MCP sessions on kill-switch', () => {
   function fakeSession(): { session: McpSession; close: ReturnType<typeof vi.fn>; log: ReturnType<typeof vi.fn> } {
     const close = vi.fn().mockResolvedValue(undefined);
