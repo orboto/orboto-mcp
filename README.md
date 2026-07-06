@@ -76,6 +76,8 @@ If your orboto host runs the bundled MCP container (default on the official `doc
 
 The `/mcp` path on the main host is proxied to the bundled MCP container — no separate subdomain or cert needed. Both modes (stdio via npm, HTTP via host) hit the same tool surface.
 
+> **stdio-first CLIs (e.g. Codex):** prefer the stdio proxy (`npx @orboto/mcp`) over an HTTP+OAuth URL. Some CLIs handle the OAuth session refresh and session-expiry re-init poorly and can lose their tools after a while or after a server deploy; the stdio proxy avoids that churn. Claude Desktop, Cursor, and VS Code Copilot are known-good over HTTP+OAuth.
+
 ## Environment
 
 | Variable | Required | Effect |
