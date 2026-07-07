@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase C Group 1 — ticket mutation tools.
+ * ORB-244 Phase C Group 1 - ticket mutation tools.
  *
  * Eight tools that round-trip the API's existing PBAC cascade. Every
  * write is gated on the caller's project-level permissions; a 403
@@ -76,7 +76,7 @@ async function resolveMilestoneId(
 }
 
 /** Render the "ticket created/updated" line every mutation tool ends
- *  with — keeps responses uniform and easy to chain. */
+ *  with - keeps responses uniform and easy to chain. */
 function ticketSummaryText(action: string, t: TicketRow): string {
   return `${action}: [${t.ticketKey}] ${t.title} (${t.statusName ?? t.status})`;
 }
@@ -101,7 +101,7 @@ function ticketStructured(t: TicketRow) {
 export const createTicketToolConfig = {
   title: 'Create a ticket',
   description:
-    'Create a new ticket in the given project. Returns the new ticket\'s key (e.g. "ACME-42") so callers can chain follow-ups. **Read the new key from `structuredContent.createdTicketKey` (ORB-1176) — never from `similarWarnings[].ticketKey`, which are OTHER, possibly-duplicate tickets.** The caller must have `ticket:create` on the project. **Duplicate-detection safety-net (ORB-831):** if `similarWarnings` appears in the response with one or more entries, the ticket WAS created but you should review whether to close it as a duplicate of the listed ticket(s) instead. The warnings are advisory — never blocking — but each entry is a ticket the system thinks the new one overlaps with. Prefer `orboto_check_similar` BEFORE creating when you want a dry-run. **Duplicate-check recall (ORB-1121):** when you search/check-similar first, results rank by term co-occurrence — a long, solution-framed title with rare terms can return 0 hits even when a short, symptom-framed dup sharing one distinctive token exists. Probe with a single distinctive STABLE token (file/component/error-string fragment), keep queries SHORT, and search the SYMPTOM not your fix; a 0-result long query is not "no dup". **Language-mismatch warning (ORB-890):** if `languageWarning` appears, the ticket was written in a language different from the workspace default. Consider rewriting in the expected language so search + duplicate-detection stay consistent. Non-blocking. **Before a mass-create (ORB-989):** call `orboto_whoami` first — its `workspaceLocale` field is the language you should write every ticket in. If the same `languageWarning` repeats, stop and clarify the intended language rather than pushing through the whole batch. **Strict mode (ORB-990):** if the workspace enforces ticket language, a mismatch is rejected (the tool returns a `blocked` result, not a created ticket) — rewrite in the workspace language, or set `allowLanguageMismatch: true` only when the language is genuinely intentional.',
+    'Create a new ticket in the given project. Returns the new ticket\'s key (e.g. "ACME-42") so callers can chain follow-ups. **Read the new key from `structuredContent.createdTicketKey` (ORB-1176) - never from `similarWarnings[].ticketKey`, which are OTHER, possibly-duplicate tickets.** The caller must have `ticket:create` on the project. **Duplicate-detection safety-net (ORB-831):** if `similarWarnings` appears in the response with one or more entries, the ticket WAS created but you should review whether to close it as a duplicate of the listed ticket(s) instead. The warnings are advisory - never blocking - but each entry is a ticket the system thinks the new one overlaps with. Prefer `orboto_check_similar` BEFORE creating when you want a dry-run. **Deferred check under load (ORB-1437):** if `duplicateCheckDeferred: true` appears, the project was under a create burst so the duplicate-check was run in the background instead of inline - `similarWarnings` is then empty because it did NOT run synchronously, which is NOT the same as "no duplicates found". A strong match, if any, is posted as an advisory comment on the new ticket a moment later; check the ticket comments before treating it as new work. **Duplicate-check recall (ORB-1121):** when you search/check-similar first, results rank by term co-occurrence - a long, solution-framed title with rare terms can return 0 hits even when a short, symptom-framed dup sharing one distinctive token exists. Probe with a single distinctive STABLE token (file/component/error-string fragment), keep queries SHORT, and search the SYMPTOM not your fix; a 0-result long query is not "no dup". **Language-mismatch warning (ORB-890):** if `languageWarning` appears, the ticket was written in a language different from the workspace default. Consider rewriting in the expected language so search + duplicate-detection stay consistent. Non-blocking. **Before a mass-create (ORB-989):** call `orboto_whoami` first - its `workspaceLocale` field is the language you should write every ticket in. If the same `languageWarning` repeats, stop and clarify the intended language rather than pushing through the whole batch. **Strict mode (ORB-990):** if the workspace enforces ticket language, a mismatch is rejected (the tool returns a `blocked` result, not a created ticket) - rewrite in the workspace language, or set `allowLanguageMismatch: true` only when the language is genuinely intentional.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
     title: z.string().min(1).max(255),
@@ -111,10 +111,10 @@ export const createTicketToolConfig = {
     milestone: z.string().optional().describe('Milestone key (e.g. "ORB-M3"), name, or UUID. Looked up in the project (incl. closed); unknown = error, ambiguous name = error (pass the key/UUID).'),
     assigneeEmails: z.array(z.string().email()).optional().describe('Project-member emails to assign on creation. Attached atomically inside the create (ORB-1416) - a non-member email rolls the whole create back with a 400, no orphan ticket.'),
     labels: z.array(z.string()).optional().describe('Label names - must already exist on the project. Attached atomically inside the create (ORB-1416) - an unknown label rolls the whole create back with a 400, no orphan ticket.'),
-    parentTicketKey: z.string().optional().describe('Parent ticket key (e.g. "ACME-10") — makes this a sub-ticket.'),
+    parentTicketKey: z.string().optional().describe('Parent ticket key (e.g. "ACME-10") - makes this a sub-ticket.'),
     dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD.'),
     isPrivate: z.boolean().optional(),
-    allowLanguageMismatch: z.boolean().optional().describe('Override strict ticket-language enforcement (ORB-990). Only set after a previous call was blocked AND you are sure the language is intentional — prefer rewriting in the workspace language.'),
+    allowLanguageMismatch: z.boolean().optional().describe('Override strict ticket-language enforcement (ORB-990). Only set after a previous call was blocked AND you are sure the language is intentional - prefer rewriting in the workspace language.'),
   }).shape,
 };
 
@@ -150,17 +150,19 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
     if (input.labels && input.labels.length > 0) body.labelNames = input.labels;
     if (input.assigneeEmails && input.assigneeEmails.length > 0) body.assigneeEmails = input.assigneeEmails;
 
-    // ORB-990 — strict ticket-language enforcement may reject this with
+    // ORB-990 - strict ticket-language enforcement may reject this with
     // a 422; surface that as a clear block result instead of a raw error.
     const createPath = `/projects/${project.id}/tickets${input.allowLanguageMismatch ? '?allowLanguageMismatch=true' : ''}`;
     let created: TicketRow & {
       similarWarnings?: SimilarWarning[];
       languageWarning?: LanguageWarning;
+      duplicateCheckDeferred?: boolean;
     };
     try {
       created = await client.post<TicketRow & {
         similarWarnings?: SimilarWarning[];
         languageWarning?: LanguageWarning;
+        duplicateCheckDeferred?: boolean;
       }>(createPath, body);
     } catch (err) {
       const blocked = languageBlockResult(err, 'Ticket create');
@@ -168,26 +170,38 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
       throw err;
     }
 
-    // ORB-831 / ORB-887 — surface the backend's `similarWarnings` to the
+    // ORB-831 / ORB-887 - surface the backend's `similarWarnings` to the
     // calling agent. The text block prepends a clearly-visible warning
     // when matches exist so a model scanning the result for "warning"
     // / "duplicate" notices and self-corrects.
-    // ORB-890 / ORB-891 — same surface for `languageWarning` when the
+    // ORB-890 / ORB-891 - same surface for `languageWarning` when the
     // detected language doesn't match the workspace default.
     const warnings = created.similarWarnings ?? [];
     const langWarning = created.languageWarning;
+    const deferred = created.duplicateCheckDeferred === true;
     const baseText = ticketSummaryText('Created', created);
     const parts: string[] = [baseText];
+    // ORB-1437 - under a create burst the backend defers the duplicate-check
+    // to a background job (empty similarWarnings, duplicateCheckDeferred:true).
+    // Tell the agent so an empty warnings list isn't read as "no duplicates":
+    // a strong match will land as an advisory comment on the new ticket shortly.
+    if (deferred) {
+      parts.push(
+        `\nℹ Duplicate-check deferred - the project is under high create load, so the check runs in the background. `
+        + `An empty duplicate list here does NOT mean "no duplicates". If a strong match is found, an advisory comment `
+        + `will be posted on [${created.ticketKey}] shortly; review it before treating this as new work.`,
+      );
+    }
     if (warnings.length > 0) {
       parts.push(
-        `\n⚠ Potential duplicates found — review before treating this as new work:\n${
+        `\n⚠ Potential duplicates found - review before treating this as new work:\n${
           warnings.map((w) => `  - [${w.ticketKey ?? w.id.slice(0, 8)}] "${w.title}" (${formatSimilarity(w)})`).join('\n')
         }\n  If one of these covers the work, close [${created.ticketKey}] as a duplicate via orboto_close_ticket.`,
       );
     }
     if (langWarning) {
       parts.push(
-        `\n⚠ Language mismatch — this ticket reads as "${langWarning.detected}" but the workspace default is "${langWarning.expected}". Consider rewriting in ${langWarning.expected.toUpperCase()} to keep search + duplicate-detection consistent across the project.`,
+        `\n⚠ Language mismatch - this ticket reads as "${langWarning.detected}" but the workspace default is "${langWarning.expected}". Consider rewriting in ${langWarning.expected.toUpperCase()} to keep search + duplicate-detection consistent across the project.`,
       );
     }
     const text = parts.join('\n');
@@ -196,12 +210,13 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
       content: [{ type: 'text', text }],
       structuredContent: {
         ...ticketStructured(created),
-        // ORB-1176 — the one unambiguous field for the NEW ticket's key.
+        // ORB-1176 - the one unambiguous field for the NEW ticket's key.
         // `similarWarnings[].ticketKey` are OTHER tickets; read
         // `createdTicketKey` (never a warning's key) to avoid grabbing the
         // wrong one.
         createdTicketKey: created.ticketKey,
         similarWarnings: warnings,
+        ...(deferred ? { duplicateCheckDeferred: true } : {}),
         ...(langWarning ? { languageWarning: langWarning } : {}),
       },
     };
@@ -220,22 +235,22 @@ interface SimilarWarning {
 }
 
 interface LanguageWarning {
-  // ORB-990 — machine-readable code + severity.
+  // ORB-990 - machine-readable code + severity.
   code?: 'language_mismatch';
   severity?: 'warn' | 'block';
   detected: string;
   expected: string;
 }
 
-// ORB-1332 — non-blocking advisory on a status move into in_review / done
+// ORB-1332 - non-blocking advisory on a status move into in_review / done
 // with no summary comment from the actor. The move always succeeds.
 interface SummaryWarning {
   code: 'missing_transition_summary';
   message: string;
 }
 
-/** Append the summaryWarning (ORB-1332) to a move/close result — extra text
- *  line + the structured field — so both the model's prose read and any
+/** Append the summaryWarning (ORB-1332) to a move/close result - extra text
+ *  line + the structured field - so both the model's prose read and any
  *  structured consumer see it. No-op when the backend didn't warn. */
 function withSummaryWarning(
   result: CallToolResult,
@@ -251,7 +266,7 @@ function withSummaryWarning(
 }
 
 /**
- * ORB-990 — turn a strict-language 422 into a clear, non-throwing tool
+ * ORB-990 - turn a strict-language 422 into a clear, non-throwing tool
  * result. The backend body is `{ error, languageWarning }`; we surface
  * the block reason and tell the agent how to proceed (rewrite, or retry
  * with the override) instead of letting the raw API error bubble up.
@@ -263,9 +278,9 @@ function languageBlockResult(err: unknown, verb: string): CallToolResult | null 
   try { parsed = JSON.parse(err.body) as typeof parsed; } catch { /* non-JSON body */ }
   if (!parsed.languageWarning) return null;
   const lw = parsed.languageWarning;
-  const text = `⛔ ${verb} blocked — strict ticket-language enforcement is on.\n` +
+  const text = `⛔ ${verb} blocked - strict ticket-language enforcement is on.\n` +
     `This content reads as "${lw.detected}" but the workspace language is "${lw.expected}".\n` +
-    `Rewrite it in ${lw.expected.toUpperCase()}, or — only if you are sure the language is intentional — retry the same call with allowLanguageMismatch=true.`;
+    `Rewrite it in ${lw.expected.toUpperCase()}, or - only if you are sure the language is intentional - retry the same call with allowLanguageMismatch=true.`;
   return {
     content: [{ type: 'text', text }],
     structuredContent: { blocked: true, languageWarning: lw },
@@ -310,7 +325,7 @@ export function makeUpdateTicketHandler(client: OrbotoClient) {
     allowLanguageMismatch?: boolean;
   }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
-    // ORB-990 — strict ticket-language enforcement may reject a
+    // ORB-990 - strict ticket-language enforcement may reject a
     // title/description patch with a 422; surface a clear block result.
     const patchPath = `/projects/${ticket.projectId}/tickets/${ticket.id}${allowLanguageMismatch ? '?allowLanguageMismatch=true' : ''}`;
     let updated: TicketRow & { languageWarning?: LanguageWarning };
@@ -325,7 +340,7 @@ export function makeUpdateTicketHandler(client: OrbotoClient) {
     const parts = [ticketSummaryText('Updated', updated)];
     if (langWarning) {
       parts.push(
-        `\n⚠ Language mismatch — this ticket reads as "${langWarning.detected}" but the workspace default is "${langWarning.expected}". Consider rewriting in ${langWarning.expected.toUpperCase()} to keep search + duplicate-detection consistent.`,
+        `\n⚠ Language mismatch - this ticket reads as "${langWarning.detected}" but the workspace default is "${langWarning.expected}". Consider rewriting in ${langWarning.expected.toUpperCase()} to keep search + duplicate-detection consistent.`,
       );
     }
     return {
@@ -345,7 +360,7 @@ export function makeUpdateTicketHandler(client: OrbotoClient) {
 export const moveTicketToolConfig = {
   title: 'Move a ticket between status categories',
   description:
-    'Move a ticket to a new status category — todo / in_progress / in_review / done / wont_fix. The API picks the project\'s first status with that category. Caller must have `ticket:change_status`. **Summary warning (ORB-1332):** moving to `in_review` or `done` without having just posted a summary comment returns a non-blocking `summaryWarning` — the move still succeeds, but you should post what changed, the commit SHA, and how to verify. Use `orboto_close_ticket` with a `comment` (or comment first, then move) to avoid it.',
+    'Move a ticket to a new status category - todo / in_progress / in_review / done / wont_fix. The API picks the project\'s first status with that category. Caller must have `ticket:change_status`. **Summary warning (ORB-1332):** moving to `in_review` or `done` without having just posted a summary comment returns a non-blocking `summaryWarning` - the move still succeeds, but you should post what changed, the commit SHA, and how to verify. Use `orboto_close_ticket` with a `comment` (or comment first, then move) to avoid it.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     statusCategory: z.enum(STATUS_CATEGORIES),
@@ -375,7 +390,7 @@ export function makeMoveTicketHandler(client: OrbotoClient) {
 export const closeTicketToolConfig = {
   title: 'Close a ticket',
   description:
-    'Move a ticket to `done` and optionally post a closing comment in one call. Convenience wrapper around `orboto_move_ticket` + `orboto_comment` so the model doesn\'t need to chain two writes. Passing a `comment` is the recommended way to close — it doubles as the transition summary and suppresses the ORB-1332 `summaryWarning`. Closing with no comment (and none posted in the last few minutes) returns a non-blocking `summaryWarning`; the close still succeeds.',
+    'Move a ticket to `done` and optionally post a closing comment in one call. Convenience wrapper around `orboto_move_ticket` + `orboto_comment` so the model doesn\'t need to chain two writes. Passing a `comment` is the recommended way to close - it doubles as the transition summary and suppresses the ORB-1332 `summaryWarning`. Closing with no comment (and none posted in the last few minutes) returns a non-blocking `summaryWarning`; the close still succeeds.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     comment: z.string().min(1).optional().describe('Optional closing comment posted before the move. Doubles as the transition summary (what changed, commit SHA, how to verify).'),
@@ -411,7 +426,7 @@ export function makeCloseTicketHandler(client: OrbotoClient) {
 export const deleteTicketToolConfig = {
   title: 'Permanently delete a ticket',
   description:
-    'DESTRUCTIVE, IRREVERSIBLE hard-delete of a ticket (by key): the row and its history are gone, and a `ticket.deleted` event + webhook fire. Strongly prefer moving the ticket to `wont_fix` (orboto_move_ticket) or closing it instead — wont_fix keeps the history and analytics intact. Only hard-delete a ticket that should truly never have existed (accidental duplicate, spam). Caller must have `ticket:delete`.',
+    'DESTRUCTIVE, IRREVERSIBLE hard-delete of a ticket (by key): the row and its history are gone, and a `ticket.deleted` event + webhook fire. Strongly prefer moving the ticket to `wont_fix` (orboto_move_ticket) or closing it instead - wont_fix keeps the history and analytics intact. Only hard-delete a ticket that should truly never have existed (accidental duplicate, spam). Caller must have `ticket:delete`.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
   }).shape,
@@ -482,7 +497,7 @@ export function makeCommentHandler(client: OrbotoClient) {
 export const updateCommentToolConfig = {
   title: 'Edit a ticket comment',
   description:
-    'Edit the text of a comment you authored (super-admins can edit any). Markdown. The prior text is snapshotted into the comment\'s revision history. Pass the commentId — from orboto_comment\'s response or orboto_get_ticket.',
+    'Edit the text of a comment you authored (super-admins can edit any). Markdown. The prior text is snapshotted into the comment\'s revision history. Pass the commentId - from orboto_comment\'s response or orboto_get_ticket.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     commentId: z.string().uuid(),
@@ -514,7 +529,7 @@ export function makeUpdateCommentHandler(client: OrbotoClient) {
 export const deleteCommentToolConfig = {
   title: 'Delete a ticket comment',
   description:
-    'Delete a comment. You can always delete your own; deleting another user\'s comment needs the `comment:delete_others` permission in the project (super-admins always can). Pass the commentId — from orboto_comment\'s response or orboto_get_ticket.',
+    'Delete a comment. You can always delete your own; deleting another user\'s comment needs the `comment:delete_others` permission in the project (super-admins always can). Pass the commentId - from orboto_comment\'s response or orboto_get_ticket.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     commentId: z.string().uuid(),
@@ -540,7 +555,7 @@ export function makeDeleteCommentHandler(client: OrbotoClient) {
 export const assignToolConfig = {
   title: 'Assign a user to a ticket',
   description:
-    'Add a project member as an assignee on a ticket. Multi-assignee is supported — this adds, it does not replace. Use `orboto_unassign` to remove.',
+    'Add a project member as an assignee on a ticket. Multi-assignee is supported - this adds, it does not replace. Use `orboto_unassign` to remove.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     assigneeEmail: z.string().email(),
@@ -557,7 +572,7 @@ export function makeAssignHandler(client: OrbotoClient) {
       await client.post(`/projects/${ticket.projectId}/tickets/${ticket.id}/assignees/${userId}`, {});
     } catch (err) {
       if (err instanceof OrbotoApiError && err.status === 409) {
-        // Already assigned — idempotent success.
+        // Already assigned - idempotent success.
         return {
           content: [{ type: 'text', text: `[${ticket.ticketKey}] already assigned to ${assigneeEmail}.` }],
           structuredContent: { ticketKey: ticket.ticketKey, alreadyAssigned: true },
@@ -607,7 +622,7 @@ export function makeUnassignHandler(client: OrbotoClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orboto_label_ticket / orboto_unlabel_ticket — ORB-1043
+// orboto_label_ticket / orboto_unlabel_ticket - ORB-1043
 // ---------------------------------------------------------------------------
 
 async function resolveLabelId(client: OrbotoClient, projectId: string, name: string): Promise<string> {
@@ -622,7 +637,7 @@ async function resolveLabelId(client: OrbotoClient, projectId: string, name: str
 export const labelTicketToolConfig = {
   title: 'Add a label to a ticket',
   description:
-    'Attach an existing label (by name) to an existing ticket (by key). The label must already exist — create it with orboto_create_label first. Idempotent: a label already on the ticket is a no-op. Needs ticket:edit.',
+    'Attach an existing label (by name) to an existing ticket (by key). The label must already exist - create it with orboto_create_label first. Idempotent: a label already on the ticket is a no-op. Needs ticket:edit.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     label: z.string().min(1).describe('Label name (must exist on the project).'),
@@ -702,7 +717,7 @@ export function makeSetMilestoneHandler(client: OrbotoClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orboto_add_ticket_dependency / remove / list — ORB-453
+// orboto_add_ticket_dependency / remove / list - ORB-453
 // ---------------------------------------------------------------------------
 
 interface DependencyEdge {
@@ -717,7 +732,7 @@ interface DependencyEdge {
 export const addTicketDependencyToolConfig = {
   title: 'Add a ticket dependency',
   description:
-    'Mark `ticketKey` as depending on `dependsOnKey` — i.e. `dependsOnKey` blocks `ticketKey`. Both tickets must live in the same project; cycles + self-dependencies are rejected by the API.',
+    'Mark `ticketKey` as depending on `dependsOnKey` - i.e. `dependsOnKey` blocks `ticketKey`. Both tickets must live in the same project; cycles + self-dependencies are rejected by the API.',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('The dependent ticket (the one being blocked).'),
     dependsOnKey: z.string().min(3).describe('The ticket that must complete first (the blocker).'),
@@ -736,7 +751,7 @@ export function makeAddTicketDependencyHandler(client: OrbotoClient) {
         { dependsOnId: dependsOn.id },
       );
     } catch (err) {
-      // 409 = edge already exists — idempotent success.
+      // 409 = edge already exists - idempotent success.
       if (err instanceof OrbotoApiError && err.status === 409) {
         return {
           content: [{ type: 'text', text: `[${ticket.ticketKey}] already depends on [${dependsOn.ticketKey}].` }],
@@ -748,7 +763,7 @@ export function makeAddTicketDependencyHandler(client: OrbotoClient) {
     return {
       content: [{
         type: 'text',
-        text: `[${ticket.ticketKey}] now depends on [${dependsOn.ticketKey}] — must complete first.`,
+        text: `[${ticket.ticketKey}] now depends on [${dependsOn.ticketKey}] - must complete first.`,
       }],
       structuredContent: {
         ticketKey: ticket.ticketKey,
@@ -760,7 +775,7 @@ export function makeAddTicketDependencyHandler(client: OrbotoClient) {
 
 export const removeTicketDependencyToolConfig = {
   title: 'Remove a ticket dependency',
-  description: 'Drop the dependency edge from `ticketKey` to `dependsOnKey`. Idempotent — removing an edge that isn\'t there returns the same success.',
+  description: 'Drop the dependency edge from `ticketKey` to `dependsOnKey`. Idempotent - removing an edge that isn\'t there returns the same success.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     dependsOnKey: z.string().min(3),
@@ -818,7 +833,7 @@ export function makeListTicketDependenciesHandler(client: OrbotoClient) {
     const fmt = (edges: DependencyEdge[]) =>
       edges.length === 0
         ? '_(none)_'
-        : edges.map((e) => `- [${e.ticketKey ?? e.id.slice(0, 8)}] ${e.title}${e.statusName ? ` — ${e.statusName}` : ''}`).join('\n');
+        : edges.map((e) => `- [${e.ticketKey ?? e.id.slice(0, 8)}] ${e.title}${e.statusName ? ` - ${e.statusName}` : ''}`).join('\n');
     const lines = [
       `# Dependencies for [${ticket.ticketKey}]`,
       '',
