@@ -71,6 +71,16 @@ interface GitActivityRow {
   createdAt: string;
   url: string | null;
 }
+/** ORB-1455 - the ticket's attachments, so the agent KNOWS files exist
+ *  (and can pull the bytes / view an image via orboto_get_attachment). */
+interface AttachmentRow {
+  id: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  uploadedAt?: string;
+  downloadUrl?: string;
+}
 interface CursorPage<T> { items: T[]; nextCursor: string | null }
 
 const COMMENT_PAGE_SIZE = 50;
@@ -92,7 +102,7 @@ export function makeGetTicketHandler(client: OrbotoClient) {
     const gitCount = (ticket as unknown as { gitActivityCount?: number }).gitActivityCount ?? 0;
     const parentId = ticket.parentTicketId ?? null;
 
-    const [commentsPage, checklists, gitActivity, parent, childrenPage, enriched] = await Promise.all([
+    const [commentsPage, checklists, gitActivity, parent, childrenPage, enriched, attachments] = await Promise.all([
       client.get<CursorPage<CommentRow>>(
         `/tickets/${ticket.id}/comments?limit=${COMMENT_PAGE_SIZE}`,
       ).catch(swallow404<CursorPage<CommentRow>>({ items: [], nextCursor: null })),
@@ -118,6 +128,9 @@ export function makeGetTicketHandler(client: OrbotoClient) {
       // (comments, checklists, git, parent, children) is unaffected. Falls
       // back to the bare row on a 404.
       client.get<TicketRow>(`/projects/${ticket.projectId}/tickets/${ticket.id}`).catch(swallow404<TicketRow | null>(null)),
+      // ORB-1455 - attachments list so the agent knows files exist without a
+      // guess. Kept LAST so the existing call-order in tests is unaffected.
+      client.get<AttachmentRow[]>(`/tickets/${ticket.id}/attachments`).catch(swallow404<AttachmentRow[]>([])),
     ]);
 
     const comments = commentsPage.items;
@@ -128,7 +141,7 @@ export function makeGetTicketHandler(client: OrbotoClient) {
     const full = enriched ?? ticket;
 
     return {
-      content: [{ type: 'text', text: formatTicket(full, comments, hasMoreComments, checklists, gitActivity, parent, children) }],
+      content: [{ type: 'text', text: formatTicket(full, comments, hasMoreComments, checklists, gitActivity, parent, children, attachments) }],
       structuredContent: {
         // ORB-1179 — surface the uuid alongside the key.
         id: full.id,
@@ -202,6 +215,15 @@ export function makeGetTicketHandler(client: OrbotoClient) {
           author: g.authorName,
           createdAt: g.createdAt,
         })),
+        // ORB-1455 - attachments (id + metadata). Feed an id to
+        // orboto_get_attachment to view an image or fetch the bytes.
+        attachments: attachments.map((a) => ({
+          id: a.id,
+          filename: a.filename,
+          contentType: a.contentType,
+          sizeBytes: a.sizeBytes,
+          downloadUrl: a.downloadUrl ?? `/attachments/${a.id}`,
+        })),
       },
     };
   };
@@ -222,6 +244,7 @@ function formatTicket(
   gitActivity: GitActivityRow[],
   parent: TicketSummaryRow | null,
   children: TicketSummaryRow[],
+  attachments: AttachmentRow[],
 ): string {
   const header = [
     `[${ticket.ticketKey}] ${ticket.title}`,
@@ -305,5 +328,17 @@ function formatTicket(
     }
   }
 
-  return [...header, ...description, ...checklistLines, ...commentLines, ...gitLines].join('\n');
+  // ORB-1455 - attachments so the agent knows files exist. Feed an id to
+  // orboto_get_attachment to view an image or fetch the bytes.
+  const attachmentLines: string[] = [];
+  if (attachments.length > 0) {
+    attachmentLines.push('', `## Attachments (${attachments.length})`);
+    for (const a of attachments) {
+      const kb = Math.round(a.sizeBytes / 1024);
+      attachmentLines.push(`- ${a.filename} (${kb} KB, ${a.contentType}) id=${a.id}`);
+    }
+    attachmentLines.push('Use orboto_get_attachment with an id to view an image or fetch bytes.');
+  }
+
+  return [...header, ...description, ...checklistLines, ...commentLines, ...gitLines, ...attachmentLines].join('\n');
 }

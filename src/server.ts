@@ -97,6 +97,10 @@ import {
   deleteDocAttachmentToolConfig, makeDeleteDocAttachmentHandler,
 } from './tools/doc-attachments.js';
 import {
+  listTicketAttachmentsToolConfig, makeListTicketAttachmentsHandler,
+  getAttachmentToolConfig, makeGetAttachmentHandler,
+} from './tools/ticket-attachments.js';
+import {
   exportDocMdToolConfig, makeExportDocMdHandler,
   exportDocPdfToolConfig, makeExportDocPdfHandler,
 } from './tools/doc-export.js';
@@ -415,6 +419,10 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_upload_doc_attachment', uploadDocAttachmentToolConfig, makeUploadDocAttachmentHandler(client));
   reg('orboto_list_doc_attachments', listDocAttachmentsToolConfig, makeListDocAttachmentsHandler(client));
   reg('orboto_delete_doc_attachment', deleteDocAttachmentToolConfig, makeDeleteDocAttachmentHandler(client));
+  // ORB-1455 - ticket-attachment read + view (list metadata, fetch bytes /
+  // image content block). Complements orboto_attach_to_ticket (write-only).
+  reg('orboto_list_ticket_attachments', listTicketAttachmentsToolConfig, makeListTicketAttachmentsHandler(client));
+  reg('orboto_get_attachment', getAttachmentToolConfig, makeGetAttachmentHandler(client));
   // ORB-915 — doc export (Markdown + PDF).
   reg('orboto_export_doc_md', exportDocMdToolConfig, makeExportDocMdHandler(client));
   reg('orboto_export_doc_pdf', exportDocPdfToolConfig, makeExportDocPdfHandler(client));

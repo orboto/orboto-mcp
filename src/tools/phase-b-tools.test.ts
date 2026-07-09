@@ -129,15 +129,17 @@ describe('orboto_get_ticket', () => {
       { json: { items: [], nextCursor: null } },
       { json: [] }, // checklists — flat array
       NO_CHILDREN, // children via /tickets?parentTicketId=… filter
-      // ORB-1023 — enriched by-id refetch (always last)
+      // ORB-1023 - enriched by-id refetch
       { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-5', title: 'Bug', status: 'TODO', statusName: 'To Do', statusCategory: 'todo', type: 'bug', priority: 'normal' } },
+      { json: [] }, // ORB-1455 - attachments (always last)
     ]);
     await makeGetTicketHandler(client)({ ticketKey: 'ACME-5' });
-    // Calls: by-key project, by-key ticket, comments, checklists, children, enriched by-id (no git, no parent).
-    expect(calls).toHaveLength(6);
+    // Calls: by-key project, by-key ticket, comments, checklists, children, enriched by-id, attachments (no git, no parent).
+    expect(calls).toHaveLength(7);
     expect(calls[2]).toContain('/tickets/t1/comments?limit=');
     expect(calls[4]).toContain('parentTicketId=t1');
     expect(calls[5]).toContain('/projects/p1/tickets/t1');
+    expect(calls[6]).toContain('/tickets/t1/attachments');
     expect(calls.some((c) => c.includes('/git-activity'))).toBe(false);
   });
 
@@ -154,6 +156,7 @@ describe('orboto_get_ticket', () => {
       { json: [] },
       NO_CHILDREN,
       { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-6', title: 'X', status: 'TODO', statusName: 'To Do', statusCategory: 'todo', type: 'task', priority: 'normal' } },
+      { json: [] }, // ORB-1455 - attachments
     ]);
     const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-6' });
     const sc = res.structuredContent as {
@@ -192,6 +195,7 @@ describe('orboto_get_ticket', () => {
       },
       NO_CHILDREN,
       { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-8', title: 'Epic', status: 'IN_PROGRESS', statusName: 'In Progress', statusCategory: 'in_progress', type: 'task', priority: 'normal' } },
+      { json: [] }, // ORB-1455 - attachments
     ]);
     const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-8' });
     const text = (res.content[0] as { text: string }).text;
@@ -211,6 +215,7 @@ describe('orboto_get_ticket', () => {
       NO_CHILDREN,
       // Enriched by-id refetch
       { json: { id: 't5', projectId: 'p1', ticketKey: 'ACME-5', title: 'Phase A', status: 'DONE', statusName: 'Done', statusCategory: 'done', type: 'task', priority: 'normal' } },
+      { json: [] }, // ORB-1455 - attachments
     ]);
     const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-5' });
     const sc = res.structuredContent as {
@@ -237,6 +242,7 @@ describe('orboto_get_ticket', () => {
       { json: [{ type: 'pr', title: 'fix', state: 'open', externalId: '1', authorName: 'x', createdAt: 'now', url: 'x' }] },
       NO_CHILDREN,
       { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-7', title: 'Feature', status: 'IN_PROGRESS', statusName: 'In Progress', statusCategory: 'in_progress', type: 'task', priority: 'normal' } },
+      { json: [] }, // ORB-1455 - attachments
     ]);
     await makeGetTicketHandler(client)({ ticketKey: 'ACME-7' });
     expect(calls.some((c) => c.includes('/git-activity'))).toBe(true);
@@ -253,12 +259,36 @@ describe('orboto_get_ticket', () => {
       NO_CHILDREN,                                // children
       // Enriched by-id refetch: carries statusCategory + the resolved name.
       { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-9', title: 'Bug', status: 'DONE', statusName: 'Done', statusCategory: 'done', type: 'bug', priority: 'normal', milestoneId: 'm1', milestoneName: 'Sprint 7' } },
+      { json: [] }, // ORB-1455 - attachments
     ]);
     const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-9' });
     const sc = res.structuredContent as { milestone: { id: string; name: string } | null; statusCategory: string | null };
     expect(sc.milestone).toEqual({ id: 'm1', name: 'Sprint 7' });
     expect(sc.statusCategory).toBe('done');
     expect((res.content[0] as { text: string }).text).toContain('Milestone: Sprint 7');
+  });
+
+  it('ORB-1455: surfaces the attachments array (agent knows files exist)', async () => {
+    const attId = 'a0000000-0000-0000-0000-000000000001';
+    stub([
+      { json: PROJ },
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-5', title: 'Bug', status: 'TODO', gitActivityCount: 0, parentTicketId: null } },
+      { json: { items: [], nextCursor: null } }, // comments
+      { json: [] },                               // checklists
+      NO_CHILDREN,                                // children
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-5', title: 'Bug', status: 'TODO', statusName: 'To Do', statusCategory: 'todo', type: 'bug', priority: 'normal' } },
+      // ORB-1455 - attachments list
+      { json: [{ id: attId, filename: 'screenshot.png', contentType: 'image/png', sizeBytes: 4096, downloadUrl: `/attachments/${attId}` }] },
+    ]);
+    const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-5' });
+    const sc = res.structuredContent as { attachments: Array<{ id: string; filename: string; contentType: string }> };
+    expect(sc.attachments).toEqual([
+      { id: attId, filename: 'screenshot.png', contentType: 'image/png', sizeBytes: 4096, downloadUrl: `/attachments/${attId}` },
+    ]);
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Attachments (1)');
+    expect(text).toContain('screenshot.png');
+    expect(text).toContain(attId);
   });
 });
 
