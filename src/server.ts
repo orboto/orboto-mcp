@@ -189,6 +189,10 @@ import {
   unclaimToolConfig, makeUnclaimHandler,
 } from './tools/claim.js';
 import {
+  listApprovalsToolConfig, makeListApprovalsHandler,
+  approvalDecideToolConfig, makeApprovalDecideHandler,
+} from './tools/approvals.js';
+import {
   createMilestoneToolConfig, makeCreateMilestoneHandler,
   closeMilestoneToolConfig, makeCloseMilestoneHandler,
   updateMilestoneToolConfig, makeUpdateMilestoneHandler,
@@ -544,6 +548,9 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_whoami', whoamiToolConfig, makeWhoamiHandler(client));
   reg('orboto_claim', claimToolConfig, makeClaimHandler(client));
   reg('orboto_unclaim', unclaimToolConfig, makeUnclaimHandler(client));
+  // ORB-1223 - approval / sign-off gates.
+  reg('orboto_list_approvals', listApprovalsToolConfig, makeListApprovalsHandler(client));
+  reg('orboto_approval_decide', approvalDecideToolConfig, makeApprovalDecideHandler(client));
   reg('orboto_create_milestone', createMilestoneToolConfig, makeCreateMilestoneHandler(client));
   reg('orboto_close_milestone', closeMilestoneToolConfig, makeCloseMilestoneHandler(client));
   reg('orboto_update_milestone', updateMilestoneToolConfig, makeUpdateMilestoneHandler(client));
