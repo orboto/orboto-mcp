@@ -158,6 +158,11 @@ import {
   deleteTimeEntryToolConfig, makeDeleteTimeEntryHandler,
 } from './tools/time-writes.js';
 import {
+  listTicketSchedulesToolConfig, makeListTicketSchedulesHandler,
+  scheduleTicketSessionToolConfig, makeScheduleTicketSessionHandler,
+  cancelTicketSessionToolConfig, makeCancelTicketSessionHandler,
+} from './tools/ticket-schedules.js';
+import {
   checkToolConfig, makeCheckHandler,
   uncheckToolConfig, makeUncheckHandler,
   addCheckToolConfig, makeAddCheckHandler,
@@ -515,6 +520,11 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_list_time_entries', listTimeEntriesToolConfig, makeListTimeEntriesHandler(client));
   reg('orboto_edit_time_entry', editTimeEntryToolConfig, makeEditTimeEntryHandler(client));
   reg('orboto_delete_time_entry', deleteTimeEntryToolConfig, makeDeleteTimeEntryHandler(client));
+
+  // ORB-626 - ticket meeting schedules (working sessions + iCal invites).
+  reg('orboto_list_ticket_schedules', listTicketSchedulesToolConfig, makeListTicketSchedulesHandler(client));
+  reg('orboto_schedule_ticket_session', scheduleTicketSessionToolConfig, makeScheduleTicketSessionHandler(client));
+  reg('orboto_cancel_ticket_session', cancelTicketSessionToolConfig, makeCancelTicketSessionHandler(client));
 
   // ORB-309 Phase C — Group 3: checklist writes (ORB-234 surface).
   reg('orboto_check', checkToolConfig, makeCheckHandler(client));

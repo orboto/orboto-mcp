@@ -169,9 +169,13 @@ export class OrbotoClient {
     return (await res.json()) as T;
   }
 
-  /** DELETE. No response body expected on success. */
-  async delete(path: string): Promise<void> {
-    await this.authedFetch(this.fullUrl(path), { method: 'DELETE' });
+  /** DELETE. Returns the parsed body when the route sends one (some
+   *  DELETEs 204, others return the mutated row - ORB-626 cancel does). */
+  async delete<T = void>(path: string): Promise<T> {
+    const res = await this.authedFetch(this.fullUrl(path), { method: 'DELETE' });
+    if (res.status === 204) return undefined as T;
+    const text = await res.text();
+    return (text ? JSON.parse(text) : undefined) as T;
   }
 
   /**
