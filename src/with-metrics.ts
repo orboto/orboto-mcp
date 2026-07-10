@@ -17,7 +17,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from './orboto-client.js';
-import { type NudgeState, shouldNudge, prependNudge } from './session-nudge.js';
+import { type NudgeState, shouldNudge, prependNudge, shouldGate, gateResult } from './session-nudge.js';
 
 /**
  * ORB-1174 — turn an OrbotoApiError into an actionable, agent-visible
@@ -113,6 +113,23 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
     // the handler runs, so the "first tool call" is the first dispatch
     // regardless of its outcome. Applied to the returned result below.
     const wantsNudge = nudge ? shouldNudge(nudge, toolName) : false;
+    // ORB-1471 - HARD session-start gate. When the workspace requires it,
+    // refuse every tool call until `orboto_session_start` has run (this also
+    // flips the "ran" flag when the tool IS session_start). The gate message
+    // supersedes the soft nudge, so we return it directly without running the
+    // handler. Disabled by default => `shouldGate` returns false and nothing
+    // below changes.
+    if (nudge && shouldGate(nudge, toolName)) {
+      const gated = gateResult();
+      void postLogEntry(client, {
+        toolName,
+        durationMs: Date.now() - start,
+        success: false,
+        errorMessage: 'session-start gate: call orboto_session_start first',
+        clientHint,
+      });
+      return gated;
+    }
     try {
       const result = await handler(args, extra);
       // Success path — but the handler can also signal a "soft"

@@ -39,11 +39,24 @@ export const SESSION_START_NUDGE =
 export interface NudgeState {
   /** Flips true on the first tool dispatch of the session, whatever it was. */
   firstToolCallSeen: boolean;
+  /**
+   * ORB-1471 - flips true once `orboto_session_start` has run this session.
+   * Drives the HARD gate (see shouldGate) when the workspace flag
+   * `mcp_require_session_start` is on: every other tool call is refused until
+   * this is true.
+   */
+  sessionStartRan: boolean;
+  /**
+   * ORB-1471 - whether the workspace requires session-start before any other
+   * tool (read from GET /agent-instructions at connect time). Off by default.
+   */
+  gateEnabled: boolean;
 }
 
-/** Fresh per-session (HTTP) / per-process (stdio) nudge state. */
-export function createNudgeState(): NudgeState {
-  return { firstToolCallSeen: false };
+/** Fresh per-session (HTTP) / per-process (stdio) nudge state. `gateEnabled`
+ *  comes from the workspace config fetched at server build (default off). */
+export function createNudgeState(gateEnabled = false): NudgeState {
+  return { firstToolCallSeen: false, sessionStartRan: false, gateEnabled };
 }
 
 /**
@@ -71,5 +84,47 @@ export function prependNudge(result: CallToolResult): CallToolResult {
       { type: 'text', text: SESSION_START_NUDGE },
       ...(result.content ?? []),
     ],
+  };
+}
+
+/**
+ * ORB-1471 - the HARD session-start gate message. Unlike the soft nudge
+ * (which rides along on the tool's real result), the gate REFUSES the tool
+ * call outright and returns this instead. English, ASCII-only.
+ */
+export const SESSION_START_GATE_MESSAGE =
+  'This workspace requires you to load its binding operating rules before any ' +
+  'other action. Call `orboto_session_start` now - it returns the rules you ' +
+  'must follow plus your in-progress work - then retry this call.';
+
+/**
+ * ORB-1471 - advance the gate state for one dispatch and report whether this
+ * dispatch must be REFUSED (returned an instructive error without running the
+ * handler).
+ *
+ * Semantics when the gate is enabled: every tool call other than
+ * `orboto_session_start` is refused until `orboto_session_start` has run once
+ * this session. Calling `orboto_session_start` marks the session unlocked
+ * (and is itself never gated). When the gate is disabled, nothing is ever
+ * refused (returns false) - default behaviour is unchanged.
+ *
+ * Idempotent bookkeeping: running `orboto_session_start` flips
+ * `sessionStartRan` so all later calls pass.
+ */
+export function shouldGate(state: NudgeState, toolName: string): boolean {
+  if (toolName === SESSION_START_TOOL) {
+    // The rule-loading tool always runs, and running it unlocks the session.
+    state.sessionStartRan = true;
+    return false;
+  }
+  if (!state.gateEnabled) return false;
+  return !state.sessionStartRan;
+}
+
+/** ORB-1471 - the instructive refusal result the gate returns. */
+export function gateResult(): CallToolResult {
+  return {
+    isError: true,
+    content: [{ type: 'text', text: SESSION_START_GATE_MESSAGE }],
   };
 }

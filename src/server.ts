@@ -311,9 +311,14 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   // fall back to the built-in rules if the instance predates ORB-1086
   // or the fetch fails.
   let workingRules = FALLBACK_WORKING_RULES;
+  // ORB-1471 - the same connect-time fetch also reports whether this
+  // workspace requires `orboto_session_start` before any other tool call
+  // (the hard gate). Default off; a fetch failure keeps it off.
+  let requireSessionStart = false;
   try {
-    const res = await client.get<{ instructions: string }>('/agent-instructions');
+    const res = await client.get<{ instructions: string; requireSessionStart?: boolean }>('/agent-instructions');
     if (res?.instructions?.trim()) workingRules = res.instructions.trim();
+    requireSessionStart = res?.requireSessionStart === true;
   } catch {
     // keep the fallback
   }
@@ -356,7 +361,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   // single flag object is per-session (HTTP) / process-local (stdio)
   // without any session-lifecycle plumbing. Shared by reference into
   // every tool's dispatch wrapper below.
-  const nudgeState = createNudgeState();
+  const nudgeState = createNudgeState(requireSessionStart);
 
   // ORB-311 — every tool dispatch posts one row to /admin/mcp/instrument
   // via the withMetrics wrapper. `reg` is a one-line shim around

@@ -251,6 +251,57 @@ describe('orboto_create_ticket', () => {
     });
     expect(createUrl).toContain('allowLanguageMismatch=true');
   });
+
+  // ORB-1471 - hard duplicate-block 409 becomes a clear duplicateBlocked
+  // result that surfaces the candidate list verbatim + the override recipe.
+  it('turns a hard duplicate-block 409 into a duplicateBlocked result listing the candidates (ORB-1471)', async () => {
+    const blockBody = JSON.stringify({
+      error: 'This ticket looks like a duplicate (98% match to an existing ticket).',
+      errorKey: 'errors.tickets.duplicate_blocked',
+      threshold: 0.9,
+      topSimilarity: 0.98,
+      similarWarnings: [
+        { id: 't1', ticketKey: 'ACME-7', title: 'Webhook signature mismatch', statusName: 'To Do', statusColor: null, statusCategory: 'todo', similarity: 0.98, matchMode: 'tsvector' },
+      ],
+    });
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const m = init?.method ?? 'GET';
+      if (m === 'GET') {
+        return { ok: true, status: 200, statusText: 'OK', json: async () => PROJ, text: async () => '' } as unknown as Response;
+      }
+      return { ok: false, status: 409, statusText: 'Conflict', json: async () => ({}), text: async () => blockBody } as unknown as Response;
+    });
+    const res = await makeCreateTicketHandler(client)({ projectKey: 'ACME', title: 'Webhook signature mismatch' });
+    expect(res.isError).toBe(true);
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('BLOCKED');
+    expect(text).toContain('ACME-7');
+    expect(text).toContain('allowDuplicate: true');
+    const sc = res.structuredContent as { duplicateBlocked: boolean; similarWarnings: unknown[] };
+    expect(sc.duplicateBlocked).toBe(true);
+    expect(sc.similarWarnings).toHaveLength(1);
+  });
+
+  it('passes allowDuplicate as a query param and the justification in the body when overriding (ORB-1471)', async () => {
+    let createUrl = '';
+    let createBody: Record<string, unknown> = {};
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const u = url.toString();
+      const m = init?.method ?? 'GET';
+      if (m === 'GET') {
+        return { ok: true, status: 200, statusText: 'OK', json: async () => PROJ, text: async () => '' } as unknown as Response;
+      }
+      createUrl = u;
+      createBody = init?.body ? JSON.parse(init.body as string) : {};
+      return { ok: true, status: 201, statusText: 'Created', json: async () => ({ ...TICKET, ticketKey: 'ACME-9' }), text: async () => '' } as unknown as Response;
+    });
+    await makeCreateTicketHandler(client)({
+      projectKey: 'ACME', title: 'Webhook signature mismatch',
+      allowDuplicate: true, duplicateJustification: 'Different provider - Stripe vs PayPal.',
+    });
+    expect(createUrl).toContain('allowDuplicate=true');
+    expect(createBody.duplicateJustification).toBe('Different provider - Stripe vs PayPal.');
+  });
 });
 
 describe('orboto_update_ticket', () => {

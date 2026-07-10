@@ -10,8 +10,11 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   SESSION_START_TOOL,
   SESSION_START_NUDGE,
+  SESSION_START_GATE_MESSAGE,
   createNudgeState,
   shouldNudge,
+  shouldGate,
+  gateResult,
   prependNudge,
 } from './session-nudge.js';
 
@@ -40,6 +43,46 @@ describe('shouldNudge (ORB-1331)', () => {
     expect(shouldNudge(b, 'orboto_list_projects')).toBe(true);
     expect(shouldNudge(a, 'orboto_list_projects')).toBe(false);
     expect(shouldNudge(b, 'orboto_list_projects')).toBe(false);
+  });
+});
+
+describe('shouldGate (ORB-1471)', () => {
+  it('never gates when the gate is disabled (default), whatever the tool', () => {
+    const state = createNudgeState(); // gateEnabled defaults false
+    expect(shouldGate(state, 'orboto_list_projects')).toBe(false);
+    expect(shouldGate(state, 'orboto_create_ticket')).toBe(false);
+    expect(shouldGate(state, SESSION_START_TOOL)).toBe(false);
+  });
+
+  it('when enabled, refuses every non-session-start tool until session_start runs', () => {
+    const state = createNudgeState(true);
+    // Pre session_start: every other tool is gated.
+    expect(shouldGate(state, 'orboto_list_projects')).toBe(true);
+    expect(shouldGate(state, 'orboto_create_ticket')).toBe(true);
+    // session_start itself is never gated AND unlocks the session.
+    expect(shouldGate(state, SESSION_START_TOOL)).toBe(false);
+    // Post session_start: everything passes.
+    expect(shouldGate(state, 'orboto_list_projects')).toBe(false);
+    expect(shouldGate(state, 'orboto_create_ticket')).toBe(false);
+  });
+
+  it('session_start as the very first call unlocks immediately (one-call cost avoided)', () => {
+    const state = createNudgeState(true);
+    expect(shouldGate(state, SESSION_START_TOOL)).toBe(false);
+    expect(shouldGate(state, 'orboto_get_ticket')).toBe(false);
+  });
+
+  it('gateResult is an instructive isError result pointing at session_start', () => {
+    const r = gateResult();
+    expect(r.isError).toBe(true);
+    expect(r.content[0]).toEqual({ type: 'text', text: SESSION_START_GATE_MESSAGE });
+  });
+
+  it('gate message is English, ASCII-only, and free of em/en-dashes', () => {
+    // eslint-disable-next-line no-control-regex
+    expect(/^[\x00-\x7F]*$/.test(SESSION_START_GATE_MESSAGE)).toBe(true);
+    expect(SESSION_START_GATE_MESSAGE).not.toMatch(/[\u2013\u2014]/);
+    expect(SESSION_START_GATE_MESSAGE).toContain('orboto_session_start');
   });
 });
 

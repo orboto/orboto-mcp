@@ -101,7 +101,7 @@ function ticketStructured(t: TicketRow) {
 export const createTicketToolConfig = {
   title: 'Create a ticket',
   description:
-    'Create a new ticket in the given project. Returns the new ticket\'s key (e.g. "ACME-42") so callers can chain follow-ups. **Read the new key from `structuredContent.createdTicketKey` (ORB-1176) - never from `similarWarnings[].ticketKey`, which are OTHER, possibly-duplicate tickets.** The caller must have `ticket:create` on the project. **Duplicate-detection safety-net (ORB-831):** if `similarWarnings` appears in the response with one or more entries, the ticket WAS created but you should review whether to close it as a duplicate of the listed ticket(s) instead. The warnings are advisory - never blocking - but each entry is a ticket the system thinks the new one overlaps with. Prefer `orboto_check_similar` BEFORE creating when you want a dry-run. **Deferred check under load (ORB-1437):** if `duplicateCheckDeferred: true` appears, the project was under a create burst so the duplicate-check was run in the background instead of inline - `similarWarnings` is then empty because it did NOT run synchronously, which is NOT the same as "no duplicates found". A strong match, if any, is posted as an advisory comment on the new ticket a moment later; check the ticket comments before treating it as new work. **Duplicate-check recall (ORB-1121):** when you search/check-similar first, results rank by term co-occurrence - a long, solution-framed title with rare terms can return 0 hits even when a short, symptom-framed dup sharing one distinctive token exists. Probe with a single distinctive STABLE token (file/component/error-string fragment), keep queries SHORT, and search the SYMPTOM not your fix; a 0-result long query is not "no dup". **Language-mismatch warning (ORB-890):** if `languageWarning` appears, the ticket was written in a language different from the workspace default. Consider rewriting in the expected language so search + duplicate-detection stay consistent. Non-blocking. **Before a mass-create (ORB-989):** call `orboto_whoami` first - its `workspaceLocale` field is the language you should write every ticket in. If the same `languageWarning` repeats, stop and clarify the intended language rather than pushing through the whole batch. **Strict mode (ORB-990):** if the workspace enforces ticket language, a mismatch is rejected (the tool returns a `blocked` result, not a created ticket) - rewrite in the workspace language, or set `allowLanguageMismatch: true` only when the language is genuinely intentional.',
+    'Create a new ticket in the given project. Returns the new ticket\'s key (e.g. "ACME-42") so callers can chain follow-ups. **Read the new key from `structuredContent.createdTicketKey` (ORB-1176) - never from `similarWarnings[].ticketKey`, which are OTHER, possibly-duplicate tickets.** The caller must have `ticket:create` on the project. **Duplicate-detection safety-net (ORB-831):** if `similarWarnings` appears in the response with one or more entries, the ticket WAS created but you should review whether to close it as a duplicate of the listed ticket(s) instead. The warnings are advisory - never blocking - but each entry is a ticket the system thinks the new one overlaps with. Prefer `orboto_check_similar` BEFORE creating when you want a dry-run. **Deferred check under load (ORB-1437):** if `duplicateCheckDeferred: true` appears, the project was under a create burst so the duplicate-check was run in the background instead of inline - `similarWarnings` is then empty because it did NOT run synchronously, which is NOT the same as "no duplicates found". A strong match, if any, is posted as an advisory comment on the new ticket a moment later; check the ticket comments before treating it as new work. **Duplicate-check recall (ORB-1121):** when you search/check-similar first, results rank by term co-occurrence - a long, solution-framed title with rare terms can return 0 hits even when a short, symptom-framed dup sharing one distinctive token exists. Probe with a single distinctive STABLE token (file/component/error-string fragment), keep queries SHORT, and search the SYMPTOM not your fix; a 0-result long query is not "no dup". **Language-mismatch warning (ORB-890):** if `languageWarning` appears, the ticket was written in a language different from the workspace default. Consider rewriting in the expected language so search + duplicate-detection stay consistent. Non-blocking. **Before a mass-create (ORB-989):** call `orboto_whoami` first - its `workspaceLocale` field is the language you should write every ticket in. If the same `languageWarning` repeats, stop and clarify the intended language rather than pushing through the whole batch. **Strict mode (ORB-990):** if the workspace enforces ticket language, a mismatch is rejected (the tool returns a `blocked` result, not a created ticket) - rewrite in the workspace language, or set `allowLanguageMismatch: true` only when the language is genuinely intentional. **Hard duplicate-block (ORB-1471):** some workspaces REFUSE a create whose top similarity match is at/above a configured threshold - the tool returns a `duplicateBlocked` result (NOT a created ticket) listing the matching tickets. Extend or comment on one of those instead. If you have confirmed none of them cover this work, retry with `allowDuplicate: true` AND a `duplicateJustification` explaining why - the justification is persisted as a comment on the new ticket.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
     title: z.string().min(1).max(255),
@@ -115,6 +115,8 @@ export const createTicketToolConfig = {
     dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD.'),
     isPrivate: z.boolean().optional(),
     allowLanguageMismatch: z.boolean().optional().describe('Override strict ticket-language enforcement (ORB-990). Only set after a previous call was blocked AND you are sure the language is intentional - prefer rewriting in the workspace language.'),
+    allowDuplicate: z.boolean().optional().describe('Override the hard duplicate-block (ORB-1471). Only set after a previous call was REFUSED with a duplicate-block error AND you have confirmed the listed tickets do NOT cover this work. Requires duplicateJustification.'),
+    duplicateJustification: z.string().optional().describe('Required with allowDuplicate=true: a short explanation of why this is NOT a duplicate of the flagged tickets. Persisted as a comment on the new ticket for an audit trail.'),
   }).shape,
 };
 
@@ -126,6 +128,7 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
     milestone?: string; assigneeEmails?: string[]; labels?: string[];
     parentTicketKey?: string; dueDate?: string; isPrivate?: boolean;
     allowLanguageMismatch?: boolean;
+    allowDuplicate?: boolean; duplicateJustification?: string;
   }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, input.projectKey);
 
@@ -136,6 +139,9 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
       priority: input.priority ?? 'normal',
       isPrivate: input.isPrivate ?? false,
     };
+    // ORB-1471 - the override justification rides in the body; the override
+    // flag itself is a querystring param (see createPath below).
+    if (input.allowDuplicate && input.duplicateJustification) body.duplicateJustification = input.duplicateJustification;
     if (input.dueDate) body.dueDate = input.dueDate;
     if (input.milestone) body.milestoneId = await resolveMilestoneId(client, project.id, input.milestone);
     if (input.parentTicketKey) {
@@ -150,9 +156,13 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
     if (input.labels && input.labels.length > 0) body.labelNames = input.labels;
     if (input.assigneeEmails && input.assigneeEmails.length > 0) body.assigneeEmails = input.assigneeEmails;
 
-    // ORB-990 - strict ticket-language enforcement may reject this with
-    // a 422; surface that as a clear block result instead of a raw error.
-    const createPath = `/projects/${project.id}/tickets${input.allowLanguageMismatch ? '?allowLanguageMismatch=true' : ''}`;
+    // ORB-990 - strict ticket-language enforcement may reject this with a
+    // 422; ORB-1471 - the hard duplicate-block may reject it with a 409.
+    // Surface each as a clear block result instead of a raw error.
+    const qs: string[] = [];
+    if (input.allowLanguageMismatch) qs.push('allowLanguageMismatch=true');
+    if (input.allowDuplicate) qs.push('allowDuplicate=true');
+    const createPath = `/projects/${project.id}/tickets${qs.length ? `?${qs.join('&')}` : ''}`;
     let created: TicketRow & {
       similarWarnings?: SimilarWarning[];
       languageWarning?: LanguageWarning;
@@ -165,6 +175,8 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
         duplicateCheckDeferred?: boolean;
       }>(createPath, body);
     } catch (err) {
+      const dup = duplicateBlockResult(err);
+      if (dup) return dup;
       const blocked = languageBlockResult(err, 'Ticket create');
       if (blocked) return blocked;
       throw err;
@@ -284,6 +296,41 @@ function languageBlockResult(err: unknown, verb: string): CallToolResult | null 
   return {
     content: [{ type: 'text', text }],
     structuredContent: { blocked: true, languageWarning: lw },
+    isError: true,
+  };
+}
+
+/**
+ * ORB-1471 - turn the hard duplicate-block 409 into a clear, non-throwing
+ * tool result that surfaces the candidate list VERBATIM plus the exact
+ * override recipe. The backend body is
+ * `{ error, errorKey, similarWarnings, threshold, topSimilarity }`.
+ * Returns null if the error isn't a duplicate-block 409.
+ */
+function duplicateBlockResult(err: unknown): CallToolResult | null {
+  if (!(err instanceof OrbotoApiError) || err.status !== 409) return null;
+  let parsed: {
+    error?: string; errorKey?: string;
+    similarWarnings?: SimilarWarning[]; threshold?: number; topSimilarity?: number;
+  } = {};
+  try { parsed = JSON.parse(err.body) as typeof parsed; } catch { /* non-JSON body */ }
+  // Only OUR duplicate-block 409 carries similarWarnings; a different 409
+  // (none currently on this route) should bubble as a normal error.
+  if (!parsed.similarWarnings) return null;
+  const candidates = parsed.similarWarnings;
+  const lines = candidates.map((w) => `  - [${w.ticketKey ?? w.id.slice(0, 8)}] "${w.title}" (${formatSimilarity(w)})`);
+  const text =
+    `⛔ Ticket create BLOCKED - this looks like a duplicate (top match ${Math.round((parsed.topSimilarity ?? 0) * 100)}%, block threshold ${Math.round((parsed.threshold ?? 0) * 100)}%).\n` +
+    `Existing tickets it overlaps with:\n${lines.join('\n')}\n` +
+    `Extend or comment on one of these instead. If you have confirmed NONE of them cover this work, retry orboto_create_ticket with allowDuplicate: true AND a duplicateJustification explaining why it is not a duplicate (it is saved as a comment on the new ticket).`;
+  return {
+    content: [{ type: 'text', text }],
+    structuredContent: {
+      duplicateBlocked: true,
+      threshold: parsed.threshold ?? null,
+      topSimilarity: parsed.topSimilarity ?? null,
+      similarWarnings: candidates,
+    },
     isError: true,
   };
 }

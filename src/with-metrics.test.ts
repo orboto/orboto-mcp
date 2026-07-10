@@ -11,7 +11,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient, OrbotoApiError } from './orboto-client.js';
 import { withMetrics } from './with-metrics.js';
-import { createNudgeState, SESSION_START_NUDGE } from './session-nudge.js';
+import { createNudgeState, SESSION_START_NUDGE, SESSION_START_GATE_MESSAGE } from './session-nudge.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
 afterEach(() => { vi.restoreAllMocks(); });
@@ -205,6 +205,49 @@ describe('withMetrics', () => {
     expect(res.isError).toBe(true);
     expect((res.content[0] as { text: string }).text).toBe(SESSION_START_NUDGE);
     expect((res.content[1] as { text: string }).text).toContain('403');
+  });
+
+  // ORB-1471 - the HARD session-start gate. When the workspace requires it,
+  // the wrapper REFUSES a non-session-start tool without running its handler,
+  // returns the instructive gate message, and logs the refusal. A
+  // session_start call unlocks the session; after that everything runs.
+  it('gates a non-session-start tool until session_start runs, without invoking the handler', async () => {
+    const calls = captureFetch();
+    const nudge = createNudgeState(true); // gate ON
+    const listHandler = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'projects' }] }));
+    const startHandler = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'rules' }] }));
+    const list = withMetrics(client, 'orboto_list_projects', undefined, listHandler, nudge);
+    const start = withMetrics(client, 'orboto_session_start', undefined, startHandler, nudge);
+
+    // First call is refused - handler never runs.
+    const refused = await list({});
+    expect(refused.isError).toBe(true);
+    expect((refused.content[0] as { text: string }).text).toBe(SESSION_START_GATE_MESSAGE);
+    expect(listHandler).not.toHaveBeenCalled();
+    await new Promise((r) => setImmediate(r));
+    const gateLog = calls.find((c) => (c.body as { errorMessage?: string })?.errorMessage?.includes('session-start gate'));
+    expect(gateLog).toBeDefined();
+
+    // Running session_start unlocks the session.
+    const rules = await start({});
+    expect((rules.content[0] as { text: string }).text).toBe('rules');
+    expect(startHandler).toHaveBeenCalledTimes(1);
+
+    // Now the previously-gated tool runs normally.
+    const ok = await list({});
+    expect((ok.content[0] as { text: string }).text).toBe('projects');
+    expect(listHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not gate anything when the gate is disabled (default)', async () => {
+    captureFetch();
+    const nudge = createNudgeState(); // gate OFF
+    const handler = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'ok' }] }));
+    const list = withMetrics(client, 'orboto_list_projects', undefined, handler, nudge);
+    const res = await list({});
+    // Still nudged (soft), but NOT refused - the handler ran.
+    expect((res.content[1] as { text: string }).text).toBe('ok');
+    expect(handler).toHaveBeenCalledTimes(1);
   });
 
   it('redacts secret-shaped text from the logged errorMessage', async () => {
