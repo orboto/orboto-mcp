@@ -53,6 +53,34 @@ describe('orboto_critical_path (ORB-1028)', () => {
     expect(calls[2]).toContain('milestoneId=m2');
   });
 
+  it('surfaces deadline risks (negative float) in text + structured output', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: {
+        tickets: [
+          { ticketKey: 'ACME-1', title: 'A', durationDays: 3, totalFloat: -2, isCritical: true, deadlineCritical: true, bindingConstraint: 'successors' },
+          { ticketKey: 'ACME-2', title: 'B', durationDays: 2, totalFloat: -2, isCritical: true, deadlineCritical: true, bindingConstraint: 'due_date' },
+        ],
+        criticalPath: ['ACME-1', 'ACME-2'],
+        deadlineRisks: [
+          { ticketKey: 'ACME-1', constrainingTicketKey: 'ACME-2', dueDate: '2026-07-18', shortfallDays: 2 },
+          { ticketKey: 'ACME-2', constrainingTicketKey: 'ACME-2', dueDate: '2026-07-18', shortfallDays: 2 },
+        ],
+        dependencies: [],
+        projectDurationDays: 5,
+        cycle: null,
+      } },
+    ]);
+    const res = await makeCriticalPathHandler(client)({ projectKey: 'ACME' });
+    expect(calls[1]).toContain('/projects/p1/critical-path');
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toMatch(/DEADLINE RISKS/);
+    expect(text).toContain('ACME-2: 2d short');
+    const sc = res.structuredContent as { deadlineRisks: Array<{ ticketKey: string; shortfallDays: number }> };
+    expect(sc.deadlineRisks).toHaveLength(2);
+    expect(sc.deadlineRisks[0]).toMatchObject({ ticketKey: 'ACME-1', shortfallDays: 2 });
+  });
+
   it('surfaces a dependency cycle', async () => {
     stub([
       { json: PROJ },
