@@ -169,6 +169,7 @@ import {
   getAuditLogToolConfig, makeGetAuditLogHandler,
   triggerBackupToolConfig, makeTriggerBackupHandler,
 } from './tools/admin-writes.js';
+import { freeBusyToolConfig, makeFreeBusyHandler } from './tools/free-busy.js';
 import {
   createFullBackupToolConfig, makeCreateFullBackupHandler,
   listBackupsToolConfig, makeListBackupsHandler,
@@ -526,6 +527,8 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   // route gated on super-admin / admin:* permissions; a non-admin
   // caller's 403 surfaces as a readable error from rewrite403().
   reg('orboto_list_users', listUsersToolConfig, makeListUsersHandler(client));
+  // ORB-625 - free/busy availability lookup for assignee selection (read).
+  reg('orboto_free_busy', freeBusyToolConfig, makeFreeBusyHandler(client));
   reg('orboto_get_audit_log', getAuditLogToolConfig, makeGetAuditLogHandler(client));
   reg('orboto_trigger_backup', triggerBackupToolConfig, makeTriggerBackupHandler(client));
   reg('orboto_create_full_backup', createFullBackupToolConfig, makeCreateFullBackupHandler(client));
