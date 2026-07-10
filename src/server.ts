@@ -44,6 +44,7 @@ import { getProjectPrimerToolConfig, makeGetProjectPrimerHandler } from './tools
 import { listTicketsToolConfig, makeListTicketsHandler } from './tools/list-tickets.js';
 import { criticalPathToolConfig, makeCriticalPathHandler } from './tools/critical-path.js';
 import { analyticsToolConfig, makeAnalyticsHandler } from './tools/analytics.js';
+import { portfolioSummaryToolConfig, makePortfolioSummaryHandler } from './tools/portfolio.js';
 import { raciToolConfig, makeRaciHandler, setRaciToolConfig, makeSetRaciHandler } from './tools/raci.js';
 import { getTicketToolConfig, makeGetTicketHandler } from './tools/get-ticket.js';
 import { myTicketsToolConfig, makeMyTicketsHandler } from './tools/my-tickets.js';
@@ -389,6 +390,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_list_tickets', listTicketsToolConfig, makeListTicketsHandler(client));
   reg('orboto_critical_path', criticalPathToolConfig, makeCriticalPathHandler(client));
   reg('orboto_analytics', analyticsToolConfig, makeAnalyticsHandler(client));
+  reg('orboto_portfolio_summary', portfolioSummaryToolConfig, makePortfolioSummaryHandler(client));
   reg('orboto_get_ticket', getTicketToolConfig, makeGetTicketHandler(client));
   reg('orboto_get_checklists', getChecklistsToolConfig, makeGetChecklistsHandler(client));
   reg('orboto_my_tickets', myTicketsToolConfig, makeMyTicketsHandler(client));
