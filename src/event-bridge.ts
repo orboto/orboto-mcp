@@ -16,6 +16,7 @@
  * uses to recover from any out-of-sync condition.
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { OAuthTokenProviderLike } from './orboto-client.js';
 
 const HEARTBEAT_GRACE_MS = 90_000; // 3× the server's 30s ping
 const OVERFLOW_THRESHOLD = 100;
@@ -34,7 +35,14 @@ interface BridgeEvent {
 
 export interface EventBridgeOpts {
   baseUrl: string;
-  apiKey: string;
+  /** Static bearer (an `orb_*` service-account PAT). Mutually exclusive with
+   *  `tokenProvider`. */
+  apiKey?: string;
+  /** ORB-1470 - resolves the CURRENT bearer on every SSE (re)connect. A session
+   *  whose client rotated its short-lived OAuth access token then reconnects
+   *  the stream with the fresh token instead of the one pinned at session
+   *  creation. When set, it takes precedence over `apiKey`. */
+  tokenProvider?: OAuthTokenProviderLike;
   mcp: McpServer;
   subscriptions: Set<string>;
   /** Optional fetch override for tests. */
@@ -167,10 +175,16 @@ export class EventBridge {
     // window doesn't leak the previous signal.
     this.abort = new AbortController();
     const url = `${this.opts.baseUrl.replace(/\/$/, '')}/sse/mcp-events`;
+    // ORB-1470 - resolve the current bearer per connect so a rotated OAuth
+    // access token is picked up on the next reconnect instead of pinning the
+    // stream to the session's creation-time token.
+    const bearer = this.opts.tokenProvider
+      ? await this.opts.tokenProvider.getAccessToken()
+      : (this.opts.apiKey ?? '');
     const res = await fetchFn(url, {
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${this.opts.apiKey}`,
+        Authorization: `Bearer ${bearer}`,
         Accept: 'text/event-stream',
       },
       signal: this.abort.signal,

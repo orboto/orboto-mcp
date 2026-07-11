@@ -36,6 +36,7 @@ import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { buildOrbotoMcpServer } from './server.js';
 import { OrbotoClient, preflightMcpSession } from './orboto-client.js';
+import type { OAuthTokenProviderLike } from './orboto-client.js';
 import { EventBridge } from './event-bridge.js';
 
 /**
@@ -85,6 +86,31 @@ export interface HttpServerOptions {
   sessionStore?: McpSessionStore;
 }
 
+/** ORB-1470 - a per-session, MUTABLE bearer holder. The session's
+ *  OrbotoClient(s) + event bridge resolve `.current` on every call, and the
+ *  request handler updates it to the bearer the CLIENT presents on each
+ *  request. This is what keeps a long-lived MCP session alive across the
+ *  client's OAuth access-token rotation: the fresh bearer is used for the API
+ *  call, not the (eventually-expired) token captured when the session was
+ *  created. Without it a session dead-ends with a 401 "OAuth access token
+ *  expired" the moment its creation-time token ages past the 1h access-token
+ *  TTL - which, if the session was initialised with an already-aged cached
+ *  token, is only minutes after connect - even though that very request
+ *  carried a valid refreshed bearer. */
+export interface SessionTokenHolder { current: string }
+
+/** Wrap a mutable token holder as an OAuthTokenProviderLike so the session's
+ *  clients resolve the latest presented bearer per request. `forceRefresh`
+ *  cannot mint a new token here (the CLIENT owns the OAuth refresh), so on a
+ *  401 it just re-reads the holder; the client presents its refreshed bearer
+ *  on the next request, which updates the holder for subsequent calls. */
+function holderTokenProvider(holder: SessionTokenHolder): OAuthTokenProviderLike {
+  return {
+    getAccessToken: async () => holder.current,
+    forceRefresh: async () => holder.current,
+  };
+}
+
 /** ORB-941 - a live MCP session: its transport, the server bound to it
  *  (for out-of-band notifications), and the OrbotoClient carrying that
  *  session's token (used to poll the workspace kill-switch). */
@@ -93,9 +119,11 @@ export interface McpSession {
   mcp: McpServer;
   client: OrbotoClient;
   bridge: EventBridge;
-  /** The token this session was (re)hydrated with - used for throttled
-   *  persistence touches so the retention window slides on activity. */
-  token: string;
+  /** ORB-1470 - the session's mutable bearer holder. Updated to the current
+   *  request's bearer on every call so a client that rotated its OAuth access
+   *  token keeps using the same session. Also read for throttled persistence
+   *  touches so the retention window slides on activity (ORB-1353). */
+  tokenHolder: SessionTokenHolder;
   /** Epoch ms of the last persistence touch, for throttling (ORB-1353). */
   lastTouchAt: number;
 }
@@ -285,8 +313,13 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
   // Build the per-session core (client + subscription set + MCP server +
   // event bridge) bound to a token. Shared by the new-session, rehydrate, and
   // adopt paths so they can't drift apart.
-  async function buildSessionCore(token: string, userAgentSuffix: string | undefined) {
-    const sessionClient = new OrbotoClient({ baseUrl, apiKey: token, userAgentSuffix });
+  async function buildSessionCore(tokenHolder: SessionTokenHolder, userAgentSuffix: string | undefined) {
+    // ORB-1470 - bind every long-lived per-session consumer (kill-switch
+    // client, tool-handler client, SSE bridge) to the SAME mutable holder so
+    // one `holder.current = <request bearer>` update rotates the bearer for
+    // all of them at once.
+    const tokenProvider = holderTokenProvider(tokenHolder);
+    const sessionClient = new OrbotoClient({ baseUrl, tokenProvider, userAgentSuffix });
     // ORB-940 - per-session subscription set + live-event bridge. The set is
     // mutated by resources/subscribe + resources/unsubscribe handlers inside
     // the McpServer; the bridge reads it to decide which incoming API events
@@ -302,8 +335,8 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
     // valid and its re-subscribe resumes pushes); adoption gives a new id so
     // the client treats it as a fresh session and re-subscribes from scratch.
     const subscriptions = new Set<string>();
-    const mcp = await buildOrbotoMcpServer({ baseUrl, apiKey: token, userAgentSuffix, subscriptions });
-    const bridge = new EventBridge({ baseUrl, apiKey: token, mcp, subscriptions });
+    const mcp = await buildOrbotoMcpServer({ baseUrl, tokenProvider, userAgentSuffix, subscriptions });
+    const bridge = new EventBridge({ baseUrl, tokenProvider, mcp, subscriptions });
     return { sessionClient, subscriptions, mcp, bridge };
   }
 
@@ -311,17 +344,17 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
   // initialized state under `chosenSessionId` WITHOUT replaying the initialize
   // handshake, so the client's in-flight non-init request validates against it.
   async function establishForcedSession(
-    token: string,
+    tokenHolder: SessionTokenHolder,
     userAgentSuffix: string | undefined,
     chosenSessionId: string,
   ): Promise<McpSession> {
-    const { sessionClient, mcp, bridge } = await buildSessionCore(token, userAgentSuffix);
+    const { sessionClient, mcp, bridge } = await buildSessionCore(tokenHolder, userAgentSuffix);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
     transport.onclose = () => { sessions.delete(chosenSessionId); bridge.close(); };
     await mcp.connect(transport);
     forceInitialized(transport, chosenSessionId);
     const session: McpSession = {
-      transport, mcp, client: sessionClient, bridge, token, lastTouchAt: Date.now(),
+      transport, mcp, client: sessionClient, bridge, tokenHolder, lastTouchAt: Date.now(),
     };
     sessions.set(chosenSessionId, session);
     bridge.start();
@@ -476,8 +509,25 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
     const userAgent = req.headers['user-agent'] as string | undefined;
 
     if (sessionId && sessions.has(sessionId)) {
-      // Existing session — hand straight to its transport.
+      // Existing session - hand straight to its transport.
       const session = sessions.get(sessionId)!;
+      // ORB-1470 - adopt the bearer the client presents on THIS request. The
+      // client's OAuth layer rotates its short-lived (1h) access token; without
+      // this the session stays pinned to the token captured at creation and
+      // dead-ends with a 401 "OAuth access token expired" once that token ages
+      // out, even though the request carried a valid refreshed bearer. Updating
+      // the shared holder rotates the bearer for the tool-handler client, the
+      // kill-switch client, and the SSE bridge in one assignment.
+      if (session.tokenHolder.current !== token) {
+        // The client rotated its access token mid-session (the exact case that
+        // used to brick the session). Breadcrumb to stderr - Sentry lives on the
+        // api side - so operators can see rotations are being absorbed, not
+        // re-hitting the pinned-token 401. Low-noise: only on an actual change.
+        process.stderr.write(
+          `[orboto-mcp] session ${sessionId} bearer rotated - adopting client's current access token\n`,
+        );
+        session.tokenHolder.current = token;
+      }
       await session.transport.handleRequest(req, res, body);
       // ORB-1353 - slide the persistence TTL on activity so an actively-used
       // session never idle-expires. Throttled + fire-and-forget so it adds no
@@ -485,7 +535,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
       const now = Date.now();
       if (now - session.lastTouchAt >= TOUCH_THROTTLE_MS) {
         session.lastTouchAt = now;
-        void store.register(session.token, { sessionId }).catch(() => { /* best-effort */ });
+        void store.register(session.tokenHolder.current, { sessionId }).catch(() => { /* best-effort */ });
       }
       return;
     }
@@ -540,7 +590,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
       }
 
       if (action === 'rehydrate') {
-        const session = await establishForcedSession(token, userAgentSuffix, sessionId);
+        const session = await establishForcedSession({ current: token }, userAgentSuffix, sessionId);
         // Touch persistence so the TTL slides; same id, so no adoptedFrom.
         void store.register(token, { sessionId, userAgent }).catch(() => { /* best-effort */ });
         await session.transport.handleRequest(req, res, body);
@@ -549,7 +599,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
 
       // action === 'adopt' - mint a fresh id and re-establish under it.
       const newSessionId = randomUUID();
-      const session = await establishForcedSession(token, userAgentSuffix, newSessionId);
+      const session = await establishForcedSession({ current: token }, userAgentSuffix, newSessionId);
       // Rewrite the in-flight request's session header so the transport
       // validates it against the fresh id AND the response advertises the new
       // id. A well-behaved client migrates to it; a client that keeps sending
@@ -586,7 +636,10 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
         });
       }
 
-      const { sessionClient, mcp, bridge } = await buildSessionCore(token, userAgentSuffix);
+      // ORB-1470 - the session's mutable bearer holder starts at this request's
+      // token and is updated to the client's current bearer on every later call.
+      const tokenHolder: SessionTokenHolder = { current: token };
+      const { sessionClient, mcp, bridge } = await buildSessionCore(tokenHolder, userAgentSuffix);
       // "name@version" of the client's declared clientInfo, for observability
       // of which adapter owns the session.
       const clientInfo = clientInfoLabel(body);
@@ -594,7 +647,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (sid: string) => {
           sessions.set(sid, {
-            transport, mcp, client: sessionClient, bridge, token, lastTouchAt: Date.now(),
+            transport, mcp, client: sessionClient, bridge, tokenHolder, lastTouchAt: Date.now(),
           });
           bridge.start();
           // ORB-1353 - persist the freshly-minted session so it survives an

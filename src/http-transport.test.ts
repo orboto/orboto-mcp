@@ -99,7 +99,7 @@ describe('ORB-941 - graceful close of in-flight MCP sessions on kill-switch', ()
       mcp: { server: { sendLoggingMessage: log } } as unknown as McpSession['mcp'],
       client: {} as unknown as McpSession['client'],
       bridge: { close: vi.fn() } as unknown as McpSession['bridge'],
-      token: 'orb_dummy',
+      tokenHolder: { current: 'orb_dummy' },
       lastTouchAt: Date.now(),
     };
     return { session, close, log };
@@ -167,10 +167,14 @@ function fakeApi(opts: { enabled?: boolean; mcpUseGranted?: boolean; userMcpEnab
     mcpUseGranted: opts.mcpUseGranted ?? true,
     // ORB-942 - per-user MCP opt-out. Defaults on so existing flows are unaffected.
     userMcpEnabled: opts.userMcpEnabled ?? true,
+    // ORB-1470 - record every Authorization header the api sees so a test can
+    // assert which bearer the transport forwarded upstream.
+    seenAuth: [] as string[],
   };
   const api = createNodeServer((req, res) => {
     const url = req.url ?? '';
     if (url.startsWith('/system/mcp/status')) {
+      state.seenAuth.push((req.headers.authorization ?? '') as string);
       // A token of `Bearer invalid` models an expired/invalid credential.
       if ((req.headers.authorization ?? '') === 'Bearer invalid') {
         res.writeHead(401, { 'content-type': 'application/json' });
@@ -341,5 +345,120 @@ describe('ORB-1353 - persisted-session resilience (transport, fake api)', () => 
     expect(res.status).toBe(404);
     await res.text();
     expect(store.register).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ORB-1470 - a long-lived MCP session must follow the client's OAuth access-
+// token rotation, not pin itself to the token captured at session creation.
+//
+// Root cause of the field 401s: the transport bound each session's OrbotoClient
+// (+ tool-handler client + SSE bridge) to the bearer seen at creation and
+// reused it for the session's whole life. An OAuth access token has a 1h TTL and
+// the client rotates it; once the pinned token aged out the api answered 401
+// "OAuth access token expired" on the NEXT tool call - even though that request
+// carried a valid refreshed bearer. If the session was initialised with an
+// already-aged cached token, that was only minutes after connect. The fix makes
+// the per-request bearer authoritative via a mutable per-session token holder.
+// ---------------------------------------------------------------------------
+
+describe('ORB-1470 - per-session bearer follows the client\'s token rotation', () => {
+  let api: Server | null = null;
+
+  afterEach(async () => {
+    if (server) {
+      const internals = (server as unknown as { __mcp?: McpServerInternals }).__mcp;
+      if (internals) {
+        for (const s of internals.sessions.values()) {
+          try { await s.transport.close(); } catch { /* ignore */ }
+        }
+      }
+    }
+    await new Promise<void>((r) => (api ? api.close(() => r()) : r()));
+    api = null;
+  });
+
+  async function startWithFakeApi(
+    store: McpSessionStore,
+    fake = fakeApi(),
+  ): Promise<{ base: string; internals: McpServerInternals; state: ReturnType<typeof fakeApi>['state'] }> {
+    api = fake.api;
+    await new Promise<void>((r) => api!.listen(0, r));
+    const { port: apiPort } = api!.address() as AddressInfo;
+    server = createHttpServer({ baseUrl: `http://127.0.0.1:${apiPort}`, sessionStore: store });
+    await new Promise<void>((r) => server!.listen(0, r));
+    const { port } = server!.address() as AddressInfo;
+    const internals = (server as unknown as { __mcp: McpServerInternals }).__mcp;
+    return { base: `http://127.0.0.1:${port}`, internals, state: fake.state };
+  }
+
+  async function post(base: string, body: string, headers: Record<string, string>): Promise<Response> {
+    return fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...headers },
+      body,
+    });
+  }
+
+  it('adopts the bearer presented on each request and forwards the fresh token upstream (no pinned-token 401)', async () => {
+    const store = fakeStore();
+    const { base, internals, state } = await startWithFakeApi(store.store);
+
+    // 1. Connect: initialise a session with the first access token (v1).
+    const initRes = await post(base, INIT_BODY, { authorization: 'Bearer orb_tok_v1' });
+    expect(initRes.status).toBe(200);
+    const sid = initRes.headers.get('mcp-session-id');
+    await initRes.text();
+    expect(sid).toBeTruthy();
+
+    // The session's mutable holder starts at the creation-time bearer.
+    const session = internals.sessions.get(sid!)!;
+    expect(session.tokenHolder.current).toBe('orb_tok_v1');
+
+    // 2. The client's OAuth layer rotates its access token (v1 -> v2) and sends
+    //    the next request on the SAME session id with the fresh bearer.
+    const res2 = await post(base, NON_INIT, { authorization: 'Bearer orb_tok_v2', 'mcp-session-id': sid! });
+    expect(res2.status).toBe(200);
+    await res2.text();
+
+    // The session adopted the rotated bearer. Before the fix the session stayed
+    // pinned to v1 and would 401 "expired" once v1 aged out.
+    expect(session.tokenHolder.current).toBe('orb_tok_v2');
+
+    // End-to-end: the session's actual OrbotoClient now forwards v2 upstream, so
+    // the api never sees the stale v1 token again.
+    state.seenAuth.length = 0;
+    await session.client.get('/system/mcp/status');
+    expect(state.seenAuth).toContain('Bearer orb_tok_v2');
+    expect(state.seenAuth).not.toContain('Bearer orb_tok_v1');
+  });
+
+  it('adopts the current bearer when rehydrating a session after a restart', async () => {
+    const store = fakeStore();
+    const { base, internals, state } = await startWithFakeApi(store.store);
+
+    // Connect with v1, then simulate an api restart wiping the in-memory map.
+    const initRes = await post(base, INIT_BODY, { authorization: 'Bearer orb_tok_v1' });
+    const sid = initRes.headers.get('mcp-session-id');
+    await initRes.text();
+    internals.sessions.clear();
+
+    // The client (now on a refreshed v2) reconnects under the SAME id.
+    const res = await post(base, NON_INIT, { authorization: 'Bearer orb_tok_v1', 'mcp-session-id': sid! });
+    // ^ rehydration is keyed on the persisted-store owner (token == userId in
+    //   the fake), so the rehydrate itself uses the presented token. Then a
+    //   follow-up request rotates to v2.
+    expect(res.status).toBe(200);
+    await res.text();
+
+    const res2 = await post(base, NON_INIT, { authorization: 'Bearer orb_tok_v2', 'mcp-session-id': sid! });
+    expect(res2.status).toBe(200);
+    await res2.text();
+
+    const session = internals.sessions.get(sid!)!;
+    expect(session.tokenHolder.current).toBe('orb_tok_v2');
+    state.seenAuth.length = 0;
+    await session.client.get('/system/mcp/status');
+    expect(state.seenAuth).toContain('Bearer orb_tok_v2');
   });
 });
