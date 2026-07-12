@@ -78,6 +78,17 @@ The `/mcp` path on the main host is proxied to the bundled MCP container - no se
 
 > **stdio-first CLIs (e.g. Codex):** prefer the stdio proxy (`npx @orboto/mcp`) over an HTTP+OAuth URL. Some CLIs handle the OAuth session refresh and session-expiry re-init poorly and can lose their tools after a while or after a server deploy; the stdio proxy avoids that churn. Claude Desktop, Cursor, and VS Code Copilot are known-good over HTTP+OAuth.
 
+**Codex CLI** reads TOML from `~/.codex/config.toml` - add an `[mcp_servers.orboto]` table pointing at the stdio proxy:
+
+```toml
+[mcp_servers.orboto]
+command = "npx"
+args = ["-y", "@orboto/mcp"]
+env = { ORBOTO_API_URL = "https://orboto.example.com/api", ORBOTO_API_KEY = "orb_…", ORBOTO_MCP_CLIENT = "codex" }
+```
+
+Omit `ORBOTO_API_KEY` to use OAuth login instead. `codex mcp add` writes the same block from the CLI.
+
 ## Environment
 
 | Variable | Required | Effect |
