@@ -100,6 +100,7 @@ describe('ORB-941 - graceful close of in-flight MCP sessions on kill-switch', ()
       client: {} as unknown as McpSession['client'],
       bridge: { close: vi.fn() } as unknown as McpSession['bridge'],
       tokenHolder: { current: 'orb_dummy' },
+      userEmail: 'owner@orboto.test',
       lastTouchAt: Date.now(),
     };
     return { session, close, log };

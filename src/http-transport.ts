@@ -124,6 +124,11 @@ export interface McpSession {
    *  token keeps using the same session. Also read for throttled persistence
    *  touches so the retention window slides on activity (ORB-1353). */
   tokenHolder: SessionTokenHolder;
+  /** ORB-1576 - the identity that created the session (from the preflight at
+   *  init). Bearer rotations + DELETEs are only honoured when the presented
+   *  bearer resolves to THIS user, so a leaked session id is not a
+   *  cross-user capability. */
+  userEmail: string;
   /** Epoch ms of the last persistence touch, for throttling (ORB-1353). */
   lastTouchAt: number;
 }
@@ -240,11 +245,26 @@ export async function closeAllMcpSessions(
 }
 
 /** Read the request body as JSON. Fails hard on empty body for POSTs
- *  that need one; MCP clients always send a body on /mcp. */
+ *  that need one; MCP clients always send a body on /mcp.
+ *  ORB-1576 — byte cap: the auth check runs AFTER the body is buffered,
+ *  so an unauthenticated client could otherwise grow container memory
+ *  with an endless POST. JSON-RPC envelopes are small (the fat
+ *  attachment payloads ride the api directly, not /mcp). */
+const MAX_BODY_BYTES = 5 * 1024 * 1024;
+
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on('data', (chunk) => chunks.push(chunk));
+    let received = 0;
+    req.on('data', (chunk: Buffer) => {
+      received += chunk.length;
+      if (received > MAX_BODY_BYTES) {
+        req.destroy();
+        reject(new Error(`request body too large (>${MAX_BODY_BYTES} bytes)`));
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on('end', () => {
       const text = Buffer.concat(chunks).toString('utf8');
       if (text.length === 0) return resolve(null);
@@ -343,10 +363,23 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
   // Rehydrate/adopt: stand up a session bound to `token` and force it into the
   // initialized state under `chosenSessionId` WITHOUT replaying the initialize
   // handshake, so the client's in-flight non-init request validates against it.
+  /** ORB-1576 — resolve a bearer's owner identity via the status preflight;
+   *  null on any failure (invalid token, MCP off, network) = fail closed. */
+  async function resolveUserEmail(token: string): Promise<string | null> {
+    try {
+      const client = new OrbotoClient({ baseUrl, apiKey: token });
+      const { userEmail } = await preflightMcpSession(client);
+      return userEmail;
+    } catch {
+      return null;
+    }
+  }
+
   async function establishForcedSession(
     tokenHolder: SessionTokenHolder,
     userAgentSuffix: string | undefined,
     chosenSessionId: string,
+    userEmail: string,
   ): Promise<McpSession> {
     const { sessionClient, mcp, bridge } = await buildSessionCore(tokenHolder, userAgentSuffix);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
@@ -354,7 +387,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
     await mcp.connect(transport);
     forceInitialized(transport, chosenSessionId);
     const session: McpSession = {
-      transport, mcp, client: sessionClient, bridge, tokenHolder, lastTouchAt: Date.now(),
+      transport, mcp, client: sessionClient, bridge, tokenHolder, userEmail, lastTouchAt: Date.now(),
     };
     sessions.set(chosenSessionId, session);
     bridge.start();
@@ -481,10 +514,18 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
     // DELETE is the client's explicit session-close. We forward it
     // to the transport's handleRequest which tears down cleanly.
     if (req.method === 'DELETE') {
+      const existing = sessions.get(sessionId);
+      if (existing) {
+        // ORB-1576 — only the session's owner may tear it down (a leaked id
+        // must not let someone kill or probe another user's session).
+        const presented = await resolveUserEmail(token);
+        if (!presented || presented !== existing.userEmail) {
+          return sendError(res, 404, 'Unknown MCP session');
+        }
+      }
       // ORB-1353 - drop the persisted row too so a closed session doesn't
       // linger until the retention sweep. Best-effort + scoped to the caller.
       void store.remove(token, sessionId).catch(() => { /* best-effort */ });
-      const existing = sessions.get(sessionId);
       if (existing) {
         await existing.transport.handleRequest(req, res);
         return;
@@ -520,9 +561,18 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
       // kill-switch client, and the SSE bridge in one assignment.
       if (session.tokenHolder.current !== token) {
         // The client rotated its access token mid-session (the exact case that
-        // used to brick the session). Breadcrumb to stderr - Sentry lives on the
-        // api side - so operators can see rotations are being absorbed, not
-        // re-hitting the pinned-token 401. Low-noise: only on an actual change.
+        // used to brick the session). ORB-1576 — adopt the new bearer ONLY
+        // after it resolves to the session owner's identity: a session id
+        // plus ANY valid token must not hijack the session's subscription set
+        // / token holder (the id is a 122-bit UUID, but a leaked id is no
+        // longer a capability on its own).
+        const presented = await resolveUserEmail(token);
+        if (!presented || presented !== session.userEmail) {
+          return sendError(res, 401, 'Bearer does not match the session owner');
+        }
+        // Breadcrumb to stderr - Sentry lives on the api side - so operators
+        // can see rotations are being absorbed, not re-hitting the pinned-
+        // token 401. Low-noise: only on an actual change.
         process.stderr.write(
           `[orboto-mcp] session ${sessionId} bearer rotated - adopting client's current access token\n`,
         );
@@ -565,9 +615,11 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
     if (sessionId && !isInitializeRequest(body)) {
       const preflightClient = new OrbotoClient({ baseUrl, apiKey: token, userAgentSuffix });
       let authValid = false;
+      let callerEmail = '';
       try {
-        await preflightMcpSession(preflightClient);
+        const preflight = await preflightMcpSession(preflightClient);
         authValid = true;
+        callerEmail = preflight.userEmail;
       } catch {
         // Invalid token, MCP disabled, or mcp:use missing → refuse to
         // re-establish; fall back to the re-initialise 404.
@@ -590,7 +642,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
       }
 
       if (action === 'rehydrate') {
-        const session = await establishForcedSession({ current: token }, userAgentSuffix, sessionId);
+        const session = await establishForcedSession({ current: token }, userAgentSuffix, sessionId, callerEmail);
         // Touch persistence so the TTL slides; same id, so no adoptedFrom.
         void store.register(token, { sessionId, userAgent }).catch(() => { /* best-effort */ });
         await session.transport.handleRequest(req, res, body);
@@ -599,7 +651,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
 
       // action === 'adopt' - mint a fresh id and re-establish under it.
       const newSessionId = randomUUID();
-      const session = await establishForcedSession({ current: token }, userAgentSuffix, newSessionId);
+      const session = await establishForcedSession({ current: token }, userAgentSuffix, newSessionId, callerEmail);
       // Rewrite the in-flight request's session header so the transport
       // validates it against the fresh id AND the response advertises the new
       // id. A well-behaved client migrates to it; a client that keeps sending
@@ -628,8 +680,9 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
       // WWW-Authenticate included on 401-shape failures so the client can
       // auto-discover OAuth.
       const preflightClient = new OrbotoClient({ baseUrl, apiKey: token, userAgentSuffix });
+      let ownerEmail: string;
       try {
-        await preflightMcpSession(preflightClient);
+        ownerEmail = (await preflightMcpSession(preflightClient)).userEmail;
       } catch (err) {
         return sendError(res, 401, (err as Error).message, {
           'WWW-Authenticate': wwwAuthChallenge(req, baseUrl, 'invalid_token', (err as Error).message),
@@ -647,7 +700,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (sid: string) => {
           sessions.set(sid, {
-            transport, mcp, client: sessionClient, bridge, tokenHolder, lastTouchAt: Date.now(),
+            transport, mcp, client: sessionClient, bridge, tokenHolder, userEmail: ownerEmail, lastTouchAt: Date.now(),
           });
           bridge.start();
           // ORB-1353 - persist the freshly-minted session so it survives an
