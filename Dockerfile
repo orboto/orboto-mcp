@@ -76,4 +76,6 @@ COPY --from=builder /deploy/mcp/package.json ./package.json
 # healthcheck against /health. No extra apk install needed.
 
 EXPOSE 3100
+# ORB-1577 — run as the unprivileged `node` user (previously root).
+USER node
 CMD ["node", "dist/index.js"]
