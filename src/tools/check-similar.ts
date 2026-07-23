@@ -16,7 +16,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { resolveProjectByKey } from './shared.js';
+import { resolveProjectByKey, resolveTicketByKey } from './shared.js';
 
 interface SimilarCandidate {
   id: string;
@@ -27,6 +27,8 @@ interface SimilarCandidate {
   statusCategory: string | null;
   similarity: number;
   matchMode: 'tsvector' | 'embedding';
+  // ORB-1604 - parent/sibling/epic candidates are related context, not dups.
+  relation?: 'parent' | 'sibling' | 'epic' | null;
 }
 
 interface SimilarResponse {
@@ -43,16 +45,20 @@ export const checkSimilarToolConfig = {
     title: z.string().min(1).describe('Proposed ticket title.'),
     description: z.string().optional().describe('Optional proposed ticket description — improves recall.'),
     limit: z.number().int().min(1).max(10).optional().describe('Max candidates to return. Default 5.'),
+    parentTicketKey: z.string().optional().describe('The intended PARENT ticket key (e.g. the epic) when drafting a child. Enables hierarchy-aware classification: the parent, its other children and epics are reported as related context instead of duplicates.'),
+    forType: z.string().optional().describe('The intended ticket type (task/bug/story/epic) of the draft.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeCheckSimilarHandler(client: OrbotoClient) {
-  return async ({ projectKey, title, description, limit }: {
+  return async ({ projectKey, title, description, limit, parentTicketKey, forType }: {
     projectKey: string;
     title: string;
     description?: string;
     limit?: number;
+    parentTicketKey?: string;
+    forType?: string;
   }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, projectKey);
     const qs = new URLSearchParams({
@@ -60,14 +66,27 @@ export function makeCheckSimilarHandler(client: OrbotoClient) {
       limit: String(limit ?? 5),
     });
     if (description) qs.set('description', description);
+    // ORB-1604 - hierarchy-aware classification inputs.
+    if (parentTicketKey) {
+      const parent = await resolveTicketByKey(client, parentTicketKey);
+      qs.set('parentTicketId', parent.id);
+    }
+    if (forType) qs.set('forType', forType);
     const result = await client.get<SimilarResponse>(
       `/projects/${project.id}/tickets/similar?${qs.toString()}`,
     );
 
-    const recommendation = result.candidates.length === 0
-      ? 'No similar tickets found — safe to create.'
-      : (result.candidates[0]!.similarity >= 0.9)
-        ? `HIGH-SIMILARITY MATCH FOUND — review [${result.candidates[0]!.ticketKey ?? result.candidates[0]!.id.slice(0, 8)}] "${result.candidates[0]!.title}" before creating; this may already be tracked.`
+    // ORB-1604 - only relation-free candidates are duplicate signals; the
+    // parent, siblings and epics are related context (they drove the 70%
+    // --allow-duplicate override rate in the field).
+    const realDuplicates = result.candidates.filter((c) => !c.relation);
+    const related = result.candidates.filter((c) => c.relation);
+    const recommendation = realDuplicates.length === 0
+      ? (related.length === 0
+          ? 'No similar tickets found — safe to create.'
+          : 'Only related context found (parent/sibling/epic) — safe to create; link them instead of treating as duplicates.')
+      : (realDuplicates[0]!.similarity >= 0.9)
+        ? `HIGH-SIMILARITY MATCH FOUND — review [${realDuplicates[0]!.ticketKey ?? realDuplicates[0]!.id.slice(0, 8)}] "${realDuplicates[0]!.title}" before creating; this may already be tracked.`
         : 'Possible related tickets — review the list and decide whether the new ticket adds distinct scope.';
 
     const text = result.candidates.length === 0
@@ -79,7 +98,8 @@ export function makeCheckSimilarHandler(client: OrbotoClient) {
             const pct = `${Math.round(c.similarity * 100)}%`;
             const status = c.statusName ? ` [${c.statusName}]` : '';
             const key = c.ticketKey ?? c.id.slice(0, 8);
-            return `  - ${key}${status} (${pct} ${c.matchMode}): ${c.title}`;
+            const rel = c.relation ? ` (related: ${c.relation})` : '';
+            return `  - ${key}${status} (${pct} ${c.matchMode})${rel}: ${c.title}`;
           }),
         ].join('\n');
 
