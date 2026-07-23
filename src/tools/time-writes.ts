@@ -111,13 +111,23 @@ export const timerStopToolConfig = {
 export function makeTimerStopHandler(client: OrbotoClient) {
   return async (): Promise<CallToolResult> => {
     try {
-      const res = await client.post<{ durationMinutes: number }>('/time/timer/stop', {});
+      // ORB-1603 - the API stop is idempotent now: nothing-to-stop returns
+      // 200 { stopped:false } instead of a 404 (the 404 branch below stays
+      // for older servers), and laneFallback flags that the timer was found
+      // via the single-active-timer fallback after an instance-token mismatch.
+      const res = await client.post<{ durationMinutes: number; stopped?: boolean; laneFallback?: boolean }>('/time/timer/stop', {});
+      if (res.stopped === false) {
+        return {
+          content: [{ type: 'text', text: 'No active timer to stop.' }],
+          structuredContent: { durationMinutes: 0, alreadyStopped: true },
+        };
+      }
       return {
         content: [{
           type: 'text',
-          text: `Timer stopped — logged ${res.durationMinutes} min.`,
+          text: `Timer stopped — logged ${res.durationMinutes} min.${res.laneFallback ? ' (matched via single-active-timer fallback - instance token differed from start)' : ''}`,
         }],
-        structuredContent: { durationMinutes: res.durationMinutes },
+        structuredContent: { durationMinutes: res.durationMinutes, ...(res.laneFallback ? { laneFallback: true } : {}) },
       };
     } catch (err) {
       if (err instanceof OrbotoApiError && err.status === 404) {
