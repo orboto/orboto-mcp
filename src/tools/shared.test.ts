@@ -101,4 +101,31 @@ describe('ticketLine', () => {
     });
     expect(line).toBe('[ACME-2] Docs update (To Do)');
   });
+
+  // ORB-1605 — flags the stalled-ingestion signal in the one-line summary.
+  it('appends the waiting-on-ingestion marker when waitingForGitIngestion is true', () => {
+    const line = ticketLine({
+      id: 't1', projectId: 'p1', milestoneId: null,
+      ticketKey: 'ACME-3', ticketNumber: 3,
+      title: 'Docs change',
+      status: 'IN_REVIEW', statusName: 'In Review',
+      type: 'task', priority: 'normal',
+      estimatedTimeMinutes: 0, dueDate: null, isPrivate: false,
+      waitingForGitIngestion: true,
+    });
+    expect(line).toBe('[ACME-3] Docs change (In Review) [waiting on Git ingestion]');
+  });
+
+  it('omits the marker when waitingForGitIngestion is false or absent', () => {
+    const line = ticketLine({
+      id: 't1', projectId: 'p1', milestoneId: null,
+      ticketKey: 'ACME-4', ticketNumber: 4,
+      title: 'Docs change',
+      status: 'IN_REVIEW', statusName: 'In Review',
+      type: 'task', priority: 'normal',
+      estimatedTimeMinutes: 0, dueDate: null, isPrivate: false,
+      waitingForGitIngestion: false,
+    });
+    expect(line).toBe('[ACME-4] Docs change (In Review)');
+  });
 });

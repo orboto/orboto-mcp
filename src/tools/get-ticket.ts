@@ -159,6 +159,10 @@ export function makeGetTicketHandler(client: OrbotoClient) {
         isPrivate: full.isPrivate,
         estimatedTimeMinutes: full.estimatedTimeMinutes,
         loggedMinutes: full.loggedMinutes ?? 0,
+        // ORB-1605 — true when in_review, zero ingested git_activities,
+        // but the project HAS an active git connection: closing
+        // verification may be blocked on stalled ingestion.
+        waitingForGitIngestion: full.waitingForGitIngestion ?? false,
         description: full.description ?? null,
         // Hierarchy — null when no parent, array of summary rows for
         // children (empty array when none). Sub-ticket consumers can
@@ -249,6 +253,12 @@ function formatTicket(
   const header = [
     `[${ticket.ticketKey}] ${ticket.title}`,
     `Status: ${ticket.statusName ?? ticket.status}  Priority: ${ticket.priority}  Type: ${ticket.type}`,
+    // ORB-1605 — surface the stalled-ingestion signal right in the
+    // header so an agent checking "is this really done?" sees it
+    // before reading the (currently empty) git-activity section.
+    ticket.waitingForGitIngestion
+      ? '⏳ Waiting for Git ingestion — this project has an active git connection but no commits/PRs have landed for this ticket yet. Closing verification may be blocked on stalled ingestion, not on unfinished work — check manually before assuming it is unlinked.'
+      : null,
     // ORB-1023 — show the milestone name (not the UUID) when set.
     ticket.milestoneId ? `Milestone: ${ticket.milestoneName ?? '(unnamed)'}` : null,
     ticket.dueDate ? `Due: ${ticket.dueDate}` : null,

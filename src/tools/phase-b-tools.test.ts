@@ -115,6 +115,29 @@ describe('orboto_list_tickets', () => {
       makeListTicketsHandler(client)({ projectKey: 'ACME', milestone: 'ghost' })
     ).rejects.toThrow(/Milestone "ghost" not found/);
   });
+
+  // ORB-1605 — the stalled-ingestion signal passes through into structuredContent.
+  it('surfaces waitingForGitIngestion per ticket', async () => {
+    stub([
+      { json: PROJ },
+      {
+        json: {
+          items: [{
+            id: 't1', projectId: 'p1', ticketKey: 'ACME-11', title: 'Docs change',
+            status: 'IN_REVIEW', statusName: 'In Review', statusCategory: 'in_review',
+            type: 'task', priority: 'normal', estimatedTimeMinutes: 0, dueDate: null,
+            waitingForGitIngestion: true,
+          }],
+          nextCursor: null,
+        },
+      },
+    ]);
+    const res = await makeListTicketsHandler(client)({ projectKey: 'ACME' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('[waiting on Git ingestion]');
+    const sc = res.structuredContent as { tickets: Array<{ waitingForGitIngestion: boolean }> };
+    expect(sc.tickets[0].waitingForGitIngestion).toBe(true);
+  });
 });
 
 describe('orboto_get_ticket', () => {
@@ -176,6 +199,31 @@ describe('orboto_get_ticket', () => {
     expect(sc.commentsHasMore).toBe(true);
     expect(sc.parentTicket).toBeNull();
     expect(sc.children).toEqual([]);
+  });
+
+  // ORB-1605 — the stalled-ingestion signal surfaces in both the header
+  // text and structuredContent.
+  it('surfaces waitingForGitIngestion in the header and structured content', async () => {
+    stub([
+      { json: PROJ },
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-10', title: 'Docs change', status: 'IN_REVIEW', gitActivityCount: 0, parentTicketId: null } },
+      { json: { items: [], nextCursor: null } },
+      { json: [] },
+      NO_CHILDREN,
+      {
+        json: {
+          id: 't1', projectId: 'p1', ticketKey: 'ACME-10', title: 'Docs change',
+          status: 'IN_REVIEW', statusName: 'In Review', statusCategory: 'in_review',
+          type: 'task', priority: 'normal', waitingForGitIngestion: true,
+        },
+      },
+      { json: [] }, // ORB-1455 - attachments
+    ]);
+    const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-10' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Waiting for Git ingestion');
+    const sc = res.structuredContent as { waitingForGitIngestion: boolean };
+    expect(sc.waitingForGitIngestion).toBe(true);
   });
 
   it('reads effectiveCompleted (not done) + surfaces linked-ticket suffix', async () => {

@@ -67,6 +67,11 @@ export interface TicketRow {
   labels?: Array<{ id: string; name: string }>;
   commentCount?: number;
   checklistProgress?: { done: number; total: number };
+  // ORB-1605 — in_review, zero ingested git_activities, but the project
+  // HAS an active git connection: closing verification may be blocked
+  // on stalled commit/PR ingestion rather than genuinely unlinked work.
+  // Absent (not false) on responses the enrich pipeline didn't touch.
+  waitingForGitIngestion?: boolean;
 }
 
 /**
@@ -107,5 +112,8 @@ export function ticketLine(t: TicketRow): string {
   if (t.assignees && t.assignees.length > 0) {
     parts.push(`→ ${t.assignees.map((a) => a.fullName || a.email).join(', ')}`);
   }
+  // ORB-1605 — flag a ticket that's genuinely just waiting on stalled
+  // commit/PR ingestion, not a ticket someone forgot to close.
+  if (t.waitingForGitIngestion) parts.push('[waiting on Git ingestion]');
   return parts.join(' ');
 }

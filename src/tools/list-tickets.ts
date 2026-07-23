@@ -115,6 +115,8 @@ export function makeListTicketsHandler(client: OrbotoClient) {
           labels: t.labels?.map((l) => l.name) ?? [],
           estimatedTimeMinutes: t.estimatedTimeMinutes,
           loggedMinutes: t.loggedMinutes ?? 0,
+          // ORB-1605 — stalled-ingestion signal for in_review tickets.
+          waitingForGitIngestion: t.waitingForGitIngestion ?? false,
         })),
       },
     };

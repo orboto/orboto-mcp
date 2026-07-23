@@ -58,4 +58,52 @@ describe('orboto_session_start (ORB-1093)', () => {
     expect(text).toContain('No tickets currently assigned');
     expect(text).toContain('No timer running');
   });
+
+  // ORB-1605 — session-start fans out to GET /projects/:id/git-health for
+  // every distinct project the caller has open work in, and surfaces a
+  // warning when a connection is unhealthy.
+  it('warns when a project git connection is unhealthy', async () => {
+    stubByPath({
+      '/users/me/assigned-tickets': {
+        items: [{ ticketKey: 'ORB-42', title: 'Wire it up', statusName: 'In Review', projectId: 'proj-1' }],
+      },
+      '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
+      '/agent-instructions': { instructions: 'rules here' },
+      '/time/timer': {},
+      '/projects/proj-1/git-health': {
+        connections: [{
+          connectionId: 'conn-1', name: 'orboto/orboto', provider: 'github',
+          connected: false, healthy: false, lastEventAt: null, reason: 'connection_inactive',
+        }],
+      },
+    });
+    const res = await makeSessionStartHandler(client)();
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Git connection health — WARNING');
+    expect(text).toContain('orboto/orboto');
+    expect(text).toContain('connection is deactivated');
+    const structured = res.structuredContent as { gitHealth: Array<{ projectId: string; connections: unknown[] }> };
+    expect(structured.gitHealth).toHaveLength(1);
+    expect(structured.gitHealth[0].projectId).toBe('proj-1');
+  });
+
+  it('omits the git health section when every connection is healthy', async () => {
+    stubByPath({
+      '/users/me/assigned-tickets': {
+        items: [{ ticketKey: 'ORB-42', title: 'Wire it up', statusName: 'In Review', projectId: 'proj-1' }],
+      },
+      '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
+      '/agent-instructions': { instructions: 'rules here' },
+      '/time/timer': {},
+      '/projects/proj-1/git-health': {
+        connections: [{
+          connectionId: 'conn-1', name: 'orboto/orboto', provider: 'github',
+          connected: true, healthy: true, lastEventAt: '2026-07-20T00:00:00Z', reason: null,
+        }],
+      },
+    });
+    const res = await makeSessionStartHandler(client)();
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).not.toContain('Git connection health — WARNING');
+  });
 });
