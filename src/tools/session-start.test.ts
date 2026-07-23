@@ -2,6 +2,9 @@
  * ORB-1093 — session-start composes 4 reads into a re-orientation
  * digest. Assert it hits the right endpoints and folds the rules +
  * in-progress work + timer into the output.
+ *
+ * ORB-1607 — also covers the rules-hash ack (per-connection cache) and
+ * the optional `ticketKey` one-shot bundle.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';
@@ -16,6 +19,22 @@ function stubByPath(map: Record<string, unknown>) {
     const u = new URL(url.toString());
     calls.push(u.pathname + u.search);
     const key = Object.keys(map).find((k) => (u.pathname + u.search).startsWith(k));
+    return { ok: true, status: 200, statusText: 'OK', json: async () => (key ? map[key] : {}), text: async () => '' } as unknown as Response;
+  });
+  return calls;
+}
+
+/** Like `stubByPath`, but a given path can also 404 (OrbotoApiError). */
+function stubByPathWithFailures(map: Record<string, unknown>, notFound: string[]) {
+  const calls: string[] = [];
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+    const u = new URL(url.toString());
+    const pathAndSearch = u.pathname + u.search;
+    calls.push(pathAndSearch);
+    if (notFound.some((p) => pathAndSearch.startsWith(p))) {
+      return { ok: false, status: 404, statusText: 'Not Found', json: async () => ({ error: 'not_found' }), text: async () => 'not found' } as unknown as Response;
+    }
+    const key = Object.keys(map).find((k) => pathAndSearch.startsWith(k));
     return { ok: true, status: 200, statusText: 'OK', json: async () => (key ? map[key] : {}), text: async () => '' } as unknown as Response;
   });
   return calls;
@@ -105,5 +124,148 @@ describe('orboto_session_start (ORB-1093)', () => {
     const res = await makeSessionStartHandler(client)();
     const text = (res.content[0] as { text: string }).text;
     expect(text).not.toContain('Git connection health — WARNING');
+  });
+});
+
+// ORB-1607 — rules-hash ack: the handler remembers the last rulesHash it
+// saw FOR THE LIFETIME OF ONE `makeSessionStartHandler(client)` CLOSURE
+// (mirrors one MCP connection) and passes it back as `knownRulesHash` on
+// every subsequent call.
+describe('orboto_session_start — rules-hash ack (ORB-1607)', () => {
+  it('sends no knownRulesHash on the first call, then passes the received hash back on the second', async () => {
+    const calls: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const u = new URL(url.toString());
+      calls.push(u.pathname + u.search);
+      if (u.pathname === '/agent-instructions') {
+        const known = u.searchParams.get('knownRulesHash');
+        const body = known === 'abc123def456'
+          ? { rulesHash: 'abc123def456', rulesUnchanged: true }
+          : { instructions: 'claim -> commit -> close', rulesHash: 'abc123def456' };
+        return { ok: true, status: 200, statusText: 'OK', json: async () => body, text: async () => '' } as unknown as Response;
+      }
+      const fallback: Record<string, unknown> = {
+        '/users/me/assigned-tickets': { items: [] },
+        '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
+        '/time/timer': {},
+      };
+      const key = Object.keys(fallback).find((k) => (u.pathname + u.search).startsWith(k));
+      return { ok: true, status: 200, statusText: 'OK', json: async () => (key ? fallback[key] : {}), text: async () => '' } as unknown as Response;
+    });
+
+    const handler = makeSessionStartHandler(client);
+
+    const first = await handler();
+    const firstCall = calls.find((c) => c.startsWith('/agent-instructions'));
+    expect(firstCall).toBe('/agent-instructions');
+    const firstText = (first.content[0] as { text: string }).text;
+    expect(firstText).toContain('claim -> commit -> close');
+    const firstStructured = first.structuredContent as { rulesHash: string | null; rulesUnchanged: boolean };
+    expect(firstStructured.rulesHash).toBe('abc123def456');
+    expect(firstStructured.rulesUnchanged).toBe(false);
+
+    calls.length = 0;
+    const second = await handler();
+    const secondCall = calls.find((c) => c.startsWith('/agent-instructions'));
+    expect(secondCall).toBe('/agent-instructions?knownRulesHash=abc123def456');
+    const secondText = (second.content[0] as { text: string }).text;
+    expect(secondText).toContain('Unchanged since your last session-start on this connection');
+    expect(secondText).not.toContain('claim -> commit -> close');
+    const secondStructured = second.structuredContent as { rulesHash: string | null; rulesUnchanged: boolean };
+    expect(secondStructured.rulesHash).toBe('abc123def456');
+    expect(secondStructured.rulesUnchanged).toBe(true);
+  });
+
+  it('a fresh handler (new connection) starts with no cached hash again', async () => {
+    const calls = stubByPath({
+      '/users/me/assigned-tickets': { items: [] },
+      '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
+      '/agent-instructions': { instructions: 'rules here', rulesHash: 'hash1' },
+      '/time/timer': {},
+    });
+    await makeSessionStartHandler(client)();
+    const call = calls.find((c) => c.startsWith('/agent-instructions'));
+    expect(call).toBe('/agent-instructions');
+  });
+});
+
+// ORB-1607 — the optional `ticketKey` one-shot bundle: project primer,
+// full ticket (incl. dependencies + checklists), git health, and active
+// sessions folded into the same response.
+describe('orboto_session_start — ticketKey bundle (ORB-1607)', () => {
+  const bundleStubs = {
+    '/projects/by-key/ORB': { id: 'proj-1', key: 'ORB', name: 'orboto' },
+    '/projects/proj-1/tickets/by-key/42': { id: 'tick-1', projectId: 'proj-1', ticketKey: 'ORB-42', title: 'Bug', status: 'IN_PROGRESS' },
+    '/projects/proj-1/tickets/tick-1/dependencies': {
+      blockedBy: [{ ticketKey: 'ORB-10', title: 'Prereq', statusName: 'Done', statusCategory: 'done' }],
+      blocks: [],
+    },
+    '/tickets/tick-1/checklists': [{
+      title: 'Acceptance', triggersDone: true, progress: { done: 1, total: 2 },
+      items: [
+        { content: 'Write tests', effectiveCompleted: true, linkedTicketKey: null, linkedTicketTitle: null, linkedTicketStatusCategory: null },
+        { content: 'Update docs', effectiveCompleted: false, linkedTicketKey: null, linkedTicketTitle: null, linkedTicketStatusCategory: null },
+      ],
+    }],
+    '/projects/proj-1/ai-primer': { markdown: '# orboto primer\n\nActive milestones: 2', totalTokens: 42, truncatedSections: [] },
+    '/projects/proj-1/git-health': { connections: [] },
+    '/v1/agent/presence': [{ userId: 'u2', userEmail: 'other@x.io', userFullName: 'Other Dev', status: 'working', workingOnTicket: { id: 'tick-1', key: 'ORB-42', title: 'Bug' }, lastSeenAt: '2026-07-23T10:00:00Z' }],
+  };
+  const baseStubs = {
+    '/users/me/assigned-tickets': { items: [] },
+    '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
+    '/agent-instructions': { instructions: 'rules here', rulesHash: 'h1' },
+    '/time/timer': {},
+    // Re-fetch of the enriched by-id row (mirrors orboto_get_ticket).
+    '/projects/proj-1/tickets/tick-1': {
+      id: 'tick-1', projectId: 'proj-1', ticketKey: 'ORB-42', title: 'Bug',
+      status: 'IN_PROGRESS', statusName: 'In Progress', priority: 'high', type: 'bug',
+      description: 'Something is broken.',
+    },
+  };
+
+  it('folds primer + ticket + dependencies + checklists + git health + active sessions into one response', async () => {
+    // bundleStubs first — the merged map is matched by `startsWith`, and
+    // baseStubs' bare `/projects/proj-1/tickets/tick-1` would otherwise
+    // shadow bundleStubs' longer `/projects/proj-1/tickets/tick-1/dependencies`
+    // if it came first in iteration order.
+    const calls = stubByPath({ ...bundleStubs, ...baseStubs });
+    const res = await makeSessionStartHandler(client)({ ticketKey: 'ORB-42' });
+    const text = (res.content[0] as { text: string }).text;
+
+    expect(text).toContain('## Ticket bundle: ORB-42');
+    expect(text).toContain('orboto primer');
+    expect(text).toContain('[ORB-42] Bug');
+    expect(text).toContain('Something is broken.');
+    expect(text).toContain('Write tests');
+    expect(text).toContain('[ORB-10] Prereq');
+    expect(text).toContain('Other Dev');
+
+    const structured = res.structuredContent as { ticketBundle: { ticketKey: string; checklists: unknown[]; dependencies: { blockedBy: unknown[] }; activeSessions: unknown[] } };
+    expect(structured.ticketBundle.ticketKey).toBe('ORB-42');
+    expect(structured.ticketBundle.checklists).toHaveLength(1);
+    expect(structured.ticketBundle.dependencies.blockedBy).toHaveLength(1);
+    expect(structured.ticketBundle.activeSessions).toHaveLength(1);
+
+    // Replaces what would otherwise be several separate calls.
+    expect(calls.some((c) => c.startsWith('/projects/proj-1/ai-primer'))).toBe(true);
+    expect(calls.some((c) => c.startsWith('/tickets/tick-1/checklists'))).toBe(true);
+    expect(calls.some((c) => c.startsWith('/projects/proj-1/tickets/tick-1/dependencies'))).toBe(true);
+  });
+
+  it('an unresolvable/unauthorized ticket key surfaces a clean error section instead of throwing', async () => {
+    stubByPathWithFailures(
+      { ...baseStubs, '/projects/by-key/ORB': { id: 'proj-1', key: 'ORB', name: 'orboto' } },
+      ['/projects/proj-1/tickets/by-key/999'],
+    );
+    const res = await makeSessionStartHandler(client)({ ticketKey: 'ORB-999' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('## Ticket bundle: ORB-999');
+    expect(text).toContain('Could not load this ticket');
+    // The rest of the digest (rules, in-progress work, timer) still renders.
+    expect(text).toContain('## Working rules');
+    expect(text).toContain('## Timer');
+    const structured = res.structuredContent as { ticketBundle: { error: string } };
+    expect(structured.ticketBundle.error).toBeTruthy();
   });
 });
