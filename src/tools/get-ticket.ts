@@ -154,6 +154,9 @@ export function makeGetTicketHandler(client: OrbotoClient) {
           : null,
         priority: full.priority,
         type: full.type,
+        // ORB-1608 — role-aware commit policy. The API defaults unset
+        // rows to 'implementation'.
+        deliveryMode: full.deliveryMode ?? 'implementation',
         dueDate: full.dueDate,
         startDate: full.startDate,
         isPrivate: full.isPrivate,
@@ -253,6 +256,11 @@ function formatTicket(
   const header = [
     `[${ticket.ticketKey}] ${ticket.title}`,
     `Status: ${ticket.statusName ?? ticket.status}  Priority: ${ticket.priority}  Type: ${ticket.type}`,
+    // ORB-1608 — only shown when it deviates from the 'implementation'
+    // default, so a fresh ticket's card stays uncluttered.
+    ticket.deliveryMode && ticket.deliveryMode !== 'implementation'
+      ? `Delivery mode: ${ticket.deliveryMode}`
+      : null,
     // ORB-1605 — surface the stalled-ingestion signal right in the
     // header so an agent checking "is this really done?" sees it
     // before reading the (currently empty) git-activity section.

@@ -52,6 +52,10 @@ export interface TicketRow {
   statusCategory?: string;
   type: string;
   priority: string;
+  // ORB-1608 — role-aware commit policy (implementation/docs/review/admin/
+  // epic). Absent on responses the enrich pipeline didn't touch (falls
+  // back to the API's 'implementation' default when read).
+  deliveryMode?: string;
   estimatedTimeMinutes: number;
   loggedMinutes?: number;
   dueDate: string | null;

@@ -89,6 +89,10 @@ function ticketStructured(t: TicketRow) {
     statusCategory: t.statusCategory ?? null,
     type: t.type,
     priority: t.priority,
+    // ORB-1608 — role-aware commit policy. Absent on responses the API's
+    // enrich pipeline didn't touch; the API itself defaults unset rows to
+    // 'implementation'.
+    deliveryMode: t.deliveryMode ?? 'implementation',
     dueDate: t.dueDate,
     isPrivate: t.isPrivate,
   };
@@ -108,6 +112,7 @@ export const createTicketToolConfig = {
     description: z.string().optional(),
     type: z.enum(['task', 'bug', 'story', 'epic']).optional().describe('Default: task.'),
     priority: z.enum(['blocker', 'high', 'normal', 'low', 'trivial']).optional().describe('Default: normal.'),
+    deliveryMode: z.enum(['implementation', 'docs', 'review', 'admin', 'epic']).optional().describe('Role-aware commit policy (ORB-1608), replacing the blanket one-commit-per-ticket rule. implementation/docs expect exactly one linked commit (closing without one is a non-blocking warning); review/admin/epic never expect one - reviews are read-only, admin work carries external evidence, epics derive completion from their children. Default: "epic" when type=epic, else "implementation".'),
     milestone: z.string().optional().describe('Milestone key (e.g. "ORB-M3"), name, or UUID. Looked up in the project (incl. closed); unknown = error, ambiguous name = error (pass the key/UUID).'),
     assigneeEmails: z.array(z.string().email()).optional().describe('Project-member emails to assign on creation. Attached atomically inside the create (ORB-1416) - a non-member email rolls the whole create back with a 400, no orphan ticket.'),
     labels: z.array(z.string()).optional().describe('Label names - must already exist on the project. Attached atomically inside the create (ORB-1416) - an unknown label rolls the whole create back with a 400, no orphan ticket.'),
@@ -125,6 +130,7 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
     projectKey: string; title: string; description?: string;
     type?: 'task' | 'bug' | 'story' | 'epic';
     priority?: 'blocker' | 'high' | 'normal' | 'low' | 'trivial';
+    deliveryMode?: 'implementation' | 'docs' | 'review' | 'admin' | 'epic';
     milestone?: string; assigneeEmails?: string[]; labels?: string[];
     parentTicketKey?: string; dueDate?: string; isPrivate?: boolean;
     allowLanguageMismatch?: boolean;
@@ -138,6 +144,9 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
       type: input.type ?? 'task',
       priority: input.priority ?? 'normal',
       isPrivate: input.isPrivate ?? false,
+      // ORB-1608 - leave unset when the caller didn't pass one; the API
+      // defaults it (epic for type=epic, else implementation).
+      ...(input.deliveryMode ? { deliveryMode: input.deliveryMode } : {}),
     };
     // ORB-1471 - the override justification rides in the body; the override
     // flag itself is a querystring param (see createPath below).
@@ -277,6 +286,31 @@ function withSummaryWarning(
   };
 }
 
+// ORB-1608 - non-blocking advisory on a status move into `done` when the
+// ticket's deliveryMode expects a linked commit (implementation / docs)
+// but zero git_activities rows are attached. The move always succeeds.
+interface DeliveryModeWarning {
+  code: 'no_commit_linked';
+  message: string;
+}
+
+/** Append the deliveryModeWarning (ORB-1608) to a move/close result - same
+ *  shape as `withSummaryWarning` above, sibling advisory. Chainable: both
+ *  can append onto the same result independently. No-op when the backend
+ *  didn't warn. */
+function withDeliveryModeWarning(
+  result: CallToolResult,
+  warning: DeliveryModeWarning | undefined,
+): CallToolResult {
+  if (!warning) return result;
+  const existing = result.content[0];
+  const baseText = existing && existing.type === 'text' ? existing.text : '';
+  return {
+    content: [{ type: 'text', text: `${baseText}\n⚠ ${warning.message}` }],
+    structuredContent: { ...(result.structuredContent ?? {}), deliveryModeWarning: warning },
+  };
+}
+
 /**
  * ORB-990 - turn a strict-language 422 into a clear, non-throwing tool
  * result. The backend body is `{ error, languageWarning }`; we surface
@@ -347,7 +381,7 @@ function formatSimilarity(w: SimilarWarning): string {
 export const updateTicketToolConfig = {
   title: 'Update a ticket',
   description:
-    'Patch one or more fields on a ticket (title, description, customerSummary, type, priority, dueDate, startDate, isPrivate, estimatedTimeMinutes). `customerSummary` is the customer-facing text shown in the customer project report instead of the internal description (leave empty to auto-summarize). Use `orboto_move_ticket` for status, `orboto_set_milestone` for milestone, and `orboto_assign` / `orboto_unassign` for members.',
+    'Patch one or more fields on a ticket (title, description, customerSummary, type, priority, deliveryMode, dueDate, startDate, isPrivate, estimatedTimeMinutes). `customerSummary` is the customer-facing text shown in the customer project report instead of the internal description (leave empty to auto-summarize). `deliveryMode` is the role-aware commit policy (ORB-1608) - see `orboto_create_ticket` for the mode semantics. Use `orboto_move_ticket` for status, `orboto_set_milestone` for milestone, and `orboto_assign` / `orboto_unassign` for members.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     patch: z.object({
@@ -356,6 +390,7 @@ export const updateTicketToolConfig = {
       customerSummary: z.string().max(2000).nullable().optional().describe('Customer-facing summary shown in the customer report instead of the internal description. Null/empty falls back to an AI distillation or the title.'),
       type: z.enum(['task', 'bug', 'story', 'epic']).optional(),
       priority: z.enum(['blocker', 'high', 'normal', 'low', 'trivial']).optional(),
+      deliveryMode: z.enum(['implementation', 'docs', 'review', 'admin', 'epic']).optional().describe('Role-aware commit policy (ORB-1608) - see orboto_create_ticket for the mode semantics.'),
       dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
       startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
       isPrivate: z.boolean().optional(),
@@ -407,7 +442,7 @@ export function makeUpdateTicketHandler(client: OrbotoClient) {
 export const moveTicketToolConfig = {
   title: 'Move a ticket between status categories',
   description:
-    'Move a ticket to a new status category - todo / in_progress / in_review / done / wont_fix. The API picks the project\'s first status with that category. Caller must have `ticket:change_status`. **Summary warning (ORB-1332):** moving to `in_review` or `done` without having just posted a summary comment returns a non-blocking `summaryWarning` - the move still succeeds, but you should post what changed, the commit SHA, and how to verify. Use `orboto_close_ticket` with a `comment` (or comment first, then move) to avoid it.',
+    'Move a ticket to a new status category - todo / in_progress / in_review / done / wont_fix. The API picks the project\'s first status with that category. Caller must have `ticket:change_status`. **Summary warning (ORB-1332):** moving to `in_review` or `done` without having just posted a summary comment returns a non-blocking `summaryWarning` - the move still succeeds, but you should post what changed, the commit SHA, and how to verify. Use `orboto_close_ticket` with a `comment` (or comment first, then move) to avoid it. **Delivery-mode warning (ORB-1608):** moving to `done` on an `implementation`/`docs` ticket with zero linked commits returns a non-blocking `deliveryModeWarning` - link a commit, or change deliveryMode via `orboto_update_ticket` if the work genuinely is not commit-shaped.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     statusCategory: z.enum(STATUS_CATEGORIES),
@@ -419,14 +454,14 @@ export function makeMoveTicketHandler(client: OrbotoClient) {
     ticketKey: string; statusCategory: StatusCategory;
   }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
-    const updated = await client.patch<TicketRow & { summaryWarning?: SummaryWarning }>(
+    const updated = await client.patch<TicketRow & { summaryWarning?: SummaryWarning; deliveryModeWarning?: DeliveryModeWarning }>(
       `/projects/${ticket.projectId}/tickets/${ticket.id}`,
       { status: CATEGORY_TO_LEGACY[statusCategory] },
     );
-    return withSummaryWarning({
+    return withDeliveryModeWarning(withSummaryWarning({
       content: [{ type: 'text', text: ticketSummaryText('Moved', updated) }],
       structuredContent: ticketStructured(updated),
-    }, updated.summaryWarning);
+    }, updated.summaryWarning), updated.deliveryModeWarning);
   };
 }
 
@@ -437,7 +472,7 @@ export function makeMoveTicketHandler(client: OrbotoClient) {
 export const closeTicketToolConfig = {
   title: 'Close a ticket',
   description:
-    'Move a ticket to `done` and optionally post a closing comment in one call. Convenience wrapper around `orboto_move_ticket` + `orboto_comment` so the model doesn\'t need to chain two writes. Passing a `comment` is the recommended way to close - it doubles as the transition summary and suppresses the ORB-1332 `summaryWarning`. Closing with no comment (and none posted in the last few minutes) returns a non-blocking `summaryWarning`; the close still succeeds.',
+    'Move a ticket to `done` and optionally post a closing comment in one call. Convenience wrapper around `orboto_move_ticket` + `orboto_comment` so the model doesn\'t need to chain two writes. Passing a `comment` is the recommended way to close - it doubles as the transition summary and suppresses the ORB-1332 `summaryWarning`. Closing with no comment (and none posted in the last few minutes) returns a non-blocking `summaryWarning`; the close still succeeds. **Delivery-mode warning (ORB-1608):** on an `implementation`/`docs` ticket, closing with zero linked commits returns a non-blocking `deliveryModeWarning` too - link a commit, or change deliveryMode via `orboto_update_ticket` if the work is not commit-shaped.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     comment: z.string().min(1).optional().describe('Optional closing comment posted before the move. Doubles as the transition summary (what changed, commit SHA, how to verify).'),
@@ -455,14 +490,14 @@ export function makeCloseTicketHandler(client: OrbotoClient) {
       // behaviour.
       await client.post(`/tickets/${ticket.id}/comments`, { content: comment });
     }
-    const updated = await client.patch<TicketRow & { summaryWarning?: SummaryWarning }>(
+    const updated = await client.patch<TicketRow & { summaryWarning?: SummaryWarning; deliveryModeWarning?: DeliveryModeWarning }>(
       `/projects/${ticket.projectId}/tickets/${ticket.id}`,
       { status: 'DONE' },
     );
-    return withSummaryWarning({
+    return withDeliveryModeWarning(withSummaryWarning({
       content: [{ type: 'text', text: ticketSummaryText('Closed', updated) }],
       structuredContent: ticketStructured(updated),
-    }, updated.summaryWarning);
+    }, updated.summaryWarning), updated.deliveryModeWarning);
   };
 }
 
