@@ -12,6 +12,8 @@ import {
   makeWorkSessionStartHandler,
   makeWorkSessionFinishHandler,
   makeWorkSessionsHandler,
+  makeWorkSessionClaimsAddHandler,
+  makeWorkSessionClaimsReleaseHandler,
 } from './work-sessions.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -172,5 +174,131 @@ describe('orboto_work_sessions', () => {
     const calls = stub([{ json: [] }]);
     await makeWorkSessionsHandler(client)({ scope: 'mine' });
     expect(calls[0].url).toContain('/work-sessions/mine');
+  });
+});
+
+describe('ORB-1610 - orboto_work_session_start with resourceClaims', () => {
+  it('passes resourceClaims + onConflict through and reports queued claims', async () => {
+    const calls = stub([
+      { json: [PROJ] },
+      { json: TICKET },
+      {
+        json: {
+          session: { ...SESSION, resourceClaims: [{ kind: 'path', value: 'src/**', mode: 'write', state: 'waiting' }] },
+          reused: false,
+          queued: [{ claim: { kind: 'path', value: 'src/**', mode: 'write' }, position: 1, blockedBy: [] }],
+        },
+      },
+    ]);
+    const res = await makeWorkSessionStartHandler(client)({
+      ticketKey: 'ACME-42',
+      resourceClaims: [{ kind: 'path', value: 'src/**', mode: 'write' }],
+      onConflict: 'queue',
+    });
+    const post = calls[calls.length - 1];
+    expect(post.body).toMatchObject({
+      resourceClaims: [{ kind: 'path', value: 'src/**', mode: 'write' }],
+      onConflict: 'queue',
+    });
+    expect((res.content[0] as { text: string }).text).toContain('Queued');
+    expect((res.content[0] as { text: string }).text).toContain('position 1');
+  });
+
+  it('surfaces claim conflicts distinctly from a lease conflict on 409', async () => {
+    const conflicts = [{
+      claim: { kind: 'named', value: 'unity-editor:main', mode: 'write' },
+      holders: [{ sessionId: 's2', ticketKey: 'ACME-9', userEmail: 'rival@orboto.test', userFullName: 'Rival Bot', claim: { kind: 'named', value: 'unity-editor:main', mode: 'write' } }],
+    }];
+    stub([
+      { json: [PROJ] },
+      { json: TICKET },
+      { ok: false, status: 409, text: JSON.stringify({ error: 'held', errorKey: 'errors.work_sessions.claim_conflict', claimConflicts: conflicts }) },
+    ]);
+    const res = await makeWorkSessionStartHandler(client)({
+      ticketKey: 'ACME-42',
+      resourceClaims: [{ kind: 'named', value: 'unity-editor:main', mode: 'write' }],
+    });
+    expect(res.isError).toBe(true);
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Rival Bot');
+    expect(text).toContain('unity-editor:main');
+    expect((res.structuredContent as { claimConflict: boolean }).claimConflict).toBe(true);
+  });
+});
+
+describe('ORB-1610 - orboto_work_session_claims_add', () => {
+  it('adds claims and reports the granted count', async () => {
+    const calls = stub([
+      {
+        json: {
+          session: { ...SESSION, resourceClaims: [{ kind: 'path', value: 'src/a/**', mode: 'write', state: 'granted' }] },
+          queued: [],
+        },
+      },
+    ]);
+    const res = await makeWorkSessionClaimsAddHandler(client)({
+      sessionId: 'ws1',
+      claims: [{ kind: 'path', value: 'src/a/**', mode: 'write' }],
+    });
+    expect(calls[0].url).toContain('/work-sessions/ws1/claims');
+    expect(calls[0].method).toBe('POST');
+    expect(calls[0].body).toMatchObject({ claims: [{ kind: 'path', value: 'src/a/**', mode: 'write' }] });
+    expect((res.content[0] as { text: string }).text).toContain('1 granted claim');
+  });
+
+  it('reports queued claims separately from granted ones', async () => {
+    stub([
+      {
+        json: {
+          session: { ...SESSION, resourceClaims: [{ kind: 'path', value: 'src/b/**', mode: 'write', state: 'waiting' }] },
+          queued: [{ claim: { kind: 'path', value: 'src/b/**', mode: 'write' }, position: 2, blockedBy: [] }],
+        },
+      },
+    ]);
+    const res = await makeWorkSessionClaimsAddHandler(client)({
+      sessionId: 'ws1',
+      claims: [{ kind: 'path', value: 'src/b/**', mode: 'write' }],
+      onConflict: 'queue',
+    });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('0 granted claim');
+    expect(text).toContain('position 2');
+  });
+
+  it('surfaces a claim conflict on 409 without adding anything', async () => {
+    const conflicts = [{
+      claim: { kind: 'path', value: 'src/c.ts', mode: 'write' },
+      holders: [{ sessionId: 's2', ticketKey: 'ACME-9', userEmail: null, userFullName: null, claim: { kind: 'path', value: 'src/c.ts', mode: 'write' } }],
+    }];
+    stub([{ ok: false, status: 409, text: JSON.stringify({ error: 'held', errorKey: 'errors.work_sessions.claim_conflict', claimConflicts: conflicts }) }]);
+    const res = await makeWorkSessionClaimsAddHandler(client)({
+      sessionId: 'ws1',
+      claims: [{ kind: 'path', value: 'src/c.ts', mode: 'write' }],
+    });
+    expect(res.isError).toBe(true);
+    expect((res.content[0] as { text: string }).text).toContain('No claims were added');
+  });
+});
+
+describe('ORB-1610 - orboto_work_session_claims_release', () => {
+  it('releases specific claims and reports the remaining count', async () => {
+    const calls = stub([{ text: JSON.stringify({ ...SESSION, resourceClaims: [{ kind: 'path', value: 'src/b/**', mode: 'write', state: 'granted' }] }) }]);
+    const res = await makeWorkSessionClaimsReleaseHandler(client)({
+      sessionId: 'ws1',
+      claims: [{ kind: 'path', value: 'src/a/**' }],
+    });
+    expect(calls[0].url).toContain('/work-sessions/ws1/claims');
+    expect(calls[0].method).toBe('DELETE');
+    expect(calls[0].body).toMatchObject({ claims: [{ kind: 'path', value: 'src/a/**' }] });
+    expect((res.content[0] as { text: string }).text).toContain('1 claim(s) remain');
+  });
+
+  it('releases everything when claims is omitted, and still sends a body', async () => {
+    const calls = stub([{ text: JSON.stringify({ ...SESSION, resourceClaims: [] }) }]);
+    const res = await makeWorkSessionClaimsReleaseHandler(client)({ sessionId: 'ws1' });
+    // A DELETE with a genuinely absent body 400s on the API's schema
+    // (ORB-1610 finding) - the handler must always send at least `{}`.
+    expect(calls[0].body).toEqual({});
+    expect((res.content[0] as { text: string }).text).toContain('Released every claim');
   });
 });

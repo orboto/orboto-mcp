@@ -170,9 +170,20 @@ export class OrbotoClient {
   }
 
   /** DELETE. Returns the parsed body when the route sends one (some
-   *  DELETEs 204, others return the mutated row - ORB-626 cancel does). */
-  async delete<T = void>(path: string): Promise<T> {
-    const res = await this.authedFetch(this.fullUrl(path), { method: 'DELETE' });
+   *  DELETEs 204, others return the mutated row - ORB-626 cancel does).
+   *
+   *  ORB-1610 - `body` is optional and, when present (including `{}`),
+   *  is sent as a real JSON body with `Content-Type: application/json`.
+   *  A genuinely bodyless DELETE against a route whose schema declares
+   *  `body: SomeSchema.optional()` 400s on Fastify's content-type
+   *  parser (verified against `DELETE /work-sessions/:id/claims`) - a
+   *  caller that means "release everything" must send `{}`, not omit
+   *  the body entirely. */
+  async delete<T = void>(path: string, body?: unknown): Promise<T> {
+    const res = await this.authedFetch(this.fullUrl(path), {
+      method: 'DELETE',
+      ...(body !== undefined ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
+    });
     if (res.status === 204) return undefined as T;
     const text = await res.text();
     return (text ? JSON.parse(text) : undefined) as T;

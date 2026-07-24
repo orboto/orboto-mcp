@@ -20,6 +20,17 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { mcpInstanceToken, resolveTicketByKey } from './shared.js';
 
+/** ORB-1610 - `state`/`requestedAt` are optional in the wire shape only
+ *  for backwards compatibility with pre-ORB-1610 rows; every claim this
+ *  tool sends or reads going forward carries both. */
+interface ResourceClaim {
+  kind: 'path' | 'named';
+  value: string;
+  mode: 'read' | 'write';
+  state?: 'granted' | 'waiting';
+  requestedAt?: string;
+}
+
 interface WorkSessionRow {
   id: string;
   ticketId: string;
@@ -29,6 +40,7 @@ interface WorkSessionRow {
   leaseUntil: string;
   activeTimerId: string | null;
   commitSha: string | null;
+  resourceClaims?: ResourceClaim[];
   ticketKey?: string | null;
   ticketTitle?: string | null;
   projectKey?: string | null;
@@ -43,6 +55,53 @@ interface LeaseHolder {
   role: string;
   startedAt: string;
   leaseUntil: string;
+}
+
+interface ClaimHolderInfo {
+  sessionId: string;
+  ticketKey: string | null;
+  userEmail: string | null;
+  userFullName: string | null;
+  claim: ResourceClaim;
+}
+
+interface ClaimConflict {
+  claim: ResourceClaim;
+  holders: ClaimHolderInfo[];
+}
+
+interface QueuedClaimResult {
+  claim: ResourceClaim;
+  position: number;
+  blockedBy: ClaimHolderInfo[];
+}
+
+const ResourceClaimShape = {
+  kind: z.enum(['path', 'named']),
+  value: z.string().min(1).max(500),
+  mode: z.enum(['read', 'write']),
+};
+
+/** Shared 409-body reader: the endpoint's body carries EITHER `holder`
+ *  (a lease conflict) OR `claimConflicts` (a resource-claim conflict) -
+ *  never both, since the lease is checked before claims are applied. */
+function parseClaimConflicts(err: OrbotoApiError): ClaimConflict[] | undefined {
+  try {
+    return (JSON.parse(err.body) as { claimConflicts?: ClaimConflict[] }).claimConflicts;
+  } catch {
+    return undefined;
+  }
+}
+
+function describeClaimConflicts(conflicts: ClaimConflict[]): string {
+  return conflicts
+    .map((c) => {
+      const who = c.holders
+        .map((h) => `${h.userFullName ?? h.userEmail ?? h.sessionId} on ${h.ticketKey ?? '(unknown ticket)'}`)
+        .join(', ');
+      return `  - ${c.claim.kind}:${c.claim.value} (${c.claim.mode}) blocked by ${who || 'an active writer'}`;
+    })
+    .join('\n');
 }
 
 function describe(s: WorkSessionRow): string {
@@ -71,6 +130,10 @@ export const workSessionStartToolConfig = {
       .describe('Defaults to true for `implementation`, false for the attach-only roles.'),
     agentSessionToken: z.string().optional()
       .describe('Stable per-agent-instance token. Omit to use this MCP connection\'s own instance id.'),
+    resourceClaims: z.array(z.object(ResourceClaimShape)).max(50).optional()
+      .describe('ORB-1610 - resource claims to acquire alongside the lease. `kind: "path"` takes a glob relative to the repo root (`src/**`, `apps/api/src/routes/tickets.ts`); `kind: "named"` takes an opaque exclusive-resource id (`unity-editor:main`, `git-push:orboto#develop`), compared by exact string equality. `mode: "write"` conflicts with any OVERLAPPING active write claim workspace-wide (across tickets and accounts) - editor refresh clobbering uncommitted changes and concurrent pushes staging each other\'s files are exactly what this prevents. `mode: "read"` never conflicts with anything, including another read.'),
+    onConflict: z.enum(['reject', 'queue']).optional()
+      .describe('Only matters when `resourceClaims` is set. Default `reject`: a conflicting write claim fails the WHOLE call with the conflicting holder(s) named - if this call would have created a brand-new session, that session is rolled back rather than left holding the lease without its claims. `queue`: the conflicting claim is accepted as `state: "waiting"` instead of failing; it is promoted automatically once the conflict clears (release, finish, or the next orboto_work_sessions read).'),
   }).shape,
 };
 
@@ -83,13 +146,20 @@ export function makeWorkSessionStartHandler(client: OrbotoClient) {
       takeover?: boolean;
       startTimer?: boolean;
       agentSessionToken?: string;
+      resourceClaims?: Array<{ kind: 'path' | 'named'; value: string; mode: 'read' | 'write' }>;
+      onConflict?: 'reject' | 'queue';
     },
     extra?: { sessionId?: string },
   ): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, args.ticketKey);
     const token = mcpInstanceToken(args.agentSessionToken, extra);
     try {
-      const res = await client.post<{ session: WorkSessionRow; reused: boolean; displaced?: LeaseHolder }>(
+      const res = await client.post<{
+        session: WorkSessionRow;
+        reused: boolean;
+        displaced?: LeaseHolder;
+        queued?: QueuedClaimResult[];
+      }>(
         '/work-sessions',
         {
           ticketId: ticket.id,
@@ -97,6 +167,8 @@ export function makeWorkSessionStartHandler(client: OrbotoClient) {
           ...(args.leaseSeconds ? { leaseSeconds: args.leaseSeconds } : {}),
           ...(args.takeover ? { takeover: true } : {}),
           ...(args.startTimer !== undefined ? { startTimer: args.startTimer } : {}),
+          ...(args.resourceClaims && args.resourceClaims.length > 0 ? { resourceClaims: args.resourceClaims } : {}),
+          ...(args.onConflict ? { onConflict: args.onConflict } : {}),
           agentSessionToken: token,
         },
       );
@@ -113,12 +185,34 @@ export function makeWorkSessionStartHandler(client: OrbotoClient) {
           `Displaced ${res.displaced.userFullName ?? res.displaced.userEmail ?? 'the previous holder'} (session ${res.displaced.sessionId}); their tracked time was booked.`,
         );
       }
+      if (res.queued && res.queued.length > 0) {
+        lines.push(
+          'Queued (waiting for a conflicting writer to release):',
+          ...res.queued.map((q) => `  - ${q.claim.kind}:${q.claim.value} - position ${q.position}`),
+        );
+      }
       return {
         content: [{ type: 'text', text: lines.join('\n') }],
-        structuredContent: { session: res.session, reused: res.reused, displaced: res.displaced ?? null },
+        structuredContent: { session: res.session, reused: res.reused, displaced: res.displaced ?? null, queued: res.queued ?? [] },
       };
     } catch (err) {
       if (err instanceof OrbotoApiError && err.status === 409) {
+        const claimConflicts = parseClaimConflicts(err);
+        if (claimConflicts && claimConflicts.length > 0) {
+          // ORB-1610 - a resourceClaims conflict, distinct from the lease
+          // conflict below: the body carries `claimConflicts`, not `holder`.
+          return {
+            content: [{
+              type: 'text',
+              text:
+                `One or more resource claims for ${args.ticketKey} conflict with an active writer:\n` +
+                `${describeClaimConflicts(claimConflicts)}\n` +
+                'Re-run with onConflict="queue" to wait instead of failing, or narrow the glob.',
+            }],
+            structuredContent: { claimConflict: true, claimConflicts },
+            isError: true,
+          };
+        }
         // OrbotoApiError carries the raw body string; the 409 payload is the
         // standard i18n error triple plus `holder`, which is the whole point
         // of the conflict response - the caller must not need a second call
@@ -231,5 +325,101 @@ export function makeWorkSessionsHandler(client: OrbotoClient) {
       ? `${heading}: none.`
       : [`${heading} (${rows.length}):`, ...rows.map(describe)].join('\n');
     return { content: [{ type: 'text', text }], structuredContent: { sessions: rows } };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// orboto_work_session_claims_add
+// ---------------------------------------------------------------------------
+
+export const workSessionClaimsAddToolConfig = {
+  title: 'Add resource claims to a live work session',
+  description:
+    'ORB-1610 - declare more resource claims on a session you already hold (from orboto_work_session_start), without touching the ticket lease or timer. Use this when you did not know the files/resources you would touch at start time, or need to widen scope mid-task. Same conflict rule as start: `write` claims conflict with any OVERLAPPING active write claim workspace-wide; `read` claims never conflict. Default `onConflict: "reject"` fails the WHOLE call (nothing is added) and names every conflicting holder; `queue` accepts the conflicting ones as `state: "waiting"`.',
+  inputSchema: z.object({
+    sessionId: z.string().uuid().describe('The id returned by orboto_work_session_start.'),
+    claims: z.array(z.object(ResourceClaimShape)).min(1).max(50)
+      .describe('Claims to add. `kind: "path"` = glob relative to the repo root. `kind: "named"` = exact-match exclusive resource id.'),
+    onConflict: z.enum(['reject', 'queue']).optional().describe('Default `reject`.'),
+  }).shape,
+};
+
+export function makeWorkSessionClaimsAddHandler(client: OrbotoClient) {
+  return async (args: {
+    sessionId: string;
+    claims: Array<{ kind: 'path' | 'named'; value: string; mode: 'read' | 'write' }>;
+    onConflict?: 'reject' | 'queue';
+  }): Promise<CallToolResult> => {
+    try {
+      const res = await client.post<{ session: WorkSessionRow; queued: QueuedClaimResult[] }>(
+        `/work-sessions/${args.sessionId}/claims`,
+        { claims: args.claims, ...(args.onConflict ? { onConflict: args.onConflict } : {}) },
+      );
+      const granted = (res.session.resourceClaims ?? []).filter((c) => c.state !== 'waiting');
+      const lines = [`Session ${args.sessionId} now holds ${granted.length} granted claim(s).`];
+      if (res.queued.length > 0) {
+        lines.push(
+          'Queued (waiting for a conflicting writer to release):',
+          ...res.queued.map((q) => `  - ${q.claim.kind}:${q.claim.value} - position ${q.position}`),
+        );
+      }
+      return {
+        content: [{ type: 'text', text: lines.join('\n') }],
+        structuredContent: { session: res.session, queued: res.queued },
+      };
+    } catch (err) {
+      if (err instanceof OrbotoApiError && err.status === 409) {
+        const claimConflicts = parseClaimConflicts(err);
+        if (claimConflicts && claimConflicts.length > 0) {
+          return {
+            content: [{
+              type: 'text',
+              text:
+                `No claims were added to session ${args.sessionId} - one or more conflict with an active writer:\n` +
+                `${describeClaimConflicts(claimConflicts)}\n` +
+                'Re-run with onConflict="queue" to wait instead of failing, or narrow the glob.',
+            }],
+            structuredContent: { claimConflict: true, claimConflicts },
+            isError: true,
+          };
+        }
+      }
+      throw err;
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// orboto_work_session_claims_release
+// ---------------------------------------------------------------------------
+
+export const workSessionClaimsReleaseToolConfig = {
+  title: 'Release resource claims from a live work session',
+  description:
+    'ORB-1610 - drop specific resource claims (or all of them) from a session you hold, WITHOUT finishing the session or touching the ticket lease/timer. Releasing a granted write claim immediately runs a grant pass, so the earliest queued waiter for that resource is promoted as part of this call - useful once you know you are done touching a subtree but are not done with the ticket. Omit `claims` to release everything the session holds.',
+  inputSchema: z.object({
+    sessionId: z.string().uuid().describe('The id returned by orboto_work_session_start.'),
+    claims: z.array(z.object({ kind: z.enum(['path', 'named']), value: z.string().min(1).max(500) })).optional()
+      .describe('Which claims to release, matched by kind+value. Omit to release ALL claims on this session.'),
+  }).shape,
+};
+
+export function makeWorkSessionClaimsReleaseHandler(client: OrbotoClient) {
+  return async (args: {
+    sessionId: string;
+    claims?: Array<{ kind: 'path' | 'named'; value: string }>;
+  }): Promise<CallToolResult> => {
+    const session = await client.delete<WorkSessionRow>(
+      `/work-sessions/${args.sessionId}/claims`,
+      { ...(args.claims && args.claims.length > 0 ? { claims: args.claims } : {}) },
+    );
+    const remaining = session.resourceClaims ?? [];
+    const text = args.claims && args.claims.length > 0
+      ? `Released ${args.claims.length} claim(s) from session ${args.sessionId}. ${remaining.length} claim(s) remain.`
+      : `Released every claim on session ${args.sessionId}.`;
+    return {
+      content: [{ type: 'text', text }],
+      structuredContent: { session },
+    };
   };
 }

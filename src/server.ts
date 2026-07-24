@@ -234,6 +234,8 @@ import {
   workSessionStartToolConfig, makeWorkSessionStartHandler,
   workSessionFinishToolConfig, makeWorkSessionFinishHandler,
   workSessionsToolConfig, makeWorkSessionsHandler,
+  workSessionClaimsAddToolConfig, makeWorkSessionClaimsAddHandler,
+  workSessionClaimsReleaseToolConfig, makeWorkSessionClaimsReleaseHandler,
 } from './tools/work-sessions.js';
 import {
   listAdminTranslationsToolConfig, makeListAdminTranslationsHandler,
@@ -601,6 +603,9 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_work_session_start', workSessionStartToolConfig, makeWorkSessionStartHandler(client));
   reg('orboto_work_session_finish', workSessionFinishToolConfig, makeWorkSessionFinishHandler(client));
   reg('orboto_work_sessions', workSessionsToolConfig, makeWorkSessionsHandler(client));
+  // ORB-1610 - resource claims: path globs + named exclusive resources.
+  reg('orboto_work_session_claims_add', workSessionClaimsAddToolConfig, makeWorkSessionClaimsAddHandler(client));
+  reg('orboto_work_session_claims_release', workSessionClaimsReleaseToolConfig, makeWorkSessionClaimsReleaseHandler(client));
   reg('orboto_admin_translation_list', listAdminTranslationsToolConfig, makeListAdminTranslationsHandler(client));
   reg('orboto_admin_translation_approve', approveTranslationToolConfig, makeApproveTranslationHandler(client));
   reg('orboto_admin_translation_revert', revertTranslationToolConfig, makeAdminRevertTranslationHandler(client));
