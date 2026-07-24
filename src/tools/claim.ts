@@ -34,11 +34,10 @@
  *     surface them as a `timerWarning` field on the structured
  *     response, same shape as the wrapper.
  */
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
-import { resolveTicketByKey, type TicketRow } from './shared.js';
+import { mcpInstanceToken, resolveTicketByKey, type TicketRow } from './shared.js';
 
 interface UserRow {
   id: string;
@@ -47,15 +46,10 @@ interface UserRow {
   isBot?: boolean;
 }
 
-// ORB-1252 / ORB-1283 — auto-derived per-instance timer token (zero config):
-// one MCP server process = one agent instance. On a bot/service account the
-// timer is scoped to it (concurrent per-instance, no cross-instance stomp).
-// A per-process random UUID (minted once at module load) is used rather than
-// the PID, because PIDs are recycled by the OS — a fresh process could inherit
-// a recycled PID and collide with a previous instance's stale/abandoned timer.
-// Precedence at the call site: explicit agentSessionToken arg > per-connection
-// MCP session id (HTTP) > this per-process token (stdio).
-const MCP_AGENT_INSTANCE = `mcp-${randomUUID()}`;
+// ORB-1252 / ORB-1283 - auto-derived per-instance timer token (zero config).
+// ORB-1609 moved the derivation into tools/shared.ts so claim's timer and the
+// work-session lease resolve to the SAME instance: two copies of this constant
+// would put one agent in two lanes.
 
 interface ActiveTimer {
   id: string;
@@ -160,8 +154,7 @@ export function makeClaimHandler(client: OrbotoClient) {
     // id: explicit arg > per-connection MCP session id (distinct per client even
     // on a shared HTTP server) > per-process id (stdio). Human accounts fall
     // through to the legacy auto-stop path.
-    const mcpInstance = extra?.sessionId ? `mcp-${extra.sessionId}` : MCP_AGENT_INSTANCE;
-    const effectiveToken = agentSessionToken ?? (me.isBot ? mcpInstance : undefined);
+    const effectiveToken = agentSessionToken ?? (me.isBot ? mcpInstanceToken(undefined, extra) : undefined);
     if (!noTimer) {
       try {
         if (effectiveToken) {

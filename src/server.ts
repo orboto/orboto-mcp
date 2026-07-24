@@ -231,6 +231,11 @@ import {
 } from './tools/update-project.js';
 import { checkSimilarToolConfig, makeCheckSimilarHandler } from './tools/check-similar.js';
 import {
+  workSessionStartToolConfig, makeWorkSessionStartHandler,
+  workSessionFinishToolConfig, makeWorkSessionFinishHandler,
+  workSessionsToolConfig, makeWorkSessionsHandler,
+} from './tools/work-sessions.js';
+import {
   listAdminTranslationsToolConfig, makeListAdminTranslationsHandler,
   approveTranslationToolConfig, makeApproveTranslationHandler,
   revertTranslationToolConfig, makeAdminRevertTranslationHandler,
@@ -592,6 +597,10 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_create_project', createProjectToolConfig, makeCreateProjectHandler(client));
   reg('orboto_archive_project', archiveProjectToolConfig, makeArchiveProjectHandler(client));
   reg('orboto_check_similar', checkSimilarToolConfig, makeCheckSimilarHandler(client));
+  // ORB-1609 - work sessions: the lease/timer/presence/evidence record.
+  reg('orboto_work_session_start', workSessionStartToolConfig, makeWorkSessionStartHandler(client));
+  reg('orboto_work_session_finish', workSessionFinishToolConfig, makeWorkSessionFinishHandler(client));
+  reg('orboto_work_sessions', workSessionsToolConfig, makeWorkSessionsHandler(client));
   reg('orboto_admin_translation_list', listAdminTranslationsToolConfig, makeListAdminTranslationsHandler(client));
   reg('orboto_admin_translation_approve', approveTranslationToolConfig, makeApproveTranslationHandler(client));
   reg('orboto_admin_translation_revert', revertTranslationToolConfig, makeAdminRevertTranslationHandler(client));

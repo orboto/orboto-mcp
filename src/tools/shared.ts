@@ -121,3 +121,26 @@ export function ticketLine(t: TicketRow): string {
   if (t.waitingForGitIngestion) parts.push('[waiting on Git ingestion]');
   return parts.join(' ');
 }
+
+// ---------------------------------------------------------------------------
+// ORB-1252 / ORB-1283 / ORB-1609 - the agent-instance token.
+//
+// One MCP server process = one agent instance. Every surface that scopes work
+// to an instance (timers, and since ORB-1609 work-session leases) MUST derive
+// the token the same way, or the same agent ends up in two lanes: a claim
+// starting a timer in lane A while its work session holds the lease in lane B
+// is precisely the class of bug ORB-1603 had to paper over.
+//
+// A per-process random UUID rather than the PID: PIDs are recycled by the OS,
+// so a fresh process could inherit a recycled PID and adopt a previous
+// instance's stale timer or lease.
+// ---------------------------------------------------------------------------
+import { randomUUID } from 'node:crypto';
+
+const MCP_PROCESS_INSTANCE = `mcp-${randomUUID()}`;
+
+/** Precedence: explicit caller-supplied token > per-connection MCP session id
+ *  (distinct per client even on a shared HTTP server) > per-process id (stdio). */
+export function mcpInstanceToken(explicit?: string, extra?: { sessionId?: string }): string {
+  return explicit ?? (extra?.sessionId ? `mcp-${extra.sessionId}` : MCP_PROCESS_INSTANCE);
+}
