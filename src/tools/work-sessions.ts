@@ -637,6 +637,178 @@ export function makeWorkFinishHandler(client: OrbotoClient) {
 }
 
 // ---------------------------------------------------------------------------
+// orboto_work_next - ORB-1613 (Wave 3 of ORB-1602)
+// ---------------------------------------------------------------------------
+
+interface NextWorkResponse {
+  reserved: StartBundleResponse | null;
+  reason: 'all-blocked' | 'all-leased' | 'none-matching' | null;
+  retryAfterSeconds: number | null;
+  earliestFreeAt: string | null;
+  candidatesConsidered: number;
+}
+
+export const workNextToolConfig = {
+  title: 'Pull the next ready ticket and reserve it in one call (worker-pool dispatch)',
+  description:
+    'ORB-1613 - the pull side of low-management dispatch, sibling of orboto_work_start on the "I already know which ticket" side. Picks the highest-priority ticket in a project that is TODO, unblocked (every dependency closed), not already leased under the requested role, and not blocked by a conflicting resourceClaim - then reserves it with the EXACT same guarantees as orboto_work_start (atomic lease acquire + the full context bundle: rules ack, primer, ticket, checklists, dependencies, git health, siblings) in the same response. Priority then ticket number, deterministic - never a coin flip on ties. Two workers calling this concurrently never receive the SAME ticket: the underlying reservation is the identical partial-unique-index INSERT orboto_work_start uses, just walked across an ordered candidate list - a collision just advances to the next candidate. Epics are never returned (they are containers, not directly implementable). When nothing is ready, the response is a STRUCTURED result (`reserved: null`) with a `reason` (`none-matching` = no todo tickets at all; `all-blocked` = candidates exist but all have open dependencies; `all-leased` = ready candidates exist but are all currently leased or claim-conflicted) and, ONLY when derivable from an actual active lease, a `retryAfterSeconds` backoff hint (`earliestFreeAt` null and `retryAfterSeconds` null means no signal exists - never a fabricated constant). This is never an error - a worker pool should back off on the hint rather than poll hot. Prefer this over orboto_work_start whenever the caller does not care WHICH ticket it gets, only that it gets the best available one right now.',
+  inputSchema: z.object({
+    projectKey: z.string().min(1).describe('Project key (e.g. "ACME") or UUID.'),
+    role: z.enum(['implementation', 'review', 'preflight', 'integration']).optional()
+      .describe('Default `implementation`. The dispatcher only reserves a ticket whose (ticket, role) lease is free for THIS role.'),
+    leaseSeconds: z.number().int().min(60).max(86_400).optional()
+      .describe('How long the lease should hold without renewal. Default 900 (15 min).'),
+    startTimer: z.boolean().optional()
+      .describe('Defaults to true for `implementation`, false for the attach-only roles.'),
+    agentSessionToken: z.string().optional()
+      .describe('Stable per-agent-instance token. Omit to use this MCP connection\'s own instance id.'),
+    resourceClaims: z.array(z.object(ResourceClaimShape)).max(50).optional()
+      .describe('ORB-1610 - resource claims to acquire alongside the reservation, AND to filter candidates: a ticket already held under a conflicting GRANTED write claim elsewhere is skipped even when its (ticket, role) lease is free.'),
+    onConflict: z.enum(['reject', 'queue']).optional()
+      .describe('Only matters when `resourceClaims` is set on the WINNING candidate. Default `reject`.'),
+  }).shape,
+};
+
+export function makeWorkNextHandler(client: OrbotoClient) {
+  // Per-connection rules-hash cache, same pattern as orboto_work_start.
+  let lastKnownRulesHash: string | undefined;
+
+  return async (
+    args: {
+      projectKey: string;
+      role?: string;
+      leaseSeconds?: number;
+      startTimer?: boolean;
+      agentSessionToken?: string;
+      resourceClaims?: Array<{ kind: 'path' | 'named'; value: string; mode: 'read' | 'write' }>;
+      onConflict?: 'reject' | 'queue';
+    },
+    extra?: { sessionId?: string },
+  ): Promise<CallToolResult> => {
+    const token = mcpInstanceToken(args.agentSessionToken, extra);
+    const res = await client.post<NextWorkResponse>('/work-sessions/next', {
+      projectKey: args.projectKey,
+      ...(args.role ? { role: args.role } : {}),
+      ...(args.leaseSeconds ? { leaseSeconds: args.leaseSeconds } : {}),
+      ...(args.startTimer !== undefined ? { startTimer: args.startTimer } : {}),
+      ...(args.resourceClaims && args.resourceClaims.length > 0 ? { resourceClaims: args.resourceClaims } : {}),
+      ...(args.onConflict ? { onConflict: args.onConflict } : {}),
+      agentSessionToken: token,
+      ...(lastKnownRulesHash ? { knownRulesHash: lastKnownRulesHash } : {}),
+    });
+
+    if (!res.reserved) {
+      const lines = [`No ready ticket in "${args.projectKey}" right now (${res.reason}).`];
+      lines.push(
+        res.retryAfterSeconds != null
+          ? `Retry in ~${res.retryAfterSeconds}s (earliest known free: ${res.earliestFreeAt}).`
+          : 'No derivable ETA - poll again later or check the project board.',
+      );
+      lines.push(`Candidates considered: ${res.candidatesConsidered}.`);
+      return {
+        content: [{ type: 'text', text: lines.join('\n') }],
+        structuredContent: {
+          reserved: null,
+          reason: res.reason,
+          retryAfterSeconds: res.retryAfterSeconds,
+          earliestFreeAt: res.earliestFreeAt,
+          candidatesConsidered: res.candidatesConsidered,
+        },
+      };
+    }
+
+    const r = res.reserved;
+    if (r.rulesHash) lastKnownRulesHash = r.rulesHash;
+
+    const lines: string[] = [
+      r.reused
+        ? `Renewed your existing ${r.session.role} session on ${r.ticket.ticketKey ?? r.session.ticketId}.`
+        : `Reserved ${r.ticket.ticketKey ?? r.session.ticketId} - started a ${r.session.role} work session.`,
+      `Session id: ${r.session.id} (pass this to orboto_work_session_finish / orboto_work_finish).`,
+      `Lease held until ${r.session.leaseUntil}; it renews automatically while you keep calling orboto.`,
+      r.session.activeTimerId ? 'Timer running.' : 'No timer started for this role.',
+    ];
+    if (r.queued && r.queued.length > 0) {
+      lines.push(
+        'Queued (waiting for a conflicting writer to release):',
+        ...r.queued.map((q) => `  - ${q.claim.kind}:${q.claim.value} - position ${q.position}`),
+      );
+    }
+
+    lines.push('', '## Working rules');
+    if (r.rulesUnchanged) {
+      lines.push(`Unchanged since your last call on this connection (hash ${r.rulesHash}) - keep following what you already loaded.`);
+    } else {
+      lines.push(r.rules?.trim() || '(no workspace rules configured)');
+    }
+
+    lines.push('', '## Project primer');
+    lines.push(r.primer.markdown.trim() || '(primer unavailable)');
+
+    lines.push('', `## Ticket: ${r.ticket.ticketKey ?? '?'}`);
+    lines.push(r.ticket.title);
+    lines.push(`Status: ${r.ticket.statusName ?? r.ticket.status}  Priority: ${r.ticket.priority}  Type: ${r.ticket.type}`);
+    if (r.ticket.description) lines.push('', r.ticket.description);
+
+    lines.push('', '## Checklists');
+    if (r.checklists.length === 0) {
+      lines.push('(none)');
+    } else {
+      for (const cl of r.checklists) {
+        lines.push(`${cl.title} (${cl.progress.done}/${cl.progress.total})${cl.triggersDone ? ' - triggers done' : ''}`);
+        for (const i of cl.items) {
+          const link = i.linkedTicketKey ? ` -> [${i.linkedTicketKey}] (${i.linkedTicketStatusCategory ?? 'unknown'})` : '';
+          lines.push(`- [${i.effectiveCompleted ? 'x' : ' '}] ${i.content}${link}`);
+        }
+      }
+    }
+
+    const fmtDeps = (edges: StartDependencyEdge[]) =>
+      edges.length === 0 ? '(none)' : edges.map((e) => `- [${e.ticketKey ?? '?'}] ${e.title}${e.statusName ? ` - ${e.statusName}` : ''}`).join('\n');
+    lines.push('', '## Dependencies');
+    lines.push('Blocked by:', fmtDeps(r.dependencies.blockedBy), 'Blocks:', fmtDeps(r.dependencies.blocks));
+
+    const unhealthy = r.gitHealth.filter((c) => !c.healthy);
+    if (unhealthy.length > 0) {
+      lines.push('', '## Git connection health - WARNING');
+      for (const c of unhealthy) {
+        lines.push(`- "${c.name}" (${c.provider}) - ${GIT_HEALTH_REASON_TEXT[c.reason ?? ''] ?? c.reason ?? 'unknown reason'}`);
+      }
+    }
+
+    lines.push('', '## Other sessions on this ticket');
+    lines.push(
+      r.siblingSessions.length === 0
+        ? '(none)'
+        : r.siblingSessions.map((s) => `  - [${s.role}] ${s.userFullName ?? s.userEmail ?? 'unknown'} - lease until ${s.leaseUntil}`).join('\n'),
+    );
+
+    return {
+      content: [{ type: 'text', text: lines.join('\n') }],
+      structuredContent: {
+        reserved: {
+          session: r.session,
+          reused: r.reused,
+          queued: r.queued ?? [],
+          rulesHash: r.rulesHash,
+          rulesUnchanged: r.rulesUnchanged,
+          primer: r.primer,
+          ticket: r.ticket,
+          checklists: r.checklists,
+          dependencies: r.dependencies,
+          gitHealth: r.gitHealth,
+          siblingSessions: r.siblingSessions,
+        },
+        reason: null,
+        retryAfterSeconds: null,
+        earliestFreeAt: null,
+        candidatesConsidered: res.candidatesConsidered,
+      },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
 // orboto_work_sessions
 // ---------------------------------------------------------------------------
 
