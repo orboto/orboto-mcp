@@ -236,6 +236,7 @@ import {
   workSessionsToolConfig, makeWorkSessionsHandler,
   workSessionClaimsAddToolConfig, makeWorkSessionClaimsAddHandler,
   workSessionClaimsReleaseToolConfig, makeWorkSessionClaimsReleaseHandler,
+  workStartToolConfig, makeWorkStartHandler,
 } from './tools/work-sessions.js';
 import {
   listAdminTranslationsToolConfig, makeListAdminTranslationsHandler,
@@ -601,6 +602,8 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_check_similar', checkSimilarToolConfig, makeCheckSimilarHandler(client));
   // ORB-1609 - work sessions: the lease/timer/presence/evidence record.
   reg('orboto_work_session_start', workSessionStartToolConfig, makeWorkSessionStartHandler(client));
+  // ORB-1611 - the one-call bundled pickup: acquire + full context bundle.
+  reg('orboto_work_start', workStartToolConfig, makeWorkStartHandler(client));
   reg('orboto_work_session_finish', workSessionFinishToolConfig, makeWorkSessionFinishHandler(client));
   reg('orboto_work_sessions', workSessionsToolConfig, makeWorkSessionsHandler(client));
   // ORB-1610 - resource claims: path globs + named exclusive resources.

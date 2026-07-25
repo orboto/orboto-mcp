@@ -111,6 +111,268 @@ function describe(s: WorkSessionRow): string {
 }
 
 // ---------------------------------------------------------------------------
+// orboto_work_start - ORB-1611
+// ---------------------------------------------------------------------------
+
+// Mirrors apps/mcp/src/tools/session-start.ts's local shapes - kept
+// duplicated rather than imported, same choice that file already made for
+// its own bundle types (no shared MCP-side schema layer for these).
+const GIT_HEALTH_REASON_TEXT: Record<string, string> = {
+  connection_inactive: 'connection is deactivated',
+  app_installation_suspended: 'GitHub App installation is suspended',
+  oauth_token_expired: 'OAuth token expired with no refresh path',
+  history_backfill_error: 'last history backfill failed',
+};
+
+interface GitConnectionHealth {
+  connectionId: string;
+  name: string;
+  provider: string;
+  connected: boolean;
+  healthy: boolean;
+  lastEventAt: string | null;
+  reason: string | null;
+}
+
+interface StartTicket {
+  ticketKey: string | null;
+  title: string;
+  description?: string | null;
+  status?: string;
+  statusName?: string;
+  priority: string;
+  type: string;
+}
+
+interface StartChecklistItem {
+  content: string;
+  effectiveCompleted: boolean;
+  linkedTicketKey: string | null;
+  linkedTicketStatusCategory: string | null;
+}
+
+interface StartChecklist {
+  title: string;
+  triggersDone: boolean;
+  progress: { done: number; total: number };
+  items: StartChecklistItem[];
+}
+
+interface StartDependencyEdge {
+  ticketKey: string | null;
+  title: string;
+  statusName: string | null;
+}
+
+interface StartBundleResponse {
+  session: WorkSessionRow;
+  reused: boolean;
+  displaced?: LeaseHolder;
+  queued?: QueuedClaimResult[];
+  rulesHash: string;
+  rulesUnchanged: boolean;
+  rules?: string;
+  primer: { markdown: string; totalTokens: number };
+  ticket: StartTicket;
+  checklists: StartChecklist[];
+  dependencies: { blockedBy: StartDependencyEdge[]; blocks: StartDependencyEdge[] };
+  gitHealth: GitConnectionHealth[];
+  siblingSessions: WorkSessionRow[];
+}
+
+export const workStartToolConfig = {
+  title: 'Start a work session AND load the full context bundle in one call',
+  description:
+    'ORB-1611 - the one-call ticket pickup. Acquires the (ticket, role) work lease with the exact same guarantees as orboto_work_session_start (exactly ONE active session per ticket+role workspace-wide, a conflict names the holder, resourceClaims apply atomically with the lease), AND in the SAME response returns the rules-hash ack (same semantics as orboto_session_start), the project primer, the ticket enriched with its description/status/priority, its checklists, its dependencies, that project\'s git connection health, and any other live sessions already on the ticket. This replaces the 8-15 separate calls (orboto_session_start, orboto_get_project_primer, orboto_get_ticket, orboto_get_checklists, orboto_list_ticket_dependencies, ...) a normal ticket pickup used to cost. Prefer this over orboto_work_session_start for picking up a ticket; use the plain tool only when you deliberately do not want the bundle (e.g. a mid-task lease renewal where you already have fresh context). A conflict never leaves a partial session behind - same rollback-on-conflict guarantee as orboto_work_session_start.',
+  inputSchema: z.object({
+    ticketKey: z.string().min(3).describe('Ticket key like "ACME-42".'),
+    role: z.enum(['implementation', 'review', 'preflight', 'integration']).optional()
+      .describe('Default `implementation`. Use `review` for a review pass, `preflight` for a pre-work check, `integration` for merge/release work - those attach without reassigning the ticket.'),
+    leaseSeconds: z.number().int().min(60).max(86_400).optional()
+      .describe('How long the lease should hold without renewal. Default 900 (15 min).'),
+    takeover: z.boolean().optional()
+      .describe('Displace the current holder of this (ticket, role) lease. Their session is cancelled and their tracked time booked.'),
+    startTimer: z.boolean().optional()
+      .describe('Defaults to true for `implementation`, false for the attach-only roles.'),
+    agentSessionToken: z.string().optional()
+      .describe('Stable per-agent-instance token. Omit to use this MCP connection\'s own instance id.'),
+    resourceClaims: z.array(z.object(ResourceClaimShape)).max(50).optional()
+      .describe('ORB-1610 - resource claims to acquire alongside the lease. Same semantics as orboto_work_session_start\'s resourceClaims.'),
+    onConflict: z.enum(['reject', 'queue']).optional()
+      .describe('Only matters when `resourceClaims` is set. Default `reject`.'),
+  }).shape,
+};
+
+export function makeWorkStartHandler(client: OrbotoClient) {
+  // Per-connection rules-hash cache, mirrored from session-start.ts's
+  // makeSessionStartHandler - this closure lives for one MCP connection.
+  let lastKnownRulesHash: string | undefined;
+
+  return async (
+    args: {
+      ticketKey: string;
+      role?: string;
+      leaseSeconds?: number;
+      takeover?: boolean;
+      startTimer?: boolean;
+      agentSessionToken?: string;
+      resourceClaims?: Array<{ kind: 'path' | 'named'; value: string; mode: 'read' | 'write' }>;
+      onConflict?: 'reject' | 'queue';
+    },
+    extra?: { sessionId?: string },
+  ): Promise<CallToolResult> => {
+    const token = mcpInstanceToken(args.agentSessionToken, extra);
+    let ticketId: string;
+    try {
+      ticketId = (await resolveTicketByKey(client, args.ticketKey)).id;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { content: [{ type: 'text', text: message }], isError: true };
+    }
+    try {
+      const res = await client.post<StartBundleResponse>(
+        '/work-sessions/start',
+        {
+          ticketId,
+          ...(args.role ? { role: args.role } : {}),
+          ...(args.leaseSeconds ? { leaseSeconds: args.leaseSeconds } : {}),
+          ...(args.takeover ? { takeover: true } : {}),
+          ...(args.startTimer !== undefined ? { startTimer: args.startTimer } : {}),
+          ...(args.resourceClaims && args.resourceClaims.length > 0 ? { resourceClaims: args.resourceClaims } : {}),
+          ...(args.onConflict ? { onConflict: args.onConflict } : {}),
+          agentSessionToken: token,
+          ...(lastKnownRulesHash ? { knownRulesHash: lastKnownRulesHash } : {}),
+        },
+      );
+      if (res.rulesHash) lastKnownRulesHash = res.rulesHash;
+
+      const lines: string[] = [
+        res.reused
+          ? `Renewed your existing ${res.session.role} session on ${args.ticketKey}.`
+          : `Started a ${res.session.role} work session on ${args.ticketKey}.`,
+        `Session id: ${res.session.id} (pass this to orboto_work_session_finish).`,
+        `Lease held until ${res.session.leaseUntil}; it renews automatically while you keep calling orboto.`,
+        res.session.activeTimerId ? 'Timer running.' : 'No timer started for this role.',
+      ];
+      if (res.displaced) {
+        lines.push(
+          `Displaced ${res.displaced.userFullName ?? res.displaced.userEmail ?? 'the previous holder'} (session ${res.displaced.sessionId}); their tracked time was booked.`,
+        );
+      }
+      if (res.queued && res.queued.length > 0) {
+        lines.push(
+          'Queued (waiting for a conflicting writer to release):',
+          ...res.queued.map((q) => `  - ${q.claim.kind}:${q.claim.value} - position ${q.position}`),
+        );
+      }
+
+      lines.push('', '## Working rules');
+      if (res.rulesUnchanged) {
+        lines.push(`Unchanged since your last work-start on this connection (hash ${res.rulesHash}) - keep following what you already loaded.`);
+      } else {
+        lines.push(res.rules?.trim() || '(no workspace rules configured)');
+      }
+
+      lines.push('', '## Project primer');
+      lines.push(res.primer.markdown.trim() || '(primer unavailable)');
+
+      lines.push('', `## Ticket: ${res.ticket.ticketKey ?? args.ticketKey}`);
+      lines.push(res.ticket.title);
+      lines.push(`Status: ${res.ticket.statusName ?? res.ticket.status}  Priority: ${res.ticket.priority}  Type: ${res.ticket.type}`);
+      if (res.ticket.description) lines.push('', res.ticket.description);
+
+      lines.push('', '## Checklists');
+      if (res.checklists.length === 0) {
+        lines.push('(none)');
+      } else {
+        for (const cl of res.checklists) {
+          lines.push(`${cl.title} (${cl.progress.done}/${cl.progress.total})${cl.triggersDone ? ' - triggers done' : ''}`);
+          for (const i of cl.items) {
+            const link = i.linkedTicketKey ? ` -> [${i.linkedTicketKey}] (${i.linkedTicketStatusCategory ?? 'unknown'})` : '';
+            lines.push(`- [${i.effectiveCompleted ? 'x' : ' '}] ${i.content}${link}`);
+          }
+        }
+      }
+
+      const fmtDeps = (edges: StartDependencyEdge[]) =>
+        edges.length === 0 ? '(none)' : edges.map((e) => `- [${e.ticketKey ?? '?'}] ${e.title}${e.statusName ? ` - ${e.statusName}` : ''}`).join('\n');
+      lines.push('', '## Dependencies');
+      lines.push('Blocked by:', fmtDeps(res.dependencies.blockedBy), 'Blocks:', fmtDeps(res.dependencies.blocks));
+
+      const unhealthy = res.gitHealth.filter((c) => !c.healthy);
+      if (unhealthy.length > 0) {
+        lines.push('', '## Git connection health - WARNING');
+        for (const c of unhealthy) {
+          lines.push(`- "${c.name}" (${c.provider}) - ${GIT_HEALTH_REASON_TEXT[c.reason ?? ''] ?? c.reason ?? 'unknown reason'}`);
+        }
+      }
+
+      lines.push('', '## Other sessions on this ticket');
+      lines.push(
+        res.siblingSessions.length === 0
+          ? '(none)'
+          : res.siblingSessions.map((s) => `  - [${s.role}] ${s.userFullName ?? s.userEmail ?? 'unknown'} - lease until ${s.leaseUntil}`).join('\n'),
+      );
+
+      return {
+        content: [{ type: 'text', text: lines.join('\n') }],
+        structuredContent: {
+          session: res.session,
+          reused: res.reused,
+          displaced: res.displaced ?? null,
+          queued: res.queued ?? [],
+          rulesHash: res.rulesHash,
+          rulesUnchanged: res.rulesUnchanged,
+          primer: res.primer,
+          ticket: res.ticket,
+          checklists: res.checklists,
+          dependencies: res.dependencies,
+          gitHealth: res.gitHealth,
+          siblingSessions: res.siblingSessions,
+        },
+      };
+    } catch (err) {
+      if (err instanceof OrbotoApiError && err.status === 409) {
+        const claimConflicts = parseClaimConflicts(err);
+        if (claimConflicts && claimConflicts.length > 0) {
+          return {
+            content: [{
+              type: 'text',
+              text:
+                `One or more resource claims for ${args.ticketKey} conflict with an active writer:\n` +
+                `${describeClaimConflicts(claimConflicts)}\n` +
+                'Re-run with onConflict="queue" to wait instead of failing, or narrow the glob.',
+            }],
+            structuredContent: { claimConflict: true, claimConflicts },
+            isError: true,
+          };
+        }
+        let holder: LeaseHolder | undefined;
+        try {
+          holder = (JSON.parse(err.body) as { holder?: LeaseHolder }).holder;
+        } catch {
+          holder = undefined;
+        }
+        const who = holder ? (holder.userFullName ?? holder.userEmail ?? holder.sessionId) : 'another agent';
+        const until = holder ? holder.leaseUntil : 'unknown';
+        return {
+          content: [{
+            type: 'text',
+            text:
+              `The ${args.role ?? 'implementation'} lease on ${args.ticketKey} is held by ${who} until ${until}.\n` +
+              'Pick a different ticket, attach in another role (e.g. role="review"), wait for the lease to expire, ' +
+              'or re-run with takeover=true if you have decided to displace them.',
+          }],
+          structuredContent: { conflict: true, holder: holder ?? null },
+          isError: true,
+        };
+      }
+      throw err;
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
 // orboto_work_session_start
 // ---------------------------------------------------------------------------
 
