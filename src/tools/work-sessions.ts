@@ -40,6 +40,7 @@ interface WorkSessionRow {
   leaseUntil: string;
   activeTimerId: string | null;
   commitSha: string | null;
+  commitVerified?: boolean;
   resourceClaims?: ResourceClaim[];
   ticketKey?: string | null;
   ticketTitle?: string | null;
@@ -511,7 +512,7 @@ export function makeWorkSessionStartHandler(client: OrbotoClient) {
 export const workSessionFinishToolConfig = {
   title: 'Finish a work session (books time, frees the lease, records evidence)',
   description:
-    'End a work session: its timer is stopped and booked, the (ticket, role) lease is released for the next agent, and the evidence you pass (commit sha + which gates you ran) is recorded on the session. Idempotent - finishing an already-finished session succeeds and still absorbs late evidence, so a retrying harness never has to distinguish "already done" from "failed". This does NOT close the ticket; ticket status is a separate, deliberate decision (use orboto_close_ticket once the acceptance criteria are verified).',
+    'End a work session: its timer is stopped and booked, the (ticket, role) lease is released for the next agent, and the evidence you pass (commit sha + which gates you ran) is recorded on the session. Idempotent - finishing an already-finished session succeeds and still absorbs late evidence, so a retrying harness never has to distinguish "already done" from "failed". This does NOT close the ticket; ticket status is a separate, deliberate decision (use orboto_close_ticket once the acceptance criteria are verified). Prefer orboto_work_finish (ORB-1612) for an `implementation` session that is actually done - it does this AND the ticket transition AND the completion note in one call.',
   inputSchema: z.object({
     sessionId: z.string().uuid().describe('The id returned by orboto_work_session_start.'),
     outcome: z.enum(['finished', 'cancelled']).optional()
@@ -547,6 +548,90 @@ export function makeWorkSessionFinishHandler(client: OrbotoClient) {
     return {
       content: [{ type: 'text', text }],
       structuredContent: { session: res.session, durationMinutes: res.durationMinutes, changed: res.changed },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// orboto_work_finish - ORB-1612
+// ---------------------------------------------------------------------------
+
+interface FinishWorkResponse {
+  session: WorkSessionRow;
+  durationMinutes: number;
+  changed: boolean;
+  ticketTransitioned: boolean;
+  ticketStatusCategory: string | null;
+  deliveryModeWarning?: { code: string; message: string };
+  noteCommented: boolean;
+}
+
+export const workFinishToolConfig = {
+  title: 'Finish a work session AND close out the ticket in one call',
+  description:
+    'ORB-1612 - the one-call ticket exit, sibling of orboto_work_start on the entry side. Does everything orboto_work_session_finish does (stops and books the session\'s EXACT timer, releases the lease and every resource claim, idles your presence) PLUS: records a commitSha as an ATTESTATION when git ingestion has not seen it yet (never blocks - verification reconciles asynchronously once the webhook/backfill lands, so a lagging git connection can never wedge a ticket in review for hours), transitions the ticket per the ORB-1608 deliveryMode policy, and posts the completion note. Only an `implementation`-role session with outcome `finished` drives the ticket (default target category `done`) - `review`/`preflight`/`integration` sessions attach without reassigning the ticket (ORB-1609) and a `cancelled` outcome never auto-closes a ticket nobody actually finished; both still book time and free the lease. Idempotent: finishing an already-finished session, or one whose ticket is already at the target category, is a no-op result - not an error. A blocked transition (approval gate, dependency blocker, missing permission) is non-fatal: the session still finished, `ticketTransitioned` comes back false, and the ticket is left for a human or a follow-up call.',
+  inputSchema: z.object({
+    sessionId: z.string().uuid().describe('The id returned by orboto_work_start / orboto_work_session_start.'),
+    outcome: z.enum(['finished', 'cancelled']).optional()
+      .describe('`finished` (default) drives the ticket transition below. `cancelled` = abandoned attempt; time is still booked, the ticket is left untouched.'),
+    commitSha: z.string().optional().describe('The commit this session produced. Recorded as an attestation immediately, verified asynchronously once git ingestion catches up - never blocks this call.'),
+    verification: z.object({
+      build: z.boolean().optional(),
+      tests: z.boolean().optional(),
+      lint: z.boolean().optional(),
+      notes: z.string().optional(),
+    }).optional().describe('Which gates you actually ran and what they said. This is the attestation a reviewer reads cold.'),
+    targetCategory: z.enum(['todo', 'in_progress', 'in_review', 'done', 'wont_fix']).optional()
+      .describe('Default `done`. Use `in_review` when a human should look at it first. Only applied for an implementation session with outcome `finished`.'),
+    note: z.string().optional().describe('The completion note posted on the ticket. Auto-generated (booked time + commit + verification summary) when omitted.'),
+  }).shape,
+};
+
+export function makeWorkFinishHandler(client: OrbotoClient) {
+  return async (args: {
+    sessionId: string;
+    outcome?: 'finished' | 'cancelled';
+    commitSha?: string;
+    verification?: Record<string, unknown>;
+    targetCategory?: string;
+    note?: string;
+  }): Promise<CallToolResult> => {
+    const res = await client.post<FinishWorkResponse>(
+      `/work-sessions/${args.sessionId}/finish-work`,
+      {
+        ...(args.outcome ? { outcome: args.outcome } : {}),
+        ...(args.commitSha ? { commitSha: args.commitSha } : {}),
+        ...(args.verification ? { verification: args.verification } : {}),
+        ...(args.targetCategory ? { targetCategory: args.targetCategory } : {}),
+        ...(args.note ? { note: args.note } : {}),
+      },
+    );
+    const lines = [
+      res.changed
+        ? `Session ${args.sessionId} ${res.session.status}. Booked ${res.durationMinutes} min; the ${res.session.role} lease on ${res.session.ticketKey ?? res.session.ticketId} is free.`
+        : `Session ${args.sessionId} was already ${res.session.status} - nothing to book. (Idempotent finish.)`,
+    ];
+    if (res.session.commitSha) {
+      lines.push(`Commit ${res.session.commitSha}${res.session.commitVerified ? ' (verified by git ingestion)' : ' (attested - pending git verification)'}.`);
+    }
+    lines.push(
+      res.ticketTransitioned
+        ? `Ticket moved to ${res.ticketStatusCategory}.`
+        : `Ticket left at ${res.ticketStatusCategory ?? 'its current status'} - not transitioned this call.`,
+    );
+    if (res.deliveryModeWarning) lines.push(`⚠ ${res.deliveryModeWarning.message}`);
+    lines.push(res.noteCommented ? 'Completion note posted.' : 'No completion note posted (nothing new to report).');
+    return {
+      content: [{ type: 'text', text: lines.join('\n') }],
+      structuredContent: {
+        session: res.session,
+        durationMinutes: res.durationMinutes,
+        changed: res.changed,
+        ticketTransitioned: res.ticketTransitioned,
+        ticketStatusCategory: res.ticketStatusCategory,
+        deliveryModeWarning: res.deliveryModeWarning ?? null,
+        noteCommented: res.noteCommented,
+      },
     };
   };
 }

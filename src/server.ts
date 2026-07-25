@@ -237,6 +237,7 @@ import {
   workSessionClaimsAddToolConfig, makeWorkSessionClaimsAddHandler,
   workSessionClaimsReleaseToolConfig, makeWorkSessionClaimsReleaseHandler,
   workStartToolConfig, makeWorkStartHandler,
+  workFinishToolConfig, makeWorkFinishHandler,
 } from './tools/work-sessions.js';
 import {
   listAdminTranslationsToolConfig, makeListAdminTranslationsHandler,
@@ -605,6 +606,8 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   // ORB-1611 - the one-call bundled pickup: acquire + full context bundle.
   reg('orboto_work_start', workStartToolConfig, makeWorkStartHandler(client));
   reg('orboto_work_session_finish', workSessionFinishToolConfig, makeWorkSessionFinishHandler(client));
+  // ORB-1612 - the one-call bundled exit: finish + ticket transition + note.
+  reg('orboto_work_finish', workFinishToolConfig, makeWorkFinishHandler(client));
   reg('orboto_work_sessions', workSessionsToolConfig, makeWorkSessionsHandler(client));
   // ORB-1610 - resource claims: path globs + named exclusive resources.
   reg('orboto_work_session_claims_add', workSessionClaimsAddToolConfig, makeWorkSessionClaimsAddHandler(client));

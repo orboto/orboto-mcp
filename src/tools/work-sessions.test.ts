@@ -14,6 +14,7 @@ import {
   makeWorkSessionsHandler,
   makeWorkSessionClaimsAddHandler,
   makeWorkSessionClaimsReleaseHandler,
+  makeWorkFinishHandler,
 } from './work-sessions.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -148,6 +149,90 @@ describe('orboto_work_session_finish', () => {
     const res = await makeWorkSessionFinishHandler(client)({ sessionId: 'ws1' });
     expect(res.isError).toBeUndefined();
     expect((res.content[0] as { text: string }).text).toContain('Idempotent finish');
+  });
+});
+
+describe('ORB-1612 - orboto_work_finish', () => {
+  it('reports the ticket transition and the completion note', async () => {
+    const calls = stub([
+      {
+        json: {
+          session: { ...SESSION, status: 'finished', commitSha: 'deadbeef', commitVerified: false },
+          durationMinutes: 23,
+          changed: true,
+          ticketTransitioned: true,
+          ticketStatusCategory: 'done',
+          noteCommented: true,
+        },
+      },
+    ]);
+    const res = await makeWorkFinishHandler(client)({ sessionId: 'ws1', commitSha: 'deadbeef', targetCategory: 'done' });
+    expect(calls[0].url).toContain('/work-sessions/ws1/finish-work');
+    expect(calls[0].body).toMatchObject({ commitSha: 'deadbeef', targetCategory: 'done' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Booked 23 min');
+    expect(text).toContain('attested - pending git verification');
+    expect(text).toContain('Ticket moved to done');
+    expect(text).toContain('Completion note posted');
+    expect((res.structuredContent as { ticketTransitioned: boolean }).ticketTransitioned).toBe(true);
+  });
+
+  it('reports a verified commit distinctly from an attested-but-unverified one', async () => {
+    stub([
+      {
+        json: {
+          session: { ...SESSION, status: 'finished', commitSha: 'cafebabe', commitVerified: true },
+          durationMinutes: 5, changed: true, ticketTransitioned: true, ticketStatusCategory: 'done', noteCommented: true,
+        },
+      },
+    ]);
+    const res = await makeWorkFinishHandler(client)({ sessionId: 'ws1', commitSha: 'cafebabe' });
+    expect((res.content[0] as { text: string }).text).toContain('verified by git ingestion');
+  });
+
+  it('reports a role/outcome that leaves the ticket untouched without treating it as an error', async () => {
+    stub([
+      {
+        json: {
+          session: { ...SESSION, role: 'review', status: 'finished' },
+          durationMinutes: 10, changed: true, ticketTransitioned: false, ticketStatusCategory: 'todo', noteCommented: true,
+        },
+      },
+    ]);
+    const res = await makeWorkFinishHandler(client)({ sessionId: 'ws1' });
+    expect(res.isError).toBeUndefined();
+    expect((res.content[0] as { text: string }).text).toContain('Ticket left at todo - not transitioned this call.');
+  });
+
+  it('treats an idempotent no-op re-run as success with no note', async () => {
+    stub([
+      {
+        json: {
+          session: { ...SESSION, status: 'finished' },
+          durationMinutes: 0, changed: false, ticketTransitioned: false, ticketStatusCategory: 'done', noteCommented: false,
+        },
+      },
+    ]);
+    const res = await makeWorkFinishHandler(client)({ sessionId: 'ws1' });
+    expect(res.isError).toBeUndefined();
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Idempotent finish');
+    expect(text).toContain('No completion note posted');
+  });
+
+  it('surfaces a deliveryModeWarning without failing the call', async () => {
+    stub([
+      {
+        json: {
+          session: { ...SESSION, status: 'finished' },
+          durationMinutes: 8, changed: true, ticketTransitioned: true, ticketStatusCategory: 'done', noteCommented: true,
+          deliveryModeWarning: { code: 'no_commit_linked', message: 'no linked commit' },
+        },
+      },
+    ]);
+    const res = await makeWorkFinishHandler(client)({ sessionId: 'ws1' });
+    expect(res.isError).toBeUndefined();
+    expect((res.content[0] as { text: string }).text).toContain('no linked commit');
   });
 });
 
