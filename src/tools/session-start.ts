@@ -82,9 +82,13 @@ interface ChecklistRow {
 }
 interface DependencyEdge {
   ticketKey: string | null;
-  title: string;
+  // ORB-1614 - null on an opaque cross-project stub the caller cannot
+  // read (see `external`/`resolved`).
+  title: string | null;
   statusName: string | null;
   statusCategory: string | null;
+  external?: boolean;
+  resolved?: boolean;
 }
 interface PrimerJsonResponse {
   markdown: string;
@@ -177,8 +181,11 @@ async function buildTicketBundle(
   }
 
   lines.push('', '### Dependencies');
+  // ORB-1614 - a cross-project blocker/dependent the caller cannot read
+  // comes back with `title: null` - render a fixed, non-identifying
+  // placeholder instead of the literal "null".
   const fmtDeps = (edges: DependencyEdge[]) =>
-    edges.length === 0 ? '(none)' : edges.map((e) => `- [${e.ticketKey ?? '?'}] ${e.title}${e.statusName ? ` - ${e.statusName}` : ''}`).join('\n');
+    edges.length === 0 ? '(none)' : edges.map((e) => `- [${e.ticketKey ?? '?'}] ${e.title ?? `External dependency (access restricted)${e.resolved ? ' - resolved' : ' - still open'}`}${e.statusName ? ` - ${e.statusName}` : ''}`).join('\n');
   lines.push('Blocked by:', fmtDeps(deps.blockedBy), 'Blocks:', fmtDeps(deps.blocks));
 
   if (unhealthy.length > 0) {
@@ -211,8 +218,8 @@ async function buildTicketBundle(
         items: cl.items.map((i) => ({ content: i.content, done: i.effectiveCompleted })),
       })),
       dependencies: {
-        blockedBy: deps.blockedBy.map((e) => ({ ticketKey: e.ticketKey, title: e.title, statusName: e.statusName })),
-        blocks: deps.blocks.map((e) => ({ ticketKey: e.ticketKey, title: e.title, statusName: e.statusName })),
+        blockedBy: deps.blockedBy.map((e) => ({ ticketKey: e.ticketKey, title: e.title, statusName: e.statusName, external: e.external, resolved: e.resolved })),
+        blocks: deps.blocks.map((e) => ({ ticketKey: e.ticketKey, title: e.title, statusName: e.statusName, external: e.external, resolved: e.resolved })),
       },
       gitHealth: gitHealthConnections,
       activeSessions: sessionsOnTicket.map((s) => ({ userFullName: s.userFullName, userEmail: s.userEmail, status: s.status, lastSeenAt: s.lastSeenAt })),

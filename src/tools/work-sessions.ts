@@ -161,8 +161,12 @@ interface StartChecklist {
 
 interface StartDependencyEdge {
   ticketKey: string | null;
-  title: string;
+  // ORB-1614 - null on an opaque cross-project stub the caller cannot
+  // read (see `external`/`resolved`).
+  title: string | null;
   statusName: string | null;
+  external?: boolean;
+  resolved?: boolean;
 }
 
 interface StartBundleResponse {
@@ -295,8 +299,11 @@ export function makeWorkStartHandler(client: OrbotoClient) {
         }
       }
 
+      // ORB-1614 - a cross-project blocker/dependent the caller cannot read
+      // comes back with `title: null` - render a fixed placeholder instead
+      // of the literal "null".
       const fmtDeps = (edges: StartDependencyEdge[]) =>
-        edges.length === 0 ? '(none)' : edges.map((e) => `- [${e.ticketKey ?? '?'}] ${e.title}${e.statusName ? ` - ${e.statusName}` : ''}`).join('\n');
+        edges.length === 0 ? '(none)' : edges.map((e) => `- [${e.ticketKey ?? '?'}] ${e.title ?? `External dependency (access restricted)${e.resolved ? ' - resolved' : ' - still open'}`}${e.statusName ? ` - ${e.statusName}` : ''}`).join('\n');
       lines.push('', '## Dependencies');
       lines.push('Blocked by:', fmtDeps(res.dependencies.blockedBy), 'Blocks:', fmtDeps(res.dependencies.blocks));
 
@@ -763,8 +770,9 @@ export function makeWorkNextHandler(client: OrbotoClient) {
       }
     }
 
+    // ORB-1614 - see the comment on the other fmtDeps above.
     const fmtDeps = (edges: StartDependencyEdge[]) =>
-      edges.length === 0 ? '(none)' : edges.map((e) => `- [${e.ticketKey ?? '?'}] ${e.title}${e.statusName ? ` - ${e.statusName}` : ''}`).join('\n');
+      edges.length === 0 ? '(none)' : edges.map((e) => `- [${e.ticketKey ?? '?'}] ${e.title ?? `External dependency (access restricted)${e.resolved ? ' - resolved' : ' - still open'}`}${e.statusName ? ` - ${e.statusName}` : ''}`).join('\n');
     lines.push('', '## Dependencies');
     lines.push('Blocked by:', fmtDeps(r.dependencies.blockedBy), 'Blocks:', fmtDeps(r.dependencies.blocks));
 

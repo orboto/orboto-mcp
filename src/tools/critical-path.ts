@@ -16,6 +16,13 @@ interface CpTicket {
   isCritical: boolean;
   deadlineCritical?: boolean;
   bindingConstraint?: 'project_end' | 'successors' | 'due_date';
+  // ORB-1614 - true when this node was pulled in from another project as a
+  // one-hop cross-project dependency neighbour of something in this
+  // project's window. Only ever present for a ticket the caller can
+  // already read - an unreadable foreign blocker is dropped from the
+  // graph entirely, not shown at all.
+  external?: boolean;
+  externalProjectId?: string | null;
 }
 interface CpDeadlineRisk {
   ticketKey: string | null;
@@ -34,7 +41,7 @@ interface CpResult {
 export const criticalPathToolConfig = {
   title: 'Critical path (CPM)',
   description:
-    "Compute a project's (or one milestone's) critical path via the Critical Path Method: the longest finish-to-start dependency chain that sets the delivery date, plus each ticket's slack (total float, in working days). Durations come from `estimatedTimeMinutes` (8h/day, floored at 1 day). Deadline-aware (ORB-1459): a ticket's due date (or its milestone's, when tighter) seeds the backward pass, so total float can go NEGATIVE when a chain cannot meet its deadline - those tickets are reported under `deadlineRisks` with the shortfall in working days. Returns the critical path (ticket keys in order), the total working-day duration, per-ticket float, and the deadline risks. A dependency cycle returns the tangled ticket keys instead of a path. By default tickets in completed/archived milestones are excluded (matching the board); set includeClosedMilestones to include them.",
+    "Compute a project's (or one milestone's) critical path via the Critical Path Method: the longest finish-to-start dependency chain that sets the delivery date, plus each ticket's slack (total float, in working days). Durations come from `estimatedTimeMinutes` (8h/day, floored at 1 day). Deadline-aware (ORB-1459): a ticket's due date (or its milestone's, when tighter) seeds the backward pass, so total float can go NEGATIVE when a chain cannot meet its deadline - those tickets are reported under `deadlineRisks` with the shortfall in working days. ORB-1614: a dependency edge to a ticket in ANOTHER project is followed one hop (that ticket's own further cross-project blockers are not) when you can read it, and marked `external: true` in the result - an edge to a foreign ticket you cannot read is silently absent from the graph, same as any other out-of-window ticket. Returns the critical path (ticket keys in order), the total working-day duration, per-ticket float, and the deadline risks. A dependency cycle (including one spanning projects) returns the tangled ticket keys instead of a path. By default tickets in completed/archived milestones are excluded (matching the board); set includeClosedMilestones to include them.",
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
     milestone: z.string().optional().describe('Milestone name to scope to. Omit for the whole project.'),
@@ -65,11 +72,13 @@ export function makeCriticalPathHandler(client: OrbotoClient) {
       };
     }
 
-    const path = res.criticalPath.length ? res.criticalPath.join(' -> ') : '(none)';
+    // ORB-1614 - flag cross-project neighbours pulled into the graph so the
+    // reader knows a key like "OVB-55" is not a typo for this project.
+    const externalKeys = new Set(res.tickets.filter((t) => t.external).map((t) => t.ticketKey));
     const slack = res.tickets
       .filter((t) => !t.isCritical && t.totalFloat > 0)
       .sort((a, b) => a.totalFloat - b.totalFloat)
-      .map((t) => `  ${t.ticketKey}: ${t.totalFloat}d slack`)
+      .map((t) => `  ${t.ticketKey}${t.external ? ' [external]' : ''}: ${t.totalFloat}d slack`)
       .join('\n');
     // ORB-1459 - surface tickets whose deadline can't be met (negative float).
     const risks = (res.deadlineRisks ?? [])
@@ -80,8 +89,11 @@ export function makeCriticalPathHandler(client: OrbotoClient) {
         return `  ${r.ticketKey}: ${r.shortfallDays}d short${via}`;
       })
       .join('\n');
+    const pathDisplay = res.criticalPath.length
+      ? res.criticalPath.map((k) => (externalKeys.has(k) ? `${k} [external]` : k)).join(' -> ')
+      : '(none)';
     const text =
-      `Critical path (${res.projectDurationDays} working day${res.projectDurationDays === 1 ? '' : 's'}): ${path}` +
+      `Critical path (${res.projectDurationDays} working day${res.projectDurationDays === 1 ? '' : 's'}): ${pathDisplay}` +
       (slack ? `\nSlack on non-critical tickets:\n${slack}` : '\nAll in-scope tickets are on the critical path.') +
       (risks ? `\nDEADLINE RISKS (negative float - cannot meet the deadline):\n${risks}` : '');
 
@@ -97,6 +109,8 @@ export function makeCriticalPathHandler(client: OrbotoClient) {
           bindingConstraint: t.bindingConstraint ?? 'project_end',
           totalFloat: t.totalFloat,
           durationDays: t.durationDays,
+          external: t.external ?? false,
+          externalProjectId: t.externalProjectId ?? null,
         })),
         deadlineRisks: res.deadlineRisks ?? [],
         cycle: null,

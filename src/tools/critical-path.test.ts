@@ -81,6 +81,34 @@ describe('orboto_critical_path (ORB-1028)', () => {
     expect(sc.deadlineRisks[0]).toMatchObject({ ticketKey: 'ACME-1', shortfallDays: 2 });
   });
 
+  // ORB-1614 - a 1-hop cross-project neighbour is marked external:true by
+  // the API; the tool should flag it in both the text (so "OVB-55" isn't
+  // mistaken for a typo of this project's key) and the structured output.
+  it('flags a cross-project neighbour with [external] in text and structured output', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: {
+        tickets: [
+          { ticketKey: 'ACME-1', title: 'A', durationDays: 1, totalFloat: 0, isCritical: true, external: false },
+          { ticketKey: 'OVB-6', title: 'Foreign blocker', durationDays: 2, totalFloat: 0, isCritical: true, external: true, externalProjectId: 'p2' },
+        ],
+        criticalPath: ['OVB-6', 'ACME-1'],
+        dependencies: [{ ticketId: 'ACME-1', dependsOnId: 'OVB-6' }],
+        projectDurationDays: 3,
+        cycle: null,
+      } },
+    ]);
+    const res = await makeCriticalPathHandler(client)({ projectKey: 'ACME' });
+    expect(calls[1]).toContain('/projects/p1/critical-path');
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('OVB-6 [external]');
+    const sc = res.structuredContent as { tickets: Array<{ ticketKey: string; external: boolean; externalProjectId: string | null }> };
+    const foreign = sc.tickets.find((t) => t.ticketKey === 'OVB-6');
+    expect(foreign).toMatchObject({ external: true, externalProjectId: 'p2' });
+    const local = sc.tickets.find((t) => t.ticketKey === 'ACME-1');
+    expect(local).toMatchObject({ external: false, externalProjectId: null });
+  });
+
   it('surfaces a dependency cycle', async () => {
     stub([
       { json: PROJ },

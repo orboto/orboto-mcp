@@ -805,19 +805,25 @@ export function makeSetMilestoneHandler(client: OrbotoClient) {
 interface DependencyEdge {
   id: string;
   ticketKey: string | null;
-  title: string;
-  projectId: string;
+  title: string | null;
+  projectId: string | null;
   statusName: string | null;
   statusCategory: string | null;
+  // ORB-1614 - true when this ticket lives in another project than the one
+  // whose dependencies were requested. When the caller cannot read it,
+  // every field above except `id` and `resolved` comes back null - an
+  // opaque "external dependency" stub, never a leaked title/key/status.
+  external?: boolean;
+  resolved?: boolean;
 }
 
 export const addTicketDependencyToolConfig = {
   title: 'Add a ticket dependency',
   description:
-    'Mark `ticketKey` as depending on `dependsOnKey` - i.e. `dependsOnKey` blocks `ticketKey`. Both tickets must live in the same project; cycles + self-dependencies are rejected by the API.',
+    'Mark `ticketKey` as depending on `dependsOnKey` - i.e. `dependsOnKey` blocks `ticketKey`. ORB-1614: the two tickets may live in DIFFERENT projects, as long as you can read both - the API 403s with a forbidden error otherwise. Self-dependencies and cycles (including cycles that span projects) are rejected.',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('The dependent ticket (the one being blocked).'),
-    dependsOnKey: z.string().min(3).describe('The ticket that must complete first (the blocker).'),
+    dependsOnKey: z.string().min(3).describe('The ticket that must complete first (the blocker) - may be in a different project.'),
   }).shape,
 };
 
@@ -900,11 +906,21 @@ export function makeRemoveTicketDependencyHandler(client: OrbotoClient) {
 export const listTicketDependenciesToolConfig = {
   title: 'List a ticket\'s dependencies',
   description:
-    'Show both directions of the dependency graph for a ticket: `blockedBy` (tickets that must finish first) and `blocks` (tickets waiting on this one).',
+    'Show both directions of the dependency graph for a ticket: `blockedBy` (tickets that must finish first) and `blocks` (tickets waiting on this one). ORB-1614: an edge to a ticket in another project you cannot read comes back as an opaque "external dependency" entry (no title/key/status - just whether it is still open).',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
   }).shape,
 };
+
+/** ORB-1614 - a stubbed cross-project entry has `title: null`; render a
+ *  fixed, non-identifying placeholder instead of the literal "null". */
+function fmtDependencyEntry(e: DependencyEdge): string {
+  const key = e.ticketKey ?? e.id.slice(0, 8);
+  if (e.title == null) {
+    return `- [${key}] External dependency (access restricted)${e.resolved ? ' - resolved' : ' - still open'}`;
+  }
+  return `- [${key}] ${e.title}${e.statusName ? ` - ${e.statusName}` : ''}`;
+}
 
 export function makeListTicketDependenciesHandler(client: OrbotoClient) {
   return async ({ ticketKey }: { ticketKey: string }): Promise<CallToolResult> => {
@@ -913,9 +929,7 @@ export function makeListTicketDependenciesHandler(client: OrbotoClient) {
       `/projects/${ticket.projectId}/tickets/${ticket.id}/dependencies`,
     );
     const fmt = (edges: DependencyEdge[]) =>
-      edges.length === 0
-        ? '_(none)_'
-        : edges.map((e) => `- [${e.ticketKey ?? e.id.slice(0, 8)}] ${e.title}${e.statusName ? ` - ${e.statusName}` : ''}`).join('\n');
+      edges.length === 0 ? '_(none)_' : edges.map(fmtDependencyEntry).join('\n');
     const lines = [
       `# Dependencies for [${ticket.ticketKey}]`,
       '',
@@ -929,8 +943,8 @@ export function makeListTicketDependenciesHandler(client: OrbotoClient) {
       content: [{ type: 'text', text: lines.join('\n') }],
       structuredContent: {
         ticketKey: ticket.ticketKey,
-        blockedBy: data.blockedBy.map((e) => ({ ticketKey: e.ticketKey, title: e.title, statusName: e.statusName })),
-        blocks: data.blocks.map((e) => ({ ticketKey: e.ticketKey, title: e.title, statusName: e.statusName })),
+        blockedBy: data.blockedBy.map((e) => ({ ticketKey: e.ticketKey, title: e.title, statusName: e.statusName, external: e.external, resolved: e.resolved })),
+        blocks: data.blocks.map((e) => ({ ticketKey: e.ticketKey, title: e.title, statusName: e.statusName, external: e.external, resolved: e.resolved })),
       },
     };
   };

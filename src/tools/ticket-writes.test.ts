@@ -623,7 +623,7 @@ describe('orboto_add_ticket_dependency / remove / list — ORB-453', () => {
     stub([
       { json: PROJ }, { json: TICKET },
       { json: {
-        blockedBy: [{ id: 't2', ticketKey: 'ACME-2', title: 'Other', projectId: 'p1', statusName: 'In Progress', statusCategory: 'in_progress' }],
+        blockedBy: [{ id: 't2', ticketKey: 'ACME-2', title: 'Other', projectId: 'p1', statusName: 'In Progress', statusCategory: 'in_progress', external: false, resolved: false }],
         blocks: [],
       } },
     ]);
@@ -633,6 +633,29 @@ describe('orboto_add_ticket_dependency / remove / list — ORB-453', () => {
     expect(text).toContain('[ACME-2] Other');
     expect(text).toContain('Blocks');
     expect(text).toContain('_(none)_');
+  });
+
+  // ORB-1614 - a cross-project blocker the caller cannot read comes back
+  // as an opaque stub (title/ticketKey/projectId/status all null). The
+  // rendered text must never print the literal "null" and must not need
+  // any of those fields to say something useful.
+  it('list renders an opaque placeholder for an unreadable cross-project stub, never "null"', async () => {
+    stub([
+      { json: PROJ }, { json: TICKET },
+      { json: {
+        blockedBy: [{
+          id: 'foreign-1', ticketKey: null, title: null, projectId: null,
+          statusId: null, statusName: null, statusColor: null, statusCategory: null,
+          external: true, resolved: false,
+        }],
+        blocks: [],
+      } },
+    ]);
+    const res = await makeListTicketDependenciesHandler(client)({ ticketKey: 'ACME-1' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).not.toContain('null');
+    expect(text).toContain('External dependency (access restricted)');
+    expect(text).toContain('still open');
   });
 });
 
