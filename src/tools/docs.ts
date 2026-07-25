@@ -596,7 +596,7 @@ interface SmartLinkResolution {
   ticketKey?: string | null;
   commitShort?: string | null;
   commitAuthor?: string | null;
-  commitProvider?: 'github' | 'gitlab' | 'azure_devops' | 'bitbucket_cloud' | 'bitbucket_server' | 'gitea' | 'ssh' | null;
+  commitProvider?: 'github' | 'gitlab' | 'azure_devops' | 'bitbucket_cloud' | 'bitbucket_server' | 'gitea' | 'forgejo' | 'ssh' | null;
 }
 
 export const resolveDocSmartLinksToolConfig = {
