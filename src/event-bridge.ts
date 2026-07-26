@@ -1,5 +1,5 @@
 /**
- * ORB-940 — bridge that streams API-side events into MCP
+ * ORB-940 - bridge that streams API-side events into MCP
  * `notifications/resources/updated` pushes.
  *
  * One bridge instance per MCP session. On `start()` it opens an SSE
@@ -22,7 +22,7 @@ const HEARTBEAT_GRACE_MS = 90_000; // 3× the server's 30s ping
 const OVERFLOW_THRESHOLD = 100;
 const RECONNECT_DELAY_MS = 2_000;
 
-/** Raw event shape from the API SSE — mirrors `WSEvent` minus the
+/** Raw event shape from the API SSE - mirrors `WSEvent` minus the
  *  discriminated-union sharpness because we cross a JSON boundary. */
 interface BridgeEvent {
   type: string;
@@ -72,7 +72,7 @@ export function eventToUris(event: BridgeEvent): string[] {
     // to projectId, which the resource handler accepts via
     // resolveProjectByKey's lookup path.
     if (event.projectId) uris.push(`orboto://project/${event.projectId}`);
-    // ORB-962 — hand-off "wake on close". When a ticket:updated
+    // ORB-962 - hand-off "wake on close". When a ticket:updated
     // payload's statusCategory is `done`, emit an additional URI
     // dedicated to close-events so subscribers don't have to filter
     // every ticket:updated client-side.
@@ -86,6 +86,24 @@ export function eventToUris(event: BridgeEvent): string[] {
     return event.projectId ? [`orboto://project/${event.projectId}`] : [];
   }
 
+  // ORB-1616 - dispatcher wake-on-unblock. Project-scoped (not per-ticket
+  // like `handoff/closed`) because a worker pool doesn't know in advance
+  // which ticket will become ready next - it subscribes to the PROJECT's
+  // ready channel and pulls via `orboto_work_next` on push. The
+  // notification carries no payload (the resource-subscription protocol
+  // never does) - `ticket.ready` is the webhook channel that carries the
+  // actual ticket key for external consumers.
+  if (event.type === 'ticket:ready') {
+    return event.projectId ? [`orboto://ready/${event.projectId}`] : [];
+  }
+
+  // ORB-1616 - escalation push: collision / failed checks / review
+  // rejection / missing decision / git failure. Project-scoped, same
+  // reasoning as `ready` above.
+  if (event.type === 'agent_escalation:raised') {
+    return event.projectId ? [`orboto://escalation/${event.projectId}`] : [];
+  }
+
   if (event.type === 'doc:updated') {
     return event.docId ? [`orboto://doc/${event.docId}`] : [];
   }
@@ -94,7 +112,7 @@ export function eventToUris(event: BridgeEvent): string[] {
     return [`orboto://timer`];
   }
 
-  // ORB-964 — agent broadcast. Map to the scope-specific URI so
+  // ORB-964 - agent broadcast. Map to the scope-specific URI so
   // subscribers can register interest in just the scope they care
   // about. For workspace scope, scopeId is the empty string.
   if (event.type === 'agent_broadcast:posted') {
@@ -106,13 +124,13 @@ export function eventToUris(event: BridgeEvent): string[] {
     return [];
   }
 
-  // ORB-970 — quorum lifecycle.
+  // ORB-970 - quorum lifecycle.
   if (event.type === 'agent_quorum:opened' || event.type === 'agent_quorum:approved') {
     const p = (event as { payload?: { topicKey?: string } }).payload;
     return p?.topicKey ? [`orboto://quorum/${p.topicKey}`] : [];
   }
 
-  // ORB-706 — mention real-time push. Every notification row firing
+  // ORB-706 - mention real-time push. Every notification row firing
   // for the calling user surfaces on `orboto://user/me/notifications`.
   // The API-side SSE bridge already filters notification:new events
   // to only deliver them to the matching user's session, so this
@@ -123,7 +141,7 @@ export function eventToUris(event: BridgeEvent): string[] {
 
   // restore:progress / system-task:* are user-scoped infrastructure
   // events that don't map to a public resource URI today. The MCP
-  // bridge ignores them — the user gets them via the in-app UI.
+  // bridge ignores them - the user gets them via the in-app UI.
   return [];
 }
 
@@ -160,7 +178,7 @@ export class EventBridge {
       } catch (err) {
         if (this.closed) return;
         const reason = err instanceof Error ? err.message : String(err);
-        this.log(`stream closed: ${reason} — retrying in ${RECONNECT_DELAY_MS}ms`);
+        this.log(`stream closed: ${reason} - retrying in ${RECONNECT_DELAY_MS}ms`);
       }
       if (this.closed) return;
       await new Promise<void>((resolve) => {
