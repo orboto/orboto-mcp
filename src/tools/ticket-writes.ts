@@ -286,11 +286,15 @@ function withSummaryWarning(
   };
 }
 
-// ORB-1608 - non-blocking advisory on a status move into `done` when the
-// ticket's deliveryMode expects a linked commit (implementation / docs)
-// but zero git_activities rows are attached. The move always succeeds.
+// ORB-1608 / ORB-1642 - non-blocking advisory on a status move into `done`
+// when the ticket's deliveryMode expects a linked commit (implementation /
+// docs) but zero git_activities rows are attached. The move always
+// succeeds. `git_delivery_failing` (ORB-1642) fires instead of
+// `no_commit_linked` when the project has a git connection but it looks
+// unhealthy - a commit may already exist and just hasn't arrived. Omitted
+// entirely when the project has no git connection at all.
 interface DeliveryModeWarning {
-  code: 'no_commit_linked';
+  code: 'no_commit_linked' | 'git_delivery_failing';
   message: string;
 }
 
@@ -442,7 +446,7 @@ export function makeUpdateTicketHandler(client: OrbotoClient) {
 export const moveTicketToolConfig = {
   title: 'Move a ticket between status categories',
   description:
-    'Move a ticket to a new status category - todo / in_progress / in_review / done / wont_fix. The API picks the project\'s first status with that category. Caller must have `ticket:change_status`. **Summary warning (ORB-1332):** moving to `in_review` or `done` without having just posted a summary comment returns a non-blocking `summaryWarning` - the move still succeeds, but you should post what changed, the commit SHA, and how to verify. Use `orboto_close_ticket` with a `comment` (or comment first, then move) to avoid it. **Delivery-mode warning (ORB-1608):** moving to `done` on an `implementation`/`docs` ticket with zero linked commits returns a non-blocking `deliveryModeWarning` - link a commit, or change deliveryMode via `orboto_update_ticket` if the work genuinely is not commit-shaped.',
+    'Move a ticket to a new status category - todo / in_progress / in_review / done / wont_fix. The API picks the project\'s first status with that category. Caller must have `ticket:change_status`. **Summary warning (ORB-1332):** moving to `in_review` or `done` without having just posted a summary comment returns a non-blocking `summaryWarning` - the move still succeeds, but you should post what changed, the commit SHA, and how to verify. Use `orboto_close_ticket` with a `comment` (or comment first, then move) to avoid it. **Delivery-mode warning (ORB-1608/1642):** moving to `done` on an `implementation`/`docs` ticket with zero linked commits returns a non-blocking `deliveryModeWarning` - UNLESS the project has no git connection at all, in which case it\'s omitted (a link isn\'t possible there). Code `no_commit_linked` means the connection looks healthy - link a commit, or change deliveryMode via `orboto_update_ticket` if the work genuinely is not commit-shaped. Code `git_delivery_failing` means the connection itself looks unhealthy - a commit may already exist and just hasn\'t arrived; check the connection before assuming none was made.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     statusCategory: z.enum(STATUS_CATEGORIES),
@@ -472,7 +476,7 @@ export function makeMoveTicketHandler(client: OrbotoClient) {
 export const closeTicketToolConfig = {
   title: 'Close a ticket',
   description:
-    'Move a ticket to `done` and optionally post a closing comment in one call. Convenience wrapper around `orboto_move_ticket` + `orboto_comment` so the model doesn\'t need to chain two writes. Passing a `comment` is the recommended way to close - it doubles as the transition summary and suppresses the ORB-1332 `summaryWarning`. Closing with no comment (and none posted in the last few minutes) returns a non-blocking `summaryWarning`; the close still succeeds. **Delivery-mode warning (ORB-1608):** on an `implementation`/`docs` ticket, closing with zero linked commits returns a non-blocking `deliveryModeWarning` too - link a commit, or change deliveryMode via `orboto_update_ticket` if the work is not commit-shaped.',
+    'Move a ticket to `done` and optionally post a closing comment in one call. Convenience wrapper around `orboto_move_ticket` + `orboto_comment` so the model doesn\'t need to chain two writes. Passing a `comment` is the recommended way to close - it doubles as the transition summary and suppresses the ORB-1332 `summaryWarning`. Closing with no comment (and none posted in the last few minutes) returns a non-blocking `summaryWarning`; the close still succeeds. **Delivery-mode warning (ORB-1608/1642):** on an `implementation`/`docs` ticket, closing with zero linked commits returns a non-blocking `deliveryModeWarning` too - UNLESS the project has no git connection at all, in which case it\'s omitted. `no_commit_linked` = healthy connection, link a commit or change deliveryMode via `orboto_update_ticket`. `git_delivery_failing` = the connection itself looks unhealthy - check it before assuming no commit was made.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     comment: z.string().min(1).optional().describe('Optional closing comment posted before the move. Doubles as the transition summary (what changed, commit SHA, how to verify).'),

@@ -50,7 +50,7 @@ export const sessionStartToolConfig = {
 interface Me { email?: string; fullName?: string; locale?: string; workspaceLocale?: string }
 interface Ticket { ticketKey: string; title: string; status?: string; statusName?: string; projectId?: string }
 interface Timer { ticketId?: string | null; ticketKey?: string; startedAt?: string }
-// ORB-1605 — mirrors GitConnectionHealthSchema in @orboto/shared-schema.
+// ORB-1605 / ORB-1638 — mirrors GitConnectionHealthSchema in @orboto/shared-schema.
 interface GitConnectionHealth {
   connectionId: string;
   name: string;
@@ -59,6 +59,10 @@ interface GitConnectionHealth {
   healthy: boolean;
   lastEventAt: string | null;
   reason: string | null;
+  outboundReachable: boolean | null;
+  inboundDelivering: boolean | null;
+  deliveryError: string | null;
+  lastProbeAt: string | null;
 }
 // ORB-1607 — mirrors the GET /agent-instructions response shape.
 interface RulesResponse {
@@ -109,6 +113,10 @@ const GIT_HEALTH_REASON_TEXT: Record<string, string> = {
   app_installation_suspended: 'GitHub App installation is suspended',
   oauth_token_expired: 'OAuth token expired with no refresh path',
   history_backfill_error: 'last history backfill failed',
+  // ORB-1638
+  awaiting_first_event: 'webhook installed but has never delivered an event',
+  outbound_unreachable: 'orboto cannot reach the provider',
+  delivery_failing: 'provider reports its last delivery to orboto failed',
 };
 
 // Cap how many distinct projects we probe for git health — a session's
