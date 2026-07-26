@@ -200,6 +200,11 @@ import {
   approvalDecideToolConfig, makeApprovalDecideHandler,
 } from './tools/approvals.js';
 import {
+  reviewFingerprintToolConfig, makeReviewFingerprintHandler,
+  reviewPolicyCheckToolConfig, makeReviewPolicyCheckHandler,
+  reviewApprovalRecordToolConfig, makeReviewApprovalRecordHandler,
+} from './tools/review-policy.js';
+import {
   createMilestoneToolConfig, makeCreateMilestoneHandler,
   closeMilestoneToolConfig, makeCloseMilestoneHandler,
   updateMilestoneToolConfig, makeUpdateMilestoneHandler,
@@ -581,6 +586,12 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   // ORB-1223 - approval / sign-off gates.
   reg('orboto_list_approvals', listApprovalsToolConfig, makeListApprovalsHandler(client));
   reg('orboto_approval_decide', approvalDecideToolConfig, makeApprovalDecideHandler(client));
+  // ORB-1615 - structural review policy: fingerprint, consult-before-invoking
+  // policy check, and recording a review decision. Rule CONFIGURATION stays
+  // out of MCP (project-settings admin, same as approval-policy CRUD above).
+  reg('orboto_review_fingerprint', reviewFingerprintToolConfig, makeReviewFingerprintHandler(client));
+  reg('orboto_review_policy_check', reviewPolicyCheckToolConfig, makeReviewPolicyCheckHandler(client));
+  reg('orboto_review_approval_record', reviewApprovalRecordToolConfig, makeReviewApprovalRecordHandler(client));
   reg('orboto_create_milestone', createMilestoneToolConfig, makeCreateMilestoneHandler(client));
   reg('orboto_close_milestone', closeMilestoneToolConfig, makeCloseMilestoneHandler(client));
   reg('orboto_update_milestone', updateMilestoneToolConfig, makeUpdateMilestoneHandler(client));
