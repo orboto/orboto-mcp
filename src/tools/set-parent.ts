@@ -32,6 +32,7 @@ export const setParentToolConfig = {
     ticketKey: z.string().min(3),
     parentTicketKey: z.string().nullable().describe('New parent ticket key (e.g. "ACME-10"), or null to detach.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeSetParentHandler(client: OrbotoClient) {

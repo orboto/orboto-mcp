@@ -62,6 +62,7 @@ export const exportDocPdfToolConfig = {
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
   }).shape,
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeExportDocPdfHandler(client: OrbotoClient) {

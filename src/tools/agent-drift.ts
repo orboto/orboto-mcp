@@ -106,6 +106,7 @@ export const resolveAgentDriftToolConfig = {
   inputSchema: z.object({
     id: z.string().uuid().describe('UUID of the drift event to resolve.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeResolveAgentDriftHandler(client: OrbotoClient) {

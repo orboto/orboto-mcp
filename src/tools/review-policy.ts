@@ -62,6 +62,7 @@ export const reviewFingerprintToolConfig = {
   inputSchema: z.object({
     diff: z.string().min(1).describe('Raw unified diff text, e.g. the output of `git diff` / `git diff --no-color`.'),
   }).shape,
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeReviewFingerprintHandler(client: OrbotoClient) {
@@ -91,6 +92,7 @@ export const reviewPolicyCheckToolConfig = {
     paths: z.array(z.string()).max(500).optional().describe('Changed file paths (from orboto_review_fingerprint) - refines the match against path-scoped rules.'),
     linesChanged: z.number().int().nonnegative().optional().describe('Total changed lines (linesAdded + linesRemoved) - refines the match against size-scoped rules.'),
   }).shape,
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeReviewPolicyCheckHandler(client: OrbotoClient) {
@@ -119,7 +121,7 @@ export function makeReviewPolicyCheckHandler(client: OrbotoClient) {
 // ---------------------------------------------------------------------------
 
 export const reviewApprovalRecordToolConfig = {
-  title: 'Record a review approve/reject decision against a diff fingerprint',
+  title: 'Record a review decision against a diff fingerprint',
   description:
     'Record your review verdict (approve/reject) against a ticket\'s diff fingerprint (from orboto_review_fingerprint). A recorded APPROVAL is reusable: orboto_review_policy_check reports it as valid for the SAME fingerprint, letting a later finish/close skip re-review - until the diff changes, which produces a different fingerprint and naturally stops matching. Requires ticket:record_review_approval.',
   inputSchema: z.object({
@@ -132,6 +134,7 @@ export const reviewApprovalRecordToolConfig = {
     linesRemoved: z.number().int().nonnegative().optional(),
     paths: z.array(z.string()).max(500).optional(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeReviewApprovalRecordHandler(client: OrbotoClient) {

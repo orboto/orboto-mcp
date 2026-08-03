@@ -117,7 +117,7 @@ export const createAgentInstructionToolConfig = {
     allowOversize: z.boolean().optional().describe('Override the hard size-cap block (400*2 chars). Only after a call was blocked.'),
     oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true - why this body genuinely needs the length. Audit-logged.'),
   }).shape,
-  annotations: {},
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeCreateAgentInstructionHandler(client: OrbotoClient) {
@@ -153,7 +153,7 @@ export const updateAgentInstructionToolConfig = {
     allowOversize: z.boolean().optional().describe('Override the hard size-cap block (400*2 chars). Only after a call was blocked.'),
     oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true - why this body genuinely needs the length. Audit-logged.'),
   }).shape,
-  annotations: { idempotentHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeUpdateAgentInstructionHandler(client: OrbotoClient) {
@@ -180,7 +180,7 @@ export const resetAgentInstructionToolConfig = {
   description:
     'Restore a seeded DEFAULT rule block (one with a builtinKey) to the text orboto ships. No-op for custom blocks. Needs admin:ai:write.',
   inputSchema: z.object({ id: z.string().uuid() }).shape,
-  annotations: { idempotentHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeResetAgentInstructionHandler(client: OrbotoClient) {
@@ -195,7 +195,7 @@ export const deleteAgentInstructionToolConfig = {
   description:
     'Delete a CUSTOM rule block. Default (builtin) blocks cannot be deleted — disable them via update instead. Needs admin:ai:write.',
   inputSchema: z.object({ id: z.string().uuid() }).shape,
-  annotations: { destructiveHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeDeleteAgentInstructionHandler(client: OrbotoClient) {

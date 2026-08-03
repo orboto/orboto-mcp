@@ -99,6 +99,7 @@ export const addCrossProjectLinkToolConfig = {
     relationType: z.enum(RELATION_TYPES),
     statusSyncEnabled: z.boolean().optional().default(false),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeAddCrossProjectLinkHandler(client: OrbotoClient) {
@@ -132,6 +133,7 @@ export const updateCrossProjectLinkToolConfig = {
     linkId: z.string().uuid(),
     statusSyncEnabled: z.boolean(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeUpdateCrossProjectLinkHandler(client: OrbotoClient) {
@@ -164,6 +166,7 @@ export const removeCrossProjectLinkToolConfig = {
     sourceTicketKey: z.string().min(3),
     linkId: z.string().uuid(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeRemoveCrossProjectLinkHandler(client: OrbotoClient) {

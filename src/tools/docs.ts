@@ -201,6 +201,7 @@ export const createDocSpaceToolConfig = {
     icon: z.string().nullish().describe('Single emoji (e.g. "📘") used in the sidebar tree.'),
     slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional().describe('URL slug. Auto-derived from name when omitted.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeCreateDocSpaceHandler(client: OrbotoClient) {
@@ -260,6 +261,7 @@ export const updateDocSpaceToolConfig = {
     memberIds: z.array(z.string().uuid()).optional().describe('Replaces the restricted-space allowlist. Requires manage rights.'),
     slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeUpdateDocSpaceHandler(client: OrbotoClient) {
@@ -309,7 +311,7 @@ export const deleteDocSpaceToolConfig = {
   inputSchema: z.object({
     spaceId: z.string().uuid(),
   }).shape,
-  annotations: { destructiveHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeDeleteDocSpaceHandler(client: OrbotoClient) {
@@ -405,6 +407,7 @@ export const createDocToolConfig = {
     visibility: z.enum(['public', 'workspace', 'members', 'specific']).optional().describe('Defaults to "workspace".'),
     icon: z.string().nullish().describe('Single emoji shown in the tree.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeCreateDocHandler(client: OrbotoClient) {
@@ -450,6 +453,7 @@ export const updateDocToolConfig = {
     visibility: z.enum(['public', 'workspace', 'members', 'specific']).optional(),
     icon: z.string().nullish(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeUpdateDocHandler(client: OrbotoClient) {
@@ -494,7 +498,7 @@ export const deleteDocToolConfig = {
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
   }).shape,
-  annotations: { destructiveHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeDeleteDocHandler(client: OrbotoClient) {
@@ -522,6 +526,7 @@ export const moveDocToolConfig = {
     spaceId: z.string().uuid().optional().describe('Move into a different space. Caller must be member of both.'),
     sortOrder: z.number().int().optional(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeMoveDocHandler(client: OrbotoClient) {
@@ -560,6 +565,7 @@ export const duplicateDocSpaceToolConfig = {
   inputSchema: z.object({
     spaceId: z.string().uuid().describe('Source space to duplicate.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeDuplicateDocSpaceHandler(client: OrbotoClient) {

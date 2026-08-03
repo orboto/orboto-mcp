@@ -85,6 +85,7 @@ export const uploadDocAttachmentToolConfig = {
     altText: z.string().optional().describe('Alt-text for the Markdown image line. Defaults to filename.'),
     embed: z.boolean().optional().describe('If true, PATCHes the doc body to append the Markdown line. Idempotent up to duplicate detection — re-running appends another copy.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeUploadDocAttachmentHandler(client: OrbotoClient) {
@@ -205,7 +206,7 @@ export const deleteDocAttachmentToolConfig = {
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     attachmentId: z.string().uuid(),
   }).shape,
-  annotations: { destructiveHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeDeleteDocAttachmentHandler(client: OrbotoClient) {

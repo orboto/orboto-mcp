@@ -52,6 +52,7 @@ export const listTicketSchedulesToolConfig = {
     ticketKey: z.string().min(3),
     includeCancelled: z.boolean().optional().describe('Include cancelled sessions (default: active only).'),
   }).shape,
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeListTicketSchedulesHandler(client: OrbotoClient) {
@@ -89,6 +90,7 @@ export const scheduleTicketSessionToolConfig = {
     attendeeUserIds: z.array(z.string().uuid()).optional().describe('orboto attendee user UUIDs.'),
     externalEmails: z.array(z.string().email()).optional().describe('External (non-orboto) guest emails.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeScheduleTicketSessionHandler(client: OrbotoClient) {
@@ -130,7 +132,7 @@ export const cancelTicketSessionToolConfig = {
     ticketKey: z.string().min(3),
     scheduleId: z.string().uuid(),
   }).shape,
-  annotations: { destructiveHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeCancelTicketSessionHandler(client: OrbotoClient) {

@@ -59,6 +59,7 @@ export const updatePublicHolidayToolConfig = {
     regionCode: z.string().max(10).nullable().optional(),
     isRecurring: z.boolean().optional(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeUpdatePublicHolidayHandler(client: OrbotoClient) {
@@ -94,6 +95,7 @@ export const updateCompanyClosureToolConfig = {
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD'),
     note: z.string().nullish(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeUpdateCompanyClosureHandler(client: OrbotoClient) {
@@ -128,6 +130,7 @@ export const updateAbsenceToolConfig = {
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD'),
     note: z.string().nullish(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeUpdateAbsenceHandler(client: OrbotoClient) {

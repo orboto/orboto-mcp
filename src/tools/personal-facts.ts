@@ -39,7 +39,7 @@ export const personalFactAddToolConfig = {
     key: z.string().min(1).max(100).describe('Short machine-readable key, e.g. "tone".'),
     value: z.string().min(1).max(4000),
   }).shape,
-  annotations: { readOnlyHint: false, idempotentHint: false },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 export function makePersonalFactAddHandler(client: OrbotoClient) {
   return async (input: { category: string; key: string; value: string }): Promise<CallToolResult> => {
@@ -57,7 +57,7 @@ export const personalFactUpdateToolConfig = {
     key: z.string().min(1).max(100).optional(),
     value: z.string().min(1).max(4000).optional(),
   }).shape,
-  annotations: { readOnlyHint: false, idempotentHint: false },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 export function makePersonalFactUpdateHandler(client: OrbotoClient) {
   return async (input: { id: string; category?: string; key?: string; value?: string }): Promise<CallToolResult> => {
@@ -71,7 +71,7 @@ export const personalFactDeleteToolConfig = {
   title: 'Delete a personal AI preference',
   description: 'Delete one of the calling user\'s personal primer facts. Owner-scoped. Wraps DELETE /users/me/primer-facts/:id.',
   inputSchema: z.object({ id: z.string().uuid() }).shape,
-  annotations: { readOnlyHint: false, idempotentHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 export function makePersonalFactDeleteHandler(client: OrbotoClient) {
   return async (input: { id: string }): Promise<CallToolResult> => {

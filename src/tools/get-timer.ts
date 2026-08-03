@@ -33,7 +33,7 @@ export const getTimerToolConfig = {
   description:
     'Return the caller\'s currently-running stopwatch (or null if no timer is active).',
   inputSchema: z.object({}).shape,
-  annotations: { readOnlyHint: true },
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeGetTimerHandler(client: OrbotoClient) {

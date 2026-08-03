@@ -59,6 +59,7 @@ export const timerStartToolConfig = {
     description: z.string().optional().describe('Note for the time entry; set at start, not at stop.'),
     replace: z.boolean().optional().describe('Stop+commit a running timer first (default: 409).'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeTimerStartHandler(client: OrbotoClient) {
@@ -106,6 +107,7 @@ export const timerStopToolConfig = {
   description:
     'Stop the user\'s stopwatch. The API commits a time_entries row using the description set at start (or pause/resume), then deletes the active-timer record. Returns the duration in minutes.',
   inputSchema: z.object({}).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeTimerStopHandler(client: OrbotoClient) {
@@ -155,6 +157,7 @@ export const logTimeToolConfig = {
     description: z.string().optional(),
     loggedAt: z.string().datetime().optional().describe('ISO 8601. Default: now.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeLogTimeHandler(client: OrbotoClient) {
@@ -194,6 +197,7 @@ export const listTimeEntriesToolConfig = {
     ticketKey: z.string().min(3),
     limit: z.number().int().positive().max(100).optional().describe('Default 25.'),
   }).shape,
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeListTimeEntriesHandler(client: OrbotoClient) {
@@ -235,7 +239,7 @@ export const editTimeEntryToolConfig = {
     loggedAt: z.string().datetime().optional(),
     moveToTicketKey: z.string().min(3).optional().describe('Re-target the entry to a different ticket.'),
   }).shape,
-  annotations: { idempotentHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeEditTimeEntryHandler(client: OrbotoClient) {
@@ -271,7 +275,7 @@ export const deleteTimeEntryToolConfig = {
     ticketKey: z.string().min(3),
     entryId: z.string().uuid(),
   }).shape,
-  annotations: { destructiveHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeDeleteTimeEntryHandler(client: OrbotoClient) {

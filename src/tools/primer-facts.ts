@@ -207,6 +207,7 @@ export const primerFactAddToolConfig = {
     allowOversize: z.boolean().optional().describe('Override the hard size-cap block (300*2 chars). Only after a call was blocked.'),
     oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true - why this value genuinely needs the length. Audit-logged.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makePrimerFactAddHandler(client: OrbotoClient) {
@@ -279,6 +280,7 @@ export const primerFactUpdateToolConfig = {
     allowOversize: z.boolean().optional().describe('Override the hard size-cap block (300*2 chars). Only after a call was blocked.'),
     oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true - why this value genuinely needs the length. Audit-logged.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makePrimerFactUpdateHandler(client: OrbotoClient) {
@@ -348,6 +350,7 @@ export const primerFactSupersedeToolConfig = {
     allowOversize: z.boolean().optional().describe('Override the hard size-cap block (300*2 chars). Only after a call was blocked.'),
     oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true - why this value genuinely needs the length. Audit-logged.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makePrimerFactSupersedeHandler(client: OrbotoClient) {
@@ -402,6 +405,7 @@ export const primerFactVerifyToolConfig = {
   inputSchema: z.object({
     factId: z.string().min(1).describe('UUID of the fact to verify.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makePrimerFactVerifyHandler(client: OrbotoClient) {
@@ -439,6 +443,7 @@ export const primerFactDeleteToolConfig = {
       'Optional human-readable reason; recorded in the audit log details for future operators.',
     ),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makePrimerFactDeleteHandler(client: OrbotoClient) {

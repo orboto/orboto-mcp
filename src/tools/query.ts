@@ -44,7 +44,7 @@ export const queryToolConfig = {
     limit: z.number().int().min(1).max(100).default(25).describe('Max rows. Default 25.'),
     verbose: z.boolean().default(false).describe('true = full rows; default is the decision fields only.'),
   }).shape,
-  annotations: { readOnlyHint: true },
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeQueryHandler(client: OrbotoClient) {

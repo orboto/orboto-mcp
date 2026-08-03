@@ -43,7 +43,7 @@ export const listTicketsToolConfig = {
     limit: z.number().int().min(1).max(50).default(25).describe('Max rows to return.'),
     verbose: z.boolean().default(false).describe('true = full rows; default is the decision fields only.'),
   }).shape,
-  annotations: { readOnlyHint: true },
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeListTicketsHandler(client: OrbotoClient) {

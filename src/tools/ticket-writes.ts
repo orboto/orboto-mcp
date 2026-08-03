@@ -129,6 +129,7 @@ export const createTicketToolConfig = {
     allowDuplicate: z.boolean().optional().describe('Override the duplicate block.'),
     duplicateJustification: z.string().optional().describe('Why this is not a duplicate.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeCreateTicketHandler(client: OrbotoClient) {
@@ -411,6 +412,7 @@ export const updateTicketToolConfig = {
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
     allowLanguageMismatch: z.boolean().optional().describe('Override the language block; only after a call was blocked.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeUpdateTicketHandler(client: OrbotoClient) {
@@ -460,6 +462,7 @@ export const moveTicketToolConfig = {
     ticketKey: z.string().min(3),
     statusCategory: z.enum(STATUS_CATEGORIES),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeMoveTicketHandler(client: OrbotoClient) {
@@ -490,6 +493,7 @@ export const closeTicketToolConfig = {
     ticketKey: z.string().min(3),
     comment: z.string().min(1).optional().describe('Closing comment; doubles as the transition summary.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeCloseTicketHandler(client: OrbotoClient) {
@@ -525,6 +529,7 @@ export const deleteTicketToolConfig = {
   inputSchema: z.object({
     ticketKey: z.string().min(3),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeDeleteTicketHandler(client: OrbotoClient) {
@@ -559,6 +564,7 @@ export const commentToolConfig = {
     text: z.string().min(1),
     isInternal: z.boolean().optional().describe('Default: false (visible to all members + guests).'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeCommentHandler(client: OrbotoClient) {
@@ -598,7 +604,7 @@ export const updateCommentToolConfig = {
     commentId: z.string().uuid(),
     text: z.string().min(1).describe('New comment body (replaces the old text).'),
   }).shape,
-  annotations: { idempotentHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeUpdateCommentHandler(client: OrbotoClient) {
@@ -629,7 +635,7 @@ export const deleteCommentToolConfig = {
     ticketKey: z.string().min(3),
     commentId: z.string().uuid(),
   }).shape,
-  annotations: { destructiveHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeDeleteCommentHandler(client: OrbotoClient) {
@@ -655,6 +661,7 @@ export const assignToolConfig = {
     ticketKey: z.string().min(3),
     assigneeEmail: z.string().email(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeAssignHandler(client: OrbotoClient) {
@@ -689,6 +696,7 @@ export const unassignToolConfig = {
     ticketKey: z.string().min(3),
     assigneeEmail: z.string().email(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeUnassignHandler(client: OrbotoClient) {
@@ -747,6 +755,7 @@ export const labelTicketToolConfig = {
     ticketKey: z.string().min(3),
     label: z.string().min(1).describe('Label name (must exist on the project).'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeLabelTicketHandler(client: OrbotoClient) {
@@ -768,6 +777,7 @@ export const unlabelTicketToolConfig = {
     ticketKey: z.string().min(3),
     label: z.string().min(1).describe('Label name.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeUnlabelTicketHandler(client: OrbotoClient) {
@@ -794,6 +804,7 @@ export const setMilestoneToolConfig = {
     ticketKey: z.string().min(3),
     milestone: z.string().nullable().optional().describe('Milestone key (e.g. "ORB-M3"), name, or UUID. Pass the key/UUID when the name is ambiguous. Pass null to remove from any milestone.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeSetMilestoneHandler(client: OrbotoClient) {
@@ -848,6 +859,7 @@ export const addTicketDependencyToolConfig = {
     ticketKey: z.string().min(3).describe('The blocked ticket.'),
     dependsOnKey: z.string().min(3).describe('The blocker; may be in another project.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeAddTicketDependencyHandler(client: OrbotoClient) {
@@ -891,6 +903,7 @@ export const removeTicketDependencyToolConfig = {
     ticketKey: z.string().min(3),
     dependsOnKey: z.string().min(3),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeRemoveTicketDependencyHandler(client: OrbotoClient) {
@@ -933,6 +946,7 @@ export const listTicketDependenciesToolConfig = {
   inputSchema: z.object({
     ticketKey: z.string().min(3),
   }).shape,
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 /** ORB-1614 - a stubbed cross-project entry has `title: null`; render a

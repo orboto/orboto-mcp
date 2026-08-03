@@ -27,7 +27,7 @@ export const myTicketsToolConfig = {
     limit: z.number().int().min(1).max(50).default(25),
     verbose: z.boolean().default(false).describe('true = full rows; default is the decision fields only.'),
   }).shape,
-  annotations: { readOnlyHint: true },
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 // The API route's `statuses` param is the uppercase LEGACY status

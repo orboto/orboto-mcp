@@ -80,6 +80,7 @@ export const approveTranslationToolConfig = {
   inputSchema: z.object({
     ticketId: z.string().uuid().describe('UUID of the ticket to approve.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeApproveTranslationHandler(client: OrbotoClient) {
@@ -102,6 +103,7 @@ export const revertTranslationToolConfig = {
   inputSchema: z.object({
     ticketId: z.string().uuid().describe('UUID of the ticket to revert.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeAdminRevertTranslationHandler(client: OrbotoClient) {

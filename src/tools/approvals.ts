@@ -42,6 +42,7 @@ export const listApprovalsToolConfig = {
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key, e.g. ORB-42.'),
   }).shape,
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeListApprovalsHandler(client: OrbotoClient) {
@@ -71,6 +72,7 @@ export const approvalDecideToolConfig = {
     comment: z.string().optional().describe('Optional decision comment (recorded on the vote + notified to the requester).'),
     requestId: z.string().uuid().optional().describe('Disambiguate when the ticket has more than one pending request.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeApprovalDecideHandler(client: OrbotoClient) {

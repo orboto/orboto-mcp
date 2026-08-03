@@ -73,6 +73,7 @@ export const askDocsToolConfig = {
     spaceId: z.string().min(1).optional().describe('Limit RAG retrieval to one doc space - key (e.g. ORB-S1), name, or UUID.'),
     limit: z.number().int().min(1).max(20).optional().describe('Max chunks to retrieve (default: 5).'),
   }).shape,
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeAskDocsHandler(client: OrbotoClient) {
@@ -115,6 +116,7 @@ export const ingestUrlToolConfig = {
     spaceId: z.string().uuid().describe('Target doc space — find IDs via `orboto_list_doc_spaces`.'),
     parentDocId: z.string().uuid().optional().describe('Optional parent doc to nest under.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeIngestUrlHandler(client: OrbotoClient) {
@@ -169,6 +171,7 @@ export const ingestFileToolConfig = {
     contentBase64: z.string().min(1).describe('File content, base64-encoded.'),
     parentDocId: z.string().uuid().optional(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeIngestFileHandler(client: OrbotoClient) {

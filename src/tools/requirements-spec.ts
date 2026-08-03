@@ -51,7 +51,7 @@ export const requirementsSpecToolConfig = {
     showAssigneeNames: z.boolean().optional().describe('Include assignee names (opt-in, default off).'),
     showTicketKeys: z.boolean().optional().describe('Show ticket keys in the output (default on).'),
   }).shape,
-  annotations: { readOnlyHint: true },
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeRequirementsSpecHandler(client: OrbotoClient) {

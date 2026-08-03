@@ -47,7 +47,7 @@ export const agentHeartbeatToolConfig = {
     sessionToken: z.string(),
     sessionId: z.string().uuid(),
   }).shape,
-  annotations: { readOnlyHint: false, idempotentHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeAgentHeartbeatHandler(client: OrbotoClient) {
@@ -167,7 +167,7 @@ export const agentNotifyToolConfig = {
     ok: z.literal(true),
     messageId: z.string().uuid(),
   }).shape,
-  annotations: { readOnlyHint: false, idempotentHint: false },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 // ---------------------------------------------------------------------------
@@ -184,7 +184,7 @@ export const agentBroadcastToolConfig = {
     message: z.record(z.string(), z.unknown()),
   }).shape,
   outputSchema: z.object({ id: z.string().uuid() }).shape,
-  annotations: { readOnlyHint: false, idempotentHint: false },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeAgentBroadcastHandler(client: OrbotoClient) {

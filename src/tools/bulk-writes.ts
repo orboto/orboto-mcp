@@ -121,6 +121,10 @@ export const bulkPatchTicketsToolConfig = {
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
     dryRun: z.boolean().optional().describe('Resolve every ticket to verify visibility/permission, but skip the actual PATCH.'),
   }).shape,
+  // ORB-1669 — the mutating bulk_* tools are destructive by blast radius:
+  // they overwrite state across N tickets in one call with no undo. The
+  // purely additive ones (bulk_comment, bulk_assign) are not.
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
 };
 
 export function makeBulkPatchTicketsHandler(client: OrbotoClient) {
@@ -157,6 +161,7 @@ export const bulkMoveTicketsToolConfig = {
     statusCategory: z.enum(STATUS_CATEGORIES),
     dryRun: z.boolean().optional(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeBulkMoveTicketsHandler(client: OrbotoClient) {
@@ -192,6 +197,7 @@ export const bulkCloseTicketsToolConfig = {
     comment: z.string().min(1).optional().describe('Optional shared closing comment posted on each ticket before its status move.'),
     dryRun: z.boolean().optional(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
 };
 
 export function makeBulkCloseTicketsHandler(client: OrbotoClient) {
@@ -230,6 +236,7 @@ export const bulkCommentTicketsToolConfig = {
     isInternal: z.boolean().optional(),
     dryRun: z.boolean().optional(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeBulkCommentTicketsHandler(client: OrbotoClient) {
@@ -283,6 +290,7 @@ export const bulkAssignTicketsToolConfig = {
     assigneeEmail: z.string().email(),
     dryRun: z.boolean().optional(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeBulkAssignTicketsHandler(client: OrbotoClient) {
@@ -324,6 +332,7 @@ export const bulkUnassignTicketsToolConfig = {
     assigneeEmail: z.string().email(),
     dryRun: z.boolean().optional(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeBulkUnassignTicketsHandler(client: OrbotoClient) {

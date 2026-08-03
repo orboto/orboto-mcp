@@ -53,6 +53,7 @@ export const updateProjectToolConfig = {
         .describe('Project content language (ORB-994). Wins over the workspace language for this project. null = inherit workspace.'),
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeUpdateProjectHandler(client: OrbotoClient) {
@@ -106,6 +107,7 @@ export const createProjectToolConfig = {
     language: z.enum(LOCALE_CODES).nullable().optional()
       .describe('Optional project content language (ORB-994), one of the 18 supported locales. Omit/null = inherit the workspace language.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeCreateProjectHandler(client: OrbotoClient) {
@@ -150,6 +152,7 @@ export const archiveProjectToolConfig = {
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME") of the project to archive.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeArchiveProjectHandler(client: OrbotoClient) {

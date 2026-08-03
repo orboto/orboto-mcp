@@ -36,10 +36,7 @@ export const listGitAppInstallationsToolConfig = {
       suspended: z.boolean(),
     })),
   }).shape,
-  annotations: {
-    readOnlyHint: true,
-    idempotentHint: true,
-  },
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeListGitAppInstallationsHandler(client: OrbotoClient) {

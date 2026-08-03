@@ -153,7 +153,7 @@ export const restoreDocRevisionToolConfig = {
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     revisionId: z.string().uuid(),
   }).shape,
-  annotations: { destructiveHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeRestoreDocRevisionHandler(client: OrbotoClient) {

@@ -92,6 +92,10 @@ export const claimToolConfig = {
     noTimer: z.boolean().optional().describe('Skip the timer start.'),
     agentSessionToken: z.string().optional().describe('Per-agent-instance token; scopes the timer on bot accounts.'),
   }).shape,
+  // ORB-1669 — destructive because of `sole=true`, which strips every
+  // other assignee. Annotations are per-tool and cannot be conditioned on
+  // an argument, so the hint has to cover the worst call the tool allows.
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeClaimHandler(client: OrbotoClient) {
@@ -237,6 +241,7 @@ export const unclaimToolConfig = {
   inputSchema: z.object({
     ticketKey: z.string().min(3),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeUnclaimHandler(client: OrbotoClient) {

@@ -151,6 +151,7 @@ export const postDocCommentToolConfig = {
       after: z.string().max(80).describe('Characters after the highlight, for anchor re-discovery.'),
     }).optional(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makePostDocCommentHandler(client: OrbotoClient) {
@@ -193,6 +194,7 @@ export const resolveDocCommentToolConfig = {
     commentId: z.string().uuid(),
     resolved: z.boolean(),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeResolveDocCommentHandler(client: OrbotoClient) {
@@ -231,6 +233,7 @@ export const updateDocCommentToolConfig = {
     commentId: z.string().uuid(),
     content: z.string().min(1).max(4000),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeUpdateDocCommentHandler(client: OrbotoClient) {
@@ -262,7 +265,7 @@ export const deleteDocCommentToolConfig = {
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     commentId: z.string().uuid(),
   }).shape,
-  annotations: { destructiveHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeDeleteDocCommentHandler(client: OrbotoClient) {

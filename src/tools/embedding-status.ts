@@ -75,10 +75,7 @@ export const embeddingStatusToolConfig = {
     stalled: z.boolean(),
     stalledMinutes: z.number().nullable(),
   }).shape,
-  annotations: {
-    readOnlyHint: true,
-    idempotentHint: true,
-  },
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeEmbeddingStatusHandler(client: OrbotoClient) {

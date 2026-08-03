@@ -106,6 +106,7 @@ export const setRaciToolConfig = {
     userEmail: z.string().email().describe('Email of a project member.'),
     role: z.enum(ROLES).describe('R, A, C, or I.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeSetRaciHandler(client: OrbotoClient) {

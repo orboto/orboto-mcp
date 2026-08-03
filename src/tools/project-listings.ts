@@ -120,6 +120,7 @@ export const createLabelToolConfig = {
     name: z.string().min(1).max(100).describe('Label name.'),
     color: z.string().optional().describe('Hex colour like "#6366f1". Defaults to indigo.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeCreateLabelHandler(client: OrbotoClient) {

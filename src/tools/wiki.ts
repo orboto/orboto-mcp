@@ -26,7 +26,7 @@ export const wikiIngestUrlToolConfig = {
     url: z.string().url().max(2048).describe('Public URL to import.'),
     parentDocId: z.string().uuid().optional().describe('Nest the source under this doc.'),
   }).shape,
-  annotations: { readOnlyHint: false, idempotentHint: false },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 export function makeWikiIngestUrlHandler(client: OrbotoClient) {
   return async (input: { spaceId: string; url: string; parentDocId?: string }): Promise<CallToolResult> => {
@@ -70,7 +70,7 @@ export const wikiLintToolConfig = {
   inputSchema: z.object({
     spaceId: z.string().uuid().describe('The LLM-Wiki space to lint.'),
   }).shape,
-  annotations: { readOnlyHint: false, idempotentHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 export function makeWikiLintHandler(client: OrbotoClient) {
   return async (input: { spaceId: string }): Promise<CallToolResult> => {
@@ -113,7 +113,7 @@ export const wikiApplyPlanToolConfig = {
     spaceId: z.string().uuid(),
     planId: z.string().uuid().describe('The planId returned by orboto_wiki_plan_update.'),
   }).shape,
-  annotations: { readOnlyHint: false, idempotentHint: false },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 export function makeWikiApplyPlanHandler(client: OrbotoClient) {
   return async (input: { spaceId: string; planId: string }): Promise<CallToolResult> => {
@@ -133,7 +133,7 @@ export const wikiRecordToolConfig = {
     instruction: z.string().min(1).max(4000).describe('What to record, in plain language.'),
     sourceDocId: z.string().uuid().optional(),
   }).shape,
-  annotations: { readOnlyHint: false, idempotentHint: false },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 export function makeWikiRecordHandler(client: OrbotoClient) {
   return async (input: { spaceId: string; instruction: string; sourceDocId?: string }): Promise<CallToolResult> => {
@@ -155,7 +155,7 @@ export const wikiAppendSectionToolConfig = {
     docId: z.string().min(1).describe('The page to append to - UUID or doc key (ORB-D12 / DOC-5).'),
     content: z.string().min(1).max(50_000).describe('Markdown section to append.'),
   }).shape,
-  annotations: { readOnlyHint: false, idempotentHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 export function makeWikiAppendSectionHandler(client: OrbotoClient) {
   return async (input: { docId: string; content: string }): Promise<CallToolResult> => {
@@ -179,7 +179,7 @@ export const wikiSaveAnswerToolConfig = {
     parentDocId: z.string().uuid().optional(),
     citations: z.array(z.object({ docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'), title: z.string() })).max(50).optional().describe('Cited docs to smart-link (from orboto_wiki_ask).'),
   }).shape,
-  annotations: { readOnlyHint: false, idempotentHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 export function makeWikiSaveAnswerHandler(client: OrbotoClient) {
   return async (input: { spaceId: string; question: string; answer: string; title?: string; parentDocId?: string; citations?: Array<{ docId: string; title: string }> }): Promise<CallToolResult> => {
@@ -198,7 +198,7 @@ export const wikiFlagStaleToolConfig = {
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     stale: z.boolean().optional().describe('true to flag (default), false to clear.'),
   }).shape,
-  annotations: { readOnlyHint: false, idempotentHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 export function makeWikiFlagStaleHandler(client: OrbotoClient) {
   return async (input: { docId: string; stale?: boolean }): Promise<CallToolResult> => {

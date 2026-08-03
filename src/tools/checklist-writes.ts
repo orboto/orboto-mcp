@@ -108,6 +108,7 @@ export const checkToolConfig = {
   description:
     'Mark a checklist item as completed. `item` is either a 1-based index (count across all checklists on the ticket, top to bottom) or the item\'s UUID. Linked-ticket items are checked automatically when the linked ticket transitions to `done` — checking those manually is ignored.',
   inputSchema: toggleInputSchema,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export const uncheckToolConfig = {
@@ -115,6 +116,7 @@ export const uncheckToolConfig = {
   description:
     'Mark a checklist item as not-completed. Same `item` semantics as orboto_check.',
   inputSchema: toggleInputSchema,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export const makeCheckHandler = (client: OrbotoClient) => makeToggleHandler(client, true);
@@ -130,7 +132,7 @@ export const removeCheckToolConfig = {
   description:
     'Delete a checklist item from a ticket. `item` is either a 1-based index (global across all checklists on the ticket, top to bottom) or the item\'s UUID — same semantics as orboto_check. Destructive: the item is gone, not just unchecked.',
   inputSchema: toggleInputSchema,
-  annotations: { destructiveHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeRemoveCheckHandler(client: OrbotoClient) {
@@ -160,6 +162,7 @@ export const addCheckToolConfig = {
     listTitle: z.string().optional().describe('Target checklist title. Default: first checklist on the ticket.'),
     linkedTicketKey: z.string().optional().describe('Make this item track another ticket\'s done-status (e.g. "ACME-99").'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeAddCheckHandler(client: OrbotoClient) {
@@ -225,6 +228,7 @@ export const newChecklistToolConfig = {
     triggersDone: z.boolean().optional().describe('Default: false. Set true to gate the ticket\'s done-transition on this list.'),
     items: z.array(z.string().min(1).max(2000)).max(100).optional().describe('Seed items in one call.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeNewChecklistHandler(client: OrbotoClient) {

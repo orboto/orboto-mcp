@@ -41,10 +41,7 @@ export const aiUsageToolConfig = {
     topOperations: z.array(z.object({ operation: z.string(), calls: z.number() })),
     topUsers: z.array(z.object({ userName: z.string().nullable(), calls: z.number(), tokensIn: z.number(), tokensOut: z.number() })),
   }).shape,
-  annotations: {
-    readOnlyHint: true,
-    idempotentHint: true,
-  },
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeAiUsageHandler(client: OrbotoClient) {

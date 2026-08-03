@@ -52,10 +52,7 @@ export const listProjectsToolConfig = {
     totalProjects: z.number(),
     query: z.string().nullable(),
   }).shape,
-  annotations: {
-    readOnlyHint: true,
-    idempotentHint: true,
-  },
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeListProjectsHandler(client: OrbotoClient) {

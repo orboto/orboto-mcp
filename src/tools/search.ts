@@ -53,7 +53,7 @@ export const searchToolConfig = {
     projectKey: z.string().optional().describe('Restrict to one project.'),
     limit: z.number().int().min(1).max(50).default(15),
   }).shape,
-  annotations: { readOnlyHint: true },
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeSearchHandler(client: OrbotoClient) {

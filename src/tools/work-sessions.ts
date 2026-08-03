@@ -186,7 +186,7 @@ interface StartBundleResponse {
 }
 
 export const workStartToolConfig = {
-  title: 'Start a work session AND load the full context bundle in one call',
+  title: 'Start a work session and load the full context bundle',
   description:
     'ORB-1611 - the one-call ticket pickup. Acquires the (ticket, role) work lease with the exact same guarantees as orboto_work_session_start (exactly ONE active session per ticket+role workspace-wide, a conflict names the holder, resourceClaims apply atomically with the lease), AND in the SAME response returns the rules-hash ack (same semantics as orboto_session_start), the project primer, the ticket enriched with its description/status/priority, its checklists, its dependencies, that project\'s git connection health, and any other live sessions already on the ticket. This replaces the 8-15 separate calls (orboto_session_start, orboto_get_project_primer, orboto_get_ticket, orboto_get_checklists, orboto_list_ticket_dependencies, ...) a normal ticket pickup used to cost. Prefer this over orboto_work_session_start for picking up a ticket; use the plain tool only when you deliberately do not want the bundle (e.g. a mid-task lease renewal where you already have fresh context). A conflict never leaves a partial session behind - same rollback-on-conflict guarantee as orboto_work_session_start.',
   inputSchema: z.object({
@@ -206,6 +206,7 @@ export const workStartToolConfig = {
     onConflict: z.enum(['reject', 'queue']).optional()
       .describe('Only matters when `resourceClaims` is set. Default `reject`.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeWorkStartHandler(client: OrbotoClient) {
@@ -405,6 +406,7 @@ export const workSessionStartToolConfig = {
     onConflict: z.enum(['reject', 'queue']).optional()
       .describe('Only matters when `resourceClaims` is set. Default `reject`: a conflicting write claim fails the WHOLE call with the conflicting holder(s) named - if this call would have created a brand-new session, that session is rolled back rather than left holding the lease without its claims. `queue`: the conflicting claim is accepted as `state: "waiting"` instead of failing; it is promoted automatically once the conflict clears (release, finish, or the next orboto_work_sessions read).'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeWorkSessionStartHandler(client: OrbotoClient) {
@@ -517,7 +519,7 @@ export function makeWorkSessionStartHandler(client: OrbotoClient) {
 // ---------------------------------------------------------------------------
 
 export const workSessionFinishToolConfig = {
-  title: 'Finish a work session (books time, frees the lease, records evidence)',
+  title: 'Finish a work session (books time, frees the lease)',
   description:
     'End a work session: its timer is stopped and booked, the (ticket, role) lease is released for the next agent, and the evidence you pass (commit sha + which gates you ran) is recorded on the session. Idempotent - finishing an already-finished session succeeds and still absorbs late evidence, so a retrying harness never has to distinguish "already done" from "failed". This does NOT close the ticket; ticket status is a separate, deliberate decision (use orboto_close_ticket once the acceptance criteria are verified). Prefer orboto_work_finish (ORB-1612) for an `implementation` session that is actually done - it does this AND the ticket transition AND the completion note in one call.',
   inputSchema: z.object({
@@ -532,6 +534,7 @@ export const workSessionFinishToolConfig = {
       notes: z.string().optional(),
     }).optional().describe('Which gates you actually ran and what they said. This is the attestation a reviewer reads cold.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeWorkSessionFinishHandler(client: OrbotoClient) {
@@ -592,6 +595,7 @@ export const workFinishToolConfig = {
       .describe('Default `done`. Use `in_review` when a human should look at it first. Only applied for an implementation session with outcome `finished`.'),
     note: z.string().optional().describe('The completion note posted on the ticket. Auto-generated (booked time + commit + verification summary) when omitted.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeWorkFinishHandler(client: OrbotoClient) {
@@ -681,7 +685,7 @@ function landedIdleLines(rows: LandedIdleHint[] | undefined): string[] {
 }
 
 export const workNextToolConfig = {
-  title: 'Pull the next ready ticket and reserve it in one call (worker-pool dispatch)',
+  title: 'Pull and reserve the next ready ticket (worker-pool dispatch)',
   description:
     'ORB-1613 - the pull side of low-management dispatch, sibling of orboto_work_start on the "I already know which ticket" side. Picks the highest-priority ticket in a project that is READY FOR THE REQUESTED ROLE (default role implementation pulls TODO tickets; `role: "review"` pulls tickets in the in_review status category instead, and NEVER offers a ticket the caller itself implemented - the review lane primitive, ORB-1777), unblocked (every dependency closed), not already leased under the requested role, and not blocked by a conflicting resourceClaim - then reserves it with the EXACT same guarantees as orboto_work_start (atomic lease acquire + the full context bundle: rules ack, primer, ticket, checklists, dependencies, git health, siblings) in the same response. Priority then ticket number, deterministic - never a coin flip on ties. Two workers calling this concurrently never receive the SAME ticket: the underlying reservation is the identical partial-unique-index INSERT orboto_work_start uses, just walked across an ordered candidate list - a collision just advances to the next candidate. Epics are never returned (they are containers, not directly implementable). When nothing is ready, the response is a STRUCTURED result (`reserved: null`) with a `reason` (`none-matching` = no todo tickets at all; `all-blocked` = candidates exist but all have open dependencies; `all-leased` = ready candidates exist but are all currently leased or claim-conflicted; `autonomy_paused` = ORB-1774, this agent identity or the whole workspace has autonomous pulls paused by an operator - idle and wait for an operator/notify wakeup instead of retrying) and, ONLY when derivable from an actual active lease, a `retryAfterSeconds` backoff hint (`earliestFreeAt` null and `retryAfterSeconds` null means no signal exists - never a fabricated constant). This is never an error - a worker pool should back off on the hint rather than poll hot. Prefer this over orboto_work_start whenever the caller does not care WHICH ticket it gets, only that it gets the best available one right now. Every response - reserved, empty or paused - also carries `landedIdle`: YOUR OWN tickets in this project that are still in_progress with a linked commit and no activity for days (ORB-1799). Those are finished-looking work nobody handed to the review lane; move them on instead of re-implementing them.',
   inputSchema: z.object({
@@ -701,6 +705,7 @@ export const workNextToolConfig = {
     onConflict: z.enum(['reject', 'queue']).optional()
       .describe('Only matters when `resourceClaims` is set on the WINNING candidate. Default `reject`.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeWorkNextHandler(client: OrbotoClient) {
@@ -923,6 +928,7 @@ export const workSessionClaimsAddToolConfig = {
       .describe('Claims to add. `kind: "path"` = glob relative to the repo root. `kind: "named"` = exact-match exclusive resource id.'),
     onConflict: z.enum(['reject', 'queue']).optional().describe('Default `reject`.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeWorkSessionClaimsAddHandler(client: OrbotoClient) {
@@ -983,6 +989,7 @@ export const workSessionClaimsReleaseToolConfig = {
     claims: z.array(z.object({ kind: z.enum(['path', 'named']), value: z.string().min(1).max(500) })).optional()
       .describe('Which claims to release, matched by kind+value. Omit to release ALL claims on this session.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeWorkSessionClaimsReleaseHandler(client: OrbotoClient) {

@@ -231,6 +231,7 @@ export const editDocToolConfig = {
     })).min(1).max(100).describe('Applied sequentially; edit N sees the result of edits 0..N-1.'),
     baseRevisionId: z.string().uuid().optional().describe('Optimistic-concurrency token = the revision id you last saw. Omit to always apply.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeEditDocHandler(client: OrbotoClient) {
@@ -258,7 +259,7 @@ export function makeEditDocHandler(client: OrbotoClient) {
 // ---------------------------------------------------------------------------
 
 export const editDocSectionToolConfig = {
-  title: 'Targeted section edit of a doc by heading path (context-efficient)',
+  title: 'Edit a doc section by heading path (context-efficient)',
   description:
     'Change a doc by markdown-heading-addressed section operations - ship only the new section content, not the whole doc. A section is addressed by its heading path (e.g. ["Setup","Credentials"] = a "Credentials" heading nested under "Setup"). Heading matching is EXACT + case-sensitive; the leading path elements must be an ordered ancestor chain (not necessarily immediate parents). op=replace swaps the section body, op=append adds to its end, op=insertAfter inserts directly below the heading line (the heading line itself is never removed). A path that matches zero or multiple headings returns a 409 you can act on (narrow the path to disambiguate). Prefer this over orboto_update_doc for section-scoped rewrites. baseRevisionId gives optimistic concurrency. Returns a short context window per op.',
   inputSchema: z.object({
@@ -270,6 +271,7 @@ export const editDocSectionToolConfig = {
     })).min(1).max(100).describe('Applied sequentially after any string edits.'),
     baseRevisionId: z.string().uuid().optional().describe('Optimistic-concurrency token = the revision id you last saw. Omit to always apply.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeEditDocSectionHandler(client: OrbotoClient) {

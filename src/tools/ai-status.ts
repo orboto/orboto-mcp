@@ -37,10 +37,7 @@ export const aiStatusToolConfig = {
     embeddingsConfigured: z.boolean(),
     visionEnabled: z.boolean(),
   }).shape,
-  annotations: {
-    readOnlyHint: true,
-    idempotentHint: true,
-  },
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeAiStatusHandler(client: OrbotoClient) {

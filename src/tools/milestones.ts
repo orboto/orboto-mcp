@@ -180,6 +180,7 @@ export const createMilestoneToolConfig = {
     endDate: z.string().regex(DATE_RE).nullable().optional().describe('YYYY-MM-DD or null.'),
     isPrivate: z.boolean().optional().describe('Project members only. Default: false.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeCreateMilestoneHandler(client: OrbotoClient) {
@@ -278,6 +279,7 @@ export const closeMilestoneToolConfig = {
     milestone: z.string().min(1).describe('Milestone name or UUID.'),
     archive: z.boolean().optional().describe('Set true to archive (status=archived) instead of merely completing.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeCloseMilestoneHandler(client: OrbotoClient) {
@@ -325,6 +327,7 @@ export const updateMilestoneToolConfig = {
       isPrivate: z.boolean().optional(),
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeUpdateMilestoneHandler(client: OrbotoClient) {

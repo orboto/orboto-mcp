@@ -33,6 +33,7 @@ export const createFullBackupToolConfig = {
   description:
     'Create an on-demand FULL workspace backup (database + storage) and return the ZIP as a base64 application/zip resource attachment — create, wait and download in one call (the server runs the export as a background run and this tool polls it; large workspaces can take minutes). Requires admin:backup:export. For the scheduled named jobs use orboto_trigger_backup instead.',
   inputSchema: z.object({}).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeCreateFullBackupHandler(client: OrbotoClient) {
@@ -99,6 +100,7 @@ export const downloadBackupToolConfig = {
   inputSchema: z.object({
     runId: z.string().uuid().describe('Backup run id from orboto_list_backups.'),
   }).shape,
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeDownloadBackupHandler(client: OrbotoClient) {

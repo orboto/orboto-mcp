@@ -48,7 +48,7 @@ export const customerReportToolConfig = {
       budget: z.boolean().optional(),
     }).optional().describe('Section toggles on top of the preset default.'),
   }).shape,
-  annotations: { readOnlyHint: true },
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeCustomerReportHandler(client: OrbotoClient) {

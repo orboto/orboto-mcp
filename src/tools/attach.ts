@@ -56,6 +56,7 @@ export const attachToTicketToolConfig = {
     altText: z.string().optional().describe('Alt-text for the markdown image line. Defaults to filename.'),
     embed: z.boolean().optional().describe('If true, also PATCH the ticket\'s description to append the markdown image line.'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeAttachToTicketHandler(client: OrbotoClient) {

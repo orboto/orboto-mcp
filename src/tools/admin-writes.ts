@@ -87,6 +87,7 @@ export const listUsersToolConfig = {
     limit: z.number().int().min(1).max(100).default(50),
     showGhosts: z.boolean().optional().describe('Include `*@imported.ghost` placeholder users created during project imports. Off by default.'),
   }).shape,
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeListUsersHandler(client: OrbotoClient) {
@@ -142,6 +143,7 @@ export const getAuditLogToolConfig = {
     entityType: z.string().optional().describe('e.g. "user", "project", "ticket", "federation_link".'),
     limit: z.number().int().min(1).max(100).default(50),
   }).shape,
+  annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeGetAuditLogHandler(client: OrbotoClient) {
@@ -205,6 +207,7 @@ export const triggerBackupToolConfig = {
   inputSchema: z.object({
     jobName: z.string().min(1).describe('Name of an existing backup job (configured at /admin/backup).'),
   }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeTriggerBackupHandler(client: OrbotoClient) {
