@@ -41,6 +41,7 @@ describe('orboto_whoami', () => {
       fullName: 'Claude Agent E',
       isBot: true,
       workspaceLocale: 'en',
+      actingAuthorizedBy: null,
     });
     expect((res.content[0] as { text: string }).text).toContain('agent-e@orboto.io');
   });
@@ -61,6 +62,7 @@ describe('orboto_whoami', () => {
       fullName: null,
       isBot: false,
       workspaceLocale: null,
+      actingAuthorizedBy: null,
     });
   });
 
