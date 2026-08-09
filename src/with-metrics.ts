@@ -18,6 +18,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from './orboto-client.js';
 import { type NudgeState, shouldNudge, prependNudge, shouldGate, gateResult } from './session-nudge.js';
+import { applyResponseBudget } from './response-budget.js';
 
 /**
  * ORB-1174 — turn an OrbotoApiError into an actionable, agent-visible
@@ -57,6 +58,13 @@ interface LogEntry {
   /** ORB-1180 — HTTP status of the failing API call (OrbotoApiError). */
   statusCode?: number;
   clientHint?: string;
+  /** ORB-1697 - characters the client actually pays for, AFTER the
+   *  response budget was applied. */
+  responseChars?: number;
+  /** ORB-1697 - characters the budget removed (0 when nothing was cut).
+   *  Makes budget pressure per tool visible in the admin MCP-usage panel
+   *  instead of needing another one-off transcript audit. */
+  truncatedChars?: number;
 }
 
 /**
@@ -131,7 +139,14 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
       return gated;
     }
     try {
-      const result = await handler(args, extra);
+      const handlerResult = await handler(args, extra);
+      // ORB-1697 - the central response budget. Applied HERE, once, so it
+      // covers every registered tool instead of relying on 168 handlers to
+      // each stay small. Over-budget payloads come back truncated with an
+      // explicit `__truncation` block + a handle for the remainder; the
+      // measured sizes go into the call log either way.
+      const budgeted = applyResponseBudget(toolName, handlerResult);
+      const result = budgeted.result;
       // Success path — but the handler can also signal a "soft"
       // failure via { isError: true } in the result. We treat that
       // as success=false in the log so dashboards reflect actual
@@ -145,6 +160,8 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
           ? redactSecrets(String(result.content[0].text)).slice(0, 500)
           : undefined,
         clientHint,
+        responseChars: budgeted.responseChars,
+        truncatedChars: budgeted.truncatedChars,
       });
       return wantsNudge ? prependNudge(result) : result;
     } catch (err) {

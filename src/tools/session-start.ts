@@ -43,6 +43,9 @@ export const sessionStartToolConfig = {
   inputSchema: z.object({
     projectId: z.string().uuid().optional().describe('Include this project\'s rules too (workspace + project + your personal).'),
     ticketKey: z.string().min(3).optional().describe('Ticket key like "ACME-42". When set, bundles that ticket\'s primer + full detail + dependencies + checklists + git health + active sessions into this same response.'),
+    // ORB-1697 - the caller is the only party that knows whether it still
+    // HOLDS the rules. See the ack-defect note on the handler below.
+    forceRules: z.boolean().optional().describe('Set true to always return the full rules text, even when this connection has already delivered them. Use it whenever you do not have the rules in your context right now - after a context compaction, a /clear, or a fresh agent taking over an existing connection.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -132,7 +135,7 @@ const MAX_GIT_HEALTH_PROJECTS = 8;
 async function buildTicketBundle(
   client: OrbotoClient,
   ticketKey: string,
-): Promise<{ lines: string[]; structured: Record<string, unknown> }> {
+): Promise<{ lines: string[]; structured: Record<string, unknown>; projectId?: string }> {
   let resolved: TicketRow;
   try {
     resolved = await resolveTicketByKey(client, ticketKey);
@@ -149,22 +152,38 @@ async function buildTicketBundle(
     // row (no statusCategory / assignees / description). Re-fetch the
     // enriched by-id shape, mirroring orboto_get_ticket.
     client.get<TicketRow>(`/projects/${resolved.projectId}/tickets/${resolved.id}`).catch(() => resolved),
-    client.get<ChecklistRow[]>(`/tickets/${resolved.id}/checklists`).catch(() => [] as ChecklistRow[]),
+    client.get<ChecklistRow[]>(`/tickets/${resolved.id}/checklists`)
+      .then((r) => (Array.isArray(r) ? r : []))
+      .catch(() => [] as ChecklistRow[]),
     client
       .get<{ blockedBy: DependencyEdge[]; blocks: DependencyEdge[] }>(`/projects/${resolved.projectId}/tickets/${resolved.id}/dependencies`)
+      .then((r) => ({
+        blockedBy: Array.isArray(r?.blockedBy) ? r.blockedBy : [],
+        blocks: Array.isArray(r?.blocks) ? r.blocks : [],
+      }))
       .catch(() => ({ blockedBy: [] as DependencyEdge[], blocks: [] as DependencyEdge[] })),
     client.get<PrimerJsonResponse>(`/projects/${resolved.projectId}/ai-primer?format=json`).catch(() => null),
     client
       .get<{ connections: GitConnectionHealth[] }>(`/projects/${resolved.projectId}/git-health`)
-      .then((r) => r.connections)
+      .then((r) => (Array.isArray(r?.connections) ? r.connections : []))
       .catch(() => [] as GitConnectionHealth[]),
     // ORB-704 — non-admins only see their own sessions; that's an
     // acceptable "cheaply available" degrade, not a bug to work around.
     client.get<ActiveAgentRow[]>('/v1/agent/presence').catch(() => [] as ActiveAgentRow[]),
   ]);
-  const full = enriched ?? resolved;
-  const sessionsOnTicket = activeSessions.filter((s) => s.workingOnTicket?.key === full.ticketKey);
-  const unhealthy = gitHealthConnections.filter((c) => !c.healthy);
+  // ORB-1697 - `enriched ?? resolved` trusted truthiness: a 200 whose body
+  // is `{}` is truthy, so the fallback never fired and the bundle rendered
+  // "Ticket bundle: undefined" with empty fields. Fall back on the row we
+  // already resolved unless the enriched read actually carries a ticket.
+  const full = enriched?.ticketKey ? enriched : resolved;
+  // ORB-1697 - the `.catch` above only covers a REJECTED request. A 200 with
+  // an unexpected body (a wrapped/paginated shape, or an older instance)
+  // would make `.filter` throw and take the whole digest down over an
+  // optional section. Coerce instead.
+  const sessions = Array.isArray(activeSessions) ? activeSessions : [];
+  const connections = Array.isArray(gitHealthConnections) ? gitHealthConnections : [];
+  const sessionsOnTicket = sessions.filter((s) => s.workingOnTicket?.key === full.ticketKey);
+  const unhealthy = connections.filter((c) => !c.healthy);
 
   const lines: string[] = ['', `## Ticket bundle: ${full.ticketKey}`];
 
@@ -212,6 +231,7 @@ async function buildTicketBundle(
 
   return {
     lines,
+    projectId: resolved.projectId,
     structured: {
       ticketKey: full.ticketKey,
       title: full.title,
@@ -229,7 +249,10 @@ async function buildTicketBundle(
         blockedBy: deps.blockedBy.map((e) => ({ ticketKey: e.ticketKey, title: e.title, statusName: e.statusName, external: e.external, resolved: e.resolved })),
         blocks: deps.blocks.map((e) => ({ ticketKey: e.ticketKey, title: e.title, statusName: e.statusName, external: e.external, resolved: e.resolved })),
       },
-      gitHealth: gitHealthConnections,
+      // ORB-1697 - only the connections that need attention. A healthy
+      // connection is 11 fields of "everything is fine" the agent never
+      // acts on; the count preserves the fact that connections exist.
+      gitHealth: { unhealthy, healthyCount: connections.length - unhealthy.length },
       activeSessions: sessionsOnTicket.map((s) => ({ userFullName: s.userFullName, userEmail: s.userEmail, status: s.status, lastSeenAt: s.lastSeenAt })),
     },
   };
@@ -239,12 +262,19 @@ export function makeSessionStartHandler(client: OrbotoClient) {
   // ORB-1607 — per-connection rules-hash cache. `buildOrbotoMcpServer`
   // calls this factory once per MCP connection, so this closure variable
   // lives for exactly that connection's lifetime and resets on reconnect.
+  //
+  // ORB-1697 - the defect that cache had: a stdio MCP server outlives
+  // `/clear` and every context compaction, so a repeat call answered
+  // "unchanged, keep following what you already loaded" at exactly the
+  // moment the agent no longer held the rules. The connection is the wrong
+  // thing to key the ack on; only the CALLER knows what is still in its
+  // context. Hence `forceRules`, and an ack text that says so.
   let lastKnownRulesHash: string | undefined;
 
-  return async (input: { projectId?: string; ticketKey?: string } = {}): Promise<CallToolResult> => {
+  return async (input: { projectId?: string; ticketKey?: string; forceRules?: boolean } = {}): Promise<CallToolResult> => {
     const rulesParams = new URLSearchParams();
     if (input.projectId) rulesParams.set('projectId', input.projectId);
-    if (lastKnownRulesHash) rulesParams.set('knownRulesHash', lastKnownRulesHash);
+    if (lastKnownRulesHash && !input.forceRules) rulesParams.set('knownRulesHash', lastKnownRulesHash);
     const rulesQs = rulesParams.toString();
     const rulesPath = rulesQs ? `/agent-instructions?${rulesQs}` : '/agent-instructions';
 
@@ -271,7 +301,11 @@ export function makeSessionStartHandler(client: OrbotoClient) {
         projectId,
         connections: await client
           .get<{ connections: GitConnectionHealth[] }>(`/projects/${projectId}/git-health`)
-          .then((r) => r.connections)
+          // ORB-1697 - `.catch` covers a rejected request, not a 200 whose
+          // body lacks `connections` (an older instance, or a shape change).
+          // Without the guard, an optional warning section takes the whole
+          // digest down at the moment the agent has the least context.
+          .then((r) => (Array.isArray(r?.connections) ? r.connections : []))
           .catch(() => [] as GitConnectionHealth[]),
       })),
     );
@@ -286,18 +320,37 @@ export function makeSessionStartHandler(client: OrbotoClient) {
     // rest so it doesn't hold up the core digest on a slow primer render.
     const bundle = input.ticketKey ? await buildTicketBundle(client, input.ticketKey) : null;
 
+    // ORB-1697 - when the caller named the ticket it is working, the
+    // cross-project assigned list is noise: it measured 3.5k characters of
+    // other projects' tickets on a real call. List the ones in the same
+    // project, count the rest so nothing is hidden.
+    const scopeProjectId = bundle?.projectId;
+    const scopedTickets = scopeProjectId
+      ? tickets.filter((t) => !t.projectId || t.projectId === scopeProjectId)
+      : tickets;
+    const elsewhereCount = tickets.length - scopedTickets.length;
+
     const lines: string[] = ['# orboto session start'];
     if (me) lines.push(`You are ${me.fullName ?? me.email}${me.email ? ` (${me.email})` : ''}.`);
     if (me?.workspaceLocale || me?.locale) lines.push(`Write tickets / comments / docs in: ${me.workspaceLocale ?? me.locale}.`);
     lines.push('', '## Working rules — follow these');
     if (rules.rulesUnchanged) {
-      lines.push(`Unchanged since your last session-start on this connection (hash ${rules.rulesHash}) — keep following what you already loaded.`);
+      // ORB-1697 - never assert that the caller still HAS the rules. This
+      // connection delivered them once, which says nothing about whether
+      // they survived a compaction or a /clear on the client side.
+      lines.push(
+        `Unchanged since this connection last delivered them (hash ${rules.rulesHash}), so they were left out to save context.`,
+        'If the rules are NOT in your context right now - after a compaction, a /clear, or because you are a fresh agent on an existing connection - call this tool again with forceRules=true and read them in full. Do not proceed on a half-remembered rule set.',
+      );
     } else {
       lines.push(rules.instructions?.trim() || '(no workspace rules configured)');
     }
     lines.push('', '## Your in-progress work');
     if (tickets.length === 0) lines.push('No tickets currently assigned to you — claim or create one before you start coding.');
-    else for (const t of tickets) lines.push(`- ${t.ticketKey} [${t.statusName ?? t.status}] ${t.title}`);
+    else for (const t of scopedTickets) lines.push(`- ${t.ticketKey} [${t.statusName ?? t.status}] ${t.title}`);
+    if (elsewhereCount > 0) {
+      lines.push(`(+ ${elsewhereCount} open ticket(s) assigned to you in other projects - call orboto_my_tickets to list them.)`);
+    }
     if (unhealthyWarnings.length > 0) {
       lines.push('', '## Git connection health — WARNING', ...unhealthyWarnings);
     }
@@ -311,9 +364,20 @@ export function makeSessionStartHandler(client: OrbotoClient) {
         rules: rules.instructions ?? '',
         rulesHash: rules.rulesHash ?? null,
         rulesUnchanged: rules.rulesUnchanged === true,
-        inProgress: tickets.map((t) => ({ ticketKey: t.ticketKey, title: t.title, status: t.statusName ?? t.status ?? null })),
+        inProgress: scopedTickets.map((t) => ({ ticketKey: t.ticketKey, title: t.title, status: t.statusName ?? t.status ?? null })),
+        ...(elsewhereCount > 0 ? { inProgressElsewhereCount: elsewhereCount } : {}),
         timer: timer?.ticketId ? { ticketKey: timer.ticketKey ?? null, startedAt: timer.startedAt ?? null } : null,
-        gitHealth: gitHealthWithConnections,
+        // ORB-1697 - unhealthy connections only; a healthy one is 11 fields
+        // the agent never acts on. `healthyCount` keeps the fact visible.
+        gitHealth: {
+          unhealthy: gitHealthWithConnections
+            .map((p) => ({ projectId: p.projectId, connections: p.connections.filter((c) => !c.healthy) }))
+            .filter((p) => p.connections.length > 0),
+          healthyCount: gitHealthWithConnections.reduce(
+            (n, p) => n + p.connections.filter((c) => c.healthy).length,
+            0,
+          ),
+        },
         ...(bundle ? { ticketBundle: bundle.structured } : {}),
       },
     };

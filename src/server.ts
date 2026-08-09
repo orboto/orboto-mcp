@@ -25,6 +25,7 @@ import { aiStatusToolConfig, makeAiStatusHandler } from './tools/ai-status.js';
 import { embeddingStatusToolConfig, makeEmbeddingStatusHandler } from './tools/embedding-status.js';
 import { aiUsageToolConfig, makeAiUsageHandler } from './tools/ai-usage.js';
 import { sessionStartToolConfig, makeSessionStartHandler } from './tools/session-start.js';
+import { responseExpandToolConfig, makeResponseExpandHandler } from './tools/response-expand.js';
 import {
   listAgentInstructionsToolConfig, makeListAgentInstructionsHandler,
   createAgentInstructionToolConfig, makeCreateAgentInstructionHandler,
@@ -397,6 +398,10 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_ai_usage', aiUsageToolConfig, makeAiUsageHandler(client));
   // ORB-1093 — session-start / post-compact re-orientation digest.
   reg('orboto_session_start', sessionStartToolConfig, makeSessionStartHandler(client));
+  // ORB-1697 - the way back from a budget-truncated response. Serves the
+  // omitted remainder from the in-process store, so capping a response
+  // never loses content.
+  reg('orboto_response_expand', responseExpandToolConfig, makeResponseExpandHandler());
   // ORB-1089 — manage the configurable coding-agent rule blocks (admin:ai:write).
   reg('orboto_list_agent_instructions', listAgentInstructionsToolConfig, makeListAgentInstructionsHandler(client));
   reg('orboto_create_agent_instruction', createAgentInstructionToolConfig, makeCreateAgentInstructionHandler(client));

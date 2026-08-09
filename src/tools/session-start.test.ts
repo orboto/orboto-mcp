@@ -101,9 +101,14 @@ describe('orboto_session_start (ORB-1093)', () => {
     expect(text).toContain('Git connection health — WARNING');
     expect(text).toContain('orboto/orboto');
     expect(text).toContain('connection is deactivated');
-    const structured = res.structuredContent as { gitHealth: Array<{ projectId: string; connections: unknown[] }> };
-    expect(structured.gitHealth).toHaveLength(1);
-    expect(structured.gitHealth[0].projectId).toBe('proj-1');
+    // ORB-1697 - unhealthy connections only; a healthy one is 11 fields
+    // the agent never acts on, so it is reduced to a count.
+    const structured = res.structuredContent as {
+      gitHealth: { unhealthy: Array<{ projectId: string; connections: unknown[] }>; healthyCount: number };
+    };
+    expect(structured.gitHealth.unhealthy).toHaveLength(1);
+    expect(structured.gitHealth.unhealthy[0].projectId).toBe('proj-1');
+    expect(structured.gitHealth.healthyCount).toBe(0);
   });
 
   it('omits the git health section when every connection is healthy', async () => {
@@ -169,7 +174,12 @@ describe('orboto_session_start — rules-hash ack (ORB-1607)', () => {
     const secondCall = calls.find((c) => c.startsWith('/agent-instructions'));
     expect(secondCall).toBe('/agent-instructions?knownRulesHash=abc123def456');
     const secondText = (second.content[0] as { text: string }).text;
-    expect(secondText).toContain('Unchanged since your last session-start on this connection');
+    // ORB-1697 - the ack must not assert that the CALLER still holds the
+    // rules (a stdio server outlives /clear and every compaction), and it
+    // must name the way to get them back.
+    expect(secondText).toContain('Unchanged since this connection last delivered them');
+    expect(secondText).toContain('forceRules=true');
+    expect(secondText).not.toContain('keep following what you already loaded');
     expect(secondText).not.toContain('claim -> commit -> close');
     const secondStructured = second.structuredContent as { rulesHash: string | null; rulesUnchanged: boolean };
     expect(secondStructured.rulesHash).toBe('abc123def456');
@@ -267,5 +277,168 @@ describe('orboto_session_start — ticketKey bundle (ORB-1607)', () => {
     expect(text).toContain('## Timer');
     const structured = res.structuredContent as { ticketBundle: { error: string } };
     expect(structured.ticketBundle.error).toBeTruthy();
+  });
+});
+
+/**
+ * ORB-1697 - the response-budget-driven changes to session_start.
+ *
+ * The digest is the most expensive tool in the workspace (measured 18.620
+ * characters average, fired on every session start AND after every
+ * compaction), so what it puts in the payload has to earn its place.
+ */
+describe('orboto_session_start - context cost (ORB-1697)', () => {
+  const client = new OrbotoClient({ baseUrl: 'http://api.test', apiKey: 'orb_k' });
+
+  const rulesStub = {
+    '/users/me/assigned-tickets': { items: [] },
+    '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
+    '/agent-instructions': { instructions: 'THE FULL RULE TEXT', rulesHash: 'h9' },
+    '/time/timer': {},
+  };
+
+  it('forceRules re-sends the rules in full even when this connection already delivered them', async () => {
+    const calls = stubByPath(rulesStub);
+    const handler = makeSessionStartHandler(client);
+
+    await handler();                       // primes the per-connection hash
+    calls.length = 0;
+    const forced = await handler({ forceRules: true });
+
+    // No knownRulesHash means the API cannot answer with an ack.
+    expect(calls.find((c) => c.startsWith('/agent-instructions'))).toBe('/agent-instructions');
+    const text = (forced.content[0] as { text: string }).text;
+    expect(text).toContain('THE FULL RULE TEXT');
+    expect(text).not.toContain('forceRules=true');
+  });
+
+  it('without forceRules the ack path is still used - the saving is not lost', async () => {
+    const calls = stubByPath(rulesStub);
+    const handler = makeSessionStartHandler(client);
+    await handler();
+    calls.length = 0;
+    await handler();
+    expect(calls.find((c) => c.startsWith('/agent-instructions'))).toBe('/agent-instructions?knownRulesHash=h9');
+  });
+
+  it('a healthy git connection costs a count, not eleven fields', async () => {
+    stubByPath({
+      '/users/me/assigned-tickets': {
+        items: [{ ticketKey: 'ORB-42', title: 'Wire it up', statusName: 'In Review', projectId: 'proj-1' }],
+      },
+      '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
+      '/agent-instructions': { instructions: 'rules here' },
+      '/time/timer': {},
+      '/projects/proj-1/git-health': {
+        connections: [{
+          connectionId: 'conn-1', name: 'orboto/orboto', provider: 'github',
+          connected: true, healthy: true, lastEventAt: '2026-08-09T00:00:00Z', reason: null,
+          outboundReachable: true, inboundDelivering: true, deliveryError: null, lastProbeAt: '2026-08-09T00:00:00Z',
+        }],
+      },
+    });
+    const res = await makeSessionStartHandler(client)();
+    const structured = res.structuredContent as { gitHealth: { unhealthy: unknown[]; healthyCount: number } };
+    expect(structured.gitHealth.unhealthy).toEqual([]);
+    expect(structured.gitHealth.healthyCount).toBe(1);
+    // And the connection object itself is nowhere in the payload.
+    expect(JSON.stringify(structured)).not.toContain('lastProbeAt');
+  });
+
+  it('with a ticketKey, open work in OTHER projects becomes a count instead of 20 rows', async () => {
+    stubByPath({
+      '/projects/by-key/ORB': { id: 'proj-1', key: 'ORB', name: 'orboto' },
+      '/projects/proj-1/tickets/by-key/42': { id: 'tick-1', projectId: 'proj-1', ticketKey: 'ORB-42', title: 'Bug' },
+      '/projects/proj-1/tickets/tick-1': {
+        id: 'tick-1', projectId: 'proj-1', ticketKey: 'ORB-42', title: 'Bug',
+        status: 'IN_PROGRESS', statusName: 'In Progress', priority: 'high', type: 'bug',
+      },
+      // Longest path first - the stub map is matched by startsWith.
+      '/users/me/assigned-tickets': {
+        items: [
+          { ticketKey: 'ORB-42', title: 'Same project', statusName: 'In Progress', projectId: 'proj-1' },
+          { ticketKey: 'HIVE-818', title: 'Another project entirely', statusName: 'In Progress', projectId: 'proj-2' },
+          { ticketKey: 'HIVE-814', title: 'And another', statusName: 'In Review', projectId: 'proj-2' },
+        ],
+      },
+      '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
+      '/agent-instructions': { instructions: 'rules here' },
+      '/time/timer': {},
+      '/v1/agent/presence': [],
+    });
+    const res = await makeSessionStartHandler(client)({ ticketKey: 'ORB-42' });
+    const structured = res.structuredContent as {
+      inProgress: Array<{ ticketKey: string }>;
+      inProgressElsewhereCount?: number;
+    };
+    expect(structured.inProgress.map((t) => t.ticketKey)).toEqual(['ORB-42']);
+    expect(structured.inProgressElsewhereCount).toBe(2);
+    const text = (res.content[0] as { text: string }).text;
+    // Nothing is hidden: the count is stated, with the way to list them.
+    expect(text).toContain('2 open ticket(s) assigned to you in other projects');
+    expect(text).toContain('orboto_my_tickets');
+    expect(text).not.toContain('Another project entirely');
+  });
+
+  it('without a ticketKey the full cross-project list is kept - the scoping is opt-in by context, not a silent filter', async () => {
+    stubByPath({
+      '/users/me/assigned-tickets': {
+        items: [
+          { ticketKey: 'ORB-42', title: 'One', statusName: 'In Progress', projectId: 'proj-1' },
+          { ticketKey: 'HIVE-818', title: 'Two', statusName: 'In Progress', projectId: 'proj-2' },
+        ],
+      },
+      '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
+      '/agent-instructions': { instructions: 'rules here' },
+      '/time/timer': {},
+    });
+    const res = await makeSessionStartHandler(client)();
+    const structured = res.structuredContent as {
+      inProgress: Array<{ ticketKey: string }>;
+      inProgressElsewhereCount?: number;
+    };
+    expect(structured.inProgress.map((t) => t.ticketKey)).toEqual(['ORB-42', 'HIVE-818']);
+    expect(structured.inProgressElsewhereCount).toBeUndefined();
+  });
+});
+
+/**
+ * ORB-1697 - the class the ORB-1697 tests kept tripping over: every
+ * optional read here is guarded with `.catch`, which covers a REJECTED
+ * request but not a 200 whose body has a different shape (an older
+ * instance, a wrapped/paginated response, a field rename). Three separate
+ * spots in this file would have thrown and taken the whole digest down
+ * over an optional section - at exactly the moment an agent has the least
+ * context. One test pins all of them.
+ */
+describe('orboto_session_start - a 200 with an unexpected body never kills the digest (ORB-1697)', () => {
+  const client = new OrbotoClient({ baseUrl: 'http://api.test', apiKey: 'orb_k' });
+
+  it('renders the digest when every optional endpoint answers 200 with {}', async () => {
+    // Only the paths the digest cannot work without return real data; every
+    // optional read answers `{}`, which is what the fallthrough produces.
+    stubByPath({
+      '/projects/by-key/ORB': { id: 'proj-1', key: 'ORB', name: 'orboto' },
+      '/projects/proj-1/tickets/by-key/42': { id: 'tick-1', projectId: 'proj-1', ticketKey: 'ORB-42', title: 'Bug' },
+      '/users/me/assigned-tickets': { items: [] },
+      '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
+      '/agent-instructions': { instructions: 'rules here' },
+    });
+
+    const res = await makeSessionStartHandler(client)({ ticketKey: 'ORB-42' });
+
+    const text = (res.content[0] as { text: string }).text;
+    expect(res.isError).toBeUndefined();
+    expect(text).toContain('## Working rules');
+    expect(text).toContain('## Ticket bundle: ORB-42');
+    expect(text).toContain('### Dependencies');
+    expect(text).toContain('### Checklists');
+    const structured = res.structuredContent as {
+      ticketBundle: { dependencies: { blockedBy: unknown[]; blocks: unknown[] }; checklists: unknown[]; activeSessions: unknown[] };
+    };
+    expect(structured.ticketBundle.dependencies.blockedBy).toEqual([]);
+    expect(structured.ticketBundle.dependencies.blocks).toEqual([]);
+    expect(structured.ticketBundle.checklists).toEqual([]);
+    expect(structured.ticketBundle.activeSessions).toEqual([]);
   });
 });
