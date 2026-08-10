@@ -87,6 +87,10 @@ export const TOOL_BUDGET_CHARS: Record<string, number> = {
   // request body + responses), which is the content the caller asked
   // for; 4k would cut most real schemas in half.
   orboto_api_search: 8_000,
+  // ORB-1519 - the proxy envelope IS the content the caller asked for
+  // (an arbitrary endpoint's response); the proxy already caps it, this
+  // budget keeps the MCP-side carry cost bounded on top.
+  orboto_api_call: 8_000,
 };
 
 /**

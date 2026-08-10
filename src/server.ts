@@ -27,6 +27,7 @@ import { aiUsageToolConfig, makeAiUsageHandler } from './tools/ai-usage.js';
 import { sessionStartToolConfig, makeSessionStartHandler } from './tools/session-start.js';
 import { responseExpandToolConfig, makeResponseExpandHandler } from './tools/response-expand.js';
 import { apiSearchToolConfig, makeApiSearchHandler } from './tools/api-search.js';
+import { apiCallToolConfig, makeApiCallHandler } from './tools/api-call.js';
 import {
   listAgentInstructionsToolConfig, makeListAgentInstructionsHandler,
   createAgentInstructionToolConfig, makeCreateAgentInstructionHandler,
@@ -407,6 +408,9 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   // OpenAPI spec / fetch one endpoint's schema on demand. Keeps the whole
   // REST surface reachable without a named tool per endpoint.
   reg('orboto_api_search', apiSearchToolConfig, makeApiSearchHandler(client));
+  // ORB-1519 - the execute half: structured REST proxy through the
+  // API's full auth + permission chain (POST /system/api-proxy).
+  reg('orboto_api_call', apiCallToolConfig, makeApiCallHandler(client));
   // ORB-1089 — manage the configurable coding-agent rule blocks (admin:ai:write).
   reg('orboto_list_agent_instructions', listAgentInstructionsToolConfig, makeListAgentInstructionsHandler(client));
   reg('orboto_create_agent_instruction', createAgentInstructionToolConfig, makeCreateAgentInstructionHandler(client));
