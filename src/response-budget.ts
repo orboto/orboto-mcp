@@ -83,6 +83,10 @@ export const TOOL_BUDGET_CHARS: Record<string, number> = {
   // The continuation tool itself: a chunk is served AT the budget, so a
   // cap equal to the default would truncate the chunk it just sized.
   orboto_response_expand: 8_000,
+  // ORB-1518 - detail mode returns a full endpoint schema (parameters +
+  // request body + responses), which is the content the caller asked
+  // for; 4k would cut most real schemas in half.
+  orboto_api_search: 8_000,
 };
 
 /**
