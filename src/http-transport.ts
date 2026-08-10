@@ -35,6 +35,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { buildOrbotoMcpServer } from './server.js';
+import { resolveToolset, type Toolset } from './toolset.js';
 import { OrbotoClient, preflightMcpSession } from './orboto-client.js';
 import type { OAuthTokenProviderLike } from './orboto-client.js';
 import { EventBridge } from './event-bridge.js';
@@ -333,7 +334,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
   // Build the per-session core (client + subscription set + MCP server +
   // event bridge) bound to a token. Shared by the new-session, rehydrate, and
   // adopt paths so they can't drift apart.
-  async function buildSessionCore(tokenHolder: SessionTokenHolder, userAgentSuffix: string | undefined) {
+  async function buildSessionCore(tokenHolder: SessionTokenHolder, userAgentSuffix: string | undefined, toolset?: Toolset) {
     // ORB-1470 - bind every long-lived per-session consumer (kill-switch
     // client, tool-handler client, SSE bridge) to the SAME mutable holder so
     // one `holder.current = <request bearer>` update rotates the bearer for
@@ -355,7 +356,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
     // valid and its re-subscribe resumes pushes); adoption gives a new id so
     // the client treats it as a fresh session and re-subscribes from scratch.
     const subscriptions = new Set<string>();
-    const mcp = await buildOrbotoMcpServer({ baseUrl, tokenProvider, userAgentSuffix, subscriptions });
+    const mcp = await buildOrbotoMcpServer({ baseUrl, tokenProvider, userAgentSuffix, subscriptions, toolset });
     const bridge = new EventBridge({ baseUrl, tokenProvider, mcp, subscriptions });
     return { sessionClient, subscriptions, mcp, bridge };
   }
@@ -380,8 +381,9 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
     userAgentSuffix: string | undefined,
     chosenSessionId: string,
     userEmail: string,
+    toolset?: Toolset,
   ): Promise<McpSession> {
-    const { sessionClient, mcp, bridge } = await buildSessionCore(tokenHolder, userAgentSuffix);
+    const { sessionClient, mcp, bridge } = await buildSessionCore(tokenHolder, userAgentSuffix, toolset);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
     transport.onclose = () => { sessions.delete(chosenSessionId); bridge.close(); };
     await mcp.connect(transport);
@@ -451,11 +453,21 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
 
     // Route: all MCP traffic lands on /mcp per spec convention.
     // Anything else is 404 so an accidental probe at / doesn't leak
-    // the transport.
-    if (req.url !== '/mcp') {
+    // the transport. ORB-1520 - a query string is allowed (and used):
+    // `?toolset=full` opts a connection into the full named-tool
+    // manifest without server-side env access. The param rides on EVERY
+    // request from a client configured with that URL, so it needs no
+    // session persistence.
+    const requestUrl = new URL(req.url ?? '', 'http://localhost');
+    if (requestUrl.pathname !== '/mcp') {
       sendError(res, 404, 'Not found');
       return;
     }
+    const toolset = resolveToolset(
+      requestUrl.searchParams.get('toolset')
+        ?? (req.headers['x-orboto-toolset'] as string | undefined),
+      process.env.ORBOTO_MCP_TOOLSET,
+    );
 
     // Reject non-POST + non-DELETE. GET on /mcp is legal per the spec
     // (SSE resumption) but that is unimplemented here.
@@ -642,7 +654,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
       }
 
       if (action === 'rehydrate') {
-        const session = await establishForcedSession({ current: token }, userAgentSuffix, sessionId, callerEmail);
+        const session = await establishForcedSession({ current: token }, userAgentSuffix, sessionId, callerEmail, toolset);
         // Touch persistence so the TTL slides; same id, so no adoptedFrom.
         void store.register(token, { sessionId, userAgent }).catch(() => { /* best-effort */ });
         await session.transport.handleRequest(req, res, body);
@@ -651,7 +663,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
 
       // action === 'adopt' - mint a fresh id and re-establish under it.
       const newSessionId = randomUUID();
-      const session = await establishForcedSession({ current: token }, userAgentSuffix, newSessionId, callerEmail);
+      const session = await establishForcedSession({ current: token }, userAgentSuffix, newSessionId, callerEmail, toolset);
       // Rewrite the in-flight request's session header so the transport
       // validates it against the fresh id AND the response advertises the new
       // id. A well-behaved client migrates to it; a client that keeps sending
@@ -692,7 +704,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
       // ORB-1470 - the session's mutable bearer holder starts at this request's
       // token and is updated to the client's current bearer on every later call.
       const tokenHolder: SessionTokenHolder = { current: token };
-      const { sessionClient, mcp, bridge } = await buildSessionCore(tokenHolder, userAgentSuffix);
+      const { sessionClient, mcp, bridge } = await buildSessionCore(tokenHolder, userAgentSuffix, toolset);
       // "name@version" of the client's declared clientInfo, for observability
       // of which adapter owns the session.
       const clientInfo = clientInfoLabel(body);

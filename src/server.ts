@@ -20,6 +20,7 @@ import { OrbotoClient, type OrbotoClientConfig } from './orboto-client.js';
 import { registerOrbotoResources } from './resources.js';
 import { registerOrbotoPrompts } from './prompts.js';
 import { registerWithMetrics } from './with-metrics.js';
+import { resolveToolset, toolInToolset, type Toolset } from './toolset.js';
 import { createNudgeState } from './session-nudge.js';
 import { aiStatusToolConfig, makeAiStatusHandler } from './tools/ai-status.js';
 import { embeddingStatusToolConfig, makeEmbeddingStatusHandler } from './tools/embedding-status.js';
@@ -262,6 +263,12 @@ export interface BuildServerOptions extends OrbotoClientConfig {
   /** Optional — passed through to McpServer metadata. Clients
    *  sometimes surface this in their UI. */
   clientDescription?: string;
+  /** ORB-1520 - which manifest to register. `curated` (default) is the
+   *  measured high-frequency set + the api_search/api_call escape
+   *  hatch; `full` registers every named tool. Entry points resolve
+   *  this from ORBOTO_MCP_TOOLSET (stdio) / the per-connection
+   *  `?toolset=` query or `x-orboto-toolset` header (http). */
+  toolset?: Toolset;
   /** ORB-940 — when present, the server registers
    *  resources/subscribe + resources/unsubscribe handlers that
    *  write into this set. The HTTP transport reads from it to
@@ -286,17 +293,26 @@ const FALLBACK_WORKING_RULES = [
 
 // Static MCP operational hints — tool/resource/prompt usage that does
 // not change per workspace. The configurable working-rules are appended
-// live below.
-const STATIC_MCP_HINTS = [
-  'orboto is a ticket + project management system.',
-  'When starting on a project, call `orboto_get_project_primer(<PROJECT_KEY>)` once to load its conventions (tech stack, commands, gotchas, expected ticket language).',
-  'Use `orboto_list_projects` first to discover what the user can see.',
-  'Ticket keys look like `PROJ-123`; the first segment is the project key.',
-  'For "what am I working on?" prefer `orboto_my_tickets`; for "anything about X?" prefer `orboto_search`.',
-  'Checklists: `orboto_get_ticket` includes them inline; use `orboto_get_checklists` when you only need the items. A linked-ticket suffix (`↪ [ACME-99]`) means the item is automatically checked/unchecked as that ticket\'s status moves.',
-  'Resources (`orboto://rules`, `orboto://ticket/<key>`, `orboto://doc/<id>`, `orboto://project/<key>`, `orboto://search/<query>`) return read-only Markdown. The `orboto://` URI scheme stays canonical. `orboto://rules` returns the COMPLETE binding rules cap-independently (this instructions block may be truncated by the client). Prompts (`plan-sprint`, `triage-my-tickets`, `summarize-project`, `estimate-ticket`, `find-duplicates`) are one-click guided workflows.',
-  'All writes respect the caller\'s project-level permissions — a 403 means the API rejected the write, not the MCP server.',
-].join(' ');
+// live below. ORB-1520 - assembled per toolset: the curated manifest
+// gets the escape-hatch pointer, the full manifest keeps the
+// get_checklists hint (that tool only exists there).
+function staticMcpHints(toolset: Toolset): string {
+  return [
+    'orboto is a ticket + project management system.',
+    'When starting on a project, call `orboto_get_project_primer(<PROJECT_KEY>)` once to load its conventions (tech stack, commands, gotchas, expected ticket language).',
+    'Use `orboto_list_projects` first to discover what the user can see.',
+    'Ticket keys look like `PROJ-123`; the first segment is the project key.',
+    'For "what am I working on?" prefer `orboto_my_tickets`; for "anything about X?" prefer `orboto_search`.',
+    toolset === 'full'
+      ? 'Checklists: `orboto_get_ticket` includes them inline; use `orboto_get_checklists` when you only need the items. A linked-ticket suffix (`↪ [ACME-99]`) means the item is automatically checked/unchecked as that ticket\'s status moves.'
+      : 'Checklists: `orboto_get_ticket` includes them inline. A linked-ticket suffix (`↪ [ACME-99]`) means the item is automatically checked/unchecked as that ticket\'s status moves.',
+    toolset === 'curated'
+      ? 'This is the CURATED tool manifest (the daily high-frequency set). The ENTIRE REST API stays reachable: find any other endpoint + its schema with `orboto_api_search`, then execute it with `orboto_api_call` - permissions are enforced server-side exactly as for named tools. The full named-tool manifest is opt-in: connect with `?toolset=full` (HTTP) or set ORBOTO_MCP_TOOLSET=full (stdio).'
+      : '',
+    'Resources (`orboto://rules`, `orboto://ticket/<key>`, `orboto://doc/<id>`, `orboto://project/<key>`, `orboto://search/<query>`) return read-only Markdown. The `orboto://` URI scheme stays canonical. `orboto://rules` returns the COMPLETE binding rules cap-independently (this instructions block may be truncated by the client). Prompts (`plan-sprint`, `triage-my-tickets`, `summarize-project`, `estimate-ticket`, `find-duplicates`) are one-click guided workflows.',
+    'All writes respect the caller\'s project-level permissions — a 403 means the API rejected the write, not the MCP server.',
+  ].filter((s) => s.length > 0).join(' ');
+}
 
 // ORB-1177 — MCP clients cap how much of the `instructions` block they
 // inject and silently truncate the overflow (ORB-1168 saw a 5k+ string
@@ -327,6 +343,9 @@ export function assembleInstructions(head: string, workingRules: string, budget 
 
 export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<McpServer> {
   const client = new OrbotoClient(opts);
+  // ORB-1520 - the manifest mode. Explicit option (per-connection) wins,
+  // then the process-wide env default, then `curated`.
+  const toolset = resolveToolset(opts.toolset, process.env.ORBOTO_MCP_TOOLSET);
 
   // ORB-1090 — fetch the workspace's configurable working-rules at
   // connect so admin edits propagate to every new MCP session. The
@@ -371,7 +390,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
       // follow and only their tail is at risk.
       instructions: assembleInstructions(
         [
-          STATIC_MCP_HINTS,
+          staticMcpHints(toolset),
           'FIRST ACTION this session: call the `orboto_session_start` tool — it returns the complete, authoritative binding rules you must follow (plus your in-progress work). Re-run it after any context compaction. If the rules below look cut off, `orboto_session_start` and the `orboto://rules` resource always have the full set. (Do NOT use `orboto_list_agent_instructions` to read the rules — that manages rule blocks for admins.) Core non-negotiables: ticket-first (claim or create a ticket before touching code), one commit per ticket with the ticket key in the subject line, push after each commit, and never mark work done that is not actually done.',
         ].join('\n\n'),
         workingRules,
@@ -391,7 +410,15 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   // via the withMetrics wrapper. `reg` is a one-line shim around
   // `server.registerTool` that adds the metrics layer at registration
   // time; per-tool files stay metrics-unaware.
-  const reg = registerWithMetrics(server, client, opts.userAgentSuffix, nudgeState);
+  // ORB-1520 - the toolset gate. Wraps the metrics-registering shim so a
+  // tail tool in curated mode simply never registers; the reg() CALL
+  // SITES below stay untouched (the chat-tools drift guard parses them
+  // from this file's source and must keep seeing the full set).
+  const regAll = registerWithMetrics(server, client, opts.userAgentSuffix, nudgeState);
+  const reg: typeof regAll = (toolName, config, handler) => {
+    if (!toolInToolset(toolName, toolset)) return;
+    regAll(toolName, config, handler);
+  };
 
   // Tools — alphabetical-ish by concept. Each tool file owns its
   // input/output schema; the server just glues names to handlers.
