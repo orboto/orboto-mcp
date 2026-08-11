@@ -73,6 +73,27 @@ describe('orboto_api_call', () => {
     expect(text).toMatch(/missing permission/i);
   });
 
+  it('un-stringifies a client-stringified JSON body before posting (ORB-1710)', async () => {
+    const calls = stub([{
+      json: { status: 201, contentType: 'application/json', body: { ok: true }, encoding: 'json', truncated: false, matchedRoute: '/docs/{id}/append-section' },
+    }]);
+    await makeApiCallHandler(client)({
+      method: 'POST',
+      path: '/docs/abc/append-section',
+      body: '{"content":"# heading"}',
+    });
+    // The proxy must receive real JSON, not a double-encoded string.
+    expect((calls[0].body as { body: unknown }).body).toEqual({ content: '# heading' });
+  });
+
+  it('passes an unparseable string body through for the proxy\'s clear 400', async () => {
+    const calls = stub([{
+      json: { status: 400, contentType: 'application/json', body: { errorKey: 'errors.api_proxy.invalid_body' }, encoding: 'json', truncated: false, matchedRoute: '/x' },
+    }]);
+    await makeApiCallHandler(client)({ method: 'POST', path: '/projects', body: 'not json' });
+    expect((calls[0].body as { body: unknown }).body).toBe('not json');
+  });
+
   it('forwards query params', async () => {
     const calls = stub([{
       json: { status: 200, contentType: 'application/json', body: [], encoding: 'json', truncated: false, matchedRoute: '/projects' },
