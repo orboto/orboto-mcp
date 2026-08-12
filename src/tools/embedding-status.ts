@@ -27,6 +27,9 @@ interface EmbeddingStatusResponse {
     overall: { embedded: number; total: number; embeddable: number; pending: number; noContent: number };
   };
   breaker: { tripped: boolean; trippedUntil: string | null; consecutiveFailures: number; lastTrippedReason: string | null };
+  // ORB-1715 - managed-AI billing-gate state (contract OCP-D24); null when
+  // never signalled. `reason` is the OCP-owned closed enum.
+  billingGate: { gated: boolean; blockedAt: string | null; reason: string | null; source: 'signal' | 'fallback'; updatedAt: string } | null;
   lastEmbeddedAt: string | null;
   stalled: boolean;
   stalledMinutes: number | null;
@@ -49,6 +52,8 @@ export const embeddingStatusToolConfig = {
     noContent: z.number(),
     breakerTripped: z.boolean(),
     breakerReason: z.string().nullable(),
+    billingGated: z.boolean(),
+    billingGateReason: z.string().nullable(),
     lastEmbeddedAt: z.string().nullable(),
     stalled: z.boolean(),
     stalledMinutes: z.number().nullable(),
@@ -75,6 +80,13 @@ export function makeEmbeddingStatusHandler(client: OrbotoClient) {
       lines.push(
         `Circuit breaker: ${s.breaker.tripped ? `TRIPPED — ${s.breaker.lastTrippedReason ?? 'unknown reason'} (${s.breaker.consecutiveFailures} consecutive failures)` : 'ok'}`,
       );
+      // ORB-1715 - a billing gate is the one cause the customer can fix
+      // themselves; name it instead of letting it read as a provider fault.
+      if (s.billingGate?.gated) {
+        lines.push(
+          `BILLING GATE: managed AI is paused for billing${s.billingGate.reason ? ` (${s.billingGate.reason})` : ''} since ${s.billingGate.blockedAt ?? 'unknown'}. The workspace admin resolves this in their orboto account; queued items embed automatically after the unblock.`,
+        );
+      }
       lines.push(`Last embedded: ${s.lastEmbeddedAt ?? 'never'}`);
       if (s.stalled) {
         lines.push('');
@@ -102,6 +114,8 @@ export function makeEmbeddingStatusHandler(client: OrbotoClient) {
         noContent: o.noContent,
         breakerTripped: s.breaker.tripped,
         breakerReason: s.breaker.lastTrippedReason,
+        billingGated: s.billingGate?.gated ?? false,
+        billingGateReason: s.billingGate?.reason ?? null,
         lastEmbeddedAt: s.lastEmbeddedAt,
         stalled: s.stalled,
         stalledMinutes: s.stalledMinutes,
