@@ -23,6 +23,7 @@ const BASE_STATUS = {
   },
   breaker: { tripped: false, trippedUntil: null, consecutiveFailures: 0, lastTrippedReason: null },
   billingGate: null,
+  spend: null,
   lastEmbeddedAt: '2026-08-12T10:00:00.000Z',
   stalled: false,
   stalledMinutes: null,
@@ -64,6 +65,24 @@ describe('tools/embedding-status', () => {
     expect(text).toContain('allowance_exhausted');
     // Contract guarantee: never vendor prose on any surface.
     expect(text).not.toContain('Key is blocked');
+  });
+
+  it('surfaces the spend state so agents can warn before the gate (ORB-1719)', async () => {
+    mockFetch({
+      ...BASE_STATUS,
+      spend: {
+        month: '2026-08-01', allowanceGrantMicrocents: 4_000_000, allowanceConsumedMicrocents: 3_500_000,
+        allowanceRemainingMicrocents: 500_000, overageMode: 'hard_gate', overageCapMicrocents: null,
+        overageConsumedMicrocents: null, walletBalanceMicrocents: null, walletFunded: true,
+        updatedAt: '2026-08-13T09:00:00.000Z',
+      },
+    });
+    const result = await makeEmbeddingStatusHandler(client)();
+    expect(result.structuredContent).toMatchObject({
+      allowanceRemainingMicrocents: 500_000, allowanceGrantMicrocents: 4_000_000, overageMode: 'hard_gate',
+    });
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain('3.50 of 4.00 EUR used');
   });
 
   it('tolerates an older api without the billingGate field', async () => {

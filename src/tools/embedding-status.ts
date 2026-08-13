@@ -30,6 +30,20 @@ interface EmbeddingStatusResponse {
   // ORB-1715 - managed-AI billing-gate state (contract OCP-D24); null when
   // never signalled. `reason` is the OCP-owned closed enum.
   billingGate: { gated: boolean; blockedAt: string | null; reason: string | null; source: 'signal' | 'fallback'; updatedAt: string } | null;
+  // ORB-1719 - managed-AI spend state (microcents; wallet fields may both be
+  // null when the publisher withholds the balance).
+  spend: {
+    month: string | null;
+    allowanceGrantMicrocents: number | null;
+    allowanceConsumedMicrocents: number | null;
+    allowanceRemainingMicrocents: number | null;
+    overageMode: string | null;
+    overageCapMicrocents: number | null;
+    overageConsumedMicrocents: number | null;
+    walletBalanceMicrocents: number | null;
+    walletFunded: boolean | null;
+    updatedAt: string;
+  } | null;
   lastEmbeddedAt: string | null;
   stalled: boolean;
   stalledMinutes: number | null;
@@ -54,6 +68,9 @@ export const embeddingStatusToolConfig = {
     breakerReason: z.string().nullable(),
     billingGated: z.boolean(),
     billingGateReason: z.string().nullable(),
+    allowanceRemainingMicrocents: z.number().nullable(),
+    allowanceGrantMicrocents: z.number().nullable(),
+    overageMode: z.string().nullable(),
     lastEmbeddedAt: z.string().nullable(),
     stalled: z.boolean(),
     stalledMinutes: z.number().nullable(),
@@ -87,6 +104,13 @@ export function makeEmbeddingStatusHandler(client: OrbotoClient) {
           `BILLING GATE: managed AI is paused for billing${s.billingGate.reason ? ` (${s.billingGate.reason})` : ''} since ${s.billingGate.blockedAt ?? 'unknown'}. The workspace admin resolves this in their orboto account; queued items embed automatically after the unblock.`,
         );
       }
+      // ORB-1719 - spend visibility so an agent can warn BEFORE the gate.
+      if (s.spend?.allowanceGrantMicrocents != null && s.spend.allowanceConsumedMicrocents != null) {
+        const eur = (mc: number) => (mc / 1_000_000).toFixed(2);
+        lines.push(
+          `Included AI this month: ${eur(s.spend.allowanceConsumedMicrocents)} of ${eur(s.spend.allowanceGrantMicrocents)} EUR used${s.spend.allowanceRemainingMicrocents != null ? ` · ${eur(s.spend.allowanceRemainingMicrocents)} EUR left` : ''} · overage ${s.spend.overageMode ?? 'unknown'}`,
+        );
+      }
       lines.push(`Last embedded: ${s.lastEmbeddedAt ?? 'never'}`);
       if (s.stalled) {
         lines.push('');
@@ -116,6 +140,9 @@ export function makeEmbeddingStatusHandler(client: OrbotoClient) {
         breakerReason: s.breaker.lastTrippedReason,
         billingGated: s.billingGate?.gated ?? false,
         billingGateReason: s.billingGate?.reason ?? null,
+        allowanceRemainingMicrocents: s.spend?.allowanceRemainingMicrocents ?? null,
+        allowanceGrantMicrocents: s.spend?.allowanceGrantMicrocents ?? null,
+        overageMode: s.spend?.overageMode ?? null,
         lastEmbeddedAt: s.lastEmbeddedAt,
         stalled: s.stalled,
         stalledMinutes: s.stalledMinutes,
