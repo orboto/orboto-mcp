@@ -72,7 +72,7 @@ describe('tools/embedding-status', () => {
       ...BASE_STATUS,
       spend: {
         month: '2026-08-01', allowanceGrantMicrocents: 4_000_000, allowanceConsumedMicrocents: 3_500_000,
-        allowanceRemainingMicrocents: 500_000, overageMode: 'hard_gate', overageCapMicrocents: null,
+        allowanceRemainingMicrocents: 500_000, overageMode: 'hard_gate', overageCapEurCents: null,
         overageConsumedMicrocents: null, walletBalanceMicrocents: null, walletFunded: true,
         updatedAt: '2026-08-13T09:00:00.000Z',
       },

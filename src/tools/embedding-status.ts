@@ -38,7 +38,7 @@ interface EmbeddingStatusResponse {
     allowanceConsumedMicrocents: number | null;
     allowanceRemainingMicrocents: number | null;
     overageMode: string | null;
-    overageCapMicrocents: number | null;
+    overageCapEurCents: number | null;
     overageConsumedMicrocents: number | null;
     walletBalanceMicrocents: number | null;
     walletFunded: boolean | null;
