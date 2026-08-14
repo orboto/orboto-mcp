@@ -40,8 +40,11 @@ import {
   agentHeartbeatToolConfig, makeAgentHeartbeatHandler,
   agentPresenceToolConfig, makeAgentPresenceHandler,
   agentNotifyToolConfig, makeAgentNotifyHandler,
+} from './tools/agent-coordination.js';
+import {
   agentBroadcastToolConfig, makeAgentBroadcastHandler,
 } from './tools/agent-coordination.js';
+import { agentMessagesToolConfig, makeAgentMessagesHandler } from './tools/agent-messages.js';
 import { listProjectsToolConfig, makeListProjectsHandler } from './tools/list-projects.js';
 import { getProjectToolConfig, makeGetProjectHandler } from './tools/get-project.js';
 import { getProjectPrimerToolConfig, makeGetProjectPrimerHandler } from './tools/get-project-primer.js';
@@ -449,6 +452,8 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_agent_heartbeat', agentHeartbeatToolConfig, makeAgentHeartbeatHandler(client));
   reg('orboto_agent_presence', agentPresenceToolConfig, makeAgentPresenceHandler(client));
   reg('orboto_agent_notify', agentNotifyToolConfig, makeAgentNotifyHandler(client));
+  // ORB-1727 - the receive half of the store-and-forward inbox.
+  reg('orboto_messages', agentMessagesToolConfig, makeAgentMessagesHandler(client));
   // ORB-964 — scoped fan-out for multi-agent coordination.
   reg('orboto_agent_broadcast', agentBroadcastToolConfig, makeAgentBroadcastHandler(client));
   reg('orboto_list_projects', listProjectsToolConfig, makeListProjectsHandler(client));

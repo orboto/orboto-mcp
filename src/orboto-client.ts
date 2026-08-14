@@ -108,6 +108,9 @@ export class OrbotoClient {
    * `OrbotoApiError` on a non-2xx (after the retry). Returns the raw Response
    * so callers parse json/text/binary as they need.
    */
+  /** ORB-1727 - unread-inbox count from the latest api response header. */
+  pendingAgentMail = 0;
+
   private async authedFetch(
     url: string,
     init: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> },
@@ -126,6 +129,11 @@ export class OrbotoClient {
     if (res.status === 401 && this.tokenProvider) {
       res = await doFetch(await this.bearer(true));
     }
+    // ORB-1727 - the api stamps `x-orboto-agent-mail: <count>` on responses
+    // while the caller has unread inbox messages. Capture it centrally so
+    // the tool-response wrapper can nudge without any extra request.
+    const mail = res.headers?.get?.('x-orboto-agent-mail');
+    this.pendingAgentMail = mail ? Number(mail) || 0 : 0;
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       throw new OrbotoApiError(res.status, body, url);

@@ -278,7 +278,7 @@ export function makeSessionStartHandler(client: OrbotoClient) {
     const rulesQs = rulesParams.toString();
     const rulesPath = rulesQs ? `/agent-instructions?${rulesQs}` : '/agent-instructions';
 
-    const [me, rules, assigned, timer] = await Promise.all([
+    const [me, rules, assigned, timer, inboxRaw] = await Promise.all([
       client.get<Me>('/users/me').catch(() => null),
       client.get<RulesResponse>(rulesPath).catch(() => ({}) as RulesResponse),
       // ORB-1330 — a re-orientation briefing must only list OPEN work.
@@ -288,7 +288,13 @@ export function makeSessionStartHandler(client: OrbotoClient) {
       // Cap 20.
       client.get<{ items?: Ticket[] } | Ticket[]>('/users/me/assigned-tickets?statuses=IN_PROGRESS,IN_REVIEW&limit=20').catch(() => ({ items: [] })),
       client.get<Timer>('/time/timer').catch(() => null),
+      // ORB-1727 - unread agent messages, delivered right where an agent
+      // re-orients. Coerced defensively (ORB-1697 lesson) and optional.
+      client.get<{ messages?: Array<{ id: string; fromUserId: string; kind: string; subject: string; createdAt: string }> }>('/v1/agent/messages?limit=10')
+        .then((r) => (Array.isArray(r?.messages) ? r.messages : []))
+        .catch(() => []),
     ]);
+    const pendingMessages = inboxRaw.map((m) => ({ id: m.id, fromUserId: m.fromUserId, kind: m.kind, subject: m.subject, createdAt: m.createdAt }));
     if (rules.rulesHash) lastKnownRulesHash = rules.rulesHash;
     const tickets: Ticket[] = Array.isArray(assigned) ? assigned : (assigned?.items ?? []);
 
@@ -356,6 +362,11 @@ export function makeSessionStartHandler(client: OrbotoClient) {
     }
     lines.push('', '## Timer');
     lines.push(timer?.ticketId ? `Running on ${timer.ticketKey ?? timer.ticketId} since ${timer.startedAt ?? 'earlier'}.` : 'No timer running.');
+    if (pendingMessages.length > 0) {
+      lines.push('', '## Agent messages - unread');
+      for (const m of pendingMessages) lines.push(`- [${m.kind}] ${m.subject} (from ${m.fromUserId}, ${m.createdAt}, id ${m.id})`);
+      lines.push('Handle them, then acknowledge via orboto_messages { ackIds: [...] }; reply via orboto_agent_notify with threadId.');
+    }
     if (bundle) lines.push(...bundle.lines);
     lines.push('', 'Re-run this after any context compaction to re-sync.');
     return {
@@ -378,6 +389,7 @@ export function makeSessionStartHandler(client: OrbotoClient) {
             0,
           ),
         },
+        ...(pendingMessages.length > 0 ? { pendingMessages } : {}),
         ...(bundle ? { ticketBundle: bundle.structured } : {}),
       },
     };

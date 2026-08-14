@@ -141,6 +141,7 @@ export function makeAgentPresenceHandler(client: OrbotoClient) {
 
 interface NotifyResponse {
   ok: true;
+  messageId: string;
 }
 
 export const agentNotifyToolConfig = {
@@ -152,9 +153,12 @@ export const agentNotifyToolConfig = {
     kind: z.enum(['info', 'request', 'complete', 'error']).default('info'),
     subject: z.string().min(1).max(200),
     payload: z.record(z.string(), z.unknown()).optional(),
+    // ORB-1727 - reply chaining: the id of the inbox message being answered.
+    threadId: z.string().uuid().optional(),
   }).shape,
   outputSchema: z.object({
     ok: z.literal(true),
+    messageId: z.string().uuid(),
   }).shape,
   annotations: { readOnlyHint: false, idempotentHint: false },
 };
@@ -200,11 +204,15 @@ export function makeAgentNotifyHandler(client: OrbotoClient) {
     kind?: 'info' | 'request' | 'complete' | 'error';
     subject: string;
     payload?: Record<string, unknown>;
+    threadId?: string;
   }): Promise<CallToolResult> => {
-    await client.post<NotifyResponse>('/v1/agent/notify', args);
+    const res = await client.post<NotifyResponse>('/v1/agent/notify', args);
     return {
-      content: [{ type: 'text', text: `notified ${args.targetEmail}` }],
-      structuredContent: { ok: true },
+      // ORB-1727 - the message is durable now: it reaches the recipient's
+      // inbox even when they are offline (delivery via the pending-mail
+      // pointer on their next tool call).
+      content: [{ type: 'text', text: `notified ${args.targetEmail} (message ${res.messageId} - delivered live if connected, waits in their inbox otherwise)` }],
+      structuredContent: { ok: true, messageId: res.messageId },
     };
   };
 }

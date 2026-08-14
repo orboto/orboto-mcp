@@ -163,7 +163,13 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
         responseChars: budgeted.responseChars,
         truncatedChars: budgeted.truncatedChars,
       });
-      return wantsNudge ? prependNudge(result) : result;
+      // ORB-1727 - agent-mail piggyback: the client captured the api's
+      // `x-orboto-agent-mail` header on the request this tool just made.
+      // Append a compact pointer while mail is pending - zero bytes when
+      // the inbox is empty, and never on the messages tool itself (the
+      // caller is already fetching).
+      const withMail = appendMailNudge(client, toolName, result);
+      return wantsNudge ? prependNudge(withMail) : withMail;
     } catch (err) {
       const durationMs = Date.now() - start;
       // ORB-1174 — an OrbotoApiError carries a real HTTP status + message.
@@ -213,6 +219,23 @@ type ToolHandler = (args: any, extra?: any) => Promise<CallToolResult>;
  * no-input-schema overload). Type-correctness is enforced at the
  * original tool-config declaration site instead.
  */
+/**
+ * ORB-1727 - append the pending-inbox pointer to a tool result. Reads the
+ * count the OrbotoClient captured from the last response header; costs
+ * nothing when the inbox is empty and skips the fetch/ack tool itself.
+ */
+function appendMailNudge(client: OrbotoClient, toolName: string, result: CallToolResult): CallToolResult {
+  if (!client.pendingAgentMail || toolName === 'orboto_messages') return result;
+  const line = `You have ${client.pendingAgentMail} unread agent message(s) - fetch them with orboto_messages.`;
+  return {
+    ...result,
+    content: [...result.content, { type: 'text', text: line }],
+    ...(result.structuredContent
+      ? { structuredContent: { ...result.structuredContent, __pendingAgentMessages: client.pendingAgentMail } }
+      : {}),
+  };
+}
+
 export function registerWithMetrics(
   server: McpServer,
   client: OrbotoClient,
