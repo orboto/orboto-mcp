@@ -18,6 +18,7 @@ interface AgentMessage {
   subject: string;
   payload: Record<string, unknown> | null;
   threadId: string | null;
+  projectKey: string | null;
   createdAt: string;
   deliveredAt: string | null;
   readAt: string | null;
@@ -30,6 +31,7 @@ export const agentMessagesToolConfig = {
   inputSchema: z.object({
     all: z.boolean().default(false).describe('true = include already-read messages'),
     limit: z.number().int().min(1).max(200).default(50),
+    project: z.string().min(1).max(64).optional().describe('Project key or UUID: narrow to messages scoped to this project PLUS unscoped ones. Pass the project you are working when your identity runs multiple sessions; only ack messages that are yours.'),
     ackIds: z.array(z.string().uuid()).max(200).optional().describe('Message ids to mark as read'),
   }).shape,
   outputSchema: z.object({
@@ -40,6 +42,7 @@ export const agentMessagesToolConfig = {
       subject: z.string(),
       payload: z.record(z.string(), z.unknown()).nullable(),
       threadId: z.string().nullable(),
+      projectKey: z.string().nullable(),
       createdAt: z.string(),
       readAt: z.string().nullable(),
     })),
@@ -49,7 +52,7 @@ export const agentMessagesToolConfig = {
 };
 
 export function makeAgentMessagesHandler(client: OrbotoClient) {
-  return async (args: { all?: boolean; limit?: number; ackIds?: string[] }): Promise<CallToolResult> => {
+  return async (args: { all?: boolean; limit?: number; project?: string; ackIds?: string[] }): Promise<CallToolResult> => {
     let acked = 0;
     if (args.ackIds && args.ackIds.length > 0) {
       const res = await client.post<{ acked: number }>('/v1/agent/messages/ack', { ids: args.ackIds });
@@ -58,10 +61,11 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
     const q = new URLSearchParams();
     if (args.all) q.set('all', 'true');
     if (args.limit) q.set('limit', String(args.limit));
+    if (args.project) q.set('project', args.project);
     const { messages } = await client.get<{ messages: AgentMessage[] }>(`/v1/agent/messages${q.toString() ? `?${q.toString()}` : ''}`);
     const lines = messages.length === 0
       ? [acked > 0 ? `Acknowledged ${acked} message(s). Inbox empty.` : 'Inbox empty.']
-      : messages.map((m) => `[${m.kind}] ${m.subject} (from ${m.fromUserId}, ${m.createdAt}, id ${m.id}${m.threadId ? `, thread ${m.threadId}` : ''})${m.payload ? ` payload: ${JSON.stringify(m.payload)}` : ''}`);
+      : messages.map((m) => `[${m.kind}]${m.projectKey ? ` [${m.projectKey}]` : ''} ${m.subject} (from ${m.fromUserId}, ${m.createdAt}, id ${m.id}${m.threadId ? `, thread ${m.threadId}` : ''})${m.payload ? ` payload: ${JSON.stringify(m.payload)}` : ''}`);
     if (messages.length > 0) {
       lines.push(`Acknowledge with ackIds once handled; reply via orboto_agent_notify with threadId.`);
     }
@@ -70,7 +74,8 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
       structuredContent: {
         messages: messages.map((m) => ({
           id: m.id, fromUserId: m.fromUserId, kind: m.kind, subject: m.subject,
-          payload: m.payload, threadId: m.threadId, createdAt: m.createdAt, readAt: m.readAt,
+          payload: m.payload, threadId: m.threadId, projectKey: m.projectKey ?? null,
+          createdAt: m.createdAt, readAt: m.readAt,
         })),
         acked,
       },

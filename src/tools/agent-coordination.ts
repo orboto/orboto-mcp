@@ -155,6 +155,9 @@ export const agentNotifyToolConfig = {
     payload: z.record(z.string(), z.unknown()).optional(),
     // ORB-1727 - reply chaining: the id of the inbox message being answered.
     threadId: z.string().uuid().optional(),
+    // ORB-1732 - optional project scope: address "the agent working project
+    // X" when the recipient identity runs multiple sessions.
+    project: z.string().min(1).max(64).optional().describe('Project key (ORB) or UUID: scope the message to the recipient session working that project. Recipients fetching with a project filter see scoped messages for their project plus unscoped ones.'),
   }).shape,
   outputSchema: z.object({
     ok: z.literal(true),
@@ -205,6 +208,7 @@ export function makeAgentNotifyHandler(client: OrbotoClient) {
     subject: string;
     payload?: Record<string, unknown>;
     threadId?: string;
+    project?: string;
   }): Promise<CallToolResult> => {
     const res = await client.post<NotifyResponse>('/v1/agent/notify', args);
     return {
