@@ -31,20 +31,33 @@ const mb = (n: number): string => `${Math.round((n / 1024 / 1024) * 10) / 10} MB
 export const createFullBackupToolConfig = {
   title: 'Create + download a full workspace backup',
   description:
-    'Create an on-demand FULL workspace backup (database + storage) right now and return the ZIP as a base64 application/zip resource attachment — create and download in one call. Requires admin:backup:export. For the scheduled named jobs use orboto_trigger_backup instead.',
+    'Create an on-demand FULL workspace backup (database + storage) and return the ZIP as a base64 application/zip resource attachment — create, wait and download in one call (the server runs the export as a background run and this tool polls it; large workspaces can take minutes). Requires admin:backup:export. For the scheduled named jobs use orboto_trigger_backup instead.',
   inputSchema: z.object({}).shape,
 };
 
 export function makeCreateFullBackupHandler(client: OrbotoClient) {
   return async (): Promise<CallToolResult> => {
-    const { bytes, contentType } = await client.postBinary('/admin/backup/full');
+    // ORB-1717 - the export is async server-side (the old synchronous
+    // stream aborted silently under load). Enqueue, poll the run row to a
+    // terminal state, then download the stored artifact - so an aborted
+    // wait never yields a partial ZIP.
+    const { runId } = await client.post<{ runId: string }>('/admin/backup/full', {});
+    const t0 = Date.now();
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const run = await client.get<{ status: string; errorMessage: string | null }>(`/admin/backup/runs/${runId}`);
+      if (run.status === 'success') break;
+      if (run.status === 'failed') throw new Error(`backup export failed: ${run.errorMessage ?? 'unknown error'}`);
+      if (Date.now() - t0 > 30 * 60_000) throw new Error(`backup export still running after 30 min - check run ${runId} in the backups list`);
+    }
+    const { bytes, contentType } = await client.getBinary(`/admin/backup/runs/${runId}/download`);
     const base64 = Buffer.from(bytes).toString('base64');
     return {
       content: [
         { type: 'resource', resource: { uri: 'orboto://backup/full.zip', mimeType: contentType, blob: base64 } },
-        { type: 'text', text: `Created full workspace backup (${mb(bytes.byteLength)}).` },
+        { type: 'text', text: `Created full workspace backup (${mb(bytes.byteLength)}), run ${runId}.` },
       ],
-      structuredContent: { sizeBytes: bytes.byteLength, contentType },
+      structuredContent: { sizeBytes: bytes.byteLength, contentType, runId },
     };
   };
 }
