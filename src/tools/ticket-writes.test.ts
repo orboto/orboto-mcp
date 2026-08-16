@@ -144,7 +144,7 @@ describe('orboto_create_ticket', () => {
     // ORB-1176 — createdTicketKey is the NEW key, never a warning's key.
     expect(sc.createdTicketKey).toBe('ACME-99');
     expect(sc.similarWarnings.map((w) => w.ticketKey)).not.toContain(sc.createdTicketKey);
-    // ORB-1693 — the agent projection is pinned: exactly these fields, no
+    // ORB-1693 - the agent projection is pinned: exactly these fields, no
     // UUID, no colours, no statusName, similarity at 2dp. A re-grow of the
     // rich shape is a regression, not an enhancement.
     for (const w of sc.similarWarnings) {
