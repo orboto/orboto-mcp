@@ -224,15 +224,17 @@ type ToolHandler = (args: any, extra?: any) => Promise<CallToolResult>;
  * count the OrbotoClient captured from the last response header; costs
  * nothing when the inbox is empty and skips the fetch/ack tool itself.
  */
-function appendMailNudge(client: OrbotoClient, toolName: string, result: CallToolResult): CallToolResult {
+/** Exported for the ORB-1733 regression test. */
+export function appendMailNudge(client: OrbotoClient, toolName: string, result: CallToolResult): CallToolResult {
   if (!client.pendingAgentMail || toolName === 'orboto_messages') return result;
+  // ORB-1733: the nudge lives ONLY in a text content block. Never touch
+  // structuredContent - the SDK validates it against the tool's declared
+  // outputSchema, and an injected extra key fails validation and errors
+  // the entire tool call for as long as mail sits unread.
   const line = `You have ${client.pendingAgentMail} unread agent message(s) - fetch them with orboto_messages.`;
   return {
     ...result,
     content: [...result.content, { type: 'text', text: line }],
-    ...(result.structuredContent
-      ? { structuredContent: { ...result.structuredContent, __pendingAgentMessages: client.pendingAgentMail } }
-      : {}),
   };
 }
 
