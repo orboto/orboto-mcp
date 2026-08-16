@@ -19,6 +19,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from './orboto-client.js';
 import { type NudgeState, shouldNudge, prependNudge, shouldGate, gateResult } from './session-nudge.js';
 import { applyResponseBudget } from './response-budget.js';
+import { buildStrictInputSchema, isRawShape } from './input-schema.js';
 
 /**
  * ORB-1174 — turn an OrbotoApiError into an actionable, agent-visible
@@ -249,10 +250,16 @@ export function registerWithMetrics(
   nudge?: NudgeState,
 ) {
   return (toolName: string, config: ToolConfig, handler: ToolHandler): void => {
+    // ORB-1692 - every raw-shape input becomes strict + alias-resolving.
+    // Central here so a new tool cannot ship permissive; empty/absent
+    // shapes stay untouched (they carry no fields to guard).
+    const cfg = config?.inputSchema && isRawShape(config.inputSchema)
+      ? { ...config, inputSchema: buildStrictInputSchema(toolName, config.inputSchema) }
+      : config;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (server.registerTool as any)(
       toolName,
-      config,
+      cfg,
       withMetrics(client, toolName, clientHint, handler, nudge),
     );
   };
