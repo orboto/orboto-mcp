@@ -28,6 +28,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { trimSimilarEntries } from './similar-projection.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey, resolveTicketByKey, type TicketRow } from './shared.js';
 import { resolveMilestoneByNameOrId } from './milestones.js';
@@ -236,7 +237,10 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
         // `createdTicketKey` (never a warning's key) to avoid grabbing the
         // wrong one.
         createdTicketKey: created.ticketKey,
-        similarWarnings: warnings,
+        // ORB-1693 - agent projection: key/title/category/2dp-similarity/
+        // relation only. The rich shape (UUID, colours, statusName, 15dp)
+        // stays on the REST response for the web UI.
+        similarWarnings: trimSimilarEntries(warnings),
         ...(deferred ? { duplicateCheckDeferred: true } : {}),
         ...(langWarning ? { languageWarning: langWarning } : {}),
       },
@@ -367,7 +371,7 @@ function duplicateBlockResult(err: unknown): CallToolResult | null {
       duplicateBlocked: true,
       threshold: parsed.threshold ?? null,
       topSimilarity: parsed.topSimilarity ?? null,
-      similarWarnings: candidates,
+      similarWarnings: trimSimilarEntries(candidates),
     },
     isError: true,
   };

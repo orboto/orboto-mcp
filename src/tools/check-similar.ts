@@ -15,6 +15,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { trimSimilarEntries } from './similar-projection.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey, resolveTicketByKey } from './shared.js';
 
@@ -106,7 +107,8 @@ export function makeCheckSimilarHandler(client: OrbotoClient) {
     return {
       content: [{ type: 'text', text }],
       structuredContent: {
-        similar: result.candidates,
+        // ORB-1693 - same agent projection as create_ticket's warnings.
+        similar: trimSimilarEntries(result.candidates),
         mode: result.mode,
         recommendation,
       },
