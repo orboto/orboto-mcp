@@ -88,49 +88,62 @@ const COMMENT_PAGE_SIZE = 50;
 export const getTicketToolConfig = {
   title: 'Get ticket details',
   description:
-    'Return a ticket including description, comments, assignees, labels, checklists, git activity, parent ticket (if any), and sub-tickets. Input is the ticket key like "ACME-42".',
+    'Return a ticket\'s decision card: description, status, priority, milestone, assignees, labels, dates, estimate/logged time, checklist progress, parent + sub-ticket count - plus COUNTS for everything omitted (commentCount, gitActivityCount, attachmentCount, childCount). Full blocks are opt-in via `include` (ORB-1698): pass e.g. include: ["comments"] to get the comment bodies, ["git","attachments","children","raci","checklistItems"] likewise. Input is the ticket key like "ACME-42".',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key like "ACME-42".'),
+    include: z.array(z.enum(['comments', 'git', 'attachments', 'children', 'raci', 'checklistItems']))
+      .optional()
+      .describe('Blocks to inline in full. Default: none - the card carries counts instead; re-call with the block you need.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
-export function makeGetTicketHandler(client: OrbotoClient) {
-  return async ({ ticketKey }: { ticketKey: string }): Promise<CallToolResult> => {
-    const ticket = await resolveTicketByKey(client, ticketKey);
+type IncludeBlock = 'comments' | 'git' | 'attachments' | 'children' | 'raci' | 'checklistItems';
 
-    const gitCount = (ticket as unknown as { gitActivityCount?: number }).gitActivityCount ?? 0;
+export function makeGetTicketHandler(client: OrbotoClient) {
+  return async ({ ticketKey, include }: { ticketKey: string; include?: IncludeBlock[] }): Promise<CallToolResult> => {
+    const ticket = await resolveTicketByKey(client, ticketKey);
+    const inc = new Set<IncludeBlock>(include ?? []);
+
     const parentId = ticket.parentTicketId ?? null;
 
-    const [commentsPage, checklists, gitActivity, parent, childrenPage, enriched, attachments] = await Promise.all([
-      client.get<CursorPage<CommentRow>>(
-        `/tickets/${ticket.id}/comments?limit=${COMMENT_PAGE_SIZE}`,
-      ).catch(swallow404<CursorPage<CommentRow>>({ items: [], nextCursor: null })),
-      client.get<ChecklistRow[]>(`/tickets/${ticket.id}/checklists`).catch(swallow404<ChecklistRow[]>([])),
-      gitCount > 0
-        ? client.get<GitActivityRow[]>(`/tickets/${ticket.id}/git-activity`).catch(swallow404<GitActivityRow[]>([]))
-        : Promise.resolve([]),
+    // ORB-1698 - the default response is the decision CARD: identity +
+    // description + progress + counts. The heavy blocks (comment bodies,
+    // git rows, checklist items) are fetched only when asked for via
+    // `include` - measured, they were the bulk of a 1.02 Mtok carry cost.
+    // Children + attachments have no count on the enriched row, so their
+    // (cheap, metadata-only) fetches stay - the RESPONSE carries only the
+    // count unless included.
+    const [enriched, parent, childrenPage, attachments, commentsPage, checklists, gitActivity] = await Promise.all([
+      // ORB-1023 — `resolveTicketByKey` hits the by-key endpoint, which
+      // returns a BARE ticket row (no statusCategory, assignees, labels,
+      // milestoneName, counts). Re-fetch the enriched by-id shape; falls
+      // back to the bare row on a 404.
+      client.get<TicketRow>(`/projects/${ticket.projectId}/tickets/${ticket.id}`).catch(swallow404<TicketRow | null>(null)),
       // Parent ticket — only fetched when set. Lets the model say
       // "this is sub-ticket of [ACME-10]" without a second tool call.
       parentId
         ? client.get<TicketSummaryRow>(`/projects/${ticket.projectId}/tickets/${parentId}`).catch(swallow404<TicketSummaryRow | null>(null))
         : Promise.resolve(null),
-      // Children via the new parentTicketId filter (API-side, O(children)).
+      // Children via the parentTicketId filter (API-side, O(children)).
       // Cap at 50; anything bigger should use `orboto_list_tickets
       // --parentTicketKey` and paginate explicitly.
       client.get<CursorPage<TicketSummaryRow>>(
         `/projects/${ticket.projectId}/tickets?parentTicketId=${ticket.id}&limit=50`,
       ).catch(swallow404<CursorPage<TicketSummaryRow>>({ items: [], nextCursor: null })),
-      // ORB-1023 — `resolveTicketByKey` hits the by-key endpoint, which
-      // returns a BARE ticket row (no statusCategory, assignees, labels,
-      // milestoneName). Re-fetch the enriched by-id shape so the response
-      // carries the full context. Kept LAST so existing call-order in tests
-      // (comments, checklists, git, parent, children) is unaffected. Falls
-      // back to the bare row on a 404.
-      client.get<TicketRow>(`/projects/${ticket.projectId}/tickets/${ticket.id}`).catch(swallow404<TicketRow | null>(null)),
-      // ORB-1455 - attachments list so the agent knows files exist without a
-      // guess. Kept LAST so the existing call-order in tests is unaffected.
+      // ORB-1455 - attachments metadata so the agent knows files exist.
       client.get<AttachmentRow[]>(`/tickets/${ticket.id}/attachments`).catch(swallow404<AttachmentRow[]>([])),
+      inc.has('comments')
+        ? client.get<CursorPage<CommentRow>>(
+            `/tickets/${ticket.id}/comments?limit=${COMMENT_PAGE_SIZE}`,
+          ).catch(swallow404<CursorPage<CommentRow>>({ items: [], nextCursor: null }))
+        : Promise.resolve({ items: [], nextCursor: null } as CursorPage<CommentRow>),
+      inc.has('checklistItems')
+        ? client.get<ChecklistRow[]>(`/tickets/${ticket.id}/checklists`).catch(swallow404<ChecklistRow[]>([]))
+        : Promise.resolve([] as ChecklistRow[]),
+      inc.has('git')
+        ? client.get<GitActivityRow[]>(`/tickets/${ticket.id}/git-activity`).catch(swallow404<GitActivityRow[]>([]))
+        : Promise.resolve([] as GitActivityRow[]),
     ]);
 
     const comments = commentsPage.items;
@@ -140,8 +153,20 @@ export function makeGetTicketHandler(client: OrbotoClient) {
     // labels, milestoneName); fall back to the bare resolver row.
     const full = enriched ?? ticket;
 
+    const commentCount = full.commentCount ?? (inc.has('comments') ? comments.length : 0);
+    const gitCount = full.gitActivityCount ?? (inc.has('git') ? gitActivity.length : 0);
+    const omitted: string[] = [];
+    if (!inc.has('comments') && commentCount > 0) omitted.push(`comments (${commentCount})`);
+    if (!inc.has('git') && gitCount > 0) omitted.push(`git (${gitCount})`);
+    if (!inc.has('attachments') && attachments.length > 0) omitted.push(`attachments (${attachments.length})`);
+    if (!inc.has('children') && children.length > 0) omitted.push(`children (${children.length})`);
+    if (!inc.has('checklistItems') && (full.checklistProgress?.total ?? 0) > 0) omitted.push(`checklistItems (${full.checklistProgress!.total})`);
+    const includeHint = omitted.length > 0
+      ? `Omitted blocks: ${omitted.join(', ')}. Re-call orboto_get_ticket with include: ["comments"|"git"|"attachments"|"children"|"raci"|"checklistItems"] for the ones you need.`
+      : undefined;
+
     return {
-      content: [{ type: 'text', text: formatTicket(full, comments, hasMoreComments, checklists, gitActivity, parent, children, attachments) }],
+      content: [{ type: 'text', text: formatTicket(full, inc, comments, hasMoreComments, checklists, gitActivity, parent, children, attachments, includeHint) }],
       structuredContent: {
         // ORB-1179 — surface the uuid alongside the key.
         id: full.id,
@@ -176,61 +201,81 @@ export function makeGetTicketHandler(client: OrbotoClient) {
           status: parent.statusName ?? parent.status,
           statusCategory: parent.statusCategory ?? null,
         } : null,
-        children: children.map((c) => ({
-          key: c.ticketKey,
-          title: c.title,
-          status: c.statusName ?? c.status,
-          statusCategory: c.statusCategory ?? null,
-        })),
-        assignees: full.assignees ?? [],
-        // ORB-1034 — RACI roster (R/A/C/I); empty array when the project
-        // has RACI disabled (everyone is implicitly Responsible).
-        raci: (full.raci ?? []).map((r) => ({ userId: r.userId, fullName: r.fullName, role: r.role })),
-        labels: (full.labels ?? []).map((l) => l.name),
-        comments: comments.map((c) => ({
-          id: c.id, // ORB-1285 — needed to target a comment for edit/delete
-          author: c.userName ?? null,
-          body: c.content,
-          createdAt: c.createdAt,
-          editedAt: c.editedAt ?? null,
-          isInternal: c.isInternal,
-        })),
-        commentsHasMore: hasMoreComments,
-        checklists: checklists.map((cl) => ({
-          title: cl.title,
-          triggersDone: cl.triggersDone,
-          progress: cl.progress,
-          items: cl.items.map((i) => ({
-            content: i.content,
-            done: i.effectiveCompleted,
-            // When the item links to another ticket, `effectiveCompleted`
-            // mirrors that ticket's status-category instead of this item's
-            // own checkbox. Surface the link so the model can explain
-            // why the item is/isn't done.
-            linkedTicket: i.linkedTicketKey ? {
-              key: i.linkedTicketKey,
-              title: i.linkedTicketTitle,
-              statusCategory: i.linkedTicketStatusCategory,
-            } : null,
+        childCount: children.length,
+        ...(inc.has('children') ? {
+          children: children.map((c) => ({
+            key: c.ticketKey,
+            title: c.title,
+            status: c.statusName ?? c.status,
+            statusCategory: c.statusCategory ?? null,
           })),
-        })),
-        gitActivity: gitActivity.map((g) => ({
-          type: g.type,
-          state: g.state,
-          title: g.title,
-          url: g.url,
-          author: g.authorName,
-          createdAt: g.createdAt,
-        })),
+        } : {}),
+        assignees: full.assignees ?? [],
+        // ORB-1034 — RACI roster (R/A/C/I); opt-in via include: ["raci"]
+        // (assignees above stay the always-on Responsible+Accountable set).
+        ...(inc.has('raci') ? {
+          raci: (full.raci ?? []).map((r) => ({ userId: r.userId, fullName: r.fullName, role: r.role })),
+        } : {}),
+        labels: (full.labels ?? []).map((l) => l.name),
+        // ORB-1698 - counts always; bodies opt-in. checklistProgress is the
+        // aggregate from the enriched row (items via include).
+        commentCount,
+        gitActivityCount: gitCount,
+        attachmentCount: attachments.length,
+        checklistProgress: full.checklistProgress ?? { done: 0, total: 0 },
+        ...(includeHint ? { includeHint } : {}),
+        ...(inc.has('comments') ? {
+          comments: comments.map((c) => ({
+            id: c.id, // ORB-1285 — needed to target a comment for edit/delete
+            author: c.userName ?? null,
+            body: c.content,
+            createdAt: c.createdAt,
+            editedAt: c.editedAt ?? null,
+            isInternal: c.isInternal,
+          })),
+          commentsHasMore: hasMoreComments,
+        } : {}),
+        ...(inc.has('checklistItems') ? {
+          checklists: checklists.map((cl) => ({
+            title: cl.title,
+            triggersDone: cl.triggersDone,
+            progress: cl.progress,
+            items: cl.items.map((i) => ({
+              content: i.content,
+              done: i.effectiveCompleted,
+              // When the item links to another ticket, `effectiveCompleted`
+              // mirrors that ticket's status-category instead of this item's
+              // own checkbox. Surface the link so the model can explain
+              // why the item is/isn't done.
+              linkedTicket: i.linkedTicketKey ? {
+                key: i.linkedTicketKey,
+                title: i.linkedTicketTitle,
+                statusCategory: i.linkedTicketStatusCategory,
+              } : null,
+            })),
+          })),
+        } : {}),
+        ...(inc.has('git') ? {
+          gitActivity: gitActivity.map((g) => ({
+            type: g.type,
+            state: g.state,
+            title: g.title,
+            url: g.url,
+            author: g.authorName,
+            createdAt: g.createdAt,
+          })),
+        } : {}),
         // ORB-1455 - attachments (id + metadata). Feed an id to
         // orboto_get_attachment to view an image or fetch the bytes.
-        attachments: attachments.map((a) => ({
-          id: a.id,
-          filename: a.filename,
-          contentType: a.contentType,
-          sizeBytes: a.sizeBytes,
-          downloadUrl: a.downloadUrl ?? `/attachments/${a.id}`,
-        })),
+        ...(inc.has('attachments') ? {
+          attachments: attachments.map((a) => ({
+            id: a.id,
+            filename: a.filename,
+            contentType: a.contentType,
+            sizeBytes: a.sizeBytes,
+            downloadUrl: a.downloadUrl ?? `/attachments/${a.id}`,
+          })),
+        } : {}),
       },
     };
   };
@@ -245,6 +290,7 @@ function swallow404<T>(fallback: T): (err: unknown) => T {
 
 function formatTicket(
   ticket: TicketRow,
+  inc: Set<IncludeBlock>,
   comments: CommentRow[],
   hasMoreComments: boolean,
   checklists: ChecklistRow[],
@@ -252,6 +298,7 @@ function formatTicket(
   parent: TicketSummaryRow | null,
   children: TicketSummaryRow[],
   attachments: AttachmentRow[],
+  includeHint: string | undefined,
 ): string {
   const header = [
     `[${ticket.ticketKey}] ${ticket.title}`,
@@ -293,7 +340,7 @@ function formatTicket(
       : null,
   ].filter((s): s is string => s !== null);
 
-  if (children.length > 0) {
+  if (inc.has('children') && children.length > 0) {
     header.push('', 'Children:');
     for (const c of children) {
       header.push(`  - [${c.ticketKey}] ${c.title} (${c.statusName ?? c.status})`);
@@ -305,7 +352,10 @@ function formatTicket(
     : [];
 
   const checklistLines: string[] = [];
-  if (checklists.length > 0) {
+  if (!inc.has('checklistItems') && (ticket.checklistProgress?.total ?? 0) > 0) {
+    checklistLines.push('', `Checklists: ${ticket.checklistProgress!.done}/${ticket.checklistProgress!.total} done`);
+  }
+  if (inc.has('checklistItems') && checklists.length > 0) {
     checklistLines.push('', '## Checklists');
     for (const cl of checklists) {
       const progressLabel = `${cl.progress.done}/${cl.progress.total}`;
@@ -324,7 +374,10 @@ function formatTicket(
   }
 
   const commentLines: string[] = [];
-  if (comments.length > 0) {
+  if (!inc.has('comments') && (ticket.commentCount ?? 0) > 0) {
+    commentLines.push('', `Comments: ${ticket.commentCount}`);
+  }
+  if (inc.has('comments') && comments.length > 0) {
     const headerLine = hasMoreComments
       ? `## Comments (${comments.length} shown, more in the UI)`
       : `## Comments (${comments.length})`;
@@ -339,7 +392,10 @@ function formatTicket(
   }
 
   const gitLines: string[] = [];
-  if (gitActivity.length > 0) {
+  if (!inc.has('git') && (ticket.gitActivityCount ?? 0) > 0) {
+    gitLines.push('', `Git activity: ${ticket.gitActivityCount}`);
+  }
+  if (inc.has('git') && gitActivity.length > 0) {
     gitLines.push('', `## Git activity (${gitActivity.length})`);
     for (const g of gitActivity) {
       gitLines.push(`- ${g.type} ${g.state ? `[${g.state}]` : ''} ${g.title}${g.url ? ` — ${g.url}` : ''}`);
@@ -349,7 +405,10 @@ function formatTicket(
   // ORB-1455 - attachments so the agent knows files exist. Feed an id to
   // orboto_get_attachment to view an image or fetch the bytes.
   const attachmentLines: string[] = [];
-  if (attachments.length > 0) {
+  if (!inc.has('attachments') && attachments.length > 0) {
+    attachmentLines.push('', `Attachments: ${attachments.length}`);
+  }
+  if (inc.has('attachments') && attachments.length > 0) {
     attachmentLines.push('', `## Attachments (${attachments.length})`);
     for (const a of attachments) {
       const kb = Math.round(a.sizeBytes / 1024);
@@ -358,5 +417,7 @@ function formatTicket(
     attachmentLines.push('Use orboto_get_attachment with an id to view an image or fetch bytes.');
   }
 
-  return [...header, ...description, ...checklistLines, ...commentLines, ...gitLines, ...attachmentLines].join('\n');
+  const hintLines = includeHint ? ['', includeHint] : [];
+
+  return [...header, ...description, ...checklistLines, ...commentLines, ...gitLines, ...attachmentLines, ...hintLines].join('\n');
 }

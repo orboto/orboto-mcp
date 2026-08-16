@@ -70,6 +70,7 @@ export interface TicketRow {
   raci?: Array<{ userId: string; email: string; fullName: string; role: 'R' | 'A' | 'C' | 'I' }>;
   labels?: Array<{ id: string; name: string }>;
   commentCount?: number;
+  gitActivityCount?: number;
   checklistProgress?: { done: number; total: number };
   // ORB-1605 — in_review, zero ingested git_activities, but the project
   // HAS an active git connection: closing verification may be blocked
