@@ -7,6 +7,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey } from './shared.js';
+import { resolveMilestoneByNameOrId } from './milestones.js';
 
 interface CpTicket {
   ticketKey: string | null;
@@ -55,9 +56,9 @@ export function makeCriticalPathHandler(client: OrbotoClient) {
     const project = await resolveProjectByKey(client, input.projectKey);
     const params = new URLSearchParams();
     if (input.milestone) {
-      const milestones = await client.get<Array<{ id: string; name: string }>>(`/projects/${project.id}/milestones`);
-      const m = milestones.find((x) => x.name === input.milestone);
-      if (!m) throw new Error(`Milestone "${input.milestone}" not found in project ${project.key}.`);
+      // ORB-1696 - shared resolver: key (ORB-M3), name or UUID, ambiguous
+      // name -> explicit error. Matches create_ticket/set_milestone/OQL.
+      const m = await resolveMilestoneByNameOrId(client, project.id, input.milestone);
       params.set('milestoneId', m.id);
     }
     if (input.includeClosedMilestones) params.set('includeClosedMilestones', 'true');

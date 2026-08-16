@@ -81,6 +81,39 @@ describe('orboto_list_tickets', () => {
     expect(calls[1]).toContain('limit=10');
   });
 
+  // ORB-1696 - the shared resolver contract: key, name, OR UUID; an
+  // ambiguous name errors listing candidates. One test per form.
+  it('resolves milestone KEY (ORB-1696)', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: [{ id: 'm1', name: 'v1', milestoneKey: 'ACME-M1' }, { id: 'm2', name: 'v2', milestoneKey: 'ACME-M2' }] },
+      { json: { items: [], nextCursor: null } },
+    ]);
+    await makeListTicketsHandler(client)({ projectKey: 'ACME', milestone: 'acme-m2' });
+    expect(calls[2]).toContain('milestoneId=m2');
+  });
+
+  it('resolves milestone UUID (ORB-1696)', async () => {
+    const uuid = '3b000000-0000-4000-8000-000000000001';
+    const calls = stub([
+      { json: PROJ },
+      { json: [{ id: uuid, name: 'v1', milestoneKey: 'ACME-M1' }] },
+      { json: { items: [], nextCursor: null } },
+    ]);
+    await makeListTicketsHandler(client)({ projectKey: 'ACME', milestone: uuid });
+    expect(calls[2]).toContain(`milestoneId=${uuid}`);
+  });
+
+  it('an ambiguous milestone NAME errors listing the candidates (ORB-1696)', async () => {
+    stub([
+      { json: PROJ },
+      { json: [{ id: 'm1', name: 'dup', milestoneKey: 'ACME-M1' }, { id: 'm2', name: 'dup', milestoneKey: 'ACME-M2' }] },
+    ]);
+    await expect(
+      makeListTicketsHandler(client)({ projectKey: 'ACME', milestone: 'dup' }),
+    ).rejects.toThrow(/ambiguous/);
+  });
+
   it('resolves milestone name → milestoneId query param', async () => {
     const calls = stub([
       { json: PROJ },

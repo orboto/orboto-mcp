@@ -8,6 +8,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey } from './shared.js';
+import { resolveMilestoneByNameOrId } from './milestones.js';
 
 const REPORTS = ['overview', 'burndown', 'velocity', 'cycle-time', 'workload', 'budget', 'collaboration', 'earned-value', 'estimation-accuracy', 'flow-time', 'flow-metrics', 'forecast', 'bottleneck'] as const;
 type Report = (typeof REPORTS)[number];
@@ -31,9 +32,9 @@ export function makeAnalyticsHandler(client: OrbotoClient) {
 
     let milestoneId: string | undefined;
     if (input.milestone && (input.report === 'burndown' || input.report === 'earned-value' || input.report === 'forecast' || input.report === 'collaboration')) {
-      const milestones = await client.get<Array<{ id: string; name: string }>>(`/projects/${project.id}/milestones`);
-      const m = milestones.find((x) => x.name === input.milestone);
-      if (!m) throw new Error(`Milestone "${input.milestone}" not found in project ${project.key}.`);
+      // ORB-1696 - shared resolver: key (ORB-M3), name or UUID, ambiguous
+      // name -> explicit error. Matches create_ticket/set_milestone/OQL.
+      const m = await resolveMilestoneByNameOrId(client, project.id, input.milestone);
       milestoneId = m.id;
     }
 
