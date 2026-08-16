@@ -79,6 +79,55 @@ export interface TicketRow {
   waitingForGitIngestion?: boolean;
 }
 
+
+/**
+ * ORB-1699 - the ONE agent-facing list-row builder. A list call is a
+ * decision aid ("which of these do I open?"); the default row carries
+ * exactly what that decision + the filters read back. `verbose: true`
+ * restores the full shape (uuid, labels, minutes, ingestion signal).
+ * list_tickets, my_tickets and query all consume THIS builder - trimming
+ * one tool and leaving the siblings fat is the class-not-instance
+ * failure the workspace rules warn about.
+ */
+export function agentTicketListRow(t: TicketRow, verbose = false): Record<string, unknown> {
+  if (verbose) {
+    return {
+      // ORB-1179 - uuid for write tools that want it without a lookup.
+      id: t.id,
+      key: t.ticketKey,
+      title: t.title,
+      status: t.statusName ?? t.status,
+      statusCategory: t.statusCategory ?? null,
+      priority: t.priority,
+      type: t.type,
+      dueDate: t.dueDate ?? null,
+      assigneeNames: (t.assignees ?? []).map((a) => a.fullName || a.email),
+      labels: (t.labels ?? []).map((l) => l.name),
+      estimatedTimeMinutes: t.estimatedTimeMinutes,
+      loggedMinutes: t.loggedMinutes ?? 0,
+      milestoneName: t.milestoneName ?? null,
+      createdAt: t.createdAt ?? null,
+      updatedAt: t.updatedAt ?? null,
+      ...(t.waitingForGitIngestion ? { waitingForGitIngestion: true } : {}),
+    };
+  }
+  // Lean row: fields at their DEFAULT value are omitted entirely - a
+  // reader treats absence as "task / normal / no due date / unassigned".
+  // The list is a decision aid; the full picture is one get_ticket away.
+  const assigneeNames = (t.assignees ?? []).map((a) => a.fullName || a.email);
+  return {
+    key: t.ticketKey,
+    title: t.title,
+    statusCategory: t.statusCategory ?? null,
+    ...(t.priority && t.priority !== 'normal' ? { priority: t.priority } : {}),
+    ...(t.type && t.type !== 'task' ? { type: t.type } : {}),
+    ...(t.dueDate ? { dueDate: t.dueDate } : {}),
+    ...(assigneeNames.length > 0 ? { assigneeNames } : {}),
+    // ORB-1605 - only present when it fires; absent costs zero chars.
+    ...(t.waitingForGitIngestion ? { waitingForGitIngestion: true } : {}),
+  };
+}
+
 /**
  * Resolve a `PROJ-123` ticket key to a fully-hydrated ticket row.
  * Splits on the first `-` — project keys are upper-case alphanumerics

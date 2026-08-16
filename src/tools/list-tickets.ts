@@ -10,7 +10,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { resolveProjectByKey, resolveTicketByKey, ticketLine, type TicketRow } from './shared.js';
+import { resolveProjectByKey, resolveTicketByKey, ticketLine, agentTicketListRow, type TicketRow } from './shared.js';
 
 interface TicketPage {
   items: TicketRow[];
@@ -40,6 +40,7 @@ export const listTicketsToolConfig = {
       .optional()
       .describe('List only children of this ticket (e.g. "ACME-42"). Useful for walking an epic into its sub-tickets.'),
     limit: z.number().int().min(1).max(50).default(25).describe('Max rows to return.'),
+    verbose: z.boolean().default(false).describe('true = full rows (uuid, labels, minutes, timestamps). Default rows carry the decision fields only (ORB-1699).'),
   }).shape,
   annotations: { readOnlyHint: true },
 };
@@ -52,6 +53,7 @@ export function makeListTicketsHandler(client: OrbotoClient) {
     assigneeEmail?: string;
     parentTicketKey?: string;
     limit?: number;
+    verbose?: boolean;
   }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, input.projectKey);
 
@@ -100,24 +102,8 @@ export function makeListTicketsHandler(client: OrbotoClient) {
         project: { key: project.key },
         count: page.items.length,
         hasMore: !!page.nextCursor,
-        tickets: page.items.map((t) => ({
-          // ORB-1179 — surface the uuid alongside the key so a downstream
-          // write tool that only accepts a uuid has it without a lookup.
-          id: t.id,
-          key: t.ticketKey,
-          title: t.title,
-          status: t.statusName ?? t.status,
-          statusCategory: t.statusCategory ?? null,
-          priority: t.priority,
-          type: t.type,
-          dueDate: t.dueDate,
-          assignees: t.assignees?.map((a) => a.email) ?? [],
-          labels: t.labels?.map((l) => l.name) ?? [],
-          estimatedTimeMinutes: t.estimatedTimeMinutes,
-          loggedMinutes: t.loggedMinutes ?? 0,
-          // ORB-1605 — stalled-ingestion signal for in_review tickets.
-          waitingForGitIngestion: t.waitingForGitIngestion ?? false,
-        })),
+        // ORB-1699 - shared lean row; verbose restores uuid/labels/minutes.
+        tickets: page.items.map((t) => agentTicketListRow(t, input.verbose ?? false)),
       },
     };
   };

@@ -16,7 +16,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { ticketLine, type TicketRow } from './shared.js';
+import { ticketLine, type TicketRow, agentTicketListRow } from './shared.js';
 
 interface QueryResponse {
   items: TicketRow[];
@@ -42,6 +42,7 @@ export const queryToolConfig = {
     syntax: z.enum(['oql', 'jql']).default('oql').describe('Set "jql" to accept Jira-flavoured syntax (resolution, sprint, due, etc. are auto-mapped).'),
     cursor: z.string().optional().describe('Opaque pagination cursor from a previous response.'),
     limit: z.number().int().min(1).max(100).default(25).describe('Max rows to return (1-100, default 25).'),
+    verbose: z.boolean().default(false).describe('true = full rows (uuid, labels, minutes, timestamps). Default rows carry the decision fields only (ORB-1699).'),
   }).shape,
   annotations: { readOnlyHint: true },
 };
@@ -52,6 +53,7 @@ export function makeQueryHandler(client: OrbotoClient) {
     syntax?: 'oql' | 'jql';
     cursor?: string;
     limit?: number;
+    verbose?: boolean;
   }): Promise<CallToolResult> => {
     const body = {
       oql: input.oql,
@@ -74,19 +76,8 @@ export function makeQueryHandler(client: OrbotoClient) {
       structuredContent: {
         count: page.items.length,
         nextCursor: page.nextCursor,
-        tickets: page.items.map((t) => ({
-          key: t.ticketKey,
-          title: t.title,
-          status: t.statusName ?? t.status,
-          statusCategory: t.statusCategory ?? null,
-          priority: t.priority,
-          type: t.type,
-          dueDate: t.dueDate,
-          assignees: t.assignees?.map((a) => a.email) ?? [],
-          labels: t.labels?.map((l) => l.name) ?? [],
-          estimatedTimeMinutes: t.estimatedTimeMinutes,
-          loggedMinutes: t.loggedMinutes ?? 0,
-        })),
+        // ORB-1699 - shared lean row; verbose restores uuid/labels/minutes.
+        tickets: page.items.map((t) => agentTicketListRow(t, input.verbose ?? false)),
       },
     };
   };

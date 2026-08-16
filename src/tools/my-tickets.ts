@@ -9,18 +9,11 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { agentTicketListRow, type TicketRow } from './shared.js';
 
-interface MyTicketRow {
-  id: string;
-  projectId: string;
-  title: string;
-  ticketKey: string | null;
-  status: string;
-  type: string;
-  priority: string;
-  dueDate: string | null;
-  createdAt: string;
-}
+// ORB-1699 - rows come from the enriched list pipeline; use the shared
+// TicketRow so the shared row builder types cleanly.
+type MyTicketRow = TicketRow;
 
 export const myTicketsToolConfig = {
   title: 'My assigned tickets',
@@ -32,6 +25,7 @@ export const myTicketsToolConfig = {
       .optional()
       .describe('Filter to one workflow category. Omit for all non-done.'),
     limit: z.number().int().min(1).max(50).default(25),
+    verbose: z.boolean().default(false).describe('true = full rows (uuid, labels, minutes, timestamps). Default rows carry the decision fields only (ORB-1699).'),
   }).shape,
   annotations: { readOnlyHint: true },
 };
@@ -52,6 +46,7 @@ export function makeMyTicketsHandler(client: OrbotoClient) {
   return async (input: {
     statusCategory?: 'todo' | 'in_progress' | 'in_review' | 'done' | 'wont_fix';
     limit?: number;
+    verbose?: boolean;
   }): Promise<CallToolResult> => {
     const qs = new URLSearchParams();
     qs.set('limit', String(input.limit ?? 25));
@@ -80,16 +75,8 @@ export function makeMyTicketsHandler(client: OrbotoClient) {
       structuredContent: {
         count: page.items.length,
         hasMore: !!page.nextCursor,
-        tickets: page.items.map((t) => ({
-          // ORB-1179 — surface the uuid alongside the key.
-          id: t.id,
-          key: t.ticketKey,
-          title: t.title,
-          status: t.status,
-          type: t.type,
-          priority: t.priority,
-          dueDate: t.dueDate,
-        })),
+        // ORB-1699 - shared lean row; verbose restores uuid/labels/minutes.
+        tickets: page.items.map((t) => agentTicketListRow(t, input.verbose ?? false)),
       },
     };
   };
