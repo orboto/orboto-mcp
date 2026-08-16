@@ -35,12 +35,23 @@ const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey:
 const BLOCK = { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', builtinKey: null, title: 'Rule', body: 'do the thing', enabled: true, sortOrder: 10 };
 
 describe('agent-instruction MCP tools (ORB-1089)', () => {
-  it('list GETs the admin surface and returns blocks + assembled', async () => {
+  it('ORB-1700: list returns metadata + excerpt, never full bodies or the assembled text', async () => {
     const calls = stubJSON([{ json: { blocks: [BLOCK], assembled: 'do the thing' } }]);
     const res = await makeListAgentInstructionsHandler(client)();
     expect(calls[0].method).toBe('GET');
     expect(calls[0].url).toContain('/agent-instructions/blocks?scope=workspace');
-    expect(res.structuredContent).toMatchObject({ assembled: 'do the thing' });
+    const sc = res.structuredContent as { blocks: Record<string, unknown>[]; assembled?: string };
+    expect(sc.assembled).toBeUndefined();
+    expect(sc.blocks[0].body).toBeUndefined();
+    expect(sc.blocks[0].contentChars).toBe(BLOCK.body.length);
+    expect(Object.keys(sc.blocks[0]).sort()).toEqual(['contentChars', 'enabled', 'id', 'title']);
+  });
+
+  it('ORB-1700: blockId returns the one block with its full body in one call', async () => {
+    stubJSON([{ json: { blocks: [BLOCK], assembled: 'x' } }]);
+    const res = await makeListAgentInstructionsHandler(client)({ blockId: BLOCK.id });
+    const sc = res.structuredContent as { block: { body: string } };
+    expect(sc.block.body).toBe(BLOCK.body);
   });
 
   it('create at project scope carries scope + projectId', async () => {

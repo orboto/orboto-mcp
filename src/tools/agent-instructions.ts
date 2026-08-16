@@ -17,10 +17,17 @@ interface BlockRow {
   sortOrder: number;
 }
 
+// ORB-1700 - a LIST answers "what exists"; the body belongs to the
+// follow-up read (blockId input below). First line, hard-capped.
+function excerptOf(body: string): string {
+  const firstLine = body.split('\n', 1)[0] ?? '';
+  return firstLine.length > 200 ? `${firstLine.slice(0, 199)}\u2026` : firstLine;
+}
+
 function renderBlock(b: BlockRow): string {
   const flag = b.enabled ? '' : ' [disabled]';
   const kind = b.builtinKey ? `default:${b.builtinKey}` : 'custom';
-  return `- ${b.title}${flag}  (${kind}, id ${b.id})\n  ${b.body}`;
+  return `- ${b.title}${flag}  (${kind}, ${b.body.length} chars, id ${b.id})\n  ${excerptOf(b.body)}`;
 }
 
 export const listAgentInstructionsToolConfig = {
@@ -31,6 +38,7 @@ export const listAgentInstructionsToolConfig = {
     scope: z.enum(['workspace', 'customer', 'project', 'personal']).default('workspace'),
     projectId: z.string().uuid().optional().describe('Required for scope=project.'),
     customerId: z.string().uuid().optional().describe('Required for scope=customer.'),
+    blockId: z.string().uuid().optional().describe('Return THIS block with its full body (ORB-1700). Without it the list carries excerpts + contentChars only.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -43,14 +51,45 @@ function scopeQs(scope: string, projectId?: string, customerId?: string): string
 }
 
 export function makeListAgentInstructionsHandler(client: OrbotoClient) {
-  return async (input: { scope?: string; projectId?: string; customerId?: string } = {}): Promise<CallToolResult> => {
+  return async (input: { scope?: string; projectId?: string; customerId?: string; blockId?: string } = {}): Promise<CallToolResult> => {
     const res = await client.get<{ blocks: BlockRow[]; assembled: string }>(`/agent-instructions/blocks?${scopeQs(input.scope ?? 'workspace', input.projectId, input.customerId)}`);
+
+    // ORB-1700 - full body for ONE explicitly named block, in one call.
+    if (input.blockId) {
+      const block = res.blocks.find((b) => b.id === input.blockId);
+      if (!block) {
+        return {
+          content: [{ type: 'text', text: `No rule block with id ${input.blockId} at this scope.` }],
+          structuredContent: { block: null },
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: `# ${block.title}${block.enabled ? '' : ' [disabled]'}\n\n${block.body}` }],
+        structuredContent: { block },
+      };
+    }
+
+    // ORB-1700 - list = metadata + excerpt. The assembled 24k rule text is
+    // NOT re-shipped here (it rode along on every management call and cost
+    // 238 Mtok over 3 calls); agents load the rules via orboto_session_start.
     const text = res.blocks.length
       ? res.blocks.map(renderBlock).join('\n')
       : 'No rule blocks configured.';
     return {
       content: [{ type: 'text', text }],
-      structuredContent: { blocks: res.blocks, assembled: res.assembled },
+      structuredContent: {
+        // Array order = sortOrder; builtinKey only when it is one; the
+        // descriptive TITLE is the excerpt (bodies via blockId).
+        blocks: res.blocks.map((b) => ({
+          id: b.id,
+          title: b.title,
+          enabled: b.enabled,
+          contentChars: b.body.length,
+          ...(b.builtinKey ? { builtinKey: b.builtinKey } : {}),
+        })),
+        bodyHint: 'Full body of one block: re-call with blockId. The assembled agent-facing rule set comes from orboto_session_start.',
+      },
     };
   };
 }

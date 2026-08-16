@@ -92,15 +92,14 @@ export function makeListDocSpacesHandler(client: OrbotoClient) {
     return {
       content: [{ type: 'text', text }],
       structuredContent: {
+        // ORB-1700 - metadata only; description/slug/visibility belong to
+        // the follow-up space read. id stays: every doc tool accepts it,
+        // and pre-key spaces have no key to address by.
         spaces: spaces.map((s) => ({
           id: s.id,
-          name: s.name,
-          slug: s.slug,
           key: s.key ?? null,
+          name: s.name,
           type: s.type,
-          description: s.description,
-          projectId: s.projectId,
-          isPublic: s.isPublic,
         })),
       },
     };
