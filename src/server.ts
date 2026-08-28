@@ -231,6 +231,10 @@ import {
   bulkUnassignTicketsToolConfig, makeBulkUnassignTicketsHandler,
 } from './tools/bulk-writes.js';
 import {
+  bulkCreateTicketsToolConfig, makeBulkCreateTicketsHandler,
+  bulkAddTicketDependenciesToolConfig, makeBulkAddTicketDependenciesHandler,
+} from './tools/bulk-create.js';
+import {
   askDocsToolConfig, makeAskDocsHandler,
   ingestUrlToolConfig, makeIngestUrlHandler,
   ingestFileToolConfig, makeIngestFileHandler,
@@ -651,6 +655,10 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_bulk_patch_tickets', bulkPatchTicketsToolConfig, makeBulkPatchTicketsHandler(client));
   reg('orboto_bulk_move_tickets', bulkMoveTicketsToolConfig, makeBulkMoveTicketsHandler(client));
   reg('orboto_bulk_close_tickets', bulkCloseTicketsToolConfig, makeBulkCloseTicketsHandler(client));
+  // ORB-1694 - the two longest measured consecutive-call runs (create 49x,
+  // add_dependency 27x) collapse into one call each.
+  reg('orboto_bulk_create_tickets', bulkCreateTicketsToolConfig, makeBulkCreateTicketsHandler(client));
+  reg('orboto_bulk_add_ticket_dependencies', bulkAddTicketDependenciesToolConfig, makeBulkAddTicketDependenciesHandler(client));
   reg('orboto_bulk_comment_tickets', bulkCommentTicketsToolConfig, makeBulkCommentTicketsHandler(client));
   reg('orboto_bulk_assign_tickets', bulkAssignTicketsToolConfig, makeBulkAssignTicketsHandler(client));
   reg('orboto_bulk_unassign_tickets', bulkUnassignTicketsToolConfig, makeBulkUnassignTicketsHandler(client));

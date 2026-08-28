@@ -32,13 +32,15 @@ afterEach(() => { vi.restoreAllMocks(); });
  * Re-measured 2026-08-28 after the ORB-1741 manifest diet (one-line
  * descriptions + orboto_help): curated = 29 tools / 27,870 chars
  * (~7.0k tokens); full = 173 tools / 145,867 chars (~36.5k tokens).
- * Ceilings set with ~10 % headroom for honest edits - a description
- * essay creeping back in is exactly what these must catch now, so the
- * headroom is deliberately tighter than the old 20 %. Shrink-only:
- * raising either number is a conscious decision to grow every
- * session's connect cost.
+ * ORB-1694 added the two bulk tools (create + dependencies, schema-heavy
+ * by nature): curated = 31 tools / 33,615 chars - still below the
+ * pre-diet 37,458 baseline. Ceilings keep ~7-10 % headroom for honest
+ * edits - a description essay creeping back in is exactly what these
+ * must catch, so the headroom is deliberately tighter than the old
+ * 20 %. Shrink-only: raising either number is a conscious decision to
+ * grow every session's connect cost.
  */
-const CURATED_MAX_CHARS = 31_000;
+const CURATED_MAX_CHARS = 36_000;
 const FULL_MAX_CHARS = 160_000;
 
 async function measuredManifest(toolset?: Toolset): Promise<{ count: number; chars: number }> {
@@ -73,7 +75,9 @@ describe('ORB-1521 - eager-load manifest size', () => {
     const { count, chars } = await measuredManifest();
     // eslint-disable-next-line no-console
     console.log(`[manifest-size] curated: ${count} tools, ${chars} chars (~${Math.round(chars / 4)} tokens)`);
-    expect(count).toBeLessThanOrEqual(30);
+    // 31 = the ORB-1741-dieted set + the two ORB-1694 bulk tools (each
+    // REPLACES dozens of per-call responses, so they earn their slot).
+    expect(count).toBeLessThanOrEqual(32);
     expect(chars).toBeLessThanOrEqual(CURATED_MAX_CHARS);
   });
 

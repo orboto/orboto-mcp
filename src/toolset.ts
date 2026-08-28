@@ -48,6 +48,8 @@ export const CURATED_TOOLS: ReadonlySet<string> = new Set([
   'orboto_get_doc',         // 86
   // Ticket writes (the strict claim->commit->close loop)
   'orboto_create_ticket',   // 2069
+  'orboto_bulk_create_tickets',   // ORB-1694 - 48 measured runs of consecutive creates
+  'orboto_bulk_add_ticket_dependencies', // ORB-1694 - longest dependency run: 27 calls
   'orboto_update_ticket',   // 250
   'orboto_comment',         // 1838
   'orboto_claim',           // 1305
