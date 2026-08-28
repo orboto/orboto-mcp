@@ -27,6 +27,7 @@ import { embeddingStatusToolConfig, makeEmbeddingStatusHandler } from './tools/e
 import { aiUsageToolConfig, makeAiUsageHandler } from './tools/ai-usage.js';
 import { sessionStartToolConfig, makeSessionStartHandler } from './tools/session-start.js';
 import { responseExpandToolConfig, makeResponseExpandHandler } from './tools/response-expand.js';
+import { helpToolConfig, makeHelpHandler } from './tools/help.js';
 import { apiSearchToolConfig, makeApiSearchHandler } from './tools/api-search.js';
 import { apiCallToolConfig, makeApiCallHandler } from './tools/api-call.js';
 import {
@@ -434,6 +435,9 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   // omitted remainder from the in-process store, so capping a response
   // never loses content.
   reg('orboto_response_expand', responseExpandToolConfig, makeResponseExpandHandler());
+  // ORB-1741 - lazy full guidance: manifest descriptions are one-line
+  // summaries (tool-docs.ts); this serves the complete text on demand.
+  reg('orboto_help', helpToolConfig, makeHelpHandler());
   // ORB-1518 - Code-Mode escape hatch, discovery half: search the live
   // OpenAPI spec / fetch one endpoint's schema on demand. Keeps the whole
   // REST surface reachable without a named tool per endpoint.

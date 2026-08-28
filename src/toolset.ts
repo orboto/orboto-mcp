@@ -63,7 +63,10 @@ export const CURATED_TOOLS: ReadonlySet<string> = new Set([
   'orboto_log_time',        // 130
   'orboto_get_timer',       // 43
   // Transport plumbing + the escape hatch itself
-  'orboto_response_expand', // ORB-1697 - the way back from a budget cut
+  'orboto_response_expand',
+  // ORB-1741 - the way back from one-line manifest summaries: full
+  // guidance on demand. Must ride every manifest the summaries ride.
+  'orboto_help', // ORB-1697 - the way back from a budget cut
   'orboto_api_search',      // ORB-1518 - discovery half of the escape hatch
   'orboto_api_call',        // ORB-1519 - execute half of the escape hatch
 ]);

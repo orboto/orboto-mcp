@@ -27,13 +27,19 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); });
 
 /**
- * Measured 2026-08-10 (numbers also posted on ORB-1521): curated =
- * 28 tools / 37,458 chars (~9.4k tokens); full = 171 tools /
- * 189,672 chars (~47.4k tokens). Ceiling set with ~20 % headroom for
- * honest description edits; a tail re-registration jumps to ~190k and
- * blows through immediately.
+ * Measured 2026-08-10 (ORB-1521): curated = 28 tools / 37,458 chars
+ * (~9.4k tokens); full = 171 tools / 189,672 chars (~47.4k tokens).
+ * Re-measured 2026-08-28 after the ORB-1741 manifest diet (one-line
+ * descriptions + orboto_help): curated = 29 tools / 27,870 chars
+ * (~7.0k tokens); full = 173 tools / 145,867 chars (~36.5k tokens).
+ * Ceilings set with ~10 % headroom for honest edits - a description
+ * essay creeping back in is exactly what these must catch now, so the
+ * headroom is deliberately tighter than the old 20 %. Shrink-only:
+ * raising either number is a conscious decision to grow every
+ * session's connect cost.
  */
-const CURATED_MAX_CHARS = 45_000;
+const CURATED_MAX_CHARS = 31_000;
+const FULL_MAX_CHARS = 160_000;
 
 async function measuredManifest(toolset?: Toolset): Promise<{ count: number; chars: number }> {
   const server = await buildOrbotoMcpServer({
@@ -77,6 +83,10 @@ describe('ORB-1521 - eager-load manifest size', () => {
     // eslint-disable-next-line no-console
     console.log(`[manifest-size] full: ${full.count} tools, ${full.chars} chars (~${Math.round(full.chars / 4)} tokens)`);
     expect(full.count).toBeGreaterThan(150);
+    // ORB-1741 - the full manifest is ratcheted too: the diet's savings
+    // live mostly here (per-tool description essays), so this is where
+    // regression would land first.
+    expect(full.chars).toBeLessThanOrEqual(FULL_MAX_CHARS);
     // The reduction claim the epic makes - keep it honest in CI.
     expect(full.chars / curated.chars).toBeGreaterThan(3);
   });

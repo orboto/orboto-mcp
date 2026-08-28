@@ -20,6 +20,7 @@ import { OrbotoApiError, type OrbotoClient } from './orboto-client.js';
 import { type NudgeState, shouldNudge, prependNudge, shouldGate, gateResult } from './session-nudge.js';
 import { applyResponseBudget, TruncationBlockSchema } from './response-budget.js';
 import { buildStrictInputSchema, isRawShape } from './input-schema.js';
+import { captureToolDoc, summarizeToolDescription } from './tool-docs.js';
 
 /**
  * ORB-1174 — turn an OrbotoApiError into an actionable, agent-visible
@@ -269,6 +270,13 @@ export function registerWithMetrics(
         ...cfg,
         outputSchema: { ...cfg.outputSchema, __truncation: TruncationBlockSchema.optional() },
       };
+    }
+    // ORB-1741 - manifest diet: the wire manifest carries a one-sentence
+    // summary; the full guidance is captured for orboto_help. Central
+    // here so a new tool cannot ship a manifest essay by accident.
+    if (typeof cfg?.description === 'string' && cfg.description.length > 0) {
+      captureToolDoc(toolName, cfg.description);
+      cfg = { ...cfg, description: summarizeToolDescription(toolName, cfg.description) };
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (server.registerTool as any)(
