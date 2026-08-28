@@ -41,6 +41,7 @@
  * rather than failing the tool call.
  */
 import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 /** Default cap for a tool that does not declare its own. */
@@ -344,6 +345,27 @@ export interface OmittedEntry {
   omittedItems?: number;
   keptItems?: number;
 }
+
+// ORB-1738 - the ADVERTISED zod shape of the marker, consumed centrally in
+// registerWithMetrics: every declared outputSchema is extended with an
+// optional `__truncation` so strict clients (which validate structured
+// content against the advertised JSON schema, additionalProperties:false)
+// accept over-budget responses. Keep in lockstep with TruncationBlock.
+export const TruncationBlockSchema = z.object({
+  handle: z.string(),
+  budgetChars: z.number(),
+  originalChars: z.number(),
+  omittedChars: z.number(),
+  omitted: z.array(z.object({
+    path: z.string(),
+    kind: z.string(),
+    omittedChars: z.number().optional(),
+    omittedItems: z.number().optional(),
+    keptItems: z.number().optional(),
+  })),
+  howToGetTheRest: z.string(),
+  atFloor: z.boolean().optional(),
+});
 
 export interface TruncationBlock {
   handle: string;
