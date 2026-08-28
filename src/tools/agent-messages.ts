@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { mcpInstanceToken } from './shared.js';
 
 interface AgentMessage {
   id: string;
@@ -32,6 +33,8 @@ export const agentMessagesToolConfig = {
     all: z.boolean().default(false).describe('true = include already-read messages'),
     limit: z.number().int().min(1).max(200).default(50),
     project: z.string().min(1).max(64).optional().describe('Project key or UUID: narrow to messages scoped to this project PLUS unscoped ones. Pass the project you are working when your identity runs multiple sessions; only ack messages that are yours.'),
+    // ORB-1742 - self-echo exclusion, on by default for MCP sessions.
+    includeOwnSends: z.boolean().default(false).describe('true = ALSO list messages this very session sent (they are hidden by default so a shared identity never wakes itself with its own outbound mail).'),
     ackIds: z.array(z.string().uuid()).max(200).optional().describe('Message ids to mark as read'),
   }).shape,
   outputSchema: z.object({
@@ -52,7 +55,7 @@ export const agentMessagesToolConfig = {
 };
 
 export function makeAgentMessagesHandler(client: OrbotoClient) {
-  return async (args: { all?: boolean; limit?: number; project?: string; ackIds?: string[] }): Promise<CallToolResult> => {
+  return async (args: { all?: boolean; limit?: number; project?: string; includeOwnSends?: boolean; ackIds?: string[] }, extra?: unknown): Promise<CallToolResult> => {
     let acked = 0;
     if (args.ackIds && args.ackIds.length > 0) {
       const res = await client.post<{ acked: number }>('/v1/agent/messages/ack', { ids: args.ackIds });
@@ -62,6 +65,9 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
     if (args.all) q.set('all', 'true');
     if (args.limit) q.set('limit', String(args.limit));
     if (args.project) q.set('project', args.project);
+    if (!args.includeOwnSends) {
+      q.set('excludeRef', mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined));
+    }
     const { messages } = await client.get<{ messages: AgentMessage[] }>(`/v1/agent/messages${q.toString() ? `?${q.toString()}` : ''}`);
     const lines = messages.length === 0
       ? [acked > 0 ? `Acknowledged ${acked} message(s). Inbox empty.` : 'Inbox empty.']

@@ -13,6 +13,7 @@ import {
   makeAgentPresenceHandler,
   makeAgentNotifyHandler,
 } from './agent-coordination.js';
+import { makeAgentMessagesHandler } from './agent-messages.js';
 
 afterEach(() => { vi.restoreAllMocks(); });
 
@@ -126,5 +127,44 @@ describe('orboto_agent_notify', () => {
     });
     expect((result.content[0] as { text: string }).text).toContain('notified bob@example.com');
     expect(result.structuredContent).toMatchObject({ ok: true });
+    // ORB-1742 - the sender session's ref is stamped automatically (per-
+    // process fallback here, since no MCP sessionId rides along).
+    expect((capturedBody[0] as { senderRef?: string }).senderRef).toMatch(/^mcp-/);
+  });
+
+  it('ORB-1742: senderRef prefers the per-connection MCP session id, and an explicit ref wins outright', async () => {
+    const capturedBody: unknown[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      capturedBody.push(JSON.parse((init?.body as string) ?? '{}'));
+      return {
+        ok: true, status: 200, statusText: 'OK',
+        json: async () => ({ ok: true, messageId: '00000000-0000-4000-8000-000000000000' }),
+        text: async () => '',
+      } as unknown as Response;
+    });
+    const handler = makeAgentNotifyHandler(client);
+    await handler({ targetEmail: 'bob@example.com', subject: 'hi' }, { sessionId: 'abc123' });
+    expect((capturedBody[0] as { senderRef?: string }).senderRef).toBe('mcp-abc123');
+    await handler({ targetEmail: 'bob@example.com', subject: 'hi', senderRef: 'runner:custom' }, { sessionId: 'abc123' });
+    expect((capturedBody[1] as { senderRef?: string }).senderRef).toBe('runner:custom');
+  });
+});
+
+describe('orboto_messages (ORB-1742 self-echo exclusion)', () => {
+  it('fetches with excludeRef = the session ref by default; includeOwnSends drops the filter', async () => {
+    const urls: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      urls.push(String(url));
+      return {
+        ok: true, status: 200, statusText: 'OK',
+        json: async () => ({ messages: [] }),
+        text: async () => '',
+      } as unknown as Response;
+    });
+    const handler = makeAgentMessagesHandler(client);
+    await handler({}, { sessionId: 'abc123' });
+    expect(urls[0]).toContain('excludeRef=mcp-abc123');
+    await handler({ includeOwnSends: true }, { sessionId: 'abc123' });
+    expect(urls[1]).not.toContain('excludeRef');
   });
 });

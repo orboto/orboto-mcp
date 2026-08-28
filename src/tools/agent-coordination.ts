@@ -16,6 +16,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { mcpInstanceToken } from './shared.js';
 
 // ---------------------------------------------------------------------------
 // orboto_agent_heartbeat
@@ -158,6 +159,9 @@ export const agentNotifyToolConfig = {
     // ORB-1732 - optional project scope: address "the agent working project
     // X" when the recipient identity runs multiple sessions.
     project: z.string().min(1).max(64).optional().describe('Project key (ORB) or UUID: scope the message to the recipient session working that project. Recipients fetching with a project filter see scoped messages for their project plus unscoped ones.'),
+    // ORB-1742 - defaults to this MCP session's instance token so a shared
+    // identity never wakes itself with its own outbound mail.
+    senderRef: z.string().min(1).max(128).optional().describe('Sender-session ref for self-echo exclusion. Defaults to this MCP session automatically - only override when sending on behalf of another session.'),
   }).shape,
   outputSchema: z.object({
     ok: z.literal(true),
@@ -209,8 +213,11 @@ export function makeAgentNotifyHandler(client: OrbotoClient) {
     payload?: Record<string, unknown>;
     threadId?: string;
     project?: string;
-  }): Promise<CallToolResult> => {
-    const res = await client.post<NotifyResponse>('/v1/agent/notify', args);
+    senderRef?: string;
+  }, extra?: unknown): Promise<CallToolResult> => {
+    // ORB-1742 - stamp the sender session automatically.
+    const senderRef = mcpInstanceToken(args.senderRef, extra as { sessionId?: string } | undefined);
+    const res = await client.post<NotifyResponse>('/v1/agent/notify', { ...args, senderRef });
     return {
       // ORB-1727 - the message is durable now: it reaches the recipient's
       // inbox even when they are offline (delivery via the pending-mail
