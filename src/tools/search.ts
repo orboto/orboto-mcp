@@ -37,12 +37,15 @@ interface SearchResponse {
   items: SearchHit[];
   nextCursor: string | null;
   total: number;
+  /** ORB-1695 - which pass produced the hits: 'strict' AND-matching, or
+   *  the 'relaxed' OR fallback + semantic recall that runs on 0 hits. */
+  pass?: 'strict' | 'relaxed';
 }
 
 export const searchToolConfig = {
   title: 'Search across orboto',
   description:
-    'Full-text search across tickets, comments, and docs. Honours the caller\'s visibility — private tickets and internal comments never appear unless the caller can already see them. Recall note (matters most for duplicate checks): results rank by term co-occurrence, so MORE specific words = WORSE recall. Prefer a single distinctive STABLE token (file/component/error-string fragment like "AdminCodesPage"); keep queries SHORT; search the SYMPTOM, not your intended fix. A 0-result long query is NOT evidence of "nothing exists" — drop terms and retry with one bare identifier.',
+    'Full-text search across tickets, comments, and docs. Honours the caller\'s visibility — private tickets and internal comments never appear unless the caller can already see them. Recall (ORB-1695): when the strict all-terms pass finds nothing, the server automatically retries with an OR-relaxed pass plus semantic (embedding) recall - the response\'s `pass` field says which pass produced the hits, and relaxed-pass hits deserve a skeptical read (they matched SOME terms or only the meaning, not all terms). Still prefer a single distinctive STABLE token (file/component/error-string fragment like "AdminCodesPage") and search the SYMPTOM, not your intended fix.',
   inputSchema: z.object({
     query: z.string().min(1).describe('Search terms, e.g. "retry logic in the queue worker".'),
     types: z.array(z.enum(['ticket', 'comment', 'doc'])).optional()
@@ -75,9 +78,12 @@ export function makeSearchHandler(client: OrbotoClient) {
     const hasMore = !!res.nextCursor && res.total > shown;
     const headerHint = hasMore ? ` (showing ${shown} of ${res.total})` : '';
 
+    const relaxedNote = res.pass === 'relaxed'
+      ? ' [relaxed pass: no row matched ALL terms - these matched some terms or the meaning]'
+      : '';
     const text = res.items.length === 0
       ? `No hits for "${input.query}".`
-      : `Hits${headerHint}:\n\n` + res.items.map((h) => {
+      : `Hits${headerHint}${relaxedNote}:\n\n` + res.items.map((h) => {
         const tag = h.type.toUpperCase();
         // ORB-1084 — non-ticket hits carry the FULL id: the truncated
         // form was unusable as input for the doc write tools.
@@ -92,6 +98,7 @@ export function makeSearchHandler(client: OrbotoClient) {
         total: res.total,
         shown,
         hasMore,
+        pass: res.pass ?? 'strict',
         hits: res.items.map((h) => ({
           type: h.type,
           id: h.id, // ORB-1084 — full id, usable as write-tool input
