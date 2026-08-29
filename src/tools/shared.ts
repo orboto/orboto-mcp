@@ -194,3 +194,23 @@ const MCP_PROCESS_INSTANCE = `mcp-${randomUUID()}`;
 export function mcpInstanceToken(explicit?: string, extra?: { sessionId?: string }): string {
   return explicit ?? (extra?.sessionId ? `mcp-${extra.sessionId}` : MCP_PROCESS_INSTANCE);
 }
+
+/** ORB-1753 - the caller's self-declared agent profile from the process
+ *  environment (stdio servers / runners). The api-key standing profile
+ *  (ORB-1751) already covers keys server-side; these env vars let a
+ *  keyless or per-process deployment declare without code. Explicit tool
+ *  inputs override. */
+export function envAgentProfile(): { agentKind?: string; modelTier?: string } {
+  const kind = process.env.ORBOTO_AGENT_KIND?.trim().toLowerCase();
+  const tier = process.env.ORBOTO_MODEL_TIER?.trim().toLowerCase();
+  return { ...(kind ? { agentKind: kind } : {}), ...(tier ? { modelTier: tier } : {}) };
+}
+
+/** ORB-1753 - append the resolved profile to a querystring. */
+export function applyAgentProfile(params: URLSearchParams, explicit?: { agentKind?: string; modelTier?: string }): void {
+  const env = envAgentProfile();
+  const kind = explicit?.agentKind ?? env.agentKind;
+  const tier = explicit?.modelTier ?? env.modelTier;
+  if (kind) params.set('agentKind', kind);
+  if (tier) params.set('modelTier', tier);
+}

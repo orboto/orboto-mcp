@@ -34,7 +34,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { resolveTicketByKey, type TicketRow } from './shared.js';
+import { resolveTicketByKey, type TicketRow , applyAgentProfile } from './shared.js';
 
 export const sessionStartToolConfig = {
   title: 'Load the rules you must follow + re-orient',
@@ -46,6 +46,11 @@ export const sessionStartToolConfig = {
     // ORB-1697 - the caller is the only party that knows whether it still
     // HOLDS the rules. See the ack-defect note on the handler below.
     forceRules: z.boolean().optional().describe('Set true to always return the full rules text, even when this connection has already delivered them. Use it whenever you do not have the rules in your context right now - after a context compaction, a /clear, or a fresh agent taking over an existing connection.'),
+    // ORB-1753 - self-declared classification for rule targeting; defaults
+    // to ORBOTO_AGENT_KIND / ORBOTO_MODEL_TIER env, then the api-key's
+    // standing profile server-side.
+    agentKind: z.string().min(1).max(32).optional().describe('Your agent runtime kind (e.g. coding, orchestrator, reviewer, runner) - targeted rule blocks are delivered per kind.'),
+    modelTier: z.string().min(1).max(32).optional().describe('Your model capability tier (frontier, standard, small) - tier-targeted rules and per-tier rule text variants are delivered per tier.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -271,9 +276,13 @@ export function makeSessionStartHandler(client: OrbotoClient) {
   // context. Hence `forceRules`, and an ack text that says so.
   let lastKnownRulesHash: string | undefined;
 
-  return async (input: { projectId?: string; ticketKey?: string; forceRules?: boolean } = {}): Promise<CallToolResult> => {
+  return async (input: { projectId?: string; ticketKey?: string; forceRules?: boolean; agentKind?: string; modelTier?: string } = {}): Promise<CallToolResult> => {
     const rulesParams = new URLSearchParams();
     if (input.projectId) rulesParams.set('projectId', input.projectId);
+    // ORB-1753 - rule targeting: explicit input > env > (server-side) the
+    // api-key's standing profile. The rules hash is profile-specific
+    // server-side, so the cached ack stays valid per profile.
+    applyAgentProfile(rulesParams, { agentKind: input.agentKind, modelTier: input.modelTier });
     if (lastKnownRulesHash && !input.forceRules) rulesParams.set('knownRulesHash', lastKnownRulesHash);
     const rulesQs = rulesParams.toString();
     const rulesPath = rulesQs ? `/agent-instructions?${rulesQs}` : '/agent-instructions';

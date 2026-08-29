@@ -241,6 +241,7 @@ import {
 } from './tools/docs-ai.js';
 import { attachToTicketToolConfig, makeAttachToTicketHandler } from './tools/attach.js';
 import { setParentToolConfig, makeSetParentHandler } from './tools/set-parent.js';
+import { applyAgentProfile } from './tools/shared.js';
 import {
   updateProjectToolConfig, makeUpdateProjectHandler,
   createProjectToolConfig, makeCreateProjectHandler,
@@ -367,7 +368,13 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   // (the hard gate). Default off; a fetch failure keeps it off.
   let requireSessionStart = false;
   try {
-    const res = await client.get<{ instructions: string; requireSessionStart?: boolean }>('/agent-instructions');
+    // ORB-1753 - stdio deployments can declare their profile via
+    // ORBOTO_AGENT_KIND / ORBOTO_MODEL_TIER; api-key standing profiles
+    // resolve server-side either way.
+    const connectParams = new URLSearchParams();
+    applyAgentProfile(connectParams);
+    const connectQs = connectParams.toString();
+    const res = await client.get<{ instructions: string; requireSessionStart?: boolean }>(`/agent-instructions${connectQs ? `?${connectQs}` : ''}`);
     if (res?.instructions?.trim()) workingRules = res.instructions.trim();
     requireSessionStart = res?.requireSessionStart === true;
   } catch {

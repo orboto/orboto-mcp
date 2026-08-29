@@ -442,3 +442,37 @@ describe('orboto_session_start - a 200 with an unexpected body never kills the d
     expect(structured.ticketBundle.activeSessions).toEqual([]);
   });
 });
+
+describe('ORB-1753 - rule targeting passthrough', () => {
+  afterEach(() => {
+    delete process.env.ORBOTO_AGENT_KIND;
+    delete process.env.ORBOTO_MODEL_TIER;
+  });
+
+  it('explicit agentKind/modelTier ride the rules fetch; env fills in when absent; explicit beats env', async () => {
+    const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
+
+    let calls = stubByPath({ '/agent-instructions': { instructions: 'RULES', rulesHash: 'h1' } });
+    let handler = makeSessionStartHandler(client);
+    await handler({ agentKind: 'runner', modelTier: 'small' });
+    expect(calls.find((c) => c.startsWith('/agent-instructions'))).toContain('agentKind=runner');
+    expect(calls.find((c) => c.startsWith('/agent-instructions'))).toContain('modelTier=small');
+
+    vi.restoreAllMocks();
+    process.env.ORBOTO_AGENT_KIND = 'Coding';
+    process.env.ORBOTO_MODEL_TIER = 'frontier';
+    calls = stubByPath({ '/agent-instructions': { instructions: 'RULES', rulesHash: 'h2' } });
+    handler = makeSessionStartHandler(client);
+    await handler({});
+    // env applies, lowercase-normalized client-side.
+    expect(calls.find((c) => c.startsWith('/agent-instructions'))).toContain('agentKind=coding');
+    expect(calls.find((c) => c.startsWith('/agent-instructions'))).toContain('modelTier=frontier');
+
+    vi.restoreAllMocks();
+    calls = stubByPath({ '/agent-instructions': { instructions: 'RULES', rulesHash: 'h3' } });
+    handler = makeSessionStartHandler(client);
+    await handler({ agentKind: 'reviewer' });
+    // explicit input beats the env default.
+    expect(calls.find((c) => c.startsWith('/agent-instructions'))).toContain('agentKind=reviewer');
+  });
+});
