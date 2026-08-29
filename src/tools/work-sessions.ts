@@ -649,7 +649,7 @@ export function makeWorkFinishHandler(client: OrbotoClient) {
 
 interface NextWorkResponse {
   reserved: StartBundleResponse | null;
-  reason: 'all-blocked' | 'all-leased' | 'none-matching' | null;
+  reason: 'all-blocked' | 'all-leased' | 'none-matching' | 'autonomy_paused' | null;
   retryAfterSeconds: number | null;
   earliestFreeAt: string | null;
   candidatesConsidered: number;
@@ -658,7 +658,7 @@ interface NextWorkResponse {
 export const workNextToolConfig = {
   title: 'Pull the next ready ticket and reserve it in one call (worker-pool dispatch)',
   description:
-    'ORB-1613 - the pull side of low-management dispatch, sibling of orboto_work_start on the "I already know which ticket" side. Picks the highest-priority ticket in a project that is TODO, unblocked (every dependency closed), not already leased under the requested role, and not blocked by a conflicting resourceClaim - then reserves it with the EXACT same guarantees as orboto_work_start (atomic lease acquire + the full context bundle: rules ack, primer, ticket, checklists, dependencies, git health, siblings) in the same response. Priority then ticket number, deterministic - never a coin flip on ties. Two workers calling this concurrently never receive the SAME ticket: the underlying reservation is the identical partial-unique-index INSERT orboto_work_start uses, just walked across an ordered candidate list - a collision just advances to the next candidate. Epics are never returned (they are containers, not directly implementable). When nothing is ready, the response is a STRUCTURED result (`reserved: null`) with a `reason` (`none-matching` = no todo tickets at all; `all-blocked` = candidates exist but all have open dependencies; `all-leased` = ready candidates exist but are all currently leased or claim-conflicted) and, ONLY when derivable from an actual active lease, a `retryAfterSeconds` backoff hint (`earliestFreeAt` null and `retryAfterSeconds` null means no signal exists - never a fabricated constant). This is never an error - a worker pool should back off on the hint rather than poll hot. Prefer this over orboto_work_start whenever the caller does not care WHICH ticket it gets, only that it gets the best available one right now.',
+    'ORB-1613 - the pull side of low-management dispatch, sibling of orboto_work_start on the "I already know which ticket" side. Picks the highest-priority ticket in a project that is TODO, unblocked (every dependency closed), not already leased under the requested role, and not blocked by a conflicting resourceClaim - then reserves it with the EXACT same guarantees as orboto_work_start (atomic lease acquire + the full context bundle: rules ack, primer, ticket, checklists, dependencies, git health, siblings) in the same response. Priority then ticket number, deterministic - never a coin flip on ties. Two workers calling this concurrently never receive the SAME ticket: the underlying reservation is the identical partial-unique-index INSERT orboto_work_start uses, just walked across an ordered candidate list - a collision just advances to the next candidate. Epics are never returned (they are containers, not directly implementable). When nothing is ready, the response is a STRUCTURED result (`reserved: null`) with a `reason` (`none-matching` = no todo tickets at all; `all-blocked` = candidates exist but all have open dependencies; `all-leased` = ready candidates exist but are all currently leased or claim-conflicted; `autonomy_paused` = ORB-1774, this agent identity or the whole workspace has autonomous pulls paused by an operator - idle and wait for an operator/notify wakeup instead of retrying) and, ONLY when derivable from an actual active lease, a `retryAfterSeconds` backoff hint (`earliestFreeAt` null and `retryAfterSeconds` null means no signal exists - never a fabricated constant). This is never an error - a worker pool should back off on the hint rather than poll hot. Prefer this over orboto_work_start whenever the caller does not care WHICH ticket it gets, only that it gets the best available one right now.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME") or UUID.'),
     role: z.enum(['implementation', 'review', 'preflight', 'integration']).optional()
@@ -705,6 +705,17 @@ export function makeWorkNextHandler(client: OrbotoClient) {
     });
 
     if (!res.reserved) {
+      // ORB-1774 - a pause is an operator decision, not a backoff situation:
+      // tell the agent to idle, not to poll for a free slot.
+      if (res.reason === 'autonomy_paused') {
+        return {
+          content: [{
+            type: 'text',
+            text: 'Autonomous work is PAUSED for this agent (by an operator, per-bot or workspace-wide). Do not poll for new tickets - idle and wait for an operator instruction or an agent-notify wakeup. Explicitly assigned work via orboto_work_start still runs.',
+          }],
+          structuredContent: { reserved: null, reason: res.reason, retryAfterSeconds: null, earliestFreeAt: null, candidatesConsidered: 0 },
+        };
+      }
       const lines = [`No ready ticket in "${args.projectKey}" right now (${res.reason}).`];
       lines.push(
         res.retryAfterSeconds != null
