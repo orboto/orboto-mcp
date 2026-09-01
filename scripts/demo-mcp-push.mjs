@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ORB-940 / ORB-959 — runnable proof that the live-push path works.
+ * Runnable proof that the live-push path works.
  *
  * Subscribes to a single ticket via the deployed `/mcp` endpoint,
  * registers a notification handler, then idles waiting for pushes.
@@ -16,7 +16,7 @@
  *   pnpm --filter @orboto/mcp exec node scripts/demo-mcp-push.mjs \
  *     --url https://orboto.example.com/mcp \
  *     --token orb_… \
- *     --ticket ORB-42
+ *     --ticket ACME-42
  *
  * Both `orb_*` API keys AND OAuth-issued access tokens (JWT) work.
  */
@@ -43,7 +43,7 @@ example:
   pnpm --filter @orboto/mcp exec node scripts/demo-mcp-push.mjs \\
     --url https://orboto.example.com/mcp \\
     --token orb_… \\
-    --ticket ORB-42
+    --ticket ACME-42
 
 Subscribes to orboto://ticket/<KEY> and prints every push that lands.
 Ctrl-C to exit.
@@ -83,7 +83,7 @@ console.log(`connected to ${args.url}`);
 
 await client.subscribeResource({ uri });
 console.log(`subscribed to ${uri}`);
-console.log(`change the ticket in the web UI — pushes will print below. Ctrl-C to exit.`);
+console.log(`change the ticket in the web UI - pushes will print below. Ctrl-C to exit.`);
 
 // SIGINT closes cleanly so the server's per-session state gets freed
 // (otherwise the bridge sits idle until the OS reaps the connection).
