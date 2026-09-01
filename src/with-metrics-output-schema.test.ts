@@ -13,11 +13,15 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { listProjectsToolConfig } from './tools/list-projects.js';
-import { TruncationBlockSchema, applyResponseBudget, resetPayloadStore } from './response-budget.js';
+import {
+  TruncationBlockSchema, TruncationBlockAdvertisedSchema,
+  applyResponseBudget, resetPayloadStore,
+} from './response-budget.js';
 
-/** Mirrors the reg() transformation in with-metrics.ts. */
+/** Mirrors the reg() transformation in with-metrics.ts (ORB-1805: the
+ *  advertised form is the compact, open one). */
 function advertisedOutputShape(shape: Record<string, z.ZodTypeAny>) {
-  return { ...shape, __truncation: TruncationBlockSchema.optional() };
+  return { ...shape, __truncation: TruncationBlockAdvertisedSchema.optional() };
 }
 
 /** What additionalProperties:false enforces on a strict client: every key
@@ -49,8 +53,24 @@ describe('ORB-1738 - __truncation is part of the advertised output schema', () =
     const shape = advertisedOutputShape(listProjectsToolConfig.outputSchema);
     // Before the fix this was false - the marker was undeclared.
     expect(strictClientAccepts(shape, sc)).toBe(true);
-    // And the marker itself matches the advertised sub-schema.
+    // And the marker itself matches BOTH the exact runtime shape and the
+    // compact schema actually advertised on the wire (ORB-1805).
     expect(TruncationBlockSchema.safeParse(sc.__truncation).success).toBe(true);
+    expect(TruncationBlockAdvertisedSchema.safeParse(sc.__truncation).success).toBe(true);
+  });
+
+  it('ORB-1805 - the advertised marker schema is strictly more permissive than the exact one', () => {
+    // Anything the exact shape accepts, the advertised one must accept -
+    // otherwise the diet would start rejecting valid payloads.
+    const block = {
+      handle: 'h1', budgetChars: 4000, originalChars: 9000, omittedChars: 5000,
+      omitted: [{ path: 'items', kind: 'array', omittedItems: 12, keptItems: 3 }],
+      howToGetTheRest: 'call orboto_response_expand',
+    };
+    expect(TruncationBlockSchema.safeParse(block).success).toBe(true);
+    expect(TruncationBlockAdvertisedSchema.safeParse(block).success).toBe(true);
+    // A future field added to the runtime block must not break clients.
+    expect(TruncationBlockAdvertisedSchema.safeParse({ ...block, futureField: 1 }).success).toBe(true);
   });
 
   it('the budget layer adds exactly ONE key - __truncation - and nothing else (class sweep)', () => {

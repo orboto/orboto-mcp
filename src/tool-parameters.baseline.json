@@ -1,0 +1,2587 @@
+{
+  "orboto_add_check": {
+    "params": [
+      "content",
+      "linkedTicketKey",
+      "listTitle",
+      "ticketKey"
+    ],
+    "required": [
+      "content",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_add_cross_project_link": {
+    "params": [
+      "relationType",
+      "sourceTicketKey",
+      "statusSyncEnabled",
+      "targetTicketKey"
+    ],
+    "required": [
+      "relationType",
+      "sourceTicketKey",
+      "targetTicketKey"
+    ],
+    "enums": {
+      "relationType": [
+        "blocks",
+        "counterpart",
+        "depends_on",
+        "related"
+      ]
+    }
+  },
+  "orboto_add_ticket_dependency": {
+    "params": [
+      "dependsOnKey",
+      "ticketKey"
+    ],
+    "required": [
+      "dependsOnKey",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_admin_agent_drift_list": {
+    "params": [
+      "cursor",
+      "driftType",
+      "from",
+      "limit",
+      "resolved",
+      "to",
+      "userId"
+    ],
+    "required": [],
+    "enums": {
+      "driftType": [
+        "transition_without_summary",
+        "untracked_commit"
+      ]
+    }
+  },
+  "orboto_admin_agent_drift_resolve": {
+    "params": [
+      "id"
+    ],
+    "required": [
+      "id"
+    ],
+    "enums": {}
+  },
+  "orboto_admin_translation_approve": {
+    "params": [
+      "ticketId"
+    ],
+    "required": [
+      "ticketId"
+    ],
+    "enums": {}
+  },
+  "orboto_admin_translation_list": {
+    "params": [
+      "cursor",
+      "limit",
+      "status"
+    ],
+    "required": [],
+    "enums": {
+      "status": [
+        "all",
+        "pending"
+      ]
+    }
+  },
+  "orboto_admin_translation_revert": {
+    "params": [
+      "ticketId"
+    ],
+    "required": [
+      "ticketId"
+    ],
+    "enums": {}
+  },
+  "orboto_agent_broadcast": {
+    "params": [
+      "message",
+      "scopeId",
+      "scopeType"
+    ],
+    "required": [
+      "message",
+      "scopeType"
+    ],
+    "enums": {
+      "scopeType": [
+        "project",
+        "topic",
+        "workspace"
+      ]
+    }
+  },
+  "orboto_agent_heartbeat": {
+    "params": [
+      "capabilities",
+      "clientInfo",
+      "clientInfo.host",
+      "clientInfo.name",
+      "clientInfo.user_agent",
+      "clientInfo.version",
+      "sessionToken",
+      "status",
+      "workingOnTicketId"
+    ],
+    "required": [],
+    "enums": {
+      "status": [
+        "blocked",
+        "idle",
+        "working"
+      ]
+    }
+  },
+  "orboto_agent_notify": {
+    "params": [
+      "kind",
+      "payload",
+      "project",
+      "senderRef",
+      "subject",
+      "targetEmail",
+      "threadId"
+    ],
+    "required": [
+      "subject",
+      "targetEmail"
+    ],
+    "enums": {
+      "kind": [
+        "complete",
+        "error",
+        "info",
+        "request"
+      ]
+    }
+  },
+  "orboto_agent_presence": {
+    "params": [],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_ai_status": {
+    "params": [],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_ai_usage": {
+    "params": [
+      "end",
+      "start"
+    ],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_analytics": {
+    "params": [
+      "milestone",
+      "mode",
+      "projectKey",
+      "report"
+    ],
+    "required": [
+      "projectKey",
+      "report"
+    ],
+    "enums": {
+      "mode": [
+        "hours",
+        "money"
+      ],
+      "report": [
+        "bottleneck",
+        "budget",
+        "burndown",
+        "collaboration",
+        "cycle-time",
+        "earned-value",
+        "estimation-accuracy",
+        "flow-metrics",
+        "flow-time",
+        "forecast",
+        "overview",
+        "velocity",
+        "workload"
+      ]
+    }
+  },
+  "orboto_api_call": {
+    "params": [
+      "body",
+      "method",
+      "path",
+      "query"
+    ],
+    "required": [
+      "method",
+      "path"
+    ],
+    "enums": {
+      "method": [
+        "DELETE",
+        "GET",
+        "PATCH",
+        "POST",
+        "PUT"
+      ]
+    }
+  },
+  "orboto_api_search": {
+    "params": [
+      "limit",
+      "method",
+      "path",
+      "query"
+    ],
+    "required": [],
+    "enums": {
+      "method": [
+        "DELETE",
+        "GET",
+        "PATCH",
+        "POST",
+        "PUT"
+      ]
+    }
+  },
+  "orboto_approval_decide": {
+    "params": [
+      "comment",
+      "decision",
+      "requestId",
+      "ticketKey"
+    ],
+    "required": [
+      "decision",
+      "ticketKey"
+    ],
+    "enums": {
+      "decision": [
+        "approve",
+        "reject"
+      ]
+    }
+  },
+  "orboto_archive_project": {
+    "params": [
+      "projectKey"
+    ],
+    "required": [
+      "projectKey"
+    ],
+    "enums": {}
+  },
+  "orboto_ask_docs": {
+    "params": [
+      "limit",
+      "question",
+      "spaceId"
+    ],
+    "required": [
+      "question"
+    ],
+    "enums": {}
+  },
+  "orboto_assign": {
+    "params": [
+      "assigneeEmail",
+      "ticketKey"
+    ],
+    "required": [
+      "assigneeEmail",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_attach_to_ticket": {
+    "params": [
+      "altText",
+      "contentBase64",
+      "embed",
+      "filename",
+      "ticketKey"
+    ],
+    "required": [
+      "contentBase64",
+      "filename",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_bulk_add_ticket_dependencies": {
+    "params": [
+      "pairs",
+      "pairs[].dependsOnKey",
+      "pairs[].ticketKey"
+    ],
+    "required": [
+      "pairs"
+    ],
+    "enums": {}
+  },
+  "orboto_bulk_assign_tickets": {
+    "params": [
+      "assigneeEmail",
+      "dryRun",
+      "ticketKeys"
+    ],
+    "required": [
+      "assigneeEmail",
+      "ticketKeys"
+    ],
+    "enums": {}
+  },
+  "orboto_bulk_close_tickets": {
+    "params": [
+      "comment",
+      "dryRun",
+      "ticketKeys"
+    ],
+    "required": [
+      "ticketKeys"
+    ],
+    "enums": {}
+  },
+  "orboto_bulk_comment_tickets": {
+    "params": [
+      "dryRun",
+      "isInternal",
+      "text",
+      "ticketKeys"
+    ],
+    "required": [
+      "text",
+      "ticketKeys"
+    ],
+    "enums": {}
+  },
+  "orboto_bulk_create_tickets": {
+    "params": [
+      "allowLanguageMismatch",
+      "milestone",
+      "parentTicketKey",
+      "projectKey",
+      "tickets",
+      "tickets[].assigneeEmails",
+      "tickets[].deliveryMode",
+      "tickets[].description",
+      "tickets[].dueDate",
+      "tickets[].isPrivate",
+      "tickets[].labels",
+      "tickets[].milestone",
+      "tickets[].parentTicketKey",
+      "tickets[].priority",
+      "tickets[].title",
+      "tickets[].type"
+    ],
+    "required": [
+      "projectKey",
+      "tickets"
+    ],
+    "enums": {
+      "tickets[].deliveryMode": [
+        "admin",
+        "docs",
+        "epic",
+        "implementation",
+        "review"
+      ],
+      "tickets[].priority": [
+        "blocker",
+        "high",
+        "low",
+        "normal",
+        "trivial"
+      ],
+      "tickets[].type": [
+        "bug",
+        "epic",
+        "story",
+        "task"
+      ]
+    }
+  },
+  "orboto_bulk_move_tickets": {
+    "params": [
+      "dryRun",
+      "statusCategory",
+      "ticketKeys"
+    ],
+    "required": [
+      "statusCategory",
+      "ticketKeys"
+    ],
+    "enums": {
+      "statusCategory": [
+        "done",
+        "in_progress",
+        "in_review",
+        "todo",
+        "wont_fix"
+      ]
+    }
+  },
+  "orboto_bulk_patch_tickets": {
+    "params": [
+      "dryRun",
+      "patch",
+      "patch.description",
+      "patch.dueDate",
+      "patch.estimatedTimeMinutes",
+      "patch.isPrivate",
+      "patch.priority",
+      "patch.startDate",
+      "patch.title",
+      "patch.type",
+      "ticketKeys"
+    ],
+    "required": [
+      "patch",
+      "ticketKeys"
+    ],
+    "enums": {
+      "patch.priority": [
+        "blocker",
+        "high",
+        "low",
+        "normal",
+        "trivial"
+      ],
+      "patch.type": [
+        "bug",
+        "epic",
+        "story",
+        "task"
+      ]
+    }
+  },
+  "orboto_bulk_unassign_tickets": {
+    "params": [
+      "assigneeEmail",
+      "dryRun",
+      "ticketKeys"
+    ],
+    "required": [
+      "assigneeEmail",
+      "ticketKeys"
+    ],
+    "enums": {}
+  },
+  "orboto_cancel_ticket_session": {
+    "params": [
+      "scheduleId",
+      "ticketKey"
+    ],
+    "required": [
+      "scheduleId",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_check": {
+    "params": [
+      "item",
+      "ticketKey"
+    ],
+    "required": [
+      "item",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_check_similar": {
+    "params": [
+      "description",
+      "forType",
+      "limit",
+      "parentTicketKey",
+      "projectKey",
+      "title"
+    ],
+    "required": [
+      "projectKey",
+      "title"
+    ],
+    "enums": {}
+  },
+  "orboto_claim": {
+    "params": [
+      "agentSessionToken",
+      "force",
+      "noTimer",
+      "sole",
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_close_milestone": {
+    "params": [
+      "archive",
+      "milestone",
+      "projectKey"
+    ],
+    "required": [
+      "milestone",
+      "projectKey"
+    ],
+    "enums": {}
+  },
+  "orboto_close_ticket": {
+    "params": [
+      "comment",
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_comment": {
+    "params": [
+      "isInternal",
+      "text",
+      "ticketKey"
+    ],
+    "required": [
+      "text",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_create_agent_instruction": {
+    "params": [
+      "body",
+      "customerId",
+      "enabled",
+      "projectId",
+      "scope",
+      "sortOrder",
+      "title"
+    ],
+    "required": [
+      "body",
+      "title"
+    ],
+    "enums": {
+      "scope": [
+        "customer",
+        "personal",
+        "project",
+        "workspace"
+      ]
+    }
+  },
+  "orboto_create_doc": {
+    "params": [
+      "content",
+      "icon",
+      "parentDocId",
+      "spaceId",
+      "title",
+      "visibility"
+    ],
+    "required": [
+      "spaceId",
+      "title"
+    ],
+    "enums": {
+      "visibility": [
+        "members",
+        "public",
+        "specific",
+        "workspace"
+      ]
+    }
+  },
+  "orboto_create_doc_space": {
+    "params": [
+      "description",
+      "icon",
+      "name",
+      "projectId",
+      "projectKey",
+      "slug",
+      "type"
+    ],
+    "required": [
+      "name",
+      "type"
+    ],
+    "enums": {
+      "type": [
+        "global",
+        "project"
+      ]
+    }
+  },
+  "orboto_create_full_backup": {
+    "params": [],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_create_label": {
+    "params": [
+      "color",
+      "name",
+      "projectKey"
+    ],
+    "required": [
+      "name",
+      "projectKey"
+    ],
+    "enums": {}
+  },
+  "orboto_create_milestone": {
+    "params": [
+      "endDate",
+      "isPrivate",
+      "name",
+      "projectKey",
+      "startDate"
+    ],
+    "required": [
+      "name",
+      "projectKey"
+    ],
+    "enums": {}
+  },
+  "orboto_create_project": {
+    "params": [
+      "customerId",
+      "description",
+      "key",
+      "language",
+      "name"
+    ],
+    "required": [
+      "name"
+    ],
+    "enums": {
+      "language": [
+        "cs",
+        "da",
+        "de",
+        "en",
+        "es",
+        "fi",
+        "fr",
+        "it",
+        "ja",
+        "ko",
+        "nl",
+        "no",
+        "pl",
+        "pt",
+        "ru",
+        "sv",
+        "tr",
+        "zh"
+      ]
+    }
+  },
+  "orboto_create_ticket": {
+    "params": [
+      "allowDuplicate",
+      "allowLanguageMismatch",
+      "assigneeEmails",
+      "deliveryMode",
+      "description",
+      "dueDate",
+      "duplicateJustification",
+      "isPrivate",
+      "labels",
+      "milestone",
+      "parentTicketKey",
+      "priority",
+      "projectKey",
+      "title",
+      "type"
+    ],
+    "required": [
+      "projectKey",
+      "title"
+    ],
+    "enums": {
+      "deliveryMode": [
+        "admin",
+        "docs",
+        "epic",
+        "implementation",
+        "review"
+      ],
+      "priority": [
+        "blocker",
+        "high",
+        "low",
+        "normal",
+        "trivial"
+      ],
+      "type": [
+        "bug",
+        "epic",
+        "story",
+        "task"
+      ]
+    }
+  },
+  "orboto_critical_path": {
+    "params": [
+      "includeClosedMilestones",
+      "milestone",
+      "projectKey"
+    ],
+    "required": [
+      "projectKey"
+    ],
+    "enums": {}
+  },
+  "orboto_customer_report": {
+    "params": [
+      "locale",
+      "lumpSumAmount",
+      "lumpSumCurrency",
+      "preset",
+      "priceMode",
+      "projectKey",
+      "sections",
+      "sections.budget",
+      "sections.epics",
+      "sections.milestones",
+      "sections.overview",
+      "sections.tickets",
+      "showAssigneeNames",
+      "showTicketKeys"
+    ],
+    "required": [
+      "projectKey"
+    ],
+    "enums": {
+      "locale": [
+        "de",
+        "en",
+        "es",
+        "fr",
+        "it",
+        "sv"
+      ],
+      "preset": [
+        "scope",
+        "status"
+      ],
+      "priceMode": [
+        "hours",
+        "lumpSum",
+        "money"
+      ]
+    }
+  },
+  "orboto_delete_agent_instruction": {
+    "params": [
+      "id"
+    ],
+    "required": [
+      "id"
+    ],
+    "enums": {}
+  },
+  "orboto_delete_comment": {
+    "params": [
+      "commentId",
+      "ticketKey"
+    ],
+    "required": [
+      "commentId",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_delete_doc": {
+    "params": [
+      "docId"
+    ],
+    "required": [
+      "docId"
+    ],
+    "enums": {}
+  },
+  "orboto_delete_doc_attachment": {
+    "params": [
+      "attachmentId",
+      "docId"
+    ],
+    "required": [
+      "attachmentId",
+      "docId"
+    ],
+    "enums": {}
+  },
+  "orboto_delete_doc_comment": {
+    "params": [
+      "commentId",
+      "docId"
+    ],
+    "required": [
+      "commentId",
+      "docId"
+    ],
+    "enums": {}
+  },
+  "orboto_delete_doc_space": {
+    "params": [
+      "spaceId"
+    ],
+    "required": [
+      "spaceId"
+    ],
+    "enums": {}
+  },
+  "orboto_delete_ticket": {
+    "params": [
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_delete_time_entry": {
+    "params": [
+      "entryId",
+      "ticketKey"
+    ],
+    "required": [
+      "entryId",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_download_backup": {
+    "params": [
+      "runId"
+    ],
+    "required": [
+      "runId"
+    ],
+    "enums": {}
+  },
+  "orboto_duplicate_doc_space": {
+    "params": [
+      "spaceId"
+    ],
+    "required": [
+      "spaceId"
+    ],
+    "enums": {}
+  },
+  "orboto_edit_doc": {
+    "params": [
+      "baseRevisionId",
+      "docId",
+      "edits",
+      "edits[].newString",
+      "edits[].oldString",
+      "edits[].replaceAll"
+    ],
+    "required": [
+      "docId",
+      "edits"
+    ],
+    "enums": {}
+  },
+  "orboto_edit_doc_section": {
+    "params": [
+      "baseRevisionId",
+      "docId",
+      "sectionOps",
+      "sectionOps[].content",
+      "sectionOps[].headingPath",
+      "sectionOps[].op"
+    ],
+    "required": [
+      "docId",
+      "sectionOps"
+    ],
+    "enums": {
+      "sectionOps[].op": [
+        "append",
+        "insertAfter",
+        "replace"
+      ]
+    }
+  },
+  "orboto_edit_time_entry": {
+    "params": [
+      "description",
+      "durationMinutes",
+      "entryId",
+      "loggedAt",
+      "moveToTicketKey",
+      "ticketKey"
+    ],
+    "required": [
+      "entryId",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_embedding_status": {
+    "params": [],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_export_doc_md": {
+    "params": [
+      "docId"
+    ],
+    "required": [
+      "docId"
+    ],
+    "enums": {}
+  },
+  "orboto_export_doc_pdf": {
+    "params": [
+      "docId"
+    ],
+    "required": [
+      "docId"
+    ],
+    "enums": {}
+  },
+  "orboto_free_busy": {
+    "params": [
+      "from",
+      "granularity",
+      "to",
+      "userIds"
+    ],
+    "required": [
+      "userIds"
+    ],
+    "enums": {
+      "granularity": [
+        "day",
+        "week"
+      ]
+    }
+  },
+  "orboto_get_attachment": {
+    "params": [
+      "attachmentId"
+    ],
+    "required": [
+      "attachmentId"
+    ],
+    "enums": {}
+  },
+  "orboto_get_audit_log": {
+    "params": [
+      "actorEmail",
+      "entityType",
+      "limit"
+    ],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_get_checklists": {
+    "params": [
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_get_doc": {
+    "params": [
+      "docId"
+    ],
+    "required": [
+      "docId"
+    ],
+    "enums": {}
+  },
+  "orboto_get_doc_revision": {
+    "params": [
+      "docId",
+      "revisionId"
+    ],
+    "required": [
+      "docId",
+      "revisionId"
+    ],
+    "enums": {}
+  },
+  "orboto_get_milestone": {
+    "params": [
+      "milestone",
+      "projectKey"
+    ],
+    "required": [
+      "milestone",
+      "projectKey"
+    ],
+    "enums": {}
+  },
+  "orboto_get_project": {
+    "params": [
+      "projectKey"
+    ],
+    "required": [
+      "projectKey"
+    ],
+    "enums": {}
+  },
+  "orboto_get_project_primer": {
+    "params": [
+      "maxTokens",
+      "projectKey"
+    ],
+    "required": [
+      "projectKey"
+    ],
+    "enums": {}
+  },
+  "orboto_get_ticket": {
+    "params": [
+      "include",
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {
+      "include[]": [
+        "attachments",
+        "checklistItems",
+        "children",
+        "comments",
+        "git",
+        "raci"
+      ]
+    }
+  },
+  "orboto_get_timer": {
+    "params": [],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_help": {
+    "params": [
+      "tool"
+    ],
+    "required": [
+      "tool"
+    ],
+    "enums": {}
+  },
+  "orboto_ingest_file": {
+    "params": [
+      "contentBase64",
+      "filename",
+      "parentDocId",
+      "spaceId"
+    ],
+    "required": [
+      "contentBase64",
+      "filename",
+      "spaceId"
+    ],
+    "enums": {}
+  },
+  "orboto_ingest_url": {
+    "params": [
+      "parentDocId",
+      "spaceId",
+      "url"
+    ],
+    "required": [
+      "spaceId",
+      "url"
+    ],
+    "enums": {}
+  },
+  "orboto_label_ticket": {
+    "params": [
+      "label",
+      "ticketKey"
+    ],
+    "required": [
+      "label",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_list_agent_instructions": {
+    "params": [
+      "blockId",
+      "customerId",
+      "projectId",
+      "scope"
+    ],
+    "required": [],
+    "enums": {
+      "scope": [
+        "customer",
+        "personal",
+        "project",
+        "workspace"
+      ]
+    }
+  },
+  "orboto_list_approvals": {
+    "params": [
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_list_backups": {
+    "params": [],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_list_cross_project_links": {
+    "params": [
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_list_doc_attachments": {
+    "params": [
+      "docId"
+    ],
+    "required": [
+      "docId"
+    ],
+    "enums": {}
+  },
+  "orboto_list_doc_comments": {
+    "params": [
+      "cursor",
+      "docId",
+      "limit"
+    ],
+    "required": [
+      "docId"
+    ],
+    "enums": {}
+  },
+  "orboto_list_doc_revisions": {
+    "params": [
+      "cursor",
+      "docId",
+      "limit"
+    ],
+    "required": [
+      "docId"
+    ],
+    "enums": {}
+  },
+  "orboto_list_doc_spaces": {
+    "params": [],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_list_docs_in_space": {
+    "params": [
+      "spaceId"
+    ],
+    "required": [
+      "spaceId"
+    ],
+    "enums": {}
+  },
+  "orboto_list_git_app_installations": {
+    "params": [],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_list_labels": {
+    "params": [
+      "projectKey"
+    ],
+    "required": [
+      "projectKey"
+    ],
+    "enums": {}
+  },
+  "orboto_list_milestones": {
+    "params": [
+      "projectKey"
+    ],
+    "required": [
+      "projectKey"
+    ],
+    "enums": {}
+  },
+  "orboto_list_projects": {
+    "params": [
+      "limit",
+      "query"
+    ],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_list_ticket_attachments": {
+    "params": [
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_list_ticket_dependencies": {
+    "params": [
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_list_ticket_schedules": {
+    "params": [
+      "includeCancelled",
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_list_ticket_statuses": {
+    "params": [
+      "projectKey"
+    ],
+    "required": [
+      "projectKey"
+    ],
+    "enums": {}
+  },
+  "orboto_list_tickets": {
+    "params": [
+      "assigneeEmail",
+      "limit",
+      "milestone",
+      "parentTicketKey",
+      "projectKey",
+      "statusCategory",
+      "verbose"
+    ],
+    "required": [
+      "projectKey"
+    ],
+    "enums": {
+      "statusCategory": [
+        "done",
+        "in_progress",
+        "in_review",
+        "todo",
+        "wont_fix"
+      ]
+    }
+  },
+  "orboto_list_time_entries": {
+    "params": [
+      "limit",
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_list_users": {
+    "params": [
+      "limit",
+      "search",
+      "showGhosts"
+    ],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_log_time": {
+    "params": [
+      "description",
+      "durationMinutes",
+      "loggedAt",
+      "ticketKey"
+    ],
+    "required": [
+      "durationMinutes",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_messages": {
+    "params": [
+      "ackIds",
+      "all",
+      "includeOwnSends",
+      "limit",
+      "project"
+    ],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_move_doc": {
+    "params": [
+      "docId",
+      "parentDocId",
+      "sortOrder",
+      "spaceId"
+    ],
+    "required": [
+      "docId"
+    ],
+    "enums": {}
+  },
+  "orboto_move_ticket": {
+    "params": [
+      "statusCategory",
+      "ticketKey"
+    ],
+    "required": [
+      "statusCategory",
+      "ticketKey"
+    ],
+    "enums": {
+      "statusCategory": [
+        "done",
+        "in_progress",
+        "in_review",
+        "todo",
+        "wont_fix"
+      ]
+    }
+  },
+  "orboto_my_tickets": {
+    "params": [
+      "limit",
+      "statusCategory",
+      "verbose"
+    ],
+    "required": [],
+    "enums": {
+      "statusCategory": [
+        "done",
+        "in_progress",
+        "in_review",
+        "todo",
+        "wont_fix"
+      ]
+    }
+  },
+  "orboto_new_checklist": {
+    "params": [
+      "items",
+      "ticketKey",
+      "title",
+      "triggersDone"
+    ],
+    "required": [
+      "ticketKey",
+      "title"
+    ],
+    "enums": {}
+  },
+  "orboto_personal_fact_add": {
+    "params": [
+      "category",
+      "key",
+      "value"
+    ],
+    "required": [
+      "category",
+      "key",
+      "value"
+    ],
+    "enums": {
+      "category": [
+        "architecture",
+        "commands",
+        "conventions",
+        "deployment",
+        "gotchas",
+        "integrations",
+        "other",
+        "tech_stack"
+      ]
+    }
+  },
+  "orboto_personal_fact_delete": {
+    "params": [
+      "id"
+    ],
+    "required": [
+      "id"
+    ],
+    "enums": {}
+  },
+  "orboto_personal_fact_list": {
+    "params": [],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_personal_fact_update": {
+    "params": [
+      "category",
+      "id",
+      "key",
+      "value"
+    ],
+    "required": [
+      "id"
+    ],
+    "enums": {
+      "category": [
+        "architecture",
+        "commands",
+        "conventions",
+        "deployment",
+        "gotchas",
+        "integrations",
+        "other",
+        "tech_stack"
+      ]
+    }
+  },
+  "orboto_portfolio_summary": {
+    "params": [
+      "portfolioId"
+    ],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_post_doc_comment": {
+    "params": [
+      "anchor",
+      "anchor.after",
+      "anchor.before",
+      "anchor.text",
+      "content",
+      "docId",
+      "parentCommentId"
+    ],
+    "required": [
+      "content",
+      "docId"
+    ],
+    "enums": {}
+  },
+  "orboto_primer_fact_add": {
+    "params": [
+      "category",
+      "key",
+      "observed",
+      "projectKey",
+      "value"
+    ],
+    "required": [
+      "category",
+      "key",
+      "projectKey",
+      "value"
+    ],
+    "enums": {
+      "category": [
+        "architecture",
+        "commands",
+        "conventions",
+        "deployment",
+        "glossary",
+        "gotchas",
+        "integrations",
+        "non_functional",
+        "other",
+        "tech_stack"
+      ]
+    }
+  },
+  "orboto_primer_fact_delete": {
+    "params": [
+      "factId",
+      "reason"
+    ],
+    "required": [
+      "factId"
+    ],
+    "enums": {}
+  },
+  "orboto_primer_fact_list": {
+    "params": [
+      "category",
+      "includeWorkspace",
+      "projectKey",
+      "source",
+      "verified"
+    ],
+    "required": [
+      "projectKey"
+    ],
+    "enums": {
+      "category": [
+        "architecture",
+        "commands",
+        "conventions",
+        "deployment",
+        "glossary",
+        "gotchas",
+        "integrations",
+        "non_functional",
+        "other",
+        "tech_stack"
+      ],
+      "source": [
+        "agent_observed",
+        "imported",
+        "manual"
+      ]
+    }
+  },
+  "orboto_primer_fact_supersede": {
+    "params": [
+      "category",
+      "key",
+      "oldFactId",
+      "value"
+    ],
+    "required": [
+      "category",
+      "key",
+      "oldFactId",
+      "value"
+    ],
+    "enums": {
+      "category": [
+        "architecture",
+        "commands",
+        "conventions",
+        "deployment",
+        "glossary",
+        "gotchas",
+        "integrations",
+        "non_functional",
+        "other",
+        "tech_stack"
+      ]
+    }
+  },
+  "orboto_primer_fact_update": {
+    "params": [
+      "category",
+      "factId",
+      "key",
+      "value"
+    ],
+    "required": [
+      "factId"
+    ],
+    "enums": {
+      "category": [
+        "architecture",
+        "commands",
+        "conventions",
+        "deployment",
+        "glossary",
+        "gotchas",
+        "integrations",
+        "non_functional",
+        "other",
+        "tech_stack"
+      ]
+    }
+  },
+  "orboto_primer_fact_verify": {
+    "params": [
+      "factId"
+    ],
+    "required": [
+      "factId"
+    ],
+    "enums": {}
+  },
+  "orboto_query": {
+    "params": [
+      "cursor",
+      "limit",
+      "oql",
+      "syntax",
+      "verbose"
+    ],
+    "required": [
+      "oql"
+    ],
+    "enums": {
+      "syntax": [
+        "jql",
+        "oql"
+      ]
+    }
+  },
+  "orboto_raci": {
+    "params": [
+      "epicsOnly",
+      "milestone",
+      "projectKey"
+    ],
+    "required": [
+      "projectKey"
+    ],
+    "enums": {}
+  },
+  "orboto_remove_check": {
+    "params": [
+      "item",
+      "ticketKey"
+    ],
+    "required": [
+      "item",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_remove_cross_project_link": {
+    "params": [
+      "linkId",
+      "sourceTicketKey"
+    ],
+    "required": [
+      "linkId",
+      "sourceTicketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_remove_ticket_dependency": {
+    "params": [
+      "dependsOnKey",
+      "ticketKey"
+    ],
+    "required": [
+      "dependsOnKey",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_requirements_spec": {
+    "params": [
+      "locale",
+      "lumpSumAmount",
+      "lumpSumCurrency",
+      "outlineVariant",
+      "priceMode",
+      "projectKey",
+      "showAssigneeNames",
+      "showTicketKeys"
+    ],
+    "required": [
+      "projectKey"
+    ],
+    "enums": {
+      "locale": [
+        "de",
+        "en",
+        "es",
+        "fr",
+        "it",
+        "sv"
+      ],
+      "outlineVariant": [
+        "industry",
+        "neutral",
+        "software"
+      ],
+      "priceMode": [
+        "hours",
+        "lumpSum",
+        "money"
+      ]
+    }
+  },
+  "orboto_reset_agent_instruction": {
+    "params": [
+      "id"
+    ],
+    "required": [
+      "id"
+    ],
+    "enums": {}
+  },
+  "orboto_resolve_doc_comment": {
+    "params": [
+      "commentId",
+      "docId",
+      "resolved"
+    ],
+    "required": [
+      "commentId",
+      "docId",
+      "resolved"
+    ],
+    "enums": {}
+  },
+  "orboto_resolve_doc_smart_links": {
+    "params": [
+      "items",
+      "items[].id",
+      "items[].type"
+    ],
+    "required": [
+      "items"
+    ],
+    "enums": {
+      "items[].type": [
+        "commit",
+        "doc",
+        "milestone",
+        "project",
+        "ticket"
+      ]
+    }
+  },
+  "orboto_response_expand": {
+    "params": [
+      "cursor",
+      "handle",
+      "path"
+    ],
+    "required": [
+      "handle"
+    ],
+    "enums": {}
+  },
+  "orboto_restore_doc_revision": {
+    "params": [
+      "docId",
+      "revisionId"
+    ],
+    "required": [
+      "docId",
+      "revisionId"
+    ],
+    "enums": {}
+  },
+  "orboto_review_approval_record": {
+    "params": [
+      "decision",
+      "filesChanged",
+      "fingerprint",
+      "linesAdded",
+      "linesRemoved",
+      "note",
+      "paths",
+      "ticketKey"
+    ],
+    "required": [
+      "decision",
+      "fingerprint",
+      "ticketKey"
+    ],
+    "enums": {
+      "decision": [
+        "approved",
+        "rejected"
+      ]
+    }
+  },
+  "orboto_review_fingerprint": {
+    "params": [
+      "diff"
+    ],
+    "required": [
+      "diff"
+    ],
+    "enums": {}
+  },
+  "orboto_review_policy_check": {
+    "params": [
+      "fingerprint",
+      "linesChanged",
+      "paths",
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_schedule_ticket_session": {
+    "params": [
+      "attendeeUserIds",
+      "endsAt",
+      "externalEmails",
+      "location",
+      "notes",
+      "startsAt",
+      "ticketKey",
+      "title"
+    ],
+    "required": [
+      "endsAt",
+      "startsAt",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_search": {
+    "params": [
+      "limit",
+      "projectKey",
+      "query",
+      "types"
+    ],
+    "required": [
+      "query"
+    ],
+    "enums": {
+      "types[]": [
+        "comment",
+        "doc",
+        "ticket"
+      ]
+    }
+  },
+  "orboto_search_docs": {
+    "params": [
+      "limit",
+      "projectKey",
+      "q",
+      "spaceId"
+    ],
+    "required": [
+      "q"
+    ],
+    "enums": {}
+  },
+  "orboto_session_start": {
+    "params": [
+      "agentKind",
+      "forceRules",
+      "modelTier",
+      "projectId",
+      "ticketKey"
+    ],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_set_milestone": {
+    "params": [
+      "milestone",
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_set_parent": {
+    "params": [
+      "parentTicketKey",
+      "ticketKey"
+    ],
+    "required": [
+      "parentTicketKey",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_set_raci": {
+    "params": [
+      "role",
+      "ticketKey",
+      "userEmail"
+    ],
+    "required": [
+      "role",
+      "ticketKey",
+      "userEmail"
+    ],
+    "enums": {
+      "role": [
+        "A",
+        "C",
+        "I",
+        "R"
+      ]
+    }
+  },
+  "orboto_timer_start": {
+    "params": [
+      "description",
+      "replace",
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_timer_stop": {
+    "params": [],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_trigger_backup": {
+    "params": [
+      "jobName"
+    ],
+    "required": [
+      "jobName"
+    ],
+    "enums": {}
+  },
+  "orboto_unassign": {
+    "params": [
+      "assigneeEmail",
+      "ticketKey"
+    ],
+    "required": [
+      "assigneeEmail",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_uncheck": {
+    "params": [
+      "item",
+      "ticketKey"
+    ],
+    "required": [
+      "item",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_unclaim": {
+    "params": [
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_unlabel_ticket": {
+    "params": [
+      "label",
+      "ticketKey"
+    ],
+    "required": [
+      "label",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_update_absence": {
+    "params": [
+      "endDate",
+      "id",
+      "note",
+      "startDate",
+      "typeId"
+    ],
+    "required": [
+      "id"
+    ],
+    "enums": {}
+  },
+  "orboto_update_agent_instruction": {
+    "params": [
+      "body",
+      "enabled",
+      "id",
+      "sortOrder",
+      "title"
+    ],
+    "required": [
+      "id"
+    ],
+    "enums": {}
+  },
+  "orboto_update_comment": {
+    "params": [
+      "commentId",
+      "text",
+      "ticketKey"
+    ],
+    "required": [
+      "commentId",
+      "text",
+      "ticketKey"
+    ],
+    "enums": {}
+  },
+  "orboto_update_company_closure": {
+    "params": [
+      "endDate",
+      "id",
+      "name",
+      "note",
+      "startDate"
+    ],
+    "required": [
+      "id"
+    ],
+    "enums": {}
+  },
+  "orboto_update_cross_project_link": {
+    "params": [
+      "linkId",
+      "sourceTicketKey",
+      "statusSyncEnabled"
+    ],
+    "required": [
+      "linkId",
+      "sourceTicketKey",
+      "statusSyncEnabled"
+    ],
+    "enums": {}
+  },
+  "orboto_update_doc": {
+    "params": [
+      "content",
+      "docId",
+      "icon",
+      "parentDocId",
+      "title",
+      "visibility"
+    ],
+    "required": [
+      "docId"
+    ],
+    "enums": {
+      "visibility": [
+        "members",
+        "public",
+        "specific",
+        "workspace"
+      ]
+    }
+  },
+  "orboto_update_doc_comment": {
+    "params": [
+      "commentId",
+      "content",
+      "docId"
+    ],
+    "required": [
+      "commentId",
+      "content",
+      "docId"
+    ],
+    "enums": {}
+  },
+  "orboto_update_doc_space": {
+    "params": [
+      "description",
+      "guestsVisible",
+      "icon",
+      "isPublic",
+      "memberIds",
+      "name",
+      "slug",
+      "spaceId",
+      "visibility"
+    ],
+    "required": [
+      "spaceId"
+    ],
+    "enums": {
+      "visibility": [
+        "project_members",
+        "restricted",
+        "workspace"
+      ]
+    }
+  },
+  "orboto_update_milestone": {
+    "params": [
+      "milestone",
+      "patch",
+      "patch.customerSummary",
+      "patch.endDate",
+      "patch.isPrivate",
+      "patch.name",
+      "patch.startDate",
+      "projectKey"
+    ],
+    "required": [
+      "milestone",
+      "patch",
+      "projectKey"
+    ],
+    "enums": {}
+  },
+  "orboto_update_project": {
+    "params": [
+      "patch",
+      "patch.branchTemplate",
+      "patch.customerId",
+      "patch.description",
+      "patch.key",
+      "patch.language",
+      "patch.name",
+      "patch.status",
+      "projectKey"
+    ],
+    "required": [
+      "patch",
+      "projectKey"
+    ],
+    "enums": {
+      "patch.language": [
+        "cs",
+        "da",
+        "de",
+        "en",
+        "es",
+        "fi",
+        "fr",
+        "it",
+        "ja",
+        "ko",
+        "nl",
+        "no",
+        "pl",
+        "pt",
+        "ru",
+        "sv",
+        "tr",
+        "zh"
+      ],
+      "patch.status": [
+        "active",
+        "archived",
+        "closed",
+        "draft"
+      ]
+    }
+  },
+  "orboto_update_public_holiday": {
+    "params": [
+      "countryCode",
+      "date",
+      "id",
+      "isRecurring",
+      "name",
+      "regionCode"
+    ],
+    "required": [
+      "id"
+    ],
+    "enums": {}
+  },
+  "orboto_update_ticket": {
+    "params": [
+      "allowLanguageMismatch",
+      "patch",
+      "patch.customerSummary",
+      "patch.deliveryMode",
+      "patch.description",
+      "patch.dueDate",
+      "patch.estimatedTimeMinutes",
+      "patch.isPrivate",
+      "patch.priority",
+      "patch.startDate",
+      "patch.title",
+      "patch.type",
+      "ticketKey"
+    ],
+    "required": [
+      "patch",
+      "ticketKey"
+    ],
+    "enums": {
+      "patch.deliveryMode": [
+        "admin",
+        "docs",
+        "epic",
+        "implementation",
+        "review"
+      ],
+      "patch.priority": [
+        "blocker",
+        "high",
+        "low",
+        "normal",
+        "trivial"
+      ],
+      "patch.type": [
+        "bug",
+        "epic",
+        "story",
+        "task"
+      ]
+    }
+  },
+  "orboto_upload_doc_attachment": {
+    "params": [
+      "altText",
+      "contentBase64",
+      "docId",
+      "embed",
+      "filename"
+    ],
+    "required": [
+      "contentBase64",
+      "docId",
+      "filename"
+    ],
+    "enums": {}
+  },
+  "orboto_whoami": {
+    "params": [],
+    "required": [],
+    "enums": {}
+  },
+  "orboto_wiki_append_section": {
+    "params": [
+      "content",
+      "docId"
+    ],
+    "required": [
+      "content",
+      "docId"
+    ],
+    "enums": {}
+  },
+  "orboto_wiki_apply_plan": {
+    "params": [
+      "planId",
+      "spaceId"
+    ],
+    "required": [
+      "planId",
+      "spaceId"
+    ],
+    "enums": {}
+  },
+  "orboto_wiki_ask": {
+    "params": [
+      "limit",
+      "question",
+      "spaceId"
+    ],
+    "required": [
+      "question"
+    ],
+    "enums": {}
+  },
+  "orboto_wiki_flag_stale": {
+    "params": [
+      "docId",
+      "stale"
+    ],
+    "required": [
+      "docId"
+    ],
+    "enums": {}
+  },
+  "orboto_wiki_ingest_url": {
+    "params": [
+      "parentDocId",
+      "spaceId",
+      "url"
+    ],
+    "required": [
+      "spaceId",
+      "url"
+    ],
+    "enums": {}
+  },
+  "orboto_wiki_lint": {
+    "params": [
+      "spaceId"
+    ],
+    "required": [
+      "spaceId"
+    ],
+    "enums": {}
+  },
+  "orboto_wiki_plan_update": {
+    "params": [
+      "instruction",
+      "sourceDocId",
+      "spaceId"
+    ],
+    "required": [
+      "instruction",
+      "spaceId"
+    ],
+    "enums": {}
+  },
+  "orboto_wiki_record": {
+    "params": [
+      "instruction",
+      "sourceDocId",
+      "spaceId"
+    ],
+    "required": [
+      "instruction",
+      "spaceId"
+    ],
+    "enums": {}
+  },
+  "orboto_wiki_save_answer": {
+    "params": [
+      "answer",
+      "citations",
+      "citations[].docId",
+      "citations[].title",
+      "parentDocId",
+      "question",
+      "spaceId",
+      "title"
+    ],
+    "required": [
+      "answer",
+      "question",
+      "spaceId"
+    ],
+    "enums": {}
+  },
+  "orboto_work_finish": {
+    "params": [
+      "commitSha",
+      "note",
+      "outcome",
+      "sessionId",
+      "targetCategory",
+      "verification",
+      "verification.build",
+      "verification.lint",
+      "verification.notes",
+      "verification.tests"
+    ],
+    "required": [
+      "sessionId"
+    ],
+    "enums": {
+      "outcome": [
+        "cancelled",
+        "finished"
+      ],
+      "targetCategory": [
+        "done",
+        "in_progress",
+        "in_review",
+        "todo",
+        "wont_fix"
+      ]
+    }
+  },
+  "orboto_work_next": {
+    "params": [
+      "agentSessionToken",
+      "agentTag",
+      "leaseSeconds",
+      "onConflict",
+      "projectKey",
+      "resourceClaims",
+      "resourceClaims[].kind",
+      "resourceClaims[].mode",
+      "resourceClaims[].value",
+      "role",
+      "startTimer"
+    ],
+    "required": [
+      "projectKey"
+    ],
+    "enums": {
+      "onConflict": [
+        "queue",
+        "reject"
+      ],
+      "resourceClaims[].kind": [
+        "named",
+        "path"
+      ],
+      "resourceClaims[].mode": [
+        "read",
+        "write"
+      ],
+      "role": [
+        "implementation",
+        "integration",
+        "preflight",
+        "review"
+      ]
+    }
+  },
+  "orboto_work_session_claims_add": {
+    "params": [
+      "claims",
+      "claims[].kind",
+      "claims[].mode",
+      "claims[].value",
+      "onConflict",
+      "sessionId"
+    ],
+    "required": [
+      "claims",
+      "sessionId"
+    ],
+    "enums": {
+      "claims[].kind": [
+        "named",
+        "path"
+      ],
+      "claims[].mode": [
+        "read",
+        "write"
+      ],
+      "onConflict": [
+        "queue",
+        "reject"
+      ]
+    }
+  },
+  "orboto_work_session_claims_release": {
+    "params": [
+      "claims",
+      "claims[].kind",
+      "claims[].value",
+      "sessionId"
+    ],
+    "required": [
+      "sessionId"
+    ],
+    "enums": {
+      "claims[].kind": [
+        "named",
+        "path"
+      ]
+    }
+  },
+  "orboto_work_session_finish": {
+    "params": [
+      "commitSha",
+      "outcome",
+      "sessionId",
+      "verification",
+      "verification.build",
+      "verification.lint",
+      "verification.notes",
+      "verification.tests"
+    ],
+    "required": [
+      "sessionId"
+    ],
+    "enums": {
+      "outcome": [
+        "cancelled",
+        "finished"
+      ]
+    }
+  },
+  "orboto_work_session_start": {
+    "params": [
+      "agentSessionToken",
+      "leaseSeconds",
+      "onConflict",
+      "resourceClaims",
+      "resourceClaims[].kind",
+      "resourceClaims[].mode",
+      "resourceClaims[].value",
+      "role",
+      "startTimer",
+      "takeover",
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {
+      "onConflict": [
+        "queue",
+        "reject"
+      ],
+      "resourceClaims[].kind": [
+        "named",
+        "path"
+      ],
+      "resourceClaims[].mode": [
+        "read",
+        "write"
+      ],
+      "role": [
+        "implementation",
+        "integration",
+        "preflight",
+        "review"
+      ]
+    }
+  },
+  "orboto_work_sessions": {
+    "params": [
+      "includeClosed",
+      "scope",
+      "ticketKey"
+    ],
+    "required": [],
+    "enums": {
+      "scope": [
+        "all",
+        "mine"
+      ]
+    }
+  },
+  "orboto_work_start": {
+    "params": [
+      "agentSessionToken",
+      "leaseSeconds",
+      "onConflict",
+      "resourceClaims",
+      "resourceClaims[].kind",
+      "resourceClaims[].mode",
+      "resourceClaims[].value",
+      "role",
+      "startTimer",
+      "takeover",
+      "ticketKey"
+    ],
+    "required": [
+      "ticketKey"
+    ],
+    "enums": {
+      "onConflict": [
+        "queue",
+        "reject"
+      ],
+      "resourceClaims[].kind": [
+        "named",
+        "path"
+      ],
+      "resourceClaims[].mode": [
+        "read",
+        "write"
+      ],
+      "role": [
+        "implementation",
+        "integration",
+        "preflight",
+        "review"
+      ]
+    }
+  }
+}

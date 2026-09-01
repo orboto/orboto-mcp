@@ -79,15 +79,18 @@ const CATEGORY_TO_LEGACY = {
 // ---------------------------------------------------------------------------
 
 export const claimToolConfig = {
-  title: 'Claim a ticket (composite: assign self + move to in_progress + start timer)',
+  title: 'Claim a ticket (assign self + in_progress + timer)',
   description:
-    'Composite of `assign self → move to in_progress → start timer` — the canonical "I am picking this up now" move. Idempotent: re-claiming an already-claimed in_progress ticket is a no-op. Set `sole=true` to remove every other assignee first (destructive take-over). Set `force=true` to allow re-claiming a `done` ticket (otherwise refuses, to prevent accidental reopens). Set `noTimer=true` to skip the timer start (e.g. when you only want ownership, not time tracking). If a different ticket has an active timer, it is stopped first (its elapsed time commits a time entry under the previous ticket).',
+    'Composite of `assign self → move to in_progress → start timer` — the canonical "I am picking this up now" move. Idempotent: re-claiming an already-claimed in_progress ticket is a no-op. Set `sole=true` to remove every other assignee first (destructive take-over). Set `force=true` to allow re-claiming a `done` ticket (otherwise refuses, to prevent accidental reopens). Set `noTimer=true` to skip the timer start (e.g. when you only want ownership, not time tracking). If a different ticket has an active timer, it is stopped first (its elapsed time commits a time entry under the previous ticket). '
+    // ORB-1805 - moved out of the input schema, which every client pays
+    // for at connect; orboto_help serves this text in full.
+    + '`agentSessionToken` is a stable per-agent-instance token: on a bot/service account it scopes the timer to YOUR instance - concurrent per-instance timers and NO auto-stop, so you own both start and stop. Omit it on human accounts, which keep the single-timer behaviour.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    sole: z.boolean().optional().describe('Destructive take-over: remove every other assignee before adding self.'),
-    force: z.boolean().optional().describe('Allow re-claiming a ticket whose status is already `done`.'),
-    noTimer: z.boolean().optional().describe('Skip the timer-start step. Assign + status move still happen.'),
-    agentSessionToken: z.string().optional().describe('A stable per-agent-instance token. On a bot/service account this scopes the timer to your instance: concurrent per-instance timers, NO auto-stop (you own start AND stop). Omit on human accounts / for single-timer behaviour.'),
+    sole: z.boolean().optional().describe('Take-over: remove every other assignee first.'),
+    force: z.boolean().optional().describe('Allow re-claiming a `done` ticket.'),
+    noTimer: z.boolean().optional().describe('Skip the timer start.'),
+    agentSessionToken: z.string().optional().describe('Per-agent-instance token; scopes the timer on bot accounts.'),
   }).shape,
 };
 

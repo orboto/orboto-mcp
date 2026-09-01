@@ -32,7 +32,7 @@ export const apiCallToolConfig = {
   inputSchema: z.object({
     method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
     path: z.string().min(1).max(500)
-      .describe('Concrete route path, e.g. "/projects/<uuid>/milestones". No query string here.'),
+      .describe('Route path, e.g. "/projects/<uuid>/milestones". No query string.'),
     query: z.record(z.union([z.string(), z.number(), z.boolean(), z.array(z.string())])).optional()
       .describe('Query parameters as an object.'),
     // ORB-1710 - typed union, NOT z.unknown(): a typeless argument is
@@ -41,7 +41,7 @@ export const apiCallToolConfig = {
     // and 415. The union renders a typed anyOf so clients send real
     // JSON; the handler still parses a string arrival as belt-and-braces.
     body: z.union([z.record(z.unknown()), z.array(z.unknown()), z.string(), z.number(), z.boolean()]).optional()
-      .describe('JSON request body for POST/PUT/PATCH/DELETE. Pass a real JSON object/array, not a stringified one.'),
+      .describe('JSON body - a real object/array, not a stringified one.'),
   }).shape,
   // Dispatches arbitrary methods - never advertise as read-only.
   annotations: { readOnlyHint: false },

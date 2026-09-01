@@ -33,8 +33,8 @@ export const listProjectsToolConfig = {
   // local 32k models over MCP) can narrow instead of ingesting every
   // project.
   inputSchema: z.object({
-    query: z.string().optional().describe('Case-insensitive substring matched against project key or name.'),
-    limit: z.number().int().min(1).max(200).optional().describe('Max projects to return (default 50).'),
+    query: z.string().optional().describe('Substring matched against key or name.'),
+    limit: z.number().int().min(1).max(200).optional().describe('Max projects. Default 50.'),
   }).shape,
   // Well-formed output schema so MCP clients that honour it can
   // surface structured data. Adding fields is safe; removing them is a

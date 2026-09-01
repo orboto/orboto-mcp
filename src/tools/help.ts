@@ -16,7 +16,7 @@ export const helpToolConfig = {
   description:
     'Return the complete guidance text (workflows, warnings, edge cases) for one orboto tool by name - manifest descriptions are one-line summaries, this is the rest. Call it before first use of an unfamiliar write tool.',
   inputSchema: z.object({
-    tool: z.string().min(1).max(128).describe('Tool name, e.g. orboto_create_ticket'),
+    tool: z.string().min(1).max(128).describe('Tool name, e.g. orboto_create_ticket.'),
   }).shape,
   outputSchema: z.object({
     tool: z.string(),

@@ -39,18 +39,21 @@ import { resolveTicketByKey, type TicketRow , applyAgentProfile } from './shared
 export const sessionStartToolConfig = {
   title: 'Load the rules you must follow + re-orient',
   description:
-    'THE canonical way to LOAD the binding workspace rules you must follow as an agent. Run it as your FIRST action in a session and immediately AFTER any context compaction. Returns the complete assembled working-rules (or a compact "unchanged" ack on a repeat call within the same connection), your in-progress tickets, your running timer, and a warning if a project\'s git connection looks unhealthy (commit ingestion may be stalled). Pass `ticketKey` to also get a one-shot bundle for that ticket: project primer, the full ticket with dependencies + checklists, that project\'s git health, and any other agent sessions currently on it — replacing several separate calls. (Do NOT use orboto_list_agent_instructions to read the rules — that tool MANAGES/edits rule blocks for admins; this one is what you read to know how to work.) Read-only; no side effects.',
+    'THE canonical way to LOAD the binding workspace rules you must follow as an agent. Run it as your FIRST action in a session and immediately AFTER any context compaction. Returns the complete assembled working-rules (or a compact "unchanged" ack on a repeat call within the same connection), your in-progress tickets, your running timer, and a warning if a project\'s git connection looks unhealthy (commit ingestion may be stalled). Pass `ticketKey` to also get a one-shot bundle for that ticket: project primer, the full ticket with dependencies + checklists, that project\'s git health, and any other agent sessions currently on it — replacing several separate calls. (Do NOT use orboto_list_agent_instructions to read the rules — that tool MANAGES/edits rule blocks for admins; this one is what you read to know how to work.) Read-only; no side effects. '
+    // ORB-1805 - parameter prose moved out of the input schema (paid for
+    // at every connect) into the description orboto_help serves in full.
+    + '**Parameters.** `projectId` adds that project\'s rules on top of the workspace + personal ones. `ticketKey` ("ACME-42") bundles that ticket\'s primer, full detail, dependencies, checklists, git health and other active agent sessions into the same response. `forceRules: true` always returns the full rules text even when this connection already delivered them - use it whenever the rules are NOT in your context right now: after a compaction, a /clear, or a fresh agent taking over an existing connection. `agentKind` (coding, orchestrator, reviewer, runner) and `modelTier` (frontier, standard, small) are your self-declared classification; rule blocks and per-tier rule text are targeted by them.',
   inputSchema: z.object({
-    projectId: z.string().uuid().optional().describe('Include this project\'s rules too (workspace + project + your personal).'),
-    ticketKey: z.string().min(3).optional().describe('Ticket key like "ACME-42". When set, bundles that ticket\'s primer + full detail + dependencies + checklists + git health + active sessions into this same response.'),
+    projectId: z.string().uuid().optional().describe('Also load this project\'s rules.'),
+    ticketKey: z.string().min(3).optional().describe('Ticket key ("ACME-42") - bundles that ticket\'s full context.'),
     // ORB-1697 - the caller is the only party that knows whether it still
     // HOLDS the rules. See the ack-defect note on the handler below.
-    forceRules: z.boolean().optional().describe('Set true to always return the full rules text, even when this connection has already delivered them. Use it whenever you do not have the rules in your context right now - after a context compaction, a /clear, or a fresh agent taking over an existing connection.'),
+    forceRules: z.boolean().optional().describe('Always return the full rules; set it when you do not hold them.'),
     // ORB-1753 - self-declared classification for rule targeting; defaults
     // to ORBOTO_AGENT_KIND / ORBOTO_MODEL_TIER env, then the api-key's
     // standing profile server-side.
-    agentKind: z.string().min(1).max(32).optional().describe('Your agent runtime kind (e.g. coding, orchestrator, reviewer, runner) - targeted rule blocks are delivered per kind.'),
-    modelTier: z.string().min(1).max(32).optional().describe('Your model capability tier (frontier, standard, small) - tier-targeted rules and per-tier rule text variants are delivered per tier.'),
+    agentKind: z.string().min(1).max(32).optional().describe('coding | orchestrator | reviewer | runner.'),
+    modelTier: z.string().min(1).max(32).optional().describe('frontier | standard | small.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

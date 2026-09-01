@@ -7,10 +7,11 @@
  * thousands of tokens before the user says a word. The default manifest
  * is therefore the CURATED set below; the long tail stays fully
  * reachable through `orboto_api_search` + `orboto_api_call`, and the
- * complete named manifest is one opt-in away:
+ * complete named manifest is one opt-in away - and since ORB-1805 a
+ * SMALLER one is too, for local models with an 8k/16k window:
  *
- *   stdio: ORBOTO_MCP_TOOLSET=full
- *   http:  .../mcp?toolset=full  (or header x-orboto-toolset: full;
+ *   stdio: ORBOTO_MCP_TOOLSET=minimal | curated | full
+ *   http:  .../mcp?toolset=minimal  (or header x-orboto-toolset: full;
  *          the query param rides on every request, so no session
  *          persistence is involved)
  *
@@ -29,7 +30,64 @@
  * SOURCE, so it keeps covering the whole set in both modes).
  */
 
-export type Toolset = 'curated' | 'full';
+export type Toolset = 'minimal' | 'curated' | 'full';
+
+/**
+ * ORB-1805 - the small-context tier.
+ *
+ * Measured 2026-09-01: the CURATED manifest alone costs ~9.4k tokens of
+ * tool schemas plus ~1k of instructions, so an 8k local model (LM Studio
+ * / Ollama defaults) dies before the first user turn:
+ * `n_keep: 13533 >= n_ctx: 8192`. `minimal` is the daily loop and
+ * nothing else - orient, find, read, write, claim, close, track time -
+ * plus the escape-hatch pair, which keeps the ENTIRE REST API reachable
+ * from 12 tools.
+ *
+ * The pair is `claim` + `close_ticket` because that is the loop the
+ * skill's own workflow mandates (SKILL.md "Claim = assign + status +
+ * timer; stop the timer the moment you finish"), not
+ * `work_next`/`work_finish` (those are not even in the curated set).
+ *
+ * Deliberately OUT, and why the loop still holds without them:
+ * - `orboto_whoami` - measured at 357 tokens, 12 % of the whole budget,
+ *   for data `orboto_session_start` already prints ("You are <name>
+ *   (<email>)." + the workspace write language). The mandated first call
+ *   covers it; a second identity tool does not earn a tier this small.
+ * - `orboto_check_similar` - `orboto_create_ticket` enforces the
+ *   duplicate block server-side (ORB-1471), so the mandated pre-create
+ *   check still happens, just inside the create.
+ * - `orboto_my_tickets` / `orboto_list_tickets` - `orboto_session_start`
+ *   already returns the caller's in-progress work, and `orboto_search`
+ *   covers "anything about X".
+ * - `orboto_move_ticket` - claim moves to in_progress and close moves to
+ *   done; any other transition goes through `orboto_api_call`.
+ * - `orboto_help` / `orboto_response_expand` - both are recovery paths
+ *   for large payloads, which is the opposite of this tier's problem.
+ *
+ * MUST stay a subset of CURATED_TOOLS (asserted in toolset.test.ts): a
+ * name that is not registered in curated cannot be registered here
+ * either, and the tier ordering minimal < curated < full is what the
+ * docs promise.
+ */
+export const MINIMAL_TOOLS: ReadonlySet<string> = new Set([
+  // Orient (session_start also reports who you are + the write language)
+  'orboto_session_start',
+  // Find + read
+  'orboto_search',
+  'orboto_get_ticket',
+  // Write
+  'orboto_create_ticket',
+  'orboto_update_ticket',
+  'orboto_comment',
+  // The claim -> close loop + its timer
+  'orboto_claim',
+  'orboto_close_ticket',
+  'orboto_timer_start',
+  'orboto_timer_stop',
+  // Everything else, on demand
+  'orboto_api_search',
+  'orboto_api_call',
+]);
 
 /** Order matches the measured 30d call counts (see ticket comment). */
 export const CURATED_TOOLS: ReadonlySet<string> = new Set([
@@ -84,11 +142,16 @@ export function resolveToolset(
   envValue?: string | null,
 ): Toolset {
   const parse = (v?: string | null): Toolset | null =>
-    v === 'full' ? 'full' : v === 'curated' ? 'curated' : null;
+    v === 'full' ? 'full'
+      : v === 'curated' ? 'curated'
+        : v === 'minimal' ? 'minimal'
+          : null;
   return parse(explicit) ?? parse(envValue) ?? 'curated';
 }
 
 /** Whether a tool registers under the given toolset. */
 export function toolInToolset(toolName: string, toolset: Toolset): boolean {
-  return toolset === 'full' || CURATED_TOOLS.has(toolName);
+  if (toolset === 'full') return true;
+  if (toolset === 'minimal') return MINIMAL_TOOLS.has(toolName);
+  return CURATED_TOOLS.has(toolName);
 }

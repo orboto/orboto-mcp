@@ -25,7 +25,7 @@ export const myTicketsToolConfig = {
       .optional()
       .describe('Filter to one workflow category. Omit for all non-done.'),
     limit: z.number().int().min(1).max(50).default(25),
-    verbose: z.boolean().default(false).describe('true = full rows (uuid, labels, minutes, timestamps). Default rows carry the decision fields only (ORB-1699).'),
+    verbose: z.boolean().default(false).describe('true = full rows; default is the decision fields only.'),
   }).shape,
   annotations: { readOnlyHint: true },
 };

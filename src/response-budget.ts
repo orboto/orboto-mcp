@@ -367,6 +367,25 @@ export const TruncationBlockSchema = z.object({
   atFloor: z.boolean().optional(),
 });
 
+/**
+ * ORB-1805 - what registerWithMetrics actually advertises.
+ *
+ * `TruncationBlockSchema` above is the exact runtime shape (and stays the
+ * validator the tests assert against), but serialising all eight of its
+ * fields costs ~620 characters in EVERY tool that declares an
+ * outputSchema - 14 tools in the full manifest, 5 in the curated one -
+ * for a block a caller only ever reads. The advertised form declares the
+ * one field a caller acts on (`handle`) and stays open for the rest, so
+ * a strict client still accepts an over-budget payload (ORB-1738, the
+ * reason the marker is advertised at all) at a third of the bytes.
+ *
+ * Strictly more permissive than TruncationBlockSchema, so nothing that
+ * validated before can fail now.
+ */
+export const TruncationBlockAdvertisedSchema = z.object({ handle: z.string() })
+  .passthrough()
+  .describe('Response was cut; pass `handle` to orboto_response_expand.');
+
 export interface TruncationBlock {
   handle: string;
   budgetChars: number;

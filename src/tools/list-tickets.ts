@@ -31,17 +31,17 @@ export const listTicketsToolConfig = {
     milestone: z
       .string()
       .optional()
-      .describe('Milestone key (ORB-M3), name, or UUID (ORB-1696). Omit for all milestones including backlog.'),
+      .describe('Key (ORB-M3), name, or UUID. Omit for all, backlog included.'),
     assigneeEmail: z
       .string()
       .optional()
-      .describe('Email of a project member. Omit for all assignees including unassigned.'),
+      .describe('Project-member email. Omit for all, unassigned included.'),
     parentTicketKey: z
       .string()
       .optional()
-      .describe('List only children of this ticket (e.g. "ACME-42"). Useful for walking an epic into its sub-tickets.'),
+      .describe('Only children of this ticket - walks an epic.'),
     limit: z.number().int().min(1).max(50).default(25).describe('Max rows to return.'),
-    verbose: z.boolean().default(false).describe('true = full rows (uuid, labels, minutes, timestamps). Default rows carry the decision fields only (ORB-1699).'),
+    verbose: z.boolean().default(false).describe('true = full rows; default is the decision fields only.'),
   }).shape,
   annotations: { readOnlyHint: true },
 };

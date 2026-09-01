@@ -106,23 +106,28 @@ function ticketStructured(t: TicketRow) {
 export const createTicketToolConfig = {
   title: 'Create a ticket',
   description:
-    'Create a new ticket in the given project. Creating more than ~3 tickets? Use `orboto_bulk_create_tickets` instead - one call, one compact response. Returns the new ticket\'s key (e.g. "ACME-42") so callers can chain follow-ups. **Read the new key from `structuredContent.createdTicketKey` (ORB-1176) - never from `similarWarnings[].ticketKey`, which are OTHER, possibly-duplicate tickets.** The caller must have `ticket:create` on the project. **Duplicate-detection safety-net (ORB-831):** if `similarWarnings` appears in the response with one or more entries, the ticket WAS created but you should review whether to close it as a duplicate of the listed ticket(s) instead. The warnings are advisory - never blocking - but each entry is a ticket the system thinks the new one overlaps with. Prefer `orboto_check_similar` BEFORE creating when you want a dry-run. **Deferred check under load (ORB-1437):** if `duplicateCheckDeferred: true` appears, the project was under a create burst so the duplicate-check was run in the background instead of inline - `similarWarnings` is then empty because it did NOT run synchronously, which is NOT the same as "no duplicates found". A strong match, if any, is posted as an advisory comment on the new ticket a moment later; check the ticket comments before treating it as new work. **Duplicate-check recall (ORB-1121):** when you search/check-similar first, results rank by term co-occurrence - a long, solution-framed title with rare terms can return 0 hits even when a short, symptom-framed dup sharing one distinctive token exists. Probe with a single distinctive STABLE token (file/component/error-string fragment), keep queries SHORT, and search the SYMPTOM not your fix; a 0-result long query is not "no dup". **Language-mismatch warning (ORB-890):** if `languageWarning` appears, the ticket was written in a language different from the workspace default. Consider rewriting in the expected language so search + duplicate-detection stay consistent. Non-blocking. **Before a mass-create (ORB-989):** call `orboto_whoami` first - its `workspaceLocale` field is the language you should write every ticket in. If the same `languageWarning` repeats, stop and clarify the intended language rather than pushing through the whole batch. **Strict mode (ORB-990):** if the workspace enforces ticket language, a mismatch is rejected (the tool returns a `blocked` result, not a created ticket) - rewrite in the workspace language, or set `allowLanguageMismatch: true` only when the language is genuinely intentional. **Hard duplicate-block (ORB-1471):** some workspaces REFUSE a create whose top similarity match is at/above a configured threshold - the tool returns a `duplicateBlocked` result (NOT a created ticket) listing the matching tickets. Extend or comment on one of those instead. If you have confirmed none of them cover this work, retry with `allowDuplicate: true` AND a `duplicateJustification` explaining why - the justification is persisted as a comment on the new ticket.',
+    'Create a new ticket in the given project. Creating more than ~3 tickets? Use `orboto_bulk_create_tickets` instead - one call, one compact response. Returns the new ticket\'s key (e.g. "ACME-42") so callers can chain follow-ups. **Read the new key from `structuredContent.createdTicketKey` (ORB-1176) - never from `similarWarnings[].ticketKey`, which are OTHER, possibly-duplicate tickets.** The caller must have `ticket:create` on the project. **Duplicate-detection safety-net (ORB-831):** if `similarWarnings` appears in the response with one or more entries, the ticket WAS created but you should review whether to close it as a duplicate of the listed ticket(s) instead. The warnings are advisory - never blocking - but each entry is a ticket the system thinks the new one overlaps with. Prefer `orboto_check_similar` BEFORE creating when you want a dry-run. **Deferred check under load (ORB-1437):** if `duplicateCheckDeferred: true` appears, the project was under a create burst so the duplicate-check was run in the background instead of inline - `similarWarnings` is then empty because it did NOT run synchronously, which is NOT the same as "no duplicates found". A strong match, if any, is posted as an advisory comment on the new ticket a moment later; check the ticket comments before treating it as new work. **Duplicate-check recall (ORB-1121):** when you search/check-similar first, results rank by term co-occurrence - a long, solution-framed title with rare terms can return 0 hits even when a short, symptom-framed dup sharing one distinctive token exists. Probe with a single distinctive STABLE token (file/component/error-string fragment), keep queries SHORT, and search the SYMPTOM not your fix; a 0-result long query is not "no dup". **Language-mismatch warning (ORB-890):** if `languageWarning` appears, the ticket was written in a language different from the workspace default. Consider rewriting in the expected language so search + duplicate-detection stay consistent. Non-blocking. **Before a mass-create (ORB-989):** call `orboto_whoami` first - its `workspaceLocale` field is the language you should write every ticket in. If the same `languageWarning` repeats, stop and clarify the intended language rather than pushing through the whole batch. **Strict mode (ORB-990):** if the workspace enforces ticket language, a mismatch is rejected (the tool returns a `blocked` result, not a created ticket) - rewrite in the workspace language, or set `allowLanguageMismatch: true` only when the language is genuinely intentional. **Hard duplicate-block (ORB-1471):** some workspaces REFUSE a create whose top similarity match is at/above a configured threshold - the tool returns a `duplicateBlocked` result (NOT a created ticket) listing the matching tickets. Extend or comment on one of those instead. If you have confirmed none of them cover this work, retry with `allowDuplicate: true` AND a `duplicateJustification` explaining why - the justification is persisted as a comment on the new ticket. '
+    // ORB-1805 - parameter prose moved out of the input schema (which
+    // every client pays for on connect) into this text, which the
+    // manifest summarises to one sentence and orboto_help serves in
+    // full. Same rows also live in the skill's REFERENCE.md.
+    + '**Parameter notes.** `deliveryMode` (ORB-1608) is the role-aware commit policy that replaced the blanket one-commit-per-ticket rule: implementation/docs expect exactly one linked commit (closing without one is a non-blocking warning); review/admin/epic never expect one - reviews are read-only, admin work carries external evidence, epics derive completion from their children; unset defaults to "epic" when type=epic, else "implementation". `milestone` takes a key ("ORB-M3"), a name, or a UUID and is looked up in the project including closed milestones - unknown or ambiguous is an error, so pass the key/UUID when a name repeats. `labels` and `assigneeEmails` attach ATOMICALLY inside the create (ORB-1416): an unknown label or non-member email rolls the whole create back with a 400, leaving no orphan ticket - there is no separate attach call to retry.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
     title: z.string().min(1).max(255),
     description: z.string().optional(),
     type: z.enum(['task', 'bug', 'story', 'epic']).optional().describe('Default: task.'),
     priority: z.enum(['blocker', 'high', 'normal', 'low', 'trivial']).optional().describe('Default: normal.'),
-    deliveryMode: z.enum(['implementation', 'docs', 'review', 'admin', 'epic']).optional().describe('Role-aware commit policy (ORB-1608), replacing the blanket one-commit-per-ticket rule. implementation/docs expect exactly one linked commit (closing without one is a non-blocking warning); review/admin/epic never expect one - reviews are read-only, admin work carries external evidence, epics derive completion from their children. Default: "epic" when type=epic, else "implementation".'),
-    milestone: z.string().optional().describe('Milestone key (e.g. "ORB-M3"), name, or UUID. Looked up in the project (incl. closed); unknown = error, ambiguous name = error (pass the key/UUID).'),
-    assigneeEmails: z.array(z.string().email()).optional().describe('Project-member emails to assign on creation. Attached atomically inside the create (ORB-1416) - a non-member email rolls the whole create back with a 400, no orphan ticket.'),
-    labels: z.array(z.string()).optional().describe('Label names - must already exist on the project. Attached atomically inside the create (ORB-1416) - an unknown label rolls the whole create back with a 400, no orphan ticket.'),
-    parentTicketKey: z.string().optional().describe('Parent ticket key (e.g. "ACME-10") - makes this a sub-ticket.'),
+    deliveryMode: z.enum(['implementation', 'docs', 'review', 'admin', 'epic']).optional().describe('Default: epic when type=epic, else implementation.'),
+    milestone: z.string().optional().describe('Key ("ORB-M3"), name, or UUID.'),
+    assigneeEmails: z.array(z.string().email()).optional().describe('Project-member emails.'),
+    labels: z.array(z.string()).optional().describe('Existing label names.'),
+    parentTicketKey: z.string().optional().describe('Parent key - makes this a sub-ticket.'),
     dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD.'),
     isPrivate: z.boolean().optional(),
-    allowLanguageMismatch: z.boolean().optional().describe('Override strict ticket-language enforcement (ORB-990). Only set after a previous call was blocked AND you are sure the language is intentional - prefer rewriting in the workspace language.'),
-    allowDuplicate: z.boolean().optional().describe('Override the hard duplicate-block (ORB-1471). Only set after a previous call was REFUSED with a duplicate-block error AND you have confirmed the listed tickets do NOT cover this work. Requires duplicateJustification.'),
-    duplicateJustification: z.string().optional().describe('Required with allowDuplicate=true: a short explanation of why this is NOT a duplicate of the flagged tickets. Persisted as a comment on the new ticket for an audit trail.'),
+    allowLanguageMismatch: z.boolean().optional().describe('Override the language block.'),
+    allowDuplicate: z.boolean().optional().describe('Override the duplicate block.'),
+    duplicateJustification: z.string().optional().describe('Why this is not a duplicate.'),
   }).shape,
 };
 
@@ -389,22 +394,22 @@ function formatSimilarity(w: SimilarWarning): string {
 export const updateTicketToolConfig = {
   title: 'Update a ticket',
   description:
-    'Patch one or more fields on a ticket (title, description, customerSummary, type, priority, deliveryMode, dueDate, startDate, isPrivate, estimatedTimeMinutes). `customerSummary` is the customer-facing text shown in the customer project report instead of the internal description (leave empty to auto-summarize). `deliveryMode` is the role-aware commit policy (ORB-1608) - see `orboto_create_ticket` for the mode semantics. Use `orboto_move_ticket` for status, `orboto_set_milestone` for milestone, and `orboto_assign` / `orboto_unassign` for members.',
+    'Patch one or more fields on a ticket. Patchable: title, description, customerSummary, type, priority, deliveryMode, dueDate, startDate, isPrivate, estimatedTimeMinutes. `customerSummary` is the customer-facing text shown in the customer project report instead of the internal description; null or empty falls back to an AI distillation or the title. `deliveryMode` is the role-aware commit policy (ORB-1608) - see `orboto_create_ticket` for the mode semantics. Use `orboto_move_ticket` for status, `orboto_set_milestone` for milestone, and `orboto_assign` / `orboto_unassign` for members.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     patch: z.object({
       title: z.string().min(1).max(255).optional(),
       description: z.string().optional(),
-      customerSummary: z.string().max(2000).nullable().optional().describe('Customer-facing summary shown in the customer report instead of the internal description. Null/empty falls back to an AI distillation or the title.'),
+      customerSummary: z.string().max(2000).nullable().optional().describe('Customer-facing report text; null falls back to AI/title.'),
       type: z.enum(['task', 'bug', 'story', 'epic']).optional(),
       priority: z.enum(['blocker', 'high', 'normal', 'low', 'trivial']).optional(),
-      deliveryMode: z.enum(['implementation', 'docs', 'review', 'admin', 'epic']).optional().describe('Role-aware commit policy (ORB-1608) - see orboto_create_ticket for the mode semantics.'),
+      deliveryMode: z.enum(['implementation', 'docs', 'review', 'admin', 'epic']).optional().describe('Commit policy; see orboto_create_ticket.'),
       dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
       startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
       isPrivate: z.boolean().optional(),
       estimatedTimeMinutes: z.number().int().nonnegative().optional(),
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
-    allowLanguageMismatch: z.boolean().optional().describe('Override strict ticket-language enforcement (ORB-990). Only set after a previous call was blocked AND the language is intentional.'),
+    allowLanguageMismatch: z.boolean().optional().describe('Override the language block; only after a call was blocked.'),
   }).shape,
 };
 
@@ -483,7 +488,7 @@ export const closeTicketToolConfig = {
     'Move a ticket to `done` and optionally post a closing comment in one call. Closing more than ~3 tickets? Use `orboto_bulk_close_tickets` instead. Convenience wrapper around `orboto_move_ticket` + `orboto_comment` so the model doesn\'t need to chain two writes. Passing a `comment` is the recommended way to close - it doubles as the transition summary and suppresses the ORB-1332 `summaryWarning`. Closing with no comment (and none posted in the last few minutes) returns a non-blocking `summaryWarning`; the close still succeeds. **Delivery-mode warning (ORB-1608/1642):** on an `implementation`/`docs` ticket, closing with zero linked commits returns a non-blocking `deliveryModeWarning` too - UNLESS the project has no git connection at all, in which case it\'s omitted. `no_commit_linked` = healthy connection, link a commit or change deliveryMode via `orboto_update_ticket`. `git_delivery_failing` = the connection itself looks unhealthy - check it before assuming no commit was made.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    comment: z.string().min(1).optional().describe('Optional closing comment posted before the move. Doubles as the transition summary (what changed, commit SHA, how to verify).'),
+    comment: z.string().min(1).optional().describe('Closing comment; doubles as the transition summary.'),
   }).shape,
 };
 
@@ -830,8 +835,8 @@ export const addTicketDependencyToolConfig = {
   description:
     'Mark `ticketKey` as depending on `dependsOnKey` - i.e. `dependsOnKey` blocks `ticketKey`. Wiring more than ~3 edges? Use `orboto_bulk_add_ticket_dependencies` instead. ORB-1614: the two tickets may live in DIFFERENT projects, as long as you can read both - the API 403s with a forbidden error otherwise. Self-dependencies and cycles (including cycles that span projects) are rejected.',
   inputSchema: z.object({
-    ticketKey: z.string().min(3).describe('The dependent ticket (the one being blocked).'),
-    dependsOnKey: z.string().min(3).describe('The ticket that must complete first (the blocker) - may be in a different project.'),
+    ticketKey: z.string().min(3).describe('The blocked ticket.'),
+    dependsOnKey: z.string().min(3).describe('The blocker; may be in another project.'),
   }).shape,
 };
 

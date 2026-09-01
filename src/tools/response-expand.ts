@@ -30,9 +30,9 @@ export const responseExpandToolConfig = {
   description:
     'Return the content a previous tool response omitted. When a result exceeds its response budget it comes back with a `__truncation` block containing a `handle` and the list of cut paths; pass that handle here to read the omitted remainder. Call with `handle` alone to list what is available, then with `path` (e.g. "description" or "ticketBundle.primer.markdown", or "$text" for the human-readable block) to read it, following `nextCursor` while it is not null. Handles live 15 minutes in the MCP server process - if one has expired, re-run the original tool. Read-only; returns nothing the original call did not already return.',
   inputSchema: z.object({
-    handle: z.string().min(4).max(64).describe('The `handle` from a response\'s `__truncation` block.'),
-    path: z.string().max(400).optional().describe('One of `__truncation.omitted[].path`. Omit to list the available paths. Use "$text" for the human-readable text block.'),
-    cursor: z.number().int().min(0).optional().describe('Character offset to resume from - pass the `nextCursor` from the previous chunk.'),
+    handle: z.string().min(4).max(64).describe('From a response\'s `__truncation` block.'),
+    path: z.string().max(400).optional().describe('One of `__truncation.omitted[].path`, or "$text". Omit to list them.'),
+    cursor: z.number().int().min(0).optional().describe('`nextCursor` from the previous chunk.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

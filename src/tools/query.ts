@@ -38,11 +38,11 @@ export const queryToolConfig = {
     + '`labels = "bug" AND createdAt >= daysAgo(7)`. '
     + 'Reach for this tool when per-entity tools (orboto_list_tickets / orboto_my_tickets) cannot express the combined filter.',
   inputSchema: z.object({
-    oql: z.string().min(1).max(8000).describe('The OQL (or JQL when syntax="jql") query string.'),
-    syntax: z.enum(['oql', 'jql']).default('oql').describe('Set "jql" to accept Jira-flavoured syntax (resolution, sprint, due, etc. are auto-mapped).'),
-    cursor: z.string().optional().describe('Opaque pagination cursor from a previous response.'),
-    limit: z.number().int().min(1).max(100).default(25).describe('Max rows to return (1-100, default 25).'),
-    verbose: z.boolean().default(false).describe('true = full rows (uuid, labels, minutes, timestamps). Default rows carry the decision fields only (ORB-1699).'),
+    oql: z.string().min(1).max(8000).describe('The query string.'),
+    syntax: z.enum(['oql', 'jql']).default('oql').describe('"jql" accepts Jira-flavoured syntax.'),
+    cursor: z.string().optional().describe('Cursor from a previous response.'),
+    limit: z.number().int().min(1).max(100).default(25).describe('Max rows. Default 25.'),
+    verbose: z.boolean().default(false).describe('true = full rows; default is the decision fields only.'),
   }).shape,
   annotations: { readOnlyHint: true },
 };

@@ -44,10 +44,10 @@ export const checkSimilarToolConfig = {
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
     title: z.string().min(1).describe('Proposed ticket title.'),
-    description: z.string().optional().describe('Optional proposed ticket description — improves recall.'),
-    limit: z.number().int().min(1).max(10).optional().describe('Max candidates to return. Default 5.'),
-    parentTicketKey: z.string().optional().describe('The intended PARENT ticket key (e.g. the epic) when drafting a child. Enables hierarchy-aware classification: the parent, its other children and epics are reported as related context instead of duplicates.'),
-    forType: z.string().optional().describe('The intended ticket type (task/bug/story/epic) of the draft.'),
+    description: z.string().optional().describe('Proposed description - improves recall.'),
+    limit: z.number().int().min(1).max(10).optional().describe('Max candidates. Default 5.'),
+    parentTicketKey: z.string().optional().describe('Intended parent; makes the check hierarchy-aware.'),
+    forType: z.string().optional().describe('Intended type (task/bug/story/epic).'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

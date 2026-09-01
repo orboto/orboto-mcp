@@ -56,8 +56,8 @@ export const timerStartToolConfig = {
     'Start the user\'s stopwatch on a ticket. If a timer is already running on a different ticket, pass replace=true to auto-stop the previous one (its elapsed time is committed to time_entries before the new timer begins). Description becomes the time entry\'s note when this timer eventually stops.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    description: z.string().optional().describe('Note for the resulting time entry. Set at start, not at stop.'),
-    replace: z.boolean().optional().describe('If a timer is already running, stop+commit it first (default: 409 instead).'),
+    description: z.string().optional().describe('Note for the time entry; set at start, not at stop.'),
+    replace: z.boolean().optional().describe('Stop+commit a running timer first (default: 409).'),
   }).shape,
 };
 
@@ -151,9 +151,9 @@ export const logTimeToolConfig = {
     'Direct time-entry POST — for "I just spent 90 minutes on this last Tuesday but forgot to start a timer". `loggedAt` defaults to now; pass an ISO datetime to back-date.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    durationMinutes: z.number().int().positive().describe('Duration in minutes (must be > 0).'),
+    durationMinutes: z.number().int().positive().describe('Minutes, > 0.'),
     description: z.string().optional(),
-    loggedAt: z.string().datetime().optional().describe('ISO 8601 datetime. Defaults to now.'),
+    loggedAt: z.string().datetime().optional().describe('ISO 8601. Default: now.'),
   }).shape,
 };
 

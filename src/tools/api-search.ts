@@ -54,11 +54,11 @@ export const apiSearchToolConfig = {
     + '`orboto_api_call`. Names with a `?` suffix are optional parameters.',
   inputSchema: z.object({
     query: z.string().min(1).max(200).optional()
-      .describe('Free-text search, e.g. "list backups". Mutually exclusive with path.'),
+      .describe('Free-text search; mutually exclusive with path.'),
     path: z.string().max(300).optional()
-      .describe('Endpoint path for detail mode, e.g. "/projects/{id}/milestones". Requires method.'),
+      .describe('Path for detail mode, e.g. "/projects/{id}". Needs method.'),
     method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).optional()
-      .describe('HTTP method for detail mode.'),
+      .describe('Method for detail mode.'),
     limit: z.number().int().min(1).max(20).default(8)
       .describe('Max search results.'),
   }).shape,

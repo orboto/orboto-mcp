@@ -306,6 +306,19 @@ const FALLBACK_WORKING_RULES = [
 // gets the escape-hatch pointer, the full manifest keeps the
 // get_checklists hint (that tool only exists there).
 function staticMcpHints(toolset: Toolset): string {
+  // ORB-1805 - the minimal tier serves 8k/16k local models, where the
+  // instructions block competes with the user's own turn for the same
+  // few thousand tokens. Everything that is merely NICE to know
+  // (resources, prompts, checklist semantics, primer) is dropped here:
+  // `orboto_session_start` delivers the authoritative rules on the first
+  // call anyway, and `orboto_api_search` reaches the rest.
+  if (toolset === 'minimal') {
+    return [
+      'orboto is a ticket + project management system. Ticket keys look like `PROJ-123`; the first segment is the project key.',
+      'This is the MINIMAL tool manifest (12 tools) for small context windows. Every other endpoint stays reachable: find it with `orboto_api_search`, run it with `orboto_api_call`. Bigger manifests are opt-in: `?toolset=curated` / `full` (HTTP) or ORBOTO_MCP_TOOLSET (stdio).',
+      'Writes respect the caller\'s permissions - a 403 is the API refusing, not this server.',
+    ].join(' ');
+  }
   return [
     'orboto is a ticket + project management system.',
     'When starting on a project, call `orboto_get_project_primer(<PROJECT_KEY>)` once to load its conventions (tech stack, commands, gotchas, expected ticket language).',
@@ -403,13 +416,26 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
       // orboto_session_start tool), and the core non-negotiables
       // FIRST so they survive any truncation; the full workspace rules
       // follow and only their tail is at risk.
-      instructions: assembleInstructions(
-        [
+      // ORB-1805 - the minimal tier ships the HEAD ONLY: no workspace
+      // rules block at all. On an 8k window every rule line here is a
+      // line the user's own turn does not get, and the rules are not
+      // lost - `orboto_session_start` (which the head demands as the
+      // first action) returns the complete, authoritative set, and its
+      // length is then the caller's budget to spend, not a fixed tax on
+      // every connect. It also makes this block a CONSTANT: a workspace
+      // that grows its rules cannot grow the minimal manifest.
+      instructions: toolset === 'minimal'
+        ? [
           staticMcpHints(toolset),
-          'FIRST ACTION this session: call the `orboto_session_start` tool — it returns the complete, authoritative binding rules you must follow (plus your in-progress work). Re-run it after any context compaction. If the rules below look cut off, `orboto_session_start` and the `orboto://rules` resource always have the full set. (Do NOT use `orboto_list_agent_instructions` to read the rules — that manages rule blocks for admins.) Core non-negotiables: ticket-first (claim or create a ticket before touching code), one commit per ticket with the ticket key in the subject line, push after each commit, and never mark work done that is not actually done.',
-        ].join('\n\n'),
-        workingRules,
-      ),
+          'FIRST ACTION: call `orboto_session_start` - it returns the binding workspace rules plus your in-progress work. Re-run it after any context compaction. Non-negotiables: claim or create a ticket before touching code, one commit per ticket with the ticket key in the subject, push after each commit, never mark work done that is not done.',
+        ].join('\n\n')
+        : assembleInstructions(
+          [
+            staticMcpHints(toolset),
+            'FIRST ACTION this session: call the `orboto_session_start` tool — it returns the complete, authoritative binding rules you must follow (plus your in-progress work). Re-run it after any context compaction. If the rules below look cut off, `orboto_session_start` and the `orboto://rules` resource always have the full set. (Do NOT use `orboto_list_agent_instructions` to read the rules — that manages rule blocks for admins.) Core non-negotiables: ticket-first (claim or create a ticket before touching code), one commit per ticket with the ticket key in the subject line, push after each commit, and never mark work done that is not actually done.',
+          ].join('\n\n'),
+          workingRules,
+        ),
     },
   );
 
@@ -432,7 +458,15 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   const regAll = registerWithMetrics(server, client, opts.userAgentSuffix, nudgeState);
   const reg: typeof regAll = (toolName, config, handler) => {
     if (!toolInToolset(toolName, toolset)) return;
-    regAll(toolName, config, handler);
+    // ORB-1805 - the minimal tier drops the human-readable `title`
+    // (measured 580 characters across its 12 tools). `name` is already
+    // self-describing (orboto_create_ticket) and a client without a
+    // title falls back to it, so the display loss is small where the
+    // token pressure is largest. Curated/full keep their titles.
+    const cfg = toolset === 'minimal' && config && 'title' in config
+      ? (() => { const { title: _title, ...rest } = config; return rest; })()
+      : config;
+    regAll(toolName, cfg, handler);
   };
 
   // Tools — alphabetical-ish by concept. Each tool file owns its

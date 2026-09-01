@@ -103,7 +103,7 @@ export const getMilestoneToolConfig = {
     'Return milestone metadata plus ticket-count breakdown by status (to do / in progress / done / …).',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
-    milestone: z.string().min(1).describe('Milestone key (e.g. "ORB-M3"), name (case-sensitive), or UUID.'),
+    milestone: z.string().min(1).describe('Key ("ORB-M3"), name (case-sensitive), or UUID.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -178,7 +178,7 @@ export const createMilestoneToolConfig = {
     name: z.string().min(1).describe('Milestone name (unique within the project).'),
     startDate: z.string().regex(DATE_RE).nullable().optional().describe('YYYY-MM-DD or null.'),
     endDate: z.string().regex(DATE_RE).nullable().optional().describe('YYYY-MM-DD or null.'),
-    isPrivate: z.boolean().optional().describe('Restrict to project members only. Default: false.'),
+    isPrivate: z.boolean().optional().describe('Project members only. Default: false.'),
   }).shape,
 };
 

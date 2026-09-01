@@ -99,7 +99,7 @@ Omit `ORBOTO_API_KEY` to use OAuth login instead. `codex mcp add` writes the sam
 | `ORBOTO_MCP_TOKEN_CACHE` | no | Override the OAuth token cache path (default `~/.config/orboto/mcp-oauth.json`). |
 | `ORBOTO_MCP_NO_BROWSER` | no | Set to `1` to print the authorization URL instead of auto-opening a browser (headless hosts). |
 | `ORBOTO_MCP_TRANSPORT` | no | `stdio` (default) or `http`. Stdio is the right choice for `npx`-launched clients. |
-| `ORBOTO_MCP_TOOLSET` | no | `curated` (default) or `full`. Curated is the measured high-frequency set (~28 tools, ~9k tokens of schemas at connect) - the whole REST API stays reachable via `orboto_api_search` + `orboto_api_call`. `full` registers every named tool (~171, ~47k tokens). HTTP clients can pick per connection instead: `?toolset=full` on the `/mcp` URL or an `x-orboto-toolset: full` header. |
+| `ORBOTO_MCP_TOOLSET` | no | `minimal`, `curated` (default) or `full`. Curated is the measured high-frequency set (31 tools, ~7.8k tokens of schemas at connect) - the whole REST API stays reachable via `orboto_api_search` + `orboto_api_call`. `full` registers every named tool (175, ~39.5k tokens). `minimal` is the daily loop only (12 tools, ~2.8k tokens including the instructions block) for local models with an 8k/16k context window. HTTP clients can pick per connection instead: `?toolset=minimal` on the `/mcp` URL or an `x-orboto-toolset: minimal` header. |
 | `ORBOTO_MCP_PORT` | no | Listen port when transport is `http`. Default `3100`. |
 | `ORBOTO_MCP_CLIENT` | no | User-agent suffix that lands in the API audit log. Useful for filtering audit rows by client. |
 

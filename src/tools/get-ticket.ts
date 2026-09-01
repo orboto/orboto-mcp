@@ -93,7 +93,7 @@ export const getTicketToolConfig = {
     ticketKey: z.string().min(3).describe('Ticket key like "ACME-42".'),
     include: z.array(z.enum(['comments', 'git', 'attachments', 'children', 'raci', 'checklistItems']))
       .optional()
-      .describe('Blocks to inline in full. Default: none - the card carries counts instead; re-call with the block you need.'),
+      .describe('Blocks to inline in full. Default: none (counts only).'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

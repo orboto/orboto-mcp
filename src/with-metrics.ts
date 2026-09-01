@@ -18,7 +18,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from './orboto-client.js';
 import { type NudgeState, shouldNudge, prependNudge, shouldGate, gateResult } from './session-nudge.js';
-import { applyResponseBudget, TruncationBlockSchema } from './response-budget.js';
+import { applyResponseBudget, TruncationBlockAdvertisedSchema } from './response-budget.js';
 import { buildStrictInputSchema, isRawShape } from './input-schema.js';
 import { captureToolDoc, summarizeToolDescription } from './tool-docs.js';
 
@@ -268,7 +268,9 @@ export function registerWithMetrics(
     if (cfg?.outputSchema && isRawShape(cfg.outputSchema)) {
       cfg = {
         ...cfg,
-        outputSchema: { ...cfg.outputSchema, __truncation: TruncationBlockSchema.optional() },
+        // ORB-1805 - the ADVERTISED (compact, open) form; the exact
+        // shape stays TruncationBlockSchema for runtime assertions.
+        outputSchema: { ...cfg.outputSchema, __truncation: TruncationBlockAdvertisedSchema.optional() },
       };
     }
     // ORB-1741 - manifest diet: the wire manifest carries a one-sentence
