@@ -127,7 +127,9 @@ const GIT_HEALTH_REASON_TEXT: Record<string, string> = {
   // ORB-1638
   awaiting_first_event: 'webhook installed but has never delivered an event',
   outbound_unreachable: 'orboto cannot reach the provider',
-  delivery_failing: 'provider reports its last delivery to orboto failed',
+  // ORB-1785 - two derivations now: the provider reporting a failed
+  // delivery, and the probe inferring one from commits that never arrived.
+  delivery_failing: 'webhook deliveries from the provider are not arriving',
 };
 
 // Cap how many distinct projects we probe for git health — a session's
