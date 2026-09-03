@@ -8,10 +8,10 @@
  *
  * ORB-799 added the write half of the surface to close wrapper-parity:
  *
- *   - orboto_create_milestone — mirrors `orboto.mjs create-milestone`,
- *     including the nullable-but-required `startDate`/`endDate` quirk
- *     the bare POST chokes on (the API's Zod schema requires the keys
- *     to be present even when their value is null).
+ *   - orboto_create_milestone - mirrors `orboto.mjs create-milestone`.
+ *     `startDate`/`endDate` are both optional; a milestone without dates
+ *     is a legitimate object (analytics/Gantt/templates treat null dates
+ *     as "no dates").
  *   - orboto_close_milestone — close + optional archive. Resolves the
  *     milestone by name OR UUID against the includeClosed=true list so
  *     re-closing an already-closed milestone is idempotent.
@@ -172,7 +172,7 @@ export function makeGetMilestoneHandler(client: OrbotoClient) {
 export const createMilestoneToolConfig = {
   title: 'Create a milestone',
   description:
-    'Create a milestone in a project. `startDate` + `endDate` are nullable but both keys are sent on the wire (the API\'s Zod schema requires their presence even when null) — this tool handles that quirk so the common "just a name" case works. The caller must have `milestone:create`.',
+    'Create a milestone in a project. `startDate` + `endDate` are optional - omit them (or pass null) for a milestone with no dates. The caller must have `milestone:create`.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
     name: z.string().min(1).describe('Milestone name (unique within the project).'),
@@ -193,10 +193,8 @@ export function makeCreateMilestoneHandler(client: OrbotoClient) {
     const project = await resolveProjectByKey(client, projectKey);
     const body = {
       name,
-      // Send both keys explicitly with null fallbacks — the bare POST
-      // returns 400 "body/startDate Required" otherwise.
-      startDate: startDate ?? null,
-      endDate: endDate ?? null,
+      startDate,
+      endDate,
       isPrivate: isPrivate ?? false,
     };
     const created = await client.post<MilestoneRow>(`/projects/${project.id}/milestones`, body);

@@ -45,7 +45,7 @@ const MILESTONE = {
 };
 
 describe('orboto_create_milestone', () => {
-  it('POSTs name + null dates when no dates supplied (handles the API quirk)', async () => {
+  it('POSTs name only (dates omitted) when no dates supplied (ORB-1825)', async () => {
     const calls = stub([
       { json: PROJ },
       { json: { ...MILESTONE, name: 'v2.0' } },
@@ -53,11 +53,16 @@ describe('orboto_create_milestone', () => {
     const res = await makeCreateMilestoneHandler(client)({
       projectKey: 'ACME', name: 'v2.0',
     });
+    // ORB-1825 - startDate/endDate are nullable().optional() on the API's
+    // create body now; an absent key means the same thing as null, so the
+    // tool no longer forces `?? null` and the wire body simply omits them.
     expect(calls[1]).toMatchObject({
       method: 'POST',
       url: 'https://orboto.example.com/projects/p1/milestones',
-      body: { name: 'v2.0', startDate: null, endDate: null, isPrivate: false },
+      body: { name: 'v2.0', isPrivate: false },
     });
+    expect(calls[1].body).not.toHaveProperty('startDate');
+    expect(calls[1].body).not.toHaveProperty('endDate');
     expect(res.structuredContent).toMatchObject({ name: 'v2.0', projectKey: 'ACME' });
   });
 
