@@ -135,7 +135,7 @@ function applyAliases(toolName: string, shape: z.ZodRawShape, value: unknown): u
   // an error (ambiguous intent must not be guessed).
   if (toolName === 'orboto_update_ticket' && !('patch' in out)) {
     const patch: Record<string, unknown> = {};
-    let rest: Record<string, unknown> = {};
+    const rest: Record<string, unknown> = {};
     let folded = false;
     for (const [k, v] of Object.entries(out)) {
       if ((UPDATE_TICKET_PATCH_KEYS as readonly string[]).includes(k)) {

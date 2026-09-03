@@ -21,7 +21,7 @@ import { type NudgeState, shouldNudge, prependNudge, shouldGate, gateResult } fr
 import { applyResponseBudget, TruncationBlockAdvertisedSchema } from './response-budget.js';
 import { buildStrictInputSchema, isRawShape } from './input-schema.js';
 import { captureToolDoc, summarizeToolDescription } from './tool-docs.js';
-import { postLogEntry, redactSecrets, type McpLogEntry } from './mcp-instrument.js';
+import { postLogEntry, redactSecrets } from './mcp-instrument.js';
 
 /**
  * ORB-1174 — turn an OrbotoApiError into an actionable, agent-visible
@@ -53,12 +53,10 @@ function formatApiError(err: OrbotoApiError): string {
   return `orboto API error ${err.status}. ${hint}\nDetail: ${detail || '(no message)'}`;
 }
 
-// ORB-1817 - LogEntry / redactSecrets / postLogEntry moved to
+// ORB-1817 - McpLogEntry / redactSecrets / postLogEntry live in
 // mcp-instrument.ts (a leaf module) so input-schema.ts can log validation
 // failures through the same instrument path without an import cycle
-// (this file already imports FROM input-schema.ts). Kept as a local alias
-// so the rest of this file is unchanged.
-type LogEntry = McpLogEntry;
+// (this file already imports FROM input-schema.ts).
 
 /**
  * Wrap a CallToolResult-returning handler so every invocation posts

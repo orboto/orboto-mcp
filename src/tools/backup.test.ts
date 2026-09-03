@@ -79,7 +79,7 @@ describe('orboto_create_full_backup (ORB-1301 / async since ORB-1717)', () => {
 
   it('a failed run surfaces the error instead of a partial ZIP', async () => {
     vi.useFakeTimers();
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, _init) => {
       const u = url.toString();
       if (u.endsWith('/admin/backup/full')) {
         return { ok: true, status: 202, statusText: 'Accepted', headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ runId: 'run-2' }), text: async () => '' } as unknown as Response;

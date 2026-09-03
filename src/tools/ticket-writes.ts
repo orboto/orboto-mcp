@@ -703,7 +703,7 @@ export function makeUnassignHandler(client: OrbotoClient) {
       // 404 = wasn't assigned. Idempotent success.
       if (err instanceof OrbotoApiError && err.status === 404) {
         return {
-          content: [{ type: 'text', text: `${assigneeEmail} wasn\'t assigned to [${ticket.ticketKey}].` }],
+          content: [{ type: 'text', text: `${assigneeEmail} wasn't assigned to [${ticket.ticketKey}].` }],
           structuredContent: { ticketKey: ticket.ticketKey, alreadyUnassigned: true },
         };
       }
@@ -907,7 +907,7 @@ export function makeRemoveTicketDependencyHandler(client: OrbotoClient) {
       // 404 = edge wasn't there. Idempotent success.
       if (err instanceof OrbotoApiError && err.status === 404) {
         return {
-          content: [{ type: 'text', text: `[${ticket.ticketKey}] didn\'t depend on [${dependsOn.ticketKey}].` }],
+          content: [{ type: 'text', text: `[${ticket.ticketKey}] didn't depend on [${dependsOn.ticketKey}].` }],
           structuredContent: { ticketKey: ticket.ticketKey, dependsOnKey: dependsOn.ticketKey, alreadyAbsent: true },
         };
       }

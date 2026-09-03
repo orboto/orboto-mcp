@@ -486,7 +486,7 @@ function shrink(
   });
 
   const omitted: OmittedEntry[] = [];
-  let structured: unknown = result.structuredContent === undefined
+  const structured: unknown = result.structuredContent === undefined
     ? undefined
     : (JSON.parse(safeStringify(result.structuredContent)) as unknown);
 

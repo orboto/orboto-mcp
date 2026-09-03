@@ -82,7 +82,7 @@ export function makeApprovalDecideHandler(client: OrbotoClient) {
       `/projects/${ticket.projectId}/tickets/${ticket.id}/approval-requests`,
     );
     const pending = rows.filter((r) => r.status === 'pending');
-    let target = requestId ? pending.find((r) => r.id === requestId) : pending.find((r) => r.canApprove) ?? pending[0];
+    const target = requestId ? pending.find((r) => r.id === requestId) : pending.find((r) => r.canApprove) ?? pending[0];
     if (!target) {
       throw new Error(`No pending approval request to decide on [${ticket.ticketKey}]${requestId ? ` (requestId ${requestId} not pending)` : ''}.`);
     }
