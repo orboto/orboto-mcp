@@ -20,7 +20,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
-import { resolveProjectByKey } from './shared.js';
+import { resolveProjectByKey, resolveByName } from './shared.js';
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -103,7 +103,7 @@ export const getMilestoneToolConfig = {
     'Return milestone metadata plus ticket-count breakdown by status (to do / in progress / done / …).',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
-    milestone: z.string().min(1).describe('Key ("ORB-M3"), name (case-sensitive), or UUID.'),
+    milestone: z.string().min(1).describe('Key ("ORB-M3"), name, or UUID. Name matching normalises HTML entities/case/whitespace.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -251,17 +251,22 @@ export async function resolveMilestoneByNameOrId(
     }
     return byKey;
   }
-  const matches = all.filter((x) => x.name === nameOrId);
-  if (matches.length === 0) {
-    throw new Error(`Milestone "${nameOrId}" not found in the project (including closed/archived).`);
-  }
-  if (matches.length > 1) {
-    const list = matches.map((m) => `"${m.name}" (${m.id})`).join(', ');
+  // ORB-1826 - exact (raw) name match wins first; falls back to a unique
+  // normalised match (HTML-entity-decoded, trimmed, whitespace-collapsed,
+  // casefolded) so `"QA &amp; Testing"` resolves against a milestone
+  // literally named `"QA & Testing"`. Ambiguous either way still errors,
+  // listing the candidates.
+  const { match, ambiguous } = resolveByName(all, nameOrId, (m) => m.name);
+  if (ambiguous) {
+    const list = ambiguous.map((m) => `"${m.name}" (${m.id})`).join(', ');
     throw new Error(
-      `Milestone name "${nameOrId}" is ambiguous — ${matches.length} milestones match: ${list}. Pass the milestone's UUID instead.`,
+      `Milestone name "${nameOrId}" is ambiguous - ${ambiguous.length} milestones match: ${list}. Pass the milestone's UUID instead.`,
     );
   }
-  return matches[0];
+  if (!match) {
+    throw new Error(`Milestone "${nameOrId}" not found in the project (including closed/archived).`);
+  }
+  return match;
 }
 
 export const closeMilestoneToolConfig = {

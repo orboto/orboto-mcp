@@ -30,7 +30,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { trimSimilarEntries } from './similar-projection.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
-import { resolveProjectByKey, resolveTicketByKey, type TicketRow } from './shared.js';
+import { resolveProjectByKey, resolveTicketByKey, resolveByName, type TicketRow } from './shared.js';
 import { resolveMilestoneByNameOrId } from './milestones.js';
 
 // ---------------------------------------------------------------------------
@@ -722,7 +722,17 @@ export function makeUnassignHandler(client: OrbotoClient) {
 
 async function resolveLabelId(client: OrbotoClient, projectId: string, name: string): Promise<string> {
   const labels = await client.get<Array<{ id: string; name: string }>>(`/projects/${projectId}/labels`);
-  const match = labels.find((l) => l.name.toLowerCase() === name.toLowerCase());
+  // ORB-1826 - exact match wins first, then a unique normalised match
+  // (HTML-entity-decoded, trimmed, whitespace-collapsed, casefolded) so
+  // case/whitespace/entity variants of an existing label name resolve
+  // instead of rejecting. Labels have no unique-name constraint, so an
+  // ambiguous normalised match (two labels differing only by case) still
+  // errors rather than silently picking one.
+  const { match, ambiguous } = resolveByName(labels, name, (l) => l.name);
+  if (ambiguous) {
+    const list = ambiguous.map((l) => `"${l.name}" (${l.id})`).join(', ');
+    throw new Error(`Label name "${name}" is ambiguous - ${ambiguous.length} labels match: ${list}.`);
+  }
   if (!match) {
     throw new Error(`No label named "${name}" in this project. Create it first with orboto_create_label.`);
   }

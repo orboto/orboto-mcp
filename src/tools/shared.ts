@@ -242,3 +242,83 @@ export function sizeBlockResult(err: unknown, verb: string): CallToolResult | nu
     isError: true,
   };
 }
+
+// ---------------------------------------------------------------------------
+// ORB-1826 - shared name-matching normaliser for free-text milestone /
+// label / status resolvers. An agent surface can hand back a name that
+// differs from the canonical DB row only in mechanically-recoverable ways:
+// leftover HTML entities from a rendering step upstream of the agent
+// (`QA &amp; Testing`), a different case, or extra/collapsed whitespace.
+// The workspace rule is normalise, never reject - if the canonical form is
+// mechanically derivable, derive it instead of rejecting the call.
+//
+// Resolution order for every call site that uses `resolveByName`: raw exact
+// match first (zero-cost, preserves today's behaviour for clean names),
+// then a UNIQUE normalised match, then the existing ambiguity error listing
+// the candidates.
+//
+// Twin: `apps/api/src/lib/name-normalize.ts` (same two functions, same
+// semantics). This package ships standalone to npm with a deliberately
+// minimal dependency set (MCP SDK + zod only) and does not depend on the
+// API workspace package, so the ~20 lines below are duplicated rather than
+// imported. The Go CLI (`cli/internal/cmd/normalize.go`) carries a third
+// copy for the same reason. Keep all three in sync.
+// ---------------------------------------------------------------------------
+
+const NAMED_HTML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+};
+
+/** Decode the five XML-safe named entities plus numeric character
+ *  references (`&#38;`, `&#x26;`). Intentionally NOT a general HTML
+ *  decoder - just enough to undo a stray HTML-escaping step. */
+export function decodeHtmlEntities(input: string): string {
+  return input.replace(/&(#\d+|#x[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, entity: string) => {
+    if (entity[0] === '#') {
+      const isHex = entity[1] === 'x' || entity[1] === 'X';
+      const codePoint = isHex ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10);
+      return Number.isFinite(codePoint) && codePoint > 0 ? String.fromCodePoint(codePoint) : match;
+    }
+    const decoded = NAMED_HTML_ENTITIES[entity.toLowerCase()];
+    return decoded ?? match;
+  });
+}
+
+/** Canonical comparison key for a free-text name: HTML-entity-decoded,
+ *  trimmed, internal whitespace collapsed to a single space, casefolded. */
+export function normalizeName(input: string): string {
+  return decodeHtmlEntities(input).trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+export interface NameMatchResult<T> {
+  /** The single resolved candidate, or null (no match / ambiguous). */
+  match: T | null;
+  /** Set (length > 1) when more than one candidate normalises to the same
+   *  key - the caller should surface all of them in the error. */
+  ambiguous: T[] | null;
+}
+
+/**
+ * Resolve `ref` against `candidates` by name: exact (raw) match wins
+ * first; falls back to a unique normalised match. `ambiguous` is set
+ * whenever more than one candidate ties at either stage.
+ */
+export function resolveByName<T>(
+  candidates: T[],
+  ref: string,
+  getName: (item: T) => string,
+): NameMatchResult<T> {
+  const exactMatches = candidates.filter((c) => getName(c) === ref);
+  if (exactMatches.length === 1) return { match: exactMatches[0], ambiguous: null };
+  if (exactMatches.length > 1) return { match: null, ambiguous: exactMatches };
+
+  const normalizedRef = normalizeName(ref);
+  const normMatches = candidates.filter((c) => normalizeName(getName(c)) === normalizedRef);
+  if (normMatches.length === 1) return { match: normMatches[0], ambiguous: null };
+  if (normMatches.length > 1) return { match: null, ambiguous: normMatches };
+  return { match: null, ambiguous: null };
+}
