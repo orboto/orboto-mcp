@@ -22,7 +22,12 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
-import { resolveProjectByKey } from './shared.js';
+import { resolveProjectByKey, sizeBlockResult } from './shared.js';
+
+// ORB-1819 - the writing contract, verbatim in every write-tool
+// description so the writing agent sees it at the moment of writing.
+const FACT_WRITING_CONTRACT =
+  ' Fact: <= 300 chars, one fact per key, the value is the fact - long material goes into a doc, the fact holds the doc key.';
 
 // ---------------------------------------------------------------------------
 // Shared types + helpers
@@ -65,6 +70,7 @@ interface PrimerFactRow {
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
+  sizeWarning?: { chars: number; limit: number; hint: string };
 }
 
 function rewritePermissionError(action: string): (err: unknown) => never {
@@ -182,7 +188,8 @@ export function makePrimerFactListHandler(client: OrbotoClient) {
 export const primerFactAddToolConfig = {
   title: 'Record a new project primer fact',
   description:
-    'Record a new structured fact about the project that future AI agents should see at session start. Use when you learn something during work that is missing from the primer (a library version, a convention, a deployment quirk, an architecture decision). Note: the auto-generated primer does NOT automatically include CLAUDE.md / AGENTS.md content unless the operator configured repo briefings and the API host can read those files from disk — most deployments cannot. Treat key conventions documented in CLAUDE.md / AGENTS.md as fair game to record here so they survive cross-deployment. Set observed=true when you are recording from a bot/agent context — the fact will land as agent_observed and require operator verification before losing the (observed) marker.',
+    'Record a new structured fact about the project that future AI agents should see at session start. Use when you learn something during work that is missing from the primer (a library version, a convention, a deployment quirk, an architecture decision). Note: the auto-generated primer does NOT automatically include CLAUDE.md / AGENTS.md content unless the operator configured repo briefings and the API host can read those files from disk — most deployments cannot. Treat key conventions documented in CLAUDE.md / AGENTS.md as fair game to record here so they survive cross-deployment. Set observed=true when you are recording from a bot/agent context — the fact will land as agent_observed and require operator verification before losing the (observed) marker.'
+    + FACT_WRITING_CONTRACT,
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key, e.g. "ORB". Case-insensitive.'),
     category: PrimerFactCategoryEnum.describe(
@@ -197,6 +204,8 @@ export const primerFactAddToolConfig = {
     observed: z.boolean().default(false).describe(
       'True = source is agent_observed (needs operator verification). False = manual entry by operator. Bots without project:edit get coerced to agent_observed server-side regardless.',
     ),
+    allowOversize: z.boolean().optional().describe('Override the hard size-cap block (300*2 chars). Only after a call was blocked.'),
+    oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true - why this value genuinely needs the length. Audit-logged.'),
   }).shape,
 };
 
@@ -207,12 +216,16 @@ export function makePrimerFactAddHandler(client: OrbotoClient) {
     key,
     value,
     observed,
+    allowOversize,
+    oversizeReason,
   }: {
     projectKey: string;
     category: (typeof PRIMER_FACT_CATEGORIES)[number];
     key: string;
     value: string;
     observed?: boolean;
+    allowOversize?: boolean;
+    oversizeReason?: string;
   }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, projectKey);
     const body = {
@@ -220,15 +233,23 @@ export function makePrimerFactAddHandler(client: OrbotoClient) {
       key,
       value,
       source: observed ? ('agent_observed' as const) : ('manual' as const),
+      allowOversize,
+      oversizeReason,
     };
-    const row = await client
-      .post<PrimerFactRow>(`/projects/${project.id}/primer-facts`, body)
-      .catch(rewritePermissionError('add primer fact'));
+    let row: PrimerFactRow;
+    try {
+      row = await client.post<PrimerFactRow>(`/projects/${project.id}/primer-facts`, body);
+    } catch (err) {
+      const blocked = sizeBlockResult(err, 'Primer fact add');
+      if (blocked) return blocked;
+      return rewritePermissionError('add primer fact')(err);
+    }
 
+    const warn = row.sizeWarning ? `\n⚠ ${row.value.length} chars, over the ${row.sizeWarning.limit}-char soft limit. ${row.sizeWarning.hint}` : '';
     return {
       content: [{
         type: 'text',
-        text: `Recorded ${project.key} primer fact: ${row.category}/${row.key} (source: ${row.source}, id ${row.id.slice(0, 8)}).`,
+        text: `Recorded ${project.key} primer fact: ${row.category}/${row.key} (source: ${row.source}, id ${row.id.slice(0, 8)}).${warn}`,
       }],
       structuredContent: {
         id: row.id,
@@ -248,12 +269,15 @@ export function makePrimerFactAddHandler(client: OrbotoClient) {
 export const primerFactUpdateToolConfig = {
   title: 'Update an existing primer fact',
   description:
-    'Update an existing fact. Use this when the value has changed (e.g. version bumped) or you are renaming the key. Bumps last_verified_at automatically when the value changes; pure renames leave it untouched. To replace a fact while preserving history, use orboto_primer_fact_supersede instead.',
+    'Update an existing fact. Use this when the value has changed (e.g. version bumped) or you are renaming the key. Bumps last_verified_at automatically when the value changes; pure renames leave it untouched. To replace a fact while preserving history, use orboto_primer_fact_supersede instead.'
+    + FACT_WRITING_CONTRACT,
   inputSchema: z.object({
     factId: z.string().min(1).describe('UUID of the fact to update. Read it from orboto_primer_fact_list output.'),
     value: z.string().min(1).max(8000).optional().describe('New Markdown body.'),
     category: PrimerFactCategoryEnum.optional().describe('New category.'),
     key: z.string().min(1).max(120).optional().describe('New key.'),
+    allowOversize: z.boolean().optional().describe('Override the hard size-cap block (300*2 chars). Only after a call was blocked.'),
+    oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true - why this value genuinely needs the length. Audit-logged.'),
   }).shape,
 };
 
@@ -263,11 +287,15 @@ export function makePrimerFactUpdateHandler(client: OrbotoClient) {
     value,
     category,
     key,
+    allowOversize,
+    oversizeReason,
   }: {
     factId: string;
     value?: string;
     category?: (typeof PRIMER_FACT_CATEGORIES)[number];
     key?: string;
+    allowOversize?: boolean;
+    oversizeReason?: string;
   }): Promise<CallToolResult> => {
     const body: Record<string, unknown> = {};
     if (value !== undefined) body.value = value;
@@ -276,14 +304,22 @@ export function makePrimerFactUpdateHandler(client: OrbotoClient) {
     if (Object.keys(body).length === 0) {
       throw new Error('orboto_primer_fact_update needs at least one of value, category, key.');
     }
-    const row = await client
-      .patch<PrimerFactRow>(`/primer-facts/${factId}`, body)
-      .catch(rewritePermissionError('update primer fact'));
+    if (allowOversize !== undefined) body.allowOversize = allowOversize;
+    if (oversizeReason !== undefined) body.oversizeReason = oversizeReason;
+    let row: PrimerFactRow;
+    try {
+      row = await client.patch<PrimerFactRow>(`/primer-facts/${factId}`, body);
+    } catch (err) {
+      const blocked = sizeBlockResult(err, 'Primer fact update');
+      if (blocked) return blocked;
+      return rewritePermissionError('update primer fact')(err);
+    }
 
+    const warn = row.sizeWarning ? `\n⚠ ${row.value.length} chars, over the ${row.sizeWarning.limit}-char soft limit. ${row.sizeWarning.hint}` : '';
     return {
       content: [{
         type: 'text',
-        text: `Updated primer fact ${row.category}/${row.key} (id ${row.id.slice(0, 8)}).`,
+        text: `Updated primer fact ${row.category}/${row.key} (id ${row.id.slice(0, 8)}).${warn}`,
       }],
       structuredContent: {
         id: row.id,
@@ -302,12 +338,15 @@ export function makePrimerFactUpdateHandler(client: OrbotoClient) {
 export const primerFactSupersedeToolConfig = {
   title: 'Replace a primer fact while preserving history',
   description:
-    'Replace a fact with a corrected version, preserving the old one in history (linked via superseded_by_id). Use when you discover a previously recorded fact was wrong; do not just delete it. The old row gets a tombstoned key suffix so the partial unique index does not collide; the new row starts unverified and needs operator verification before losing the (observed) marker.',
+    'Replace a fact with a corrected version, preserving the old one in history (linked via superseded_by_id). Use when you discover a previously recorded fact was wrong; do not just delete it. The old row gets a tombstoned key suffix so the partial unique index does not collide; the new row starts unverified and needs operator verification before losing the (observed) marker.'
+    + FACT_WRITING_CONTRACT,
   inputSchema: z.object({
     oldFactId: z.string().min(1).describe('UUID of the fact being replaced.'),
     category: PrimerFactCategoryEnum.describe('Category of the new fact (usually unchanged).'),
     key: z.string().min(1).max(120).describe('Key of the new fact (usually unchanged).'),
     value: z.string().min(1).max(8000).describe('Corrected Markdown body.'),
+    allowOversize: z.boolean().optional().describe('Override the hard size-cap block (300*2 chars). Only after a call was blocked.'),
+    oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true - why this value genuinely needs the length. Audit-logged.'),
   }).shape,
 };
 
@@ -317,20 +356,30 @@ export function makePrimerFactSupersedeHandler(client: OrbotoClient) {
     category,
     key,
     value,
+    allowOversize,
+    oversizeReason,
   }: {
     oldFactId: string;
     category: (typeof PRIMER_FACT_CATEGORIES)[number];
     key: string;
     value: string;
+    allowOversize?: boolean;
+    oversizeReason?: string;
   }): Promise<CallToolResult> => {
-    const row = await client
-      .post<PrimerFactRow>(`/primer-facts/${oldFactId}/supersede`, { category, key, value })
-      .catch(rewritePermissionError('supersede primer fact'));
+    let row: PrimerFactRow;
+    try {
+      row = await client.post<PrimerFactRow>(`/primer-facts/${oldFactId}/supersede`, { category, key, value, allowOversize, oversizeReason });
+    } catch (err) {
+      const blocked = sizeBlockResult(err, 'Primer fact supersede');
+      if (blocked) return blocked;
+      return rewritePermissionError('supersede primer fact')(err);
+    }
 
+    const warn = row.sizeWarning ? `\n⚠ ${row.value.length} chars, over the ${row.sizeWarning.limit}-char soft limit. ${row.sizeWarning.hint}` : '';
     return {
       content: [{
         type: 'text',
-        text: `Superseded primer fact: new id ${row.id.slice(0, 8)}, category ${row.category}, key ${row.key}.`,
+        text: `Superseded primer fact: new id ${row.id.slice(0, 8)}, category ${row.category}, key ${row.key}.${warn}`,
       }],
       structuredContent: {
         newId: row.id,

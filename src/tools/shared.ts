@@ -7,6 +7,7 @@
  * take UUIDs for the cascade-friendly join path. These helpers do
  * the key→UUID resolution in one place.
  */
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 
 export interface ProjectRow {
@@ -213,4 +214,31 @@ export function applyAgentProfile(params: URLSearchParams, explicit?: { agentKin
   const tier = explicit?.modelTier ?? env.modelTier;
   if (kind) params.set('agentKind', kind);
   if (tier) params.set('modelTier', tier);
+}
+
+// ---------------------------------------------------------------------------
+// ORB-1819 - the writing-for-tokens size gate shared by the rule-block and
+// primer-fact write tools. The backend body is
+// `{ error, errorKey, errorParams, sizeWarning }`; this turns the hard-cap
+// 422 into a clear, non-throwing tool result that tells the agent HOW to
+// proceed (shorten it, or retry with allowOversize + oversizeReason) instead
+// of letting the raw API error bubble up. Returns null if the error isn't
+// this route's size-cap block (mirrors ticket-writes.ts's languageBlockResult).
+// ---------------------------------------------------------------------------
+interface SizeWarningLike { chars: number; limit: number; hint: string }
+
+export function sizeBlockResult(err: unknown, verb: string): CallToolResult | null {
+  if (!(err instanceof OrbotoApiError) || err.status !== 422) return null;
+  let parsed: { error?: string; sizeWarning?: SizeWarningLike } = {};
+  try { parsed = JSON.parse(err.body) as typeof parsed; } catch { /* non-JSON body */ }
+  if (!parsed.sizeWarning) return null;
+  const sw = parsed.sizeWarning;
+  const text = `⛔ ${verb} blocked - content is ${sw.chars} characters, over the ${sw.limit}-character hard limit.\n` +
+    `${sw.hint}\n` +
+    `Only if you are sure the length is genuinely necessary, retry the same call with allowOversize=true and an oversizeReason (10+ characters explaining why).`;
+  return {
+    content: [{ type: 'text', text }],
+    structuredContent: { blocked: true, sizeWarning: sw },
+    isError: true,
+  };
 }

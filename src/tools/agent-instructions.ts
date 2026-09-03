@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { sizeBlockResult } from './shared.js';
 
 interface BlockRow {
   id: string;
@@ -15,7 +16,13 @@ interface BlockRow {
   body: string;
   enabled: boolean;
   sortOrder: number;
+  sizeWarning?: { chars: number; limit: number; hint: string };
 }
+
+// ORB-1819 - the writing contract, verbatim in every write-tool
+// description so the writing agent sees it at the moment of writing.
+const RULE_WRITING_CONTRACT =
+  ' Rule: title = one imperative sentence; body <= 400 chars, Rule / Why / How, no long examples, nothing another block says.';
 
 // ORB-1700 - a LIST answers "what exists"; the body belongs to the
 // follow-up read (blockId input below). First line, hard-capped.
@@ -97,7 +104,8 @@ export function makeListAgentInstructionsHandler(client: OrbotoClient) {
 export const createAgentInstructionToolConfig = {
   title: 'Add a custom coding-agent rule block',
   description:
-    'Create a custom rule block at a scope: workspace (every agent; admin:ai:write), customer (every project of one customer; customer:write), project (one project; project:edit), or personal (your own). For scope=customer pass customerId; for scope=project pass projectId.',
+    'Create a custom rule block at a scope: workspace (every agent; admin:ai:write), customer (every project of one customer; customer:write), project (one project; project:edit), or personal (your own). For scope=customer pass customerId; for scope=project pass projectId.'
+    + RULE_WRITING_CONTRACT,
   inputSchema: z.object({
     title: z.string().min(1).max(120),
     body: z.string().min(1).max(8000).describe('The rule text the agent should follow.'),
@@ -106,37 +114,64 @@ export const createAgentInstructionToolConfig = {
     customerId: z.string().uuid().optional().describe('Required for scope=customer.'),
     enabled: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
+    allowOversize: z.boolean().optional().describe('Override the hard size-cap block (400*2 chars). Only after a call was blocked.'),
+    oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true - why this body genuinely needs the length. Audit-logged.'),
   }).shape,
   annotations: {},
 };
 
 export function makeCreateAgentInstructionHandler(client: OrbotoClient) {
-  return async (input: { title: string; body: string; scope?: string; projectId?: string; customerId?: string; enabled?: boolean; sortOrder?: number }): Promise<CallToolResult> => {
+  return async (input: {
+    title: string; body: string; scope?: string; projectId?: string; customerId?: string; enabled?: boolean; sortOrder?: number;
+    allowOversize?: boolean; oversizeReason?: string;
+  }): Promise<CallToolResult> => {
     const { scope, projectId, customerId, ...body } = input;
-    const row = await client.post<BlockRow>(`/agent-instructions/blocks?${scopeQs(scope ?? 'workspace', projectId, customerId)}`, body);
-    return { content: [{ type: 'text', text: `Created rule block "${row.title}" (id ${row.id}).` }], structuredContent: row as unknown as Record<string, unknown> };
+    let row: BlockRow;
+    try {
+      row = await client.post<BlockRow>(`/agent-instructions/blocks?${scopeQs(scope ?? 'workspace', projectId, customerId)}`, body);
+    } catch (err) {
+      const blocked = sizeBlockResult(err, 'Rule block create');
+      if (blocked) return blocked;
+      throw err;
+    }
+    const warn = row.sizeWarning ? `\n⚠ ${row.body.length} chars, over the ${row.sizeWarning.limit}-char soft limit. ${row.sizeWarning.hint}` : '';
+    return { content: [{ type: 'text', text: `Created rule block "${row.title}" (id ${row.id}).${warn}` }], structuredContent: row as unknown as Record<string, unknown> };
   };
 }
 
 export const updateAgentInstructionToolConfig = {
   title: 'Edit / toggle / reorder a coding-agent rule block',
   description:
-    'Patch a rule block: title, body, enabled (toggle a rule on/off), or sortOrder. Works on default AND custom blocks (defaults keep their builtinKey and can be reset later). Needs admin:ai:write.',
+    'Patch a rule block: title, body, enabled (toggle a rule on/off), or sortOrder. Works on default AND custom blocks (defaults keep their builtinKey and can be reset later). Needs admin:ai:write.'
+    + RULE_WRITING_CONTRACT,
   inputSchema: z.object({
     id: z.string().uuid(),
     title: z.string().min(1).max(120).optional(),
     body: z.string().min(1).max(8000).optional(),
     enabled: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
+    allowOversize: z.boolean().optional().describe('Override the hard size-cap block (400*2 chars). Only after a call was blocked.'),
+    oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true - why this body genuinely needs the length. Audit-logged.'),
   }).shape,
   annotations: { idempotentHint: true },
 };
 
 export function makeUpdateAgentInstructionHandler(client: OrbotoClient) {
-  return async (input: { id: string; title?: string; body?: string; enabled?: boolean; sortOrder?: number }): Promise<CallToolResult> => {
+  return async (input: {
+    id: string; title?: string; body?: string; enabled?: boolean; sortOrder?: number;
+    allowOversize?: boolean; oversizeReason?: string;
+  }): Promise<CallToolResult> => {
     const { id, ...patch } = input;
-    const row = await client.patch<BlockRow>(`/agent-instructions/blocks/${id}`, patch);
-    return { content: [{ type: 'text', text: `Updated rule block "${row.title}" (enabled: ${row.enabled}).` }], structuredContent: row as unknown as Record<string, unknown> };
+    let row: BlockRow;
+    try {
+      row = await client.patch<BlockRow>(`/agent-instructions/blocks/${id}`, patch);
+    } catch (err) {
+      const blocked = sizeBlockResult(err, 'Rule block update');
+      if (blocked) return blocked;
+      throw err;
+    }
+    const warn = row.sizeWarning ? `\n⚠ ${row.body.length} chars, over the ${row.sizeWarning.limit}-char soft limit. ${row.sizeWarning.hint}` : '';
+    return { content: [{ type: 'text', text: `Updated rule block "${row.title}" (enabled: ${row.enabled}).${warn}` }], structuredContent: row as unknown as Record<string, unknown> };
   };
 }
 

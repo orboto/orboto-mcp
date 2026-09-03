@@ -324,3 +324,87 @@ describe('orboto_primer_fact_delete', () => {
     ).rejects.toThrow(/not found/);
   });
 });
+
+// ORB-1819 - the writing-for-tokens size contract, passed through from the
+// REST route's warn (200/201 + sizeWarning) / block (422) responses.
+describe('ORB-1819 size contract', () => {
+  it('add surfaces a soft-limit sizeWarning in the success text, not as an error', async () => {
+    stub([
+      { json: projectStub },
+      { status: 201, json: { ...factStub, value: 'x'.repeat(320), sizeWarning: { chars: 320, limit: 300, hint: 'move it to a doc' } } },
+    ]);
+    const res = await makePrimerFactAddHandler(client)({
+      projectKey: 'ORB', category: 'tech_stack', key: 'long-fact', value: 'x'.repeat(320),
+    });
+    expect(res.isError).toBeUndefined();
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('320 chars');
+    expect(text).toContain('move it to a doc');
+  });
+
+  it('add turns a hard-cap 422 into a non-throwing blocked result carrying the override recipe', async () => {
+    const blockBody = JSON.stringify({
+      error: 'oversize', errorKey: 'errors.agent_content.oversize',
+      sizeWarning: { chars: 650, limit: 600, hint: 'move it to a doc and keep the doc key here' },
+    });
+    let call = 0;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      call += 1;
+      if (call === 1) return { ok: true, status: 200, statusText: 'OK', json: async () => projectStub, text: async () => '' } as unknown as Response;
+      return { ok: false, status: 422, statusText: 'Unprocessable', json: async () => ({}), text: async () => blockBody } as unknown as Response;
+    });
+    const res = await makePrimerFactAddHandler(client)({
+      projectKey: 'ORB', category: 'tech_stack', key: 'way-too-long', value: 'x'.repeat(650),
+    });
+    expect(res.isError).toBe(true);
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('650');
+    expect(text).toContain('allowOversize=true');
+    expect(text).toContain('oversizeReason');
+    const sc = res.structuredContent as { blocked: boolean; sizeWarning: { limit: number } };
+    expect(sc.blocked).toBe(true);
+    expect(sc.sizeWarning.limit).toBe(600);
+  });
+
+  it('add passes allowOversize + oversizeReason through to the POST body', async () => {
+    const calls = stub([
+      { json: projectStub },
+      { status: 201, json: { ...factStub, sizeWarning: { chars: 650, limit: 600, hint: 'h' } } },
+    ]);
+    await makePrimerFactAddHandler(client)({
+      projectKey: 'ORB', category: 'tech_stack', key: 'k', value: 'x'.repeat(650),
+      allowOversize: true, oversizeReason: 'genuinely needs the full spec',
+    });
+    expect(calls[1].body).toMatchObject({ allowOversize: true, oversizeReason: 'genuinely needs the full spec' });
+  });
+
+  it('update turns a hard-cap 422 into a non-throwing blocked result', async () => {
+    const blockBody = JSON.stringify({
+      error: 'oversize', errorKey: 'errors.agent_content.oversize',
+      sizeWarning: { chars: 700, limit: 600, hint: 'shorten it' },
+    });
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => (
+      { ok: false, status: 422, statusText: 'Unprocessable', json: async () => ({}), text: async () => blockBody } as unknown as Response
+    ));
+    const res = await makePrimerFactUpdateHandler(client)({ factId: factStub.id, value: 'x'.repeat(700) });
+    expect(res.isError).toBe(true);
+    const sc = res.structuredContent as { blocked: boolean };
+    expect(sc.blocked).toBe(true);
+  });
+
+  it('supersede turns a hard-cap 422 into a non-throwing blocked result', async () => {
+    const blockBody = JSON.stringify({
+      error: 'oversize', errorKey: 'errors.agent_content.oversize',
+      sizeWarning: { chars: 700, limit: 600, hint: 'shorten it' },
+    });
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => (
+      { ok: false, status: 422, statusText: 'Unprocessable', json: async () => ({}), text: async () => blockBody } as unknown as Response
+    ));
+    const res = await makePrimerFactSupersedeHandler(client)({
+      oldFactId: factStub.id, category: 'tech_stack', key: 'k', value: 'x'.repeat(700),
+    });
+    expect(res.isError).toBe(true);
+    const sc = res.structuredContent as { blocked: boolean };
+    expect(sc.blocked).toBe(true);
+  });
+});

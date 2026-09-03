@@ -88,4 +88,60 @@ describe('agent-instruction MCP tools (ORB-1089)', () => {
     expect(calls[0]).toMatchObject({ method: 'DELETE', url: `https://orboto.example.com/agent-instructions/blocks/${BLOCK.id}` });
     expect(res.structuredContent).toMatchObject({ deleted: true });
   });
+
+  // ORB-1819 - the writing-for-tokens size contract, passed through from
+  // the REST route's warn (200 + sizeWarning) / block (422) responses.
+  describe('ORB-1819 size contract', () => {
+    it('create surfaces a soft-limit sizeWarning in the success text, not as an error', async () => {
+      const oversizeBlock = { ...BLOCK, body: 'x'.repeat(450), sizeWarning: { chars: 450, limit: 400, hint: 'move it to a doc' } };
+      stubJSON([{ status: 201, json: oversizeBlock }]);
+      const res = await makeCreateAgentInstructionHandler(client)({ title: 'Long', body: 'x'.repeat(450) });
+      expect(res.isError).toBeUndefined();
+      const text = (res.content[0] as { text: string }).text;
+      expect(text).toContain('450 chars');
+      expect(text).toContain('move it to a doc');
+    });
+
+    it('create turns a hard-cap 422 into a non-throwing blocked result carrying the override recipe', async () => {
+      const blockBody = JSON.stringify({
+        error: 'This rule content is 850 characters, over the 800-character hard limit.',
+        errorKey: 'errors.agent_content.oversize',
+        sizeWarning: { chars: 850, limit: 800, hint: 'move it to a doc and keep the doc key here' },
+      });
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async () => (
+        { ok: false, status: 422, statusText: 'Unprocessable', json: async () => ({}), text: async () => blockBody } as unknown as Response
+      ));
+      const res = await makeCreateAgentInstructionHandler(client)({ title: 'Way too long', body: 'x'.repeat(850) });
+      expect(res.isError).toBe(true);
+      const text = (res.content[0] as { text: string }).text;
+      expect(text).toContain('850');
+      expect(text).toContain('allowOversize=true');
+      expect(text).toContain('oversizeReason');
+      const sc = res.structuredContent as { blocked: boolean; sizeWarning: { limit: number } };
+      expect(sc.blocked).toBe(true);
+      expect(sc.sizeWarning.limit).toBe(800);
+    });
+
+    it('create passes allowOversize + oversizeReason through to the POST body', async () => {
+      const calls = stubJSON([{ status: 201, json: { ...BLOCK, sizeWarning: { chars: 850, limit: 800, hint: 'h' } } }]);
+      await makeCreateAgentInstructionHandler(client)({
+        title: 'Long', body: 'x'.repeat(850), allowOversize: true, oversizeReason: 'genuinely needs the full list',
+      });
+      expect(calls[0].body).toMatchObject({ allowOversize: true, oversizeReason: 'genuinely needs the full list' });
+    });
+
+    it('update turns a hard-cap 422 into a non-throwing blocked result', async () => {
+      const blockBody = JSON.stringify({
+        error: 'oversize', errorKey: 'errors.agent_content.oversize',
+        sizeWarning: { chars: 900, limit: 800, hint: 'shorten it' },
+      });
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async () => (
+        { ok: false, status: 422, statusText: 'Unprocessable', json: async () => ({}), text: async () => blockBody } as unknown as Response
+      ));
+      const res = await makeUpdateAgentInstructionHandler(client)({ id: BLOCK.id, body: 'x'.repeat(900) });
+      expect(res.isError).toBe(true);
+      const sc = res.structuredContent as { blocked: boolean };
+      expect(sc.blocked).toBe(true);
+    });
+  });
 });
