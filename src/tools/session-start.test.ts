@@ -9,6 +9,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';
 import { makeSessionStartHandler } from './session-start.js';
+import { makeResponseExpandHandler } from './response-expand.js';
+import { applyResponseBudget, budgetFor, DEFAULT_BUDGET_CHARS } from '../response-budget.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
 afterEach(() => { vi.restoreAllMocks(); });
@@ -474,5 +476,162 @@ describe('ORB-1753 - rule targeting passthrough', () => {
     await handler({ agentKind: 'reviewer' });
     // explicit input beats the env default.
     expect(calls.find((c) => c.startsWith('/agent-instructions'))).toContain('agentKind=reviewer');
+  });
+});
+
+/**
+ * ORB-1818 - the rules INDEX. Production measured the last 15 calls of
+ * this tool at 21.8k-29.3k characters, 89 % of it the assembled rule
+ * text, none ever truncated. The default answer must now fit the plain
+ * 4k budget, with the full text one call away and byte-identical.
+ */
+describe('ORB-1818 - rules index instead of the full rule text', () => {
+  /** 27 blocks of realistic size - the ORB workspace on 2026-09-03 had
+   *  27 enabled blocks and 17.746 characters of rule body. */
+  const BLOCK_TITLES = Array.from({ length: 27 }, (_, i) => `Rule block number ${i + 1} - a realistic operator-authored title`);
+  const RULES_TEXT = BLOCK_TITLES.map((t, i) => `${t}\n${'x'.repeat(650)}${i}`).join('\n\n');
+  const RULES_INDEX = BLOCK_TITLES.map((title) => ({ title, chars: 651 }));
+
+  const rulesFull = { instructions: RULES_TEXT, rulesHash: 'hash1818aaaa', rulesIndex: RULES_INDEX, rulesChars: RULES_TEXT.length };
+
+  function stubDigest(rules: unknown) {
+    return stubByPath({
+      '/users/me/assigned-tickets': {
+        items: [
+          { ticketKey: 'ORB-42', title: 'Wire it up', statusName: 'In Progress', projectId: 'proj-1' },
+          { ticketKey: 'ORB-43', title: 'Landed but idle', statusName: 'In Progress', projectId: 'proj-1', landedIdle: true, landedIdleWorkingDays: 3 },
+        ],
+      },
+      '/users/me': { email: 'dev@x.io', fullName: 'Dev', workspaceLocale: 'en' },
+      '/agent-instructions': rules,
+      '/time/timer': { ticketId: 't1', ticketKey: 'ORB-42', startedAt: '2026-09-03T10:00:00Z' },
+      '/projects/proj-1/git-health': { connections: [] },
+      '/v1/agent/messages': { messages: [] },
+    });
+  }
+
+  it('the default answer fits the 4k response budget and carries index + hash + handle, not the text', async () => {
+    stubDigest(rulesFull);
+    const res = await makeSessionStartHandler(client)();
+    const budgeted = applyResponseBudget('orboto_session_start', res, {});
+
+    // The whole point: no truncation, because there is nothing big left.
+    expect(budgeted.truncatedChars).toBe(0);
+    expect(budgeted.responseChars).toBeLessThan(DEFAULT_BUDGET_CHARS);
+    // ...and the tool no longer buys itself a special budget.
+    expect(budgetFor('orboto_session_start', {})).toBe(DEFAULT_BUDGET_CHARS);
+
+    const structured = res.structuredContent as {
+      rules: string; rulesDelivery: string; rulesIndex: string[]; rulesChars: number; rulesHandle: string; rulesHowToRead: string;
+      inProgress: Array<{ ticketKey: string; landedIdle?: boolean }>;
+      timer: { ticketKey: string } | null;
+    };
+    expect(structured.rulesDelivery).toBe('index');
+    expect(structured.rules).toBe('');
+    // One line per enabled block, in delivery order.
+    expect(structured.rulesIndex).toEqual(BLOCK_TITLES);
+    expect(structured.rulesChars).toBe(RULES_TEXT.length);
+    // The way back must live in the STRUCTURED half too - Claude Code
+    // keeps that one and drops the text block.
+    expect(structured.rulesHowToRead).toContain('rulesOnly');
+    expect(structured.rulesHandle).toBeTruthy();
+    // The rest of the digest is unchanged (ORB-1799 landed-idle included).
+    expect(structured.inProgress).toHaveLength(2);
+    expect(structured.inProgress[1].landedIdle).toBe(true);
+    expect(structured.timer?.ticketKey).toBe('ORB-42');
+
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('27 rule(s) bind you');
+    expect(text).toContain('1. Rule block number 1');
+    expect(text).toContain('27. Rule block number 27');
+    expect(text).not.toContain('xxxxxxxxxx');
+  });
+
+  it('the handle expands to the byte-identical rule text', async () => {
+    stubDigest(rulesFull);
+    const res = await makeSessionStartHandler(client)();
+    const { rulesHandle } = res.structuredContent as { rulesHandle: string };
+
+    const expand = await makeResponseExpandHandler()({ handle: rulesHandle, path: 'rules' });
+    const chunks: string[] = [];
+    let cursor: number | null = 0;
+    let guard = 0;
+    while (cursor !== null && guard++ < 20) {
+      const page = await makeResponseExpandHandler()({ handle: rulesHandle, path: 'rules', cursor });
+      const s = page.structuredContent as { chunk: string; nextCursor: number | null };
+      chunks.push(s.chunk);
+      cursor = s.nextCursor;
+    }
+    expect((expand.structuredContent as { totalChars: number }).totalChars).toBe(RULES_TEXT.length);
+    expect(chunks.join('')).toBe(RULES_TEXT);
+  });
+
+  it('an acked hash returns neither the text NOR the index', async () => {
+    const handler = makeSessionStartHandler(client);
+    stubDigest(rulesFull);
+    await handler();
+    vi.restoreAllMocks();
+    stubDigest({ rulesHash: 'hash1818aaaa', rulesUnchanged: true });
+    const second = await handler();
+    const structured = second.structuredContent as { rulesDelivery: string; rulesIndex?: string[]; rules: string };
+    expect(structured.rulesDelivery).toBe('ack');
+    expect(structured.rulesIndex).toBeUndefined();
+    expect(structured.rules).toBe('');
+    const text = (second.content[0] as { text: string }).text;
+    expect(text).toContain('Unchanged since this connection last delivered them');
+    expect(text).toContain('rulesOnly=true');
+    expect(text).not.toContain('Rule block number 1');
+  });
+
+  it('forceRules returns the full text inline, and the budget never cuts it', async () => {
+    stubDigest(rulesFull);
+    const res = await makeSessionStartHandler(client)({ forceRules: true });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain(RULES_TEXT);
+    expect((res.structuredContent as { rules: string }).rules).toBe(RULES_TEXT);
+    expect((res.structuredContent as { rulesDelivery: string }).rulesDelivery).toBe('full');
+
+    const budgeted = applyResponseBudget('orboto_session_start', res, {});
+    expect(budgeted.truncatedChars).toBe(0);
+    // Both halves survive: the structured one via PROTECTED_PATHS, the
+    // text one via the per-call PROTECT_TEXT_META flag...
+    expect((budgeted.result.structuredContent as { rules: string }).rules).toBe(RULES_TEXT);
+    expect((budgeted.result.content[0] as { text: string }).text).toContain(RULES_TEXT);
+    // ...and no misleading "response truncated" notice is appended.
+    expect((budgeted.result.content[0] as { text: string }).text).not.toContain('Response truncated');
+    // The marker itself never reaches the wire.
+    expect((budgeted.result as { _meta?: unknown })._meta).toBeUndefined();
+  });
+
+  it('rulesOnly returns just the rules - no tickets, no timer, no other calls', async () => {
+    const calls = stubDigest(rulesFull);
+    const res = await makeSessionStartHandler(client)({ rulesOnly: true });
+    expect(calls).toEqual(['/agent-instructions']);
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain(RULES_TEXT);
+    expect(text).not.toContain('## Your in-progress work');
+    const structured = res.structuredContent as { rules: string; rulesDelivery: string; rulesChars: number };
+    expect(structured.rules).toBe(RULES_TEXT);
+    expect(structured.rulesDelivery).toBe('full');
+    expect(structured.rulesChars).toBe(RULES_TEXT.length);
+    const budgeted = applyResponseBudget('orboto_session_start', res, {});
+    expect(budgeted.truncatedChars).toBe(0);
+  });
+
+  it('rulesOnly ignores the cached ack - the caller asked because it does not hold them', async () => {
+    const handler = makeSessionStartHandler(client);
+    stubDigest(rulesFull);
+    await handler();
+    vi.restoreAllMocks();
+    const calls = stubDigest(rulesFull);
+    await handler({ rulesOnly: true });
+    expect(calls[0]).toBe('/agent-instructions');
+  });
+
+  it('an API too old to send an index still delivers the full rules inline', async () => {
+    stubDigest({ instructions: RULES_TEXT, rulesHash: 'oldapi' });
+    const res = await makeSessionStartHandler(client)();
+    expect((res.structuredContent as { rulesDelivery: string }).rulesDelivery).toBe('full');
+    expect((res.content[0] as { text: string }).text).toContain(RULES_TEXT);
   });
 });

@@ -26,6 +26,7 @@ import {
   MAX_HANDLES,
   HANDLE_TTL_MS,
   storePayload,
+  PROTECT_TEXT_META,
 } from './response-budget.js';
 import { makeResponseExpandHandler } from './tools/response-expand.js';
 
@@ -53,14 +54,18 @@ beforeEach(() => {
 describe('budget configuration', () => {
   it('defaults to 4k and honours per-tool overrides', () => {
     expect(budgetFor('orboto_whatever', {})).toBe(DEFAULT_BUDGET_CHARS);
-    // session_start carries mandatory operator rules; it is deliberately higher.
-    expect(budgetFor('orboto_session_start', {})).toBeGreaterThan(DEFAULT_BUDGET_CHARS);
+    // A content read is deliberately higher.
+    expect(budgetFor('orboto_get_doc', {})).toBeGreaterThan(DEFAULT_BUDGET_CHARS);
+    // ORB-1818 - session_start lost its 48k exemption: its default answer
+    // carries a rules INDEX plus a hash, not the rule text, so it lives on
+    // the plain default like every other tool.
+    expect(budgetFor('orboto_session_start', {})).toBe(DEFAULT_BUDGET_CHARS);
   });
 
   it('reads a custom default from the env, per-tool overrides still win', () => {
     expect(budgetFor('orboto_whatever', { ORBOTO_MCP_RESPONSE_BUDGET_CHARS: '9000' })).toBe(9000);
-    expect(budgetFor('orboto_session_start', { ORBOTO_MCP_RESPONSE_BUDGET_CHARS: '9000' }))
-      .toBe(budgetFor('orboto_session_start', {}));
+    expect(budgetFor('orboto_get_doc', { ORBOTO_MCP_RESPONSE_BUDGET_CHARS: '9000' }))
+      .toBe(budgetFor('orboto_get_doc', {}));
   });
 
   it('ignores a nonsense env value rather than dropping the cap to zero', () => {
@@ -345,5 +350,52 @@ describe('protected paths - a mandatory rule is never cut (ORB-1697)', () => {
     // ticketBundle is NOT protected, so this one does get cut - the guard is
     // path-scoped, not a blanket exemption.
     expect(sc.ticketBundle.note.length).toBeLessThan(80_000);
+  });
+});
+
+/**
+ * ORB-1818 - the text half needs the same protection the structured half
+ * has, for the one answer whose entire payload is the binding rules.
+ */
+describe('per-call text protection (ORB-1818)', () => {
+  it('leaves BOTH halves whole, strips the marker, and says nothing was omitted', () => {
+    const rules = 'R'.repeat(40_000);
+    const marked: CallToolResult = {
+      _meta: { [PROTECT_TEXT_META]: true },
+      content: [{ type: 'text', text: rules }],
+      structuredContent: { rules },
+    };
+    const out = applyResponseBudget('orboto_session_start', marked);
+
+    expect(out.truncatedChars).toBe(0);
+    expect((out.result.structuredContent as { rules: string }).rules).toBe(rules);
+    const text = (out.result.content[0] as { text: string }).text;
+    expect(text).toContain(rules);
+    // The floor notice must not claim a truncation that did not happen.
+    expect(text).not.toContain('Response truncated');
+    expect(text).toContain('NOTHING was omitted');
+    // The marker is transport-internal - it never reaches the client.
+    expect((out.result as { _meta?: unknown })._meta).toBeUndefined();
+  });
+
+  it('protects the text half only - unprotected structured leaves are still cut', () => {
+    const marked: CallToolResult = {
+      _meta: { [PROTECT_TEXT_META]: true },
+      content: [{ type: 'text', text: 'short text' }],
+      structuredContent: { rules: 'R'.repeat(20_000), primer: 'P'.repeat(20_000) },
+    };
+    const out = applyResponseBudget('orboto_session_start', marked);
+    const sc = out.result.structuredContent as { rules: string; primer: string };
+    expect(sc.rules).toBe('R'.repeat(20_000));
+    expect(sc.primer.length).toBeLessThan(20_000);
+    expect((out.result.content[0] as { text: string }).text).toContain('Response truncated');
+  });
+
+  it('an unmarked result still has its text half cut', () => {
+    const out = applyResponseBudget('orboto_session_start', {
+      content: [{ type: 'text', text: 'T'.repeat(40_000) }],
+      structuredContent: { rules: 'R'.repeat(40_000) },
+    });
+    expect((out.result.content[0] as { text: string }).text.length).toBeLessThan(40_000);
   });
 });

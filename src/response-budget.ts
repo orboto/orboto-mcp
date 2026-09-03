@@ -57,21 +57,16 @@ export const DEFAULT_BUDGET_CHARS = 4000;
  *  - CONTENT READS. The caller explicitly asked for a document, a
  *    generated report or a primer. Cutting those to 4k would break the
  *    tool's purpose rather than remove waste.
- *  - `orboto_session_start`. The assembled ORB rule text alone measured
- *    23.920 characters on 2026-08-09, and those rules are mandatory
- *    operator-authored content - truncating a binding rule silently is
- *    worse than paying for it. Shortening the rules themselves is an
- *    editorial decision tracked in ORB-1701; this budget only stops the
- *    REST of the digest from growing on top of them.
+ *
+ * `orboto_session_start` used to be the third category at 48.000
+ * characters, and ORB-1818 removed that exemption: the digest now
+ * answers with a rules INDEX plus a hash instead of the full rule text,
+ * so the default answer fits the 4k default like every other tool. The
+ * two answers that DO carry the full rules (`forceRules: true`,
+ * `rulesOnly: true`) protect them instead of buying size - see
+ * PROTECTED_PATHS and PROTECT_TEXT_META below.
  */
 export const TOOL_BUDGET_CHARS: Record<string, number> = {
-  // Measured composition on 2026-08-09 for the ORB workspace: rules
-  // 23.920 + (with `ticketKey`) a project primer of 19.894. Both are
-  // content by design, so the cap sits just above what those two
-  // legitimately cost and its job here is to stop the digest AROUND them
-  // from growing. The way down is ORB-1701 (shorten the rules) plus the
-  // primer's own server-side token budget, not a blind cut here.
-  orboto_session_start: 48_000,
   orboto_get_project_primer: 16_000,
   orboto_get_doc: 16_000,
   orboto_get_doc_revision: 16_000,
@@ -114,6 +109,36 @@ export const TOOL_BUDGET_CHARS: Record<string, number> = {
 export const PROTECTED_PATHS: Record<string, string[]> = {
   orboto_session_start: ['rules'],
 };
+
+/**
+ * ORB-1818 - per-call protection of the TEXT half.
+ *
+ * PROTECTED_PATHS covers the structured half, which is what Claude Code
+ * pays for; a text-only client pays the Markdown block instead, and that
+ * half is cut on a line boundary with no notion of protected paths. For
+ * an answer whose whole payload IS the binding rules (`session_start`
+ * with `forceRules` or `rulesOnly`), cutting either half truncates a
+ * mandatory rule - the exact thing the protection above exists to
+ * prevent, just for the other client class.
+ *
+ * A handler marks such a result by setting `result._meta[PROTECT_TEXT_META]
+ * = true`. The flag is READ AND REMOVED here, so it never reaches the
+ * wire. It protects; it does not exempt: unprotected structured leaves in
+ * the same result are still cut normally.
+ *
+ * This is deliberately not a general "skip the budget" escape hatch -
+ * `protect-text-usage.test.ts` fails the build if a file other than the
+ * session-start tool sets it.
+ */
+export const PROTECT_TEXT_META = 'orboto/protectText';
+
+function takeProtectTextFlag(result: CallToolResult): boolean {
+  const meta = (result as { _meta?: Record<string, unknown> })._meta;
+  if (!meta || meta[PROTECT_TEXT_META] !== true) return false;
+  delete meta[PROTECT_TEXT_META];
+  if (Object.keys(meta).length === 0) delete (result as { _meta?: unknown })._meta;
+  return true;
+}
 
 /**
  * Never cut a string shorter than this. Keeps identifiers, keys, urls,
@@ -423,6 +448,10 @@ export function applyResponseBudget(
   result: CallToolResult,
   env: NodeJS.ProcessEnv = process.env,
 ): BudgetOutcome {
+  // ORB-1818 - read (and strip) the per-call text protection before
+  // anything else, so the flag never rides the wire even on the
+  // under-budget path.
+  const protectText = takeProtectTextFlag(result);
   const originalChars = measureResult(result);
   if (!budgetEnabled(env)) {
     return { result, responseChars: originalChars, originalChars, truncatedChars: 0 };
@@ -433,7 +462,7 @@ export function applyResponseBudget(
   }
 
   try {
-    return shrink(toolName, result, budget, originalChars);
+    return shrink(toolName, result, budget, originalChars, protectText);
   } catch {
     // A budget must never break a tool call. Report the real size so the
     // panel still shows the pressure, and hand back the untouched result.
@@ -446,6 +475,7 @@ function shrink(
   result: CallToolResult,
   budget: number,
   originalChars: number,
+  protectText = false,
 ): BudgetOutcome {
   const fullText = (result.content ?? [])
     .map((part) => textOf(part) ?? '')
@@ -472,7 +502,7 @@ function shrink(
   // sentence, and record how much was dropped.
   let currentTextLength = fullText.length;
   let textOmitted = 0;
-  if (fullText.length > target) {
+  if (!protectText && fullText.length > target) {
     const boundary = fullText.lastIndexOf('\n', target);
     currentTextLength = boundary > MIN_STRING_KEEP ? boundary : target;
     textOmitted = fullText.length - currentTextLength;
@@ -522,11 +552,18 @@ function shrink(
     : omitted;
   annotatePayload(handle, allOmitted);
 
+
   const atFloor = measure() > target;
-  const notice =
-    `[Response truncated to the MCP response budget (${budget} chars) - it would otherwise cost `
-    + `${originalChars} chars on EVERY later request in this session. Omitted content is not lost: `
-    + `call orboto_response_expand with handle "${handle}" and one of the paths in __truncation.omitted.]`;
+  // ORB-1818 - the floor case gets its OWN notice. Telling an agent its
+  // response was truncated when nothing was cut sends it hunting for a
+  // remainder that does not exist - and that is exactly what a protected
+  // answer (the binding rules) produces every time.
+  const notice = allOmitted.length > 0
+    ? `[Response truncated to the MCP response budget (${budget} chars) - it would otherwise cost `
+      + `${originalChars} chars on EVERY later request in this session. Omitted content is not lost: `
+      + `call orboto_response_expand with handle "${handle}" and one of the paths in __truncation.omitted.]`
+    : `[Response is ${originalChars} chars, over the MCP response budget (${budget} chars), and nothing in it `
+      + 'could be cut safely - it is protected or uncuttable content. NOTHING was omitted; there is no remainder to fetch.]';
 
   if (structured !== undefined && structured !== null && typeof structured === 'object' && !Array.isArray(structured)) {
     const block: TruncationBlock = {

@@ -30,25 +30,44 @@
  *       be >=4 separate tool calls (get_project_primer, get_ticket,
  *       get_checklists, list_ticket_dependencies) at the point an agent
  *       has the least context loaded.
+ *
+ * ORB-1818 - the rules INDEX. Measured on production 2026-09-03: the
+ * last 15 `session_start` calls cost 21.8k-29.3k characters each, 89 %
+ * of it the assembled rule text, and none was ever truncated (the tool
+ * held a 48k per-tool budget). A result is re-sent on every later
+ * request, so that block was the single largest carry cost an agent
+ * paid, on every cold start, whether or not it needed a single rule.
+ *
+ * The default answer now carries the rules HASH plus one line per rule
+ * block (title only, in delivery order) and a `response_expand` handle;
+ * the full, byte-identical text is one call away via `rulesOnly: true`
+ * (stateless, never truncated) or that handle (in-process, 15 min). The
+ * ack semantics are unchanged: a caller that already acked this exact
+ * hash gets neither the text NOR the index, and `forceRules: true`
+ * still returns the full text inline for offline agents and operator
+ * debugging.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { resolveTicketByKey, type TicketRow , applyAgentProfile } from './shared.js';
+import { PROTECT_TEXT_META, storePayload } from '../response-budget.js';
 
 export const sessionStartToolConfig = {
   title: 'Load the rules you must follow + re-orient',
   description:
-    'THE canonical way to LOAD the binding workspace rules you must follow as an agent. Run it as your FIRST action in a session and immediately AFTER any context compaction. Returns the complete assembled working-rules (or a compact "unchanged" ack on a repeat call within the same connection), your in-progress tickets - each flagged LANDED, IDLE when it has a linked commit but has not moved for days, i.e. finished work you never handed to review - your running timer, and a warning if a project\'s git connection looks unhealthy (commit ingestion may be stalled). Pass `ticketKey` to also get a one-shot bundle for that ticket: project primer, the full ticket with dependencies + checklists, that project\'s git health, and any other agent sessions currently on it — replacing several separate calls. (Do NOT use orboto_list_agent_instructions to read the rules — that tool MANAGES/edits rule blocks for admins; this one is what you read to know how to work.) Read-only; no side effects. '
+    'THE canonical way to LOAD the binding workspace rules you must follow as an agent. Run it as your FIRST action in a session and immediately AFTER any context compaction. Returns a one-line-per-rule INDEX of the binding working-rules plus their hash (or a compact "unchanged" ack on a repeat call within the same connection) - read the index, then call this tool again with `rulesOnly: true` to read the full text of the rules whenever you do not already hold that exact hash, and expand before acting on any rule whose title touches what you are about to do. Also returns your in-progress tickets - each flagged LANDED, IDLE when it has a linked commit but has not moved for days, i.e. finished work you never handed to review - your running timer, and a warning if a project\'s git connection looks unhealthy (commit ingestion may be stalled). Pass `ticketKey` to also get a one-shot bundle for that ticket: project primer, the full ticket with dependencies + checklists, that project\'s git health, and any other agent sessions currently on it - replacing several separate calls. (Do NOT use orboto_list_agent_instructions to read the rules - that tool MANAGES/edits rule blocks for admins; this one is what you read to know how to work.) Read-only; no side effects. '
     // ORB-1805 - parameter prose moved out of the input schema (paid for
     // at every connect) into the description orboto_help serves in full.
-    + '**Parameters.** `projectId` adds that project\'s rules on top of the workspace + personal ones. `ticketKey` ("ACME-42") bundles that ticket\'s primer, full detail, dependencies, checklists, git health and other active agent sessions into the same response. `forceRules: true` always returns the full rules text even when this connection already delivered them - use it whenever the rules are NOT in your context right now: after a compaction, a /clear, or a fresh agent taking over an existing connection. `agentKind` (coding, orchestrator, reviewer, runner) and `modelTier` (frontier, standard, small) are your self-declared classification; rule blocks and per-tier rule text are targeted by them.',
+    + '**Parameters.** `rulesOnly: true` returns ONLY the complete rules text (nothing else) and is never truncated - the cheapest way to read the rules the index listed. `projectId` adds that project\'s rules on top of the workspace + personal ones. `ticketKey` ("ACME-42") bundles that ticket\'s primer, full detail, dependencies, checklists, git health and other active agent sessions into the same response. `forceRules: true` returns the full rules text inline with the rest of the digest even when this connection already delivered them - use it whenever the rules are NOT in your context right now: after a compaction, a /clear, or a fresh agent taking over an existing connection. `agentKind` (coding, orchestrator, reviewer, runner) and `modelTier` (frontier, standard, small) are your self-declared classification; rule blocks and per-tier rule text are targeted by them.',
   inputSchema: z.object({
     projectId: z.string().uuid().optional().describe('Also load this project\'s rules.'),
     ticketKey: z.string().min(3).optional().describe('Ticket key ("ACME-42") - bundles that ticket\'s full context.'),
     // ORB-1697 - the caller is the only party that knows whether it still
     // HOLDS the rules. See the ack-defect note on the handler below.
     forceRules: z.boolean().optional().describe('Always return the full rules; set it when you do not hold them.'),
+    // ORB-1818 - the stateless way back from the index to the full text.
+    rulesOnly: z.boolean().optional().describe('Return ONLY the complete rules text.'),
     // ORB-1753 - self-declared classification for rule targeting; defaults
     // to ORBOTO_AGENT_KIND / ORBOTO_MODEL_TIER env, then the api-key's
     // standing profile server-side.
@@ -92,6 +111,11 @@ interface RulesResponse {
   requireSessionStart?: boolean;
   rulesHash?: string;
   rulesUnchanged?: boolean;
+  // ORB-1818 - one entry per rule block that binds this caller, in
+  // delivery order. Absent on an older API (then the full text is
+  // delivered inline, exactly as before).
+  rulesIndex?: Array<{ title: string; chars: number }>;
+  rulesChars?: number;
 }
 interface ChecklistItemRow {
   content: string;
@@ -292,16 +316,51 @@ export function makeSessionStartHandler(client: OrbotoClient) {
   // context. Hence `forceRules`, and an ack text that says so.
   let lastKnownRulesHash: string | undefined;
 
-  return async (input: { projectId?: string; ticketKey?: string; forceRules?: boolean; agentKind?: string; modelTier?: string } = {}): Promise<CallToolResult> => {
+  return async (input: { projectId?: string; ticketKey?: string; forceRules?: boolean; rulesOnly?: boolean; agentKind?: string; modelTier?: string } = {}): Promise<CallToolResult> => {
     const rulesParams = new URLSearchParams();
     if (input.projectId) rulesParams.set('projectId', input.projectId);
     // ORB-1753 - rule targeting: explicit input > env > (server-side) the
     // api-key's standing profile. The rules hash is profile-specific
     // server-side, so the cached ack stays valid per profile.
     applyAgentProfile(rulesParams, { agentKind: input.agentKind, modelTier: input.modelTier });
-    if (lastKnownRulesHash && !input.forceRules) rulesParams.set('knownRulesHash', lastKnownRulesHash);
+    // ORB-1818 - both full-text answers bypass the ack: the caller is
+    // asking for the text precisely because it does not hold it.
+    const wantsFullRules = input.forceRules === true || input.rulesOnly === true;
+    if (lastKnownRulesHash && !wantsFullRules) rulesParams.set('knownRulesHash', lastKnownRulesHash);
     const rulesQs = rulesParams.toString();
     const rulesPath = rulesQs ? `/agent-instructions?${rulesQs}` : '/agent-instructions';
+
+    // ORB-1818 - `rulesOnly`: the STATELESS way back from the index to the
+    // full text. The `response_expand` handle the index also carries lives
+    // in this process' memory (15 min, 16 payloads), so a server restart,
+    // a reconnect or simply 16 later truncations can retire it - and a
+    // binding rule must never become unreachable. This path re-reads the
+    // rules from the API instead, costs one call, and skips the whole rest
+    // of the digest. Protected in both halves: it IS the rule text.
+    if (input.rulesOnly) {
+      const rules = await client.get<RulesResponse>(rulesPath).catch(() => ({}) as RulesResponse);
+      if (rules.rulesHash) lastKnownRulesHash = rules.rulesHash;
+      const text = rules.instructions?.trim() ?? '';
+      return {
+        _meta: { [PROTECT_TEXT_META]: true },
+        content: [{
+          type: 'text',
+          text: [
+            '# orboto working rules - complete',
+            `Hash ${rules.rulesHash ?? '(unknown)'}. Follow these; they are binding.`,
+            '',
+            text || '(no workspace rules configured)',
+          ].join('\n'),
+        }],
+        structuredContent: {
+          rules: rules.instructions ?? '',
+          rulesHash: rules.rulesHash ?? null,
+          rulesUnchanged: false,
+          rulesDelivery: 'full',
+          rulesChars: (rules.instructions ?? '').length,
+        },
+      };
+    }
 
     const [me, rules, assigned, timer, inboxRaw] = await Promise.all([
       client.get<Me>('/users/me').catch(() => null),
@@ -364,6 +423,25 @@ export function makeSessionStartHandler(client: OrbotoClient) {
     const lines: string[] = ['# orboto session start'];
     if (me) lines.push(`You are ${me.fullName ?? me.email}${me.email ? ` (${me.email})` : ''}.`);
     if (me?.workspaceLocale || me?.locale) lines.push(`Write tickets / comments / docs in: ${me.workspaceLocale ?? me.locale}.`);
+    // ORB-1818 - three delivery modes for the rules, cheapest first:
+    //   ack    - this connection already delivered this exact hash.
+    //   index  - one line per rule + the hash + a handle; the default.
+    //   full   - the text inline (forceRules, or an API too old to send
+    //            an index - never leave a caller without its rules).
+    const rulesText = rules.instructions?.trim() ?? '';
+    const rulesIndex = Array.isArray(rules.rulesIndex)
+      ? rules.rulesIndex.map((e) => e?.title).filter((t): t is string => typeof t === 'string' && t.length > 0)
+      : [];
+    const deliverIndex = !rules.rulesUnchanged && input.forceRules !== true && rulesIndex.length > 0 && rulesText.length > 0;
+    const deliverFull = !rules.rulesUnchanged && !deliverIndex && rulesText.length > 0;
+    const rulesChars = rules.rulesChars ?? rulesText.length;
+    // The way back, spelled out for the structured half too: Claude Code
+    // keeps `structuredContent` and drops the text block, so a pointer
+    // that lives only in the Markdown reaches half the clients.
+    const HOW_TO_READ_RULES =
+      'Call orboto_session_start { rulesOnly: true } for the complete rule text (one call, never truncated). '
+      + 'Do that whenever you do not already hold this exact rulesHash - after a compaction, a /clear, or as a fresh agent.';
+    let rulesHandle: string | undefined;
     lines.push('', '## Working rules — follow these');
     if (rules.rulesUnchanged) {
       // ORB-1697 - never assert that the caller still HAS the rules. This
@@ -371,10 +449,24 @@ export function makeSessionStartHandler(client: OrbotoClient) {
       // they survived a compaction or a /clear on the client side.
       lines.push(
         `Unchanged since this connection last delivered them (hash ${rules.rulesHash}), so they were left out to save context.`,
-        'If the rules are NOT in your context right now - after a compaction, a /clear, or because you are a fresh agent on an existing connection - call this tool again with forceRules=true and read them in full. Do not proceed on a half-remembered rule set.',
+        'If the rules are NOT in your context right now - after a compaction, a /clear, or because you are a fresh agent on an existing connection - call this tool again with rulesOnly=true (rules alone) or forceRules=true (rules plus this digest) and read them in full. Do not proceed on a half-remembered rule set.',
+      );
+    } else if (deliverIndex) {
+      // The full text stays one call away in BOTH directions: statelessly
+      // via rulesOnly, and via the standard ORB-1697 expand handle while
+      // this process still holds it.
+      rulesHandle = storePayload('orboto_session_start', {
+        structuredContent: { rules: rules.instructions ?? '' },
+        text: rules.instructions ?? '',
+        omitted: [{ path: 'rules', kind: 'string', omittedChars: rulesText.length }],
+      });
+      lines.push(
+        `${rulesIndex.length} rule(s) bind you (${rulesChars} characters, hash ${rules.rulesHash}). Titles only - the full text is NOT in this response.`,
+        `${HOW_TO_READ_RULES} Read any rule below whose title touches what you are about to do BEFORE you do it. (orboto_response_expand { handle: "${rulesHandle}", path: "rules" } serves the same text from this process for 15 minutes.)`,
+        ...rulesIndex.map((title, i) => `${i + 1}. ${title}`),
       );
     } else {
-      lines.push(rules.instructions?.trim() || '(no workspace rules configured)');
+      lines.push(rulesText || '(no workspace rules configured)');
     }
     lines.push('', '## Your in-progress work');
     if (tickets.length === 0) lines.push('No tickets currently assigned to you — claim or create one before you start coding.');
@@ -405,11 +497,22 @@ export function makeSessionStartHandler(client: OrbotoClient) {
     if (bundle) lines.push(...bundle.lines);
     lines.push('', 'Re-run this after any context compaction to re-sync.');
     return {
+      // ORB-1818 - when the full rule text IS the payload, neither half
+      // may be cut; see PROTECT_TEXT_META. The index answer carries no
+      // rule text and is budgeted like any other response.
+      ...(deliverFull ? { _meta: { [PROTECT_TEXT_META]: true } } : {}),
       content: [{ type: 'text', text: lines.join('\n') }],
       structuredContent: {
-        rules: rules.instructions ?? '',
+        // ORB-1818 - empty in index/ack mode: the whole point is that the
+        // text is not carried. `rulesDelivery` says which answer this is.
+        rules: deliverFull ? (rules.instructions ?? '') : '',
         rulesHash: rules.rulesHash ?? null,
         rulesUnchanged: rules.rulesUnchanged === true,
+        rulesDelivery: rules.rulesUnchanged ? 'ack' : deliverIndex ? 'index' : 'full',
+        ...(deliverIndex
+          ? { rulesIndex, rulesChars, rulesHandle, rulesHowToRead: HOW_TO_READ_RULES }
+          : {}),
+        ...(rules.rulesUnchanged ? { rulesHowToRead: HOW_TO_READ_RULES } : {}),
         inProgress: scopedTickets.map((t) => ({
           ticketKey: t.ticketKey,
           title: t.title,
