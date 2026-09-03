@@ -39,7 +39,7 @@ import { resolveTicketByKey, type TicketRow , applyAgentProfile } from './shared
 export const sessionStartToolConfig = {
   title: 'Load the rules you must follow + re-orient',
   description:
-    'THE canonical way to LOAD the binding workspace rules you must follow as an agent. Run it as your FIRST action in a session and immediately AFTER any context compaction. Returns the complete assembled working-rules (or a compact "unchanged" ack on a repeat call within the same connection), your in-progress tickets, your running timer, and a warning if a project\'s git connection looks unhealthy (commit ingestion may be stalled). Pass `ticketKey` to also get a one-shot bundle for that ticket: project primer, the full ticket with dependencies + checklists, that project\'s git health, and any other agent sessions currently on it — replacing several separate calls. (Do NOT use orboto_list_agent_instructions to read the rules — that tool MANAGES/edits rule blocks for admins; this one is what you read to know how to work.) Read-only; no side effects. '
+    'THE canonical way to LOAD the binding workspace rules you must follow as an agent. Run it as your FIRST action in a session and immediately AFTER any context compaction. Returns the complete assembled working-rules (or a compact "unchanged" ack on a repeat call within the same connection), your in-progress tickets - each flagged LANDED, IDLE when it has a linked commit but has not moved for days, i.e. finished work you never handed to review - your running timer, and a warning if a project\'s git connection looks unhealthy (commit ingestion may be stalled). Pass `ticketKey` to also get a one-shot bundle for that ticket: project primer, the full ticket with dependencies + checklists, that project\'s git health, and any other agent sessions currently on it — replacing several separate calls. (Do NOT use orboto_list_agent_instructions to read the rules — that tool MANAGES/edits rule blocks for admins; this one is what you read to know how to work.) Read-only; no side effects. '
     // ORB-1805 - parameter prose moved out of the input schema (paid for
     // at every connect) into the description orboto_help serves in full.
     + '**Parameters.** `projectId` adds that project\'s rules on top of the workspace + personal ones. `ticketKey` ("ACME-42") bundles that ticket\'s primer, full detail, dependencies, checklists, git health and other active agent sessions into the same response. `forceRules: true` always returns the full rules text even when this connection already delivered them - use it whenever the rules are NOT in your context right now: after a compaction, a /clear, or a fresh agent taking over an existing connection. `agentKind` (coding, orchestrator, reviewer, runner) and `modelTier` (frontier, standard, small) are your self-declared classification; rule blocks and per-tier rule text are targeted by them.',
@@ -59,7 +59,18 @@ export const sessionStartToolConfig = {
 };
 
 interface Me { email?: string; fullName?: string; locale?: string; workspaceLocale?: string }
-interface Ticket { ticketKey: string; title: string; status?: string; statusName?: string; projectId?: string }
+interface Ticket {
+  ticketKey: string;
+  title: string;
+  status?: string;
+  statusName?: string;
+  projectId?: string;
+  // ORB-1799 - "landed, idle": still in_progress, has a linked commit, no
+  // activity for N working days. Finished-looking work that was never handed
+  // to the review lane - the exact thing a re-orienting agent forgets.
+  landedIdle?: boolean;
+  landedIdleWorkingDays?: number | null;
+}
 interface Timer { ticketId?: string | null; ticketKey?: string; startedAt?: string }
 // ORB-1605 / ORB-1638 — mirrors GitConnectionHealthSchema in @orboto/shared-schema.
 interface GitConnectionHealth {
@@ -367,7 +378,17 @@ export function makeSessionStartHandler(client: OrbotoClient) {
     }
     lines.push('', '## Your in-progress work');
     if (tickets.length === 0) lines.push('No tickets currently assigned to you — claim or create one before you start coding.');
-    else for (const t of scopedTickets) lines.push(`- ${t.ticketKey} [${t.statusName ?? t.status}] ${t.title}`);
+    else {
+      for (const t of scopedTickets) {
+        // ORB-1799 - the flag is the whole point of listing this ticket
+        // again, so it goes on the SAME line, not into a separate section
+        // a compaction-recovering agent might skim past.
+        const landed = t.landedIdle
+          ? ` - LANDED, IDLE ${t.landedIdleWorkingDays ?? '?'} working day(s): a commit is linked but the ticket never moved. Verify it is finished, then move it to review (orboto_work_finish / move_ticket) instead of re-implementing it.`
+          : '';
+        lines.push(`- ${t.ticketKey} [${t.statusName ?? t.status}] ${t.title}${landed}`);
+      }
+    }
     if (elsewhereCount > 0) {
       lines.push(`(+ ${elsewhereCount} open ticket(s) assigned to you in other projects - call orboto_my_tickets to list them.)`);
     }
@@ -389,7 +410,15 @@ export function makeSessionStartHandler(client: OrbotoClient) {
         rules: rules.instructions ?? '',
         rulesHash: rules.rulesHash ?? null,
         rulesUnchanged: rules.rulesUnchanged === true,
-        inProgress: scopedTickets.map((t) => ({ ticketKey: t.ticketKey, title: t.title, status: t.statusName ?? t.status ?? null })),
+        inProgress: scopedTickets.map((t) => ({
+          ticketKey: t.ticketKey,
+          title: t.title,
+          status: t.statusName ?? t.status ?? null,
+          // ORB-1799 - only carried when true; a `false` on every row is
+          // budget spent on "nothing to see here" (see the MCP response
+          // budget contract in CLAUDE.md).
+          ...(t.landedIdle ? { landedIdle: true, landedIdleWorkingDays: t.landedIdleWorkingDays ?? null } : {}),
+        })),
         ...(elsewhereCount > 0 ? { inProgressElsewhereCount: elsewhereCount } : {}),
         timer: timer?.ticketId ? { ticketKey: timer.ticketKey ?? null, startedAt: timer.startedAt ?? null } : null,
         // ORB-1697 - unhealthy connections only; a healthy one is 11 fields

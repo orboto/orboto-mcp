@@ -647,18 +647,43 @@ export function makeWorkFinishHandler(client: OrbotoClient) {
 // orboto_work_next - ORB-1613 (Wave 3 of ORB-1602)
 // ---------------------------------------------------------------------------
 
+// ORB-1799 - your own tickets in this project that are still in_progress
+// with a landed commit and no activity for N working days.
+interface LandedIdleHint {
+  ticketId: string;
+  ticketKey: string | null;
+  title: string;
+  idleWorkingDays: number;
+  lastActivityAt: string;
+  commitCount: number;
+}
+
 interface NextWorkResponse {
   reserved: StartBundleResponse | null;
   reason: 'all-blocked' | 'all-leased' | 'none-matching' | 'autonomy_paused' | null;
   retryAfterSeconds: number | null;
   earliestFreeAt: string | null;
   candidatesConsidered: number;
+  landedIdle?: LandedIdleHint[];
+}
+
+/** ORB-1799 - rendered identically on every exit (reserved, empty, paused):
+ *  an agent that just pulled fresh work is exactly the one about to forget
+ *  the ticket it already finished. Empty array renders nothing. */
+function landedIdleLines(rows: LandedIdleHint[] | undefined): string[] {
+  if (!rows || rows.length === 0) return [];
+  return [
+    '',
+    '## Landed, idle - finished-looking work of yours awaiting the status move',
+    ...rows.map((r) => `- ${r.ticketKey ?? r.ticketId} "${r.title}" - ${r.commitCount} commit(s) linked, no activity for ${r.idleWorkingDays} working day(s) (since ${r.lastActivityAt}).`),
+    'Verify each is actually finished, then move it into the review lane (orboto_work_finish with targetCategory "in_review", or orboto_move_ticket) - do NOT re-implement it.',
+  ];
 }
 
 export const workNextToolConfig = {
   title: 'Pull the next ready ticket and reserve it in one call (worker-pool dispatch)',
   description:
-    'ORB-1613 - the pull side of low-management dispatch, sibling of orboto_work_start on the "I already know which ticket" side. Picks the highest-priority ticket in a project that is READY FOR THE REQUESTED ROLE (default role implementation pulls TODO tickets; `role: "review"` pulls tickets in the in_review status category instead, and NEVER offers a ticket the caller itself implemented - the review lane primitive, ORB-1777), unblocked (every dependency closed), not already leased under the requested role, and not blocked by a conflicting resourceClaim - then reserves it with the EXACT same guarantees as orboto_work_start (atomic lease acquire + the full context bundle: rules ack, primer, ticket, checklists, dependencies, git health, siblings) in the same response. Priority then ticket number, deterministic - never a coin flip on ties. Two workers calling this concurrently never receive the SAME ticket: the underlying reservation is the identical partial-unique-index INSERT orboto_work_start uses, just walked across an ordered candidate list - a collision just advances to the next candidate. Epics are never returned (they are containers, not directly implementable). When nothing is ready, the response is a STRUCTURED result (`reserved: null`) with a `reason` (`none-matching` = no todo tickets at all; `all-blocked` = candidates exist but all have open dependencies; `all-leased` = ready candidates exist but are all currently leased or claim-conflicted; `autonomy_paused` = ORB-1774, this agent identity or the whole workspace has autonomous pulls paused by an operator - idle and wait for an operator/notify wakeup instead of retrying) and, ONLY when derivable from an actual active lease, a `retryAfterSeconds` backoff hint (`earliestFreeAt` null and `retryAfterSeconds` null means no signal exists - never a fabricated constant). This is never an error - a worker pool should back off on the hint rather than poll hot. Prefer this over orboto_work_start whenever the caller does not care WHICH ticket it gets, only that it gets the best available one right now.',
+    'ORB-1613 - the pull side of low-management dispatch, sibling of orboto_work_start on the "I already know which ticket" side. Picks the highest-priority ticket in a project that is READY FOR THE REQUESTED ROLE (default role implementation pulls TODO tickets; `role: "review"` pulls tickets in the in_review status category instead, and NEVER offers a ticket the caller itself implemented - the review lane primitive, ORB-1777), unblocked (every dependency closed), not already leased under the requested role, and not blocked by a conflicting resourceClaim - then reserves it with the EXACT same guarantees as orboto_work_start (atomic lease acquire + the full context bundle: rules ack, primer, ticket, checklists, dependencies, git health, siblings) in the same response. Priority then ticket number, deterministic - never a coin flip on ties. Two workers calling this concurrently never receive the SAME ticket: the underlying reservation is the identical partial-unique-index INSERT orboto_work_start uses, just walked across an ordered candidate list - a collision just advances to the next candidate. Epics are never returned (they are containers, not directly implementable). When nothing is ready, the response is a STRUCTURED result (`reserved: null`) with a `reason` (`none-matching` = no todo tickets at all; `all-blocked` = candidates exist but all have open dependencies; `all-leased` = ready candidates exist but are all currently leased or claim-conflicted; `autonomy_paused` = ORB-1774, this agent identity or the whole workspace has autonomous pulls paused by an operator - idle and wait for an operator/notify wakeup instead of retrying) and, ONLY when derivable from an actual active lease, a `retryAfterSeconds` backoff hint (`earliestFreeAt` null and `retryAfterSeconds` null means no signal exists - never a fabricated constant). This is never an error - a worker pool should back off on the hint rather than poll hot. Prefer this over orboto_work_start whenever the caller does not care WHICH ticket it gets, only that it gets the best available one right now. Every response - reserved, empty or paused - also carries `landedIdle`: YOUR OWN tickets in this project that are still in_progress with a linked commit and no activity for days (ORB-1799). Those are finished-looking work nobody handed to the review lane; move them on instead of re-implementing them.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME") or UUID.'),
     agentTag: z.string().min(1).max(64).optional()
@@ -715,9 +740,19 @@ export function makeWorkNextHandler(client: OrbotoClient) {
         return {
           content: [{
             type: 'text',
-            text: 'Autonomous work is PAUSED for this agent (by an operator, per-bot or workspace-wide). Do not poll for new tickets - idle and wait for an operator instruction or an agent-notify wakeup. Explicitly assigned work via orboto_work_start still runs.',
+            text: [
+              'Autonomous work is PAUSED for this agent (by an operator, per-bot or workspace-wide). Do not poll for new tickets - idle and wait for an operator instruction or an agent-notify wakeup. Explicitly assigned work via orboto_work_start still runs.',
+              ...landedIdleLines(res.landedIdle),
+            ].join('\n'),
           }],
-          structuredContent: { reserved: null, reason: res.reason, retryAfterSeconds: null, earliestFreeAt: null, candidatesConsidered: 0 },
+          structuredContent: {
+            reserved: null,
+            reason: res.reason,
+            retryAfterSeconds: null,
+            earliestFreeAt: null,
+            candidatesConsidered: 0,
+            ...(res.landedIdle && res.landedIdle.length > 0 ? { landedIdle: res.landedIdle } : {}),
+          },
         };
       }
       const lines = [`No ready ticket in "${args.projectKey}" right now (${res.reason}).`];
@@ -727,6 +762,7 @@ export function makeWorkNextHandler(client: OrbotoClient) {
           : 'No derivable ETA - poll again later or check the project board.',
       );
       lines.push(`Candidates considered: ${res.candidatesConsidered}.`);
+      lines.push(...landedIdleLines(res.landedIdle));
       return {
         content: [{ type: 'text', text: lines.join('\n') }],
         structuredContent: {
@@ -735,6 +771,7 @@ export function makeWorkNextHandler(client: OrbotoClient) {
           retryAfterSeconds: res.retryAfterSeconds,
           earliestFreeAt: res.earliestFreeAt,
           candidatesConsidered: res.candidatesConsidered,
+          ...(res.landedIdle && res.landedIdle.length > 0 ? { landedIdle: res.landedIdle } : {}),
         },
       };
     }
@@ -805,6 +842,7 @@ export function makeWorkNextHandler(client: OrbotoClient) {
         ? '(none)'
         : r.siblingSessions.map((s) => `  - [${s.role}] ${s.userFullName ?? s.userEmail ?? 'unknown'} - lease until ${s.leaseUntil}`).join('\n'),
     );
+    lines.push(...landedIdleLines(res.landedIdle));
 
     return {
       content: [{ type: 'text', text: lines.join('\n') }],
@@ -826,6 +864,7 @@ export function makeWorkNextHandler(client: OrbotoClient) {
         retryAfterSeconds: null,
         earliestFreeAt: null,
         candidatesConsidered: res.candidatesConsidered,
+        ...(res.landedIdle && res.landedIdle.length > 0 ? { landedIdle: res.landedIdle } : {}),
       },
     };
   };
