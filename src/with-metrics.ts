@@ -21,6 +21,7 @@ import { type NudgeState, shouldNudge, prependNudge, shouldGate, gateResult } fr
 import { applyResponseBudget, TruncationBlockAdvertisedSchema } from './response-budget.js';
 import { buildStrictInputSchema, isRawShape } from './input-schema.js';
 import { captureToolDoc, summarizeToolDescription } from './tool-docs.js';
+import { postLogEntry, redactSecrets, type McpLogEntry } from './mcp-instrument.js';
 
 /**
  * ORB-1174 — turn an OrbotoApiError into an actionable, agent-visible
@@ -52,47 +53,12 @@ function formatApiError(err: OrbotoApiError): string {
   return `orboto API error ${err.status}. ${hint}\nDetail: ${detail || '(no message)'}`;
 }
 
-interface LogEntry {
-  toolName: string;
-  durationMs: number;
-  success: boolean;
-  errorMessage?: string;
-  /** ORB-1180 — HTTP status of the failing API call (OrbotoApiError). */
-  statusCode?: number;
-  clientHint?: string;
-  /** ORB-1697 - characters the client actually pays for, AFTER the
-   *  response budget was applied. */
-  responseChars?: number;
-  /** ORB-1697 - characters the budget removed (0 when nothing was cut).
-   *  Makes budget pressure per tool visible in the admin MCP-usage panel
-   *  instead of needing another one-off transcript audit. */
-  truncatedChars?: number;
-}
-
-/**
- * ORB-1180 — defensive secret-redaction on anything we persist to the
- * admin MCP panel. The API error body is workspace error text (no
- * secrets), but the non-API error path is `err.message` from arbitrary
- * code and could carry a token / Authorization header / creds-in-URL.
- * Strip the obvious shapes before the log row is written.
- */
-function redactSecrets(text: string): string {
-  return text
-    .replace(/orb_[A-Za-z0-9_-]{8,}/g, 'orb_[redacted]')
-    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
-    .replace(/eyJ[A-Za-z0-9._-]{10,}/g, '[redacted-jwt]')
-    .replace(/(https?:\/\/)[^/\s:@]+:[^/\s@]+@/gi, '$1[redacted]@');
-}
-
-async function postLogEntry(client: OrbotoClient, entry: LogEntry): Promise<void> {
-  try {
-    await client.post('/admin/mcp/instrument', entry);
-  } catch {
-    // Swallow — instrumentation must never fail the tool call. If the
-    // workspace is mid-restart or rate-limited, we'd rather lose a
-    // few rows than break user-visible behaviour.
-  }
-}
+// ORB-1817 - LogEntry / redactSecrets / postLogEntry moved to
+// mcp-instrument.ts (a leaf module) so input-schema.ts can log validation
+// failures through the same instrument path without an import cycle
+// (this file already imports FROM input-schema.ts). Kept as a local alias
+// so the rest of this file is unchanged.
+type LogEntry = McpLogEntry;
 
 /**
  * Wrap a CallToolResult-returning handler so every invocation posts
@@ -255,7 +221,11 @@ export function registerWithMetrics(
     // Central here so a new tool cannot ship permissive; empty/absent
     // shapes stay untouched (they carry no fields to guard).
     let cfg = config?.inputSchema && isRawShape(config.inputSchema)
-      ? { ...config, inputSchema: buildStrictInputSchema(toolName, config.inputSchema) }
+      // ORB-1817 - `client` + `clientHint` let a validation failure log
+      // through the same instrument path as a handler error (Part C):
+      // the SDK validates BEFORE this handler wrapper ever runs, so this
+      // is the only place that sees the failure.
+      ? { ...config, inputSchema: buildStrictInputSchema(toolName, config.inputSchema, client, clientHint) }
       : config;
     // ORB-1738 - every declared output shape ADVERTISES the response
     // budget's optional __truncation marker. The SDK emits

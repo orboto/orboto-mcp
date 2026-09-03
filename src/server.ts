@@ -332,6 +332,7 @@ function staticMcpHints(toolset: Toolset): string {
       ? 'This is the CURATED tool manifest (the daily high-frequency set). The ENTIRE REST API stays reachable: find any other endpoint + its schema with `orboto_api_search`, then execute it with `orboto_api_call` - permissions are enforced server-side exactly as for named tools. The full named-tool manifest is opt-in: connect with `?toolset=full` (HTTP) or set ORBOTO_MCP_TOOLSET=full (stdio).'
       : '',
     'Resources (`orboto://rules`, `orboto://ticket/<key>`, `orboto://doc/<id>`, `orboto://project/<key>`, `orboto://search/<query>`) return read-only Markdown. The `orboto://` URI scheme stays canonical. `orboto://rules` returns the COMPLETE binding rules cap-independently (this instructions block may be truncated by the client). Prompts (`plan-sprint`, `triage-my-tickets`, `summarize-project`, `estimate-ticket`, `find-duplicates`) are one-click guided workflows.',
+    'A few natural parameter spellings (`key`, `query`, `id`, `projectId`, `milestoneId`, `comment`/`message`, `max`, `page`, ...) are silently normalised to the documented name; anything else that still doesn\'t match returns an error naming the tool\'s full parameter list and the closest valid name.',
     'All writes respect the caller\'s project-level permissions — a 403 means the API rejected the write, not the MCP server.',
   ].filter((s) => s.length > 0).join(' ');
 }
