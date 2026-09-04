@@ -70,7 +70,7 @@ export const bulkCreateTicketsToolConfig = {
     })),
     languageWarnings: z.number().int().describe('Drafts with a language warning.'),
   }).shape,
-  annotations: { readOnlyHint: false, idempotentHint: false },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeBulkCreateTicketsHandler(client: OrbotoClient) {
@@ -192,7 +192,7 @@ export const bulkAddTicketDependenciesToolConfig = {
     successful: z.array(z.string()).describe('"A->B" pairs written (or already present).'),
     failed: z.array(z.object({ pair: z.string(), error: z.string() })),
   }).shape,
-  annotations: { readOnlyHint: false, idempotentHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeBulkAddTicketDependenciesHandler(client: OrbotoClient) {

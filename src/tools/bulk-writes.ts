@@ -1,15 +1,15 @@
 /**
- * ORB-799 — bulk-* writes.
+ * ORB-799 - bulk-* writes.
  *
  * The wrapper's `bulk-*` family is one of its most-used clusters, used
  * in every phase-cleanup pass. MCP-side we collapse the wrapper's
  * `--from=- | @file | "ORB-1,ORB-2"` UX into a single typed `ticketKeys:
- * string[]` array — the calling agent already has the list as JSON, so
+ * string[]` array - the calling agent already has the list as JSON, so
  * the wrapper's stdin/file-roundtrip is a regression there.
  *
  * Each tool:
  *   - Takes `ticketKeys: string[]` (1..200 keys) + tool-specific params
- *   - Has a `dryRun: boolean` modifier — when true, resolves every key
+ *   - Has a `dryRun: boolean` modifier - when true, resolves every key
  *     to verify visibility + permission but does NOT issue the
  *     mutating call. Returns the same outcome shape with a
  *     `dryRun: true` marker so the caller can preview.
@@ -21,7 +21,7 @@
  * that other operators may be writing concurrently; spraying parallel
  * PATCHes against the same tickets is the kind of thing tenant rate
  * limits exist to slow down. A 200-ticket bulk-close at ~80ms/ticket
- * is ~16s — acceptable.
+ * is ~16s - acceptable.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -57,7 +57,7 @@ function emptyOutcome(dryRun: boolean): BulkOutcome {
 
 function bulkResult(action: string, outcome: BulkOutcome): CallToolResult {
   const lines = [
-    `${outcome.dryRun ? '[dry-run] ' : ''}${action} — ${outcome.successful.length} ok, ${outcome.failed.length} failed${outcome.skipped.length ? `, ${outcome.skipped.length} skipped` : ''}.`,
+    `${outcome.dryRun ? '[dry-run] ' : ''}${action} - ${outcome.successful.length} ok, ${outcome.failed.length} failed${outcome.skipped.length ? `, ${outcome.skipped.length} skipped` : ''}.`,
   ];
   if (outcome.failed.length > 0) {
     lines.push('');
@@ -72,7 +72,7 @@ function bulkResult(action: string, outcome: BulkOutcome): CallToolResult {
 
 function errMessage(err: unknown): string {
   if (err instanceof OrbotoApiError) {
-    if (err.status === 403) return 'Forbidden — caller lacks permission on this ticket.';
+    if (err.status === 403) return 'Forbidden - caller lacks permission on this ticket.';
     if (err.status === 404) return 'Not found.';
     return `HTTP ${err.status}: ${err.body || '(empty body)'}`;
   }
@@ -121,7 +121,7 @@ export const bulkPatchTicketsToolConfig = {
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
     dryRun: z.boolean().optional().describe('Resolve every ticket to verify visibility/permission, but skip the actual PATCH.'),
   }).shape,
-  // ORB-1669 — the mutating bulk_* tools are destructive by blast radius:
+  // ORB-1669 - the mutating bulk_* tools are destructive by blast radius:
   // they overwrite state across N tickets in one call with no undo. The
   // purely additive ones (bulk_comment, bulk_assign) are not.
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
@@ -284,7 +284,7 @@ async function makeAssigneeResolver(client: OrbotoClient, email: string) {
 export const bulkAssignTicketsToolConfig = {
   title: 'Assign the same user to many tickets',
   description:
-    'POST `assigneeEmail` as an additional assignee on every ticket in `ticketKeys`. Multi-assignee is supported — this adds, it does not replace. Idempotent: a 409 (already assigned) counts as success.',
+    'POST `assigneeEmail` as an additional assignee on every ticket in `ticketKeys`. Multi-assignee is supported - this adds, it does not replace. Idempotent: a 409 (already assigned) counts as success.',
   inputSchema: z.object({
     ticketKeys: TICKET_KEY_ARRAY,
     assigneeEmail: z.string().email(),

@@ -44,9 +44,16 @@ afterEach(() => { vi.restoreAllMocks(); });
  * advertised `__truncation` block: minimal = 12 tools / 9,440 chars;
  * curated = 31 tools / 27,945 chars (was 34,015); full = 175 tools /
  * 142,366 chars (was 152,348).
+ *
+ * ORB-1669, landed 2026-09-04: every tool carries an MCP `annotations`
+ * block (readOnlyHint / destructiveHint / idempotentHint) - clients use
+ * them for confirmation UX, so they are spec conformance, not payload
+ * fat. Measured cost: minimal +688 chars (12 tools), curated +1,276,
+ * full +9,836 (175 tools, ~56 chars each). FULL_MAX_CHARS and
+ * MINIMAL_MAX_TOKENS were raised by exactly that, deliberately.
  */
 const CURATED_MAX_CHARS = 30_000;
-const FULL_MAX_CHARS = 152_000;
+const FULL_MAX_CHARS = 155_000;
 
 /**
  * ORB-1805 - the estimator the ticket measured the failure with
@@ -61,9 +68,10 @@ const estTokens = (chars: number) => Math.round(chars / CHARS_PER_TOKEN);
 /**
  * The minimal tier's whole connect cost - tool schemas AND the
  * instructions block - must fit a small local model's window with room
- * left for the conversation. 3,000 is the ticket's number.
+ * left for the conversation. 3,000 was the ticket's number; 3,100 since
+ * ORB-1669 added the annotations block to every tool (+688 chars).
  */
-const MINIMAL_MAX_TOKENS = 3_000;
+const MINIMAL_MAX_TOKENS = 3_100;
 
 /**
  * The curated tier is ratcheted on its TOOL SCHEMAS (the instructions

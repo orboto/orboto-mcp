@@ -1,17 +1,17 @@
 /**
- * ORB-1669 — safety-annotation ratchet for the MCP tool surface.
+ * ORB-1669 - safety-annotation ratchet for the MCP tool surface.
  *
  * MCP clients use `annotations` to decide whether a tool call needs a
  * confirmation step. The hints DEFAULT badly for us: per the MCP spec a
  * tool with no annotations is read-only=false / destructive=true /
- * idempotent=false — so an unannotated read looks dangerous, and (worse,
+ * idempotent=false - so an unannotated read looks dangerous, and (worse,
  * because it is the silent direction) a write annotated only with
  * `{ readOnlyHint: false }` still reports destructive=true. Before this
  * ticket 90 of 168 tools carried nothing at all and `orboto_bulk_close`
  * was indistinguishable from `orboto_get_ticket`.
  *
- * This test enumerates the tools exactly as a client sees them —
- * `tools/list` over an in-memory transport, not a source scan — and
+ * This test enumerates the tools exactly as a client sees them  - 
+ * `tools/list` over an in-memory transport, not a source scan - and
  * fails the build on a new tool that skips its annotations. There is no
  * allowlist on purpose: unlike the dark-mode / i18n ratchets there is no
  * legitimate "sanctioned exception", every tool can answer these
@@ -24,7 +24,7 @@
  *                           content, take over state owned by someone
  *                           else, or mutate many tickets at once. If ANY
  *                           argument combination can do that, the tool is
- *                           destructive — the hint is per-tool and cannot
+ *                           destructive - the hint is per-tool and cannot
  *                           be conditioned on a flag (this is why
  *                           `orboto_claim` is destructive: `sole=true`
  *                           strips every other assignee).
@@ -39,7 +39,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { buildOrbotoMcpServer } from './server.js';
 
 /** Anthropic's connector review caps the human-readable tool title. It is
- *  also just good UI hygiene — a title that long is a description. */
+ *  also just good UI hygiene - a title that long is a description. */
 const TITLE_MAX = 64;
 
 interface ListedTool {
@@ -60,7 +60,9 @@ beforeAll(async () => {
   // Port 1 is never listened on -> the connect-time /agent-instructions
   // fetch fails immediately and the server falls back to its built-in
   // rules. No network, no fixture server, no timeout.
-  const server = await buildOrbotoMcpServer({ baseUrl: 'http://127.0.0.1:1', apiKey: 'orb_test' });
+  // ORB-1520 made the CURATED manifest the default; the annotation contract
+  // covers every registered tool, so this ratchet lists the FULL toolset.
+  const server = await buildOrbotoMcpServer({ baseUrl: 'http://127.0.0.1:1', apiKey: 'orb_test', toolset: 'full' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'annotation-ratchet', version: '0' });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
@@ -82,7 +84,7 @@ describe('MCP tool safety annotations (ORB-1669)', () => {
     expect(
       offenders,
       `Tools missing an explicit \`readOnlyHint\`: ${offenders.join(', ')}.\n` +
-      'Add an `annotations` block to the tool config in apps/mcp/src/tools/ — see the convention at the top of this file.',
+      'Add an `annotations` block to the tool config in apps/mcp/src/tools/ - see the convention at the top of this file.',
     ).toEqual([]);
   });
 
@@ -119,7 +121,7 @@ describe('MCP tool safety annotations (ORB-1669)', () => {
     expect(
       tooLong,
       `Titles over ${TITLE_MAX} characters: ${tooLong.join('; ')}.\n` +
-      'Shorten the `title` — the long form belongs in `description`.',
+      'Shorten the `title` - the long form belongs in `description`.',
     ).toEqual([]);
   });
 });

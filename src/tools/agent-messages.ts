@@ -51,7 +51,7 @@ export const agentMessagesToolConfig = {
     })),
     acked: z.number().int(),
   }).shape,
-  annotations: { readOnlyHint: false, idempotentHint: false },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeAgentMessagesHandler(client: OrbotoClient) {

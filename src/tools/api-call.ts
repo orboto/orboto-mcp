@@ -44,7 +44,8 @@ export const apiCallToolConfig = {
       .describe('JSON body - a real object/array, not a stringified one.'),
   }).shape,
   // Dispatches arbitrary methods - never advertise as read-only.
-  annotations: { readOnlyHint: false },
+  // ORB-1669 - the escape hatch can issue DELETE through the proxy: destructive by contract.
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
 };
 
 export function makeApiCallHandler(client: OrbotoClient) {
