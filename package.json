@@ -23,18 +23,18 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "zod": "^3"
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/node": "^20",
-    "@typescript-eslint/eslint-plugin": "^7",
-    "@typescript-eslint/parser": "^7",
+    "@types/node": "^20.19.43",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
     "@vitest/coverage-v8": "1.6.1",
-    "eslint": "^8",
-    "tsx": "^4",
-    "typescript": "^5",
-    "vitest": "^1"
+    "eslint": "^8.57.1",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3",
+    "vitest": "^1.6.1"
   },
   "engines": {
     "node": ">=20"
