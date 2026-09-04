@@ -164,7 +164,7 @@ describe('shape preservation (outputSchema tools must still validate)', () => {
 
   it('never cuts identifier-shaped strings in half', () => {
     const uuid = 'cd42b836-47b8-485a-aea7-ad09789b9bc6';
-    const url = 'https://tasks.silentfuture.de/projects/904c8036/tickets/3dab8c3c';
+    const url = 'https://orboto.example.com/projects/904c8036/tickets/3dab8c3c';
     const out = applyResponseBudget(TOOL, result({ id: uuid, url, blob: 'x'.repeat(40_000) }));
     const sc = out.result.structuredContent as Record<string, string>;
     expect(sc.id).toBe(uuid);
