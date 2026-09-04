@@ -1,4 +1,8 @@
-# ORB-939 - npm publish for @orboto/mcp.
+# ORB-939 - npm publish for @orboto/mcp. Re-enabled by ORB-1878: the
+# package had never reached npm - the Forgejo-side token publish (ORB-1515)
+# never ran because its secrets never existed, and Forgejo is not an npm
+# OIDC provider anyway. This mirror IS the publisher: GitHub-hosted runner,
+# trusted publishing, provenance on, no npm token anywhere.
 #
 # This file LIVES in the orboto/orboto monorepo at
 # `apps/mcp/.github/workflows/publish-npm.yml` and gets subtree-split
