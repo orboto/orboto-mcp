@@ -1,5 +1,5 @@
 /**
- * ORB-912 — doc-spaces CRUD + list-docs-in-space tool tests.
+ * ORB-912 - doc-spaces CRUD + list-docs-in-space tool tests.
  *
  * Same fetch-stub harness as docs-ai.test.ts. Each test asserts both
  * the outgoing wire shape (URL + method + body) and the structured
@@ -268,7 +268,7 @@ describe('orboto_create_doc', () => {
 });
 
 describe('orboto_update_doc', () => {
-  // ORB-1084 — write tools accept the human-readable doc key: the key
+  // ORB-1084 - write tools accept the human-readable doc key: the key
   // resolves via /docs/by-key, then the PATCH targets the UUID.
   it('resolves a doc key to the UUID before writing', async () => {
     const calls = stubJSON([
@@ -380,7 +380,7 @@ describe('orboto_resolve_doc_smart_links', () => {
     const calls = stubJSON([{
       json: [
         { type: 'ticket', id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', title: 'Auth bug', url: '/p/orb/t/ORB-42', ticketKey: 'ORB-42', projectKey: 'ORB' },
-        // Note: the doc UUID below is in the input below but absent from the response — verifies "unresolved" surfacing.
+        // Note: the doc UUID below is in the input below but absent from the response - verifies "unresolved" surfacing.
       ],
     }]);
     const res = await makeResolveDocSmartLinksHandler(client)({

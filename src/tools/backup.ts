@@ -1,10 +1,10 @@
 /**
- * ORB-1301 — backup MCP tools. Four-way parity with the skill/UI, which can
+ * ORB-1301 - backup MCP tools. Four-way parity with the skill/UI, which can
  * create an on-demand full backup and download the ZIP. The MCP previously only
  * had orboto_trigger_backup (run a pre-configured named job).
  *
  * Binary archives are returned as MCP `resource` content attachments (base64
- * blob + mimeType + uri), exactly like orboto_export_doc_pdf (ORB-915) — no new
+ * blob + mimeType + uri), exactly like orboto_export_doc_pdf (ORB-915) - no new
  * download mechanism. `OrbotoClient.postBinary` / `getBinary` fetch the bytes.
  */
 import { z } from 'zod';
@@ -31,7 +31,7 @@ const mb = (n: number): string => `${Math.round((n / 1024 / 1024) * 10) / 10} MB
 export const createFullBackupToolConfig = {
   title: 'Create + download a full workspace backup',
   description:
-    'Create an on-demand FULL workspace backup (database + storage) and return the ZIP as a base64 application/zip resource attachment — create, wait and download in one call (the server runs the export as a background run and this tool polls it; large workspaces can take minutes). Requires admin:backup:export. For the scheduled named jobs use orboto_trigger_backup instead.',
+    'Create an on-demand FULL workspace backup (database + storage) and return the ZIP as a base64 application/zip resource attachment - create, wait and download in one call (the server runs the export as a background run and this tool polls it; large workspaces can take minutes). Requires admin:backup:export. For the scheduled named jobs use orboto_trigger_backup instead.',
   inputSchema: z.object({}).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -80,7 +80,7 @@ export function makeListBackupsHandler(client: OrbotoClient) {
     const page = await client.get<{ items: BackupRun[] }>('/admin/backup/runs');
     const items = page.items ?? [];
     const lines = items.map(
-      (r) => `- ${r.id} — ${r.status}${r.fileSizeBytes ? ` (${mb(r.fileSizeBytes)})` : ''} — ${r.completedAt ?? r.startedAt}`,
+      (r) => `- ${r.id} - ${r.status}${r.fileSizeBytes ? ` (${mb(r.fileSizeBytes)})` : ''} - ${r.completedAt ?? r.startedAt}`,
     );
     return {
       content: [{ type: 'text', text: items.length ? `Backup runs:\n${lines.join('\n')}` : 'No backup runs yet.' }],

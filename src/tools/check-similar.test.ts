@@ -1,5 +1,5 @@
 /**
- * ORB-887 — unit tests for `orboto_check_similar`.
+ * ORB-887 - unit tests for `orboto_check_similar`.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
@@ -101,7 +101,7 @@ describe('orboto_check_similar', () => {
   it('surfaces a 403 from the API as an OrbotoApiError', async () => {
     stub([
       { json: PROJ },
-      { ok: false, status: 403, json: { error: 'Forbidden — missing ticket:create' } },
+      { ok: false, status: 403, json: { error: 'Forbidden - missing ticket:create' } },
     ]);
     await expect(
       makeCheckSimilarHandler(client)({ projectKey: 'ACME', title: 'x' }),

@@ -1,22 +1,22 @@
 /**
- * ORB-244 Phase C Group 4 — admin-only tools.
+ * ORB-244 Phase C Group 4 - admin-only tools.
  *
  * These three are listed under "write tools" in the ticket because
  * they're privileged surfaces, but two of them (`list_users`,
- * `get_audit_log`) are read-only — the gating is what makes them
+ * `get_audit_log`) are read-only - the gating is what makes them
  * "writes" from a permission perspective. `trigger_backup` is the
  * only true mutation.
  *
  * Gating: the API enforces super-admin via the `admin:*` permission
  * slugs. A non-admin's request lands a 403 from the API, which
  * surfaces as OrbotoApiError on the MCP side. The tools themselves
- * don't double-check — that would race against the API anyway. We
+ * don't double-check - that would race against the API anyway. We
  * just rewrite 403 into a clear message.
  *
  * Tools:
- *   - orboto_list_users — admin user directory with cursor pagination
- *   - orboto_get_audit_log — recent admin / mutation events
- *   - orboto_trigger_backup — run a configured backup job by name
+ * - orboto_list_users - admin user directory with cursor pagination
+ * - orboto_get_audit_log - recent admin / mutation events
+ * - orboto_trigger_backup - run a configured backup job by name
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -137,7 +137,7 @@ export function makeListUsersHandler(client: OrbotoClient) {
 export const getAuditLogToolConfig = {
   title: 'Read the workspace audit log (admin)',
   description:
-    'Recent audit events — admin actions, role changes, ticket deletions, federation handshakes, etc. Super-admin only. Filter by actor or entity to narrow the window.',
+    'Recent audit events - admin actions, role changes, ticket deletions, federation handshakes, etc. Super-admin only. Filter by actor or entity to narrow the window.',
   inputSchema: z.object({
     actorEmail: z.string().email().optional().describe('Filter to one actor.'),
     entityType: z.string().optional().describe('e.g. "user", "project", "ticket", "federation_link".'),
@@ -223,7 +223,7 @@ export function makeTriggerBackupHandler(client: OrbotoClient) {
       );
     }
     if (!job.isActive) {
-      throw new Error(`Backup job "${jobName}" is currently disabled — enable it in /admin/backup first.`);
+      throw new Error(`Backup job "${jobName}" is currently disabled - enable it in /admin/backup first.`);
     }
 
     const run = await client.post<BackupRun>(`/admin/backup/jobs/${job.id}/run`, {})

@@ -1,5 +1,5 @@
 /**
- * ORB-320 — `orboto_list_git_app_installations`.
+ * ORB-320 - `orboto_list_git_app_installations`.
  *
  * Returns every GitHub App installation orboto knows about. Wraps
  * `GET /admin/git-app-installations` (super-admin only on the API
@@ -51,7 +51,7 @@ export function makeListGitAppInstallationsHandler(client: OrbotoClient) {
     }));
     const text = out.length === 0
       ? 'No GitHub App installations registered.'
-      : out.map((r) => `- ${r.accountLogin} (${r.accountType}) — installed ${r.installedAt}${r.suspended ? ' — SUSPENDED' : ''}`).join('\n');
+      : out.map((r) => `- ${r.accountLogin} (${r.accountType}) - installed ${r.installedAt}${r.suspended ? ' - SUSPENDED' : ''}`).join('\n');
     return {
       content: [{ type: 'text', text }],
       structuredContent: { installations: out },

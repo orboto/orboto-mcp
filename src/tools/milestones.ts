@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase B — milestone tools, expanded in ORB-799 with CRUD.
+ * ORB-244 Phase B - milestone tools, expanded in ORB-799 with CRUD.
  *
  * `orboto_list_milestones` and `orboto_get_milestone` share this file
  * because they're cheap neighbours (same API root, same resolution
@@ -12,10 +12,10 @@
  *     `startDate`/`endDate` are both optional; a milestone without dates
  *     is a legitimate object (analytics/Gantt/templates treat null dates
  *     as "no dates").
- *   - orboto_close_milestone — close + optional archive. Resolves the
+ * - orboto_close_milestone - close + optional archive. Resolves the
  *     milestone by name OR UUID against the includeClosed=true list so
  *     re-closing an already-closed milestone is idempotent.
- *   - orboto_update_milestone — patch name / dates / private flag.
+ * - orboto_update_milestone - patch name / dates / private flag.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -26,7 +26,7 @@ const UUID_RE = /^[0-9a-f-]{36}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Matches MilestoneSchema in @orboto/shared-schema. `description` is
- *  intentionally absent there — milestones hold name + dates + status
+ *  intentionally absent there - milestones hold name + dates + status
  *  only, no free-text body. */
 interface MilestoneRow {
   id: string;
@@ -42,7 +42,7 @@ interface MilestoneRow {
 /** ORB-1059 - a milestone key looks like `ORB-M3`. */
 const MILESTONE_KEY_RE = /^[A-Za-z0-9]+-M\d+$/i;
 
-/** `/progress` response — one row per status, plus total count.
+/** `/progress` response - one row per status, plus total count.
  *  Keys in `byStatus` are the legacy status enum (TODO / IN_PROGRESS
  *  / IN_REVIEW / DONE / WONT_FIX). */
 interface MilestoneProgress {
@@ -79,7 +79,7 @@ export function makeListMilestonesHandler(client: OrbotoClient) {
       structuredContent: {
         project: { key: project.key },
         milestones: milestones.map((m) => ({
-          // ORB-1179 — surface the uuid alongside the milestone key.
+          // ORB-1179 - surface the uuid alongside the milestone key.
           id: m.id,
           milestoneKey: m.milestoneKey ?? null,
           name: m.name,
@@ -166,7 +166,7 @@ export function makeGetMilestoneHandler(client: OrbotoClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orboto_create_milestone — ORB-799
+// orboto_create_milestone - ORB-799
 // ---------------------------------------------------------------------------
 
 export const createMilestoneToolConfig = {
@@ -218,7 +218,7 @@ export function makeCreateMilestoneHandler(client: OrbotoClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orboto_close_milestone — ORB-799
+// orboto_close_milestone - ORB-799
 // ---------------------------------------------------------------------------
 
 /** Resolve a milestone by name OR UUID against the includeClosed list,
@@ -309,13 +309,13 @@ export function makeCloseMilestoneHandler(client: OrbotoClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orboto_update_milestone — ORB-799
+// orboto_update_milestone - ORB-799
 // ---------------------------------------------------------------------------
 
 export const updateMilestoneToolConfig = {
   title: 'Update a milestone\'s fields',
   description:
-    'Patch a milestone (`name`, `customerSummary`, `startDate`, `endDate`, `isPrivate`). At least one field must be set. `customerSummary` is the customer-facing text shown in the customer project report instead of any internal text. Use `orboto_close_milestone` to flip status to completed/archived — this tool intentionally does NOT touch the status field so closing remains a clear semantic operation.',
+    'Patch a milestone (`name`, `customerSummary`, `startDate`, `endDate`, `isPrivate`). At least one field must be set. `customerSummary` is the customer-facing text shown in the customer project report instead of any internal text. Use `orboto_close_milestone` to flip status to completed/archived - this tool intentionally does NOT touch the status field so closing remains a clear semantic operation.',
   inputSchema: z.object({
     projectKey: z.string().min(1),
     milestone: z.string().min(1).describe('Milestone name or UUID to identify the target.'),

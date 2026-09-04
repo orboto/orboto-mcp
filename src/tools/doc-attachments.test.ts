@@ -1,7 +1,7 @@
 /**
- * ORB-914 — doc-attachments tool tests.
+ * ORB-914 - doc-attachments tool tests.
  *
- * Multipart upload's wire format is opaque to JSON inspection — we
+ * Multipart upload's wire format is opaque to JSON inspection - we
  * just assert URL + method + that the FormData carries a `file` field.
  * The embed branch is covered by checking that a follow-up PATCH lands
  * on /docs/:id with the appended Markdown line.
@@ -56,7 +56,7 @@ function stubFetch(responses: Array<{ ok?: boolean; status?: number; json?: unkn
 }
 
 const TINY_PNG_BASE64 =
-  // 1x1 red png — smallest valid bytes we can pass through
+  // 1x1 red png - smallest valid bytes we can pass through
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAFhAJ/wlseKgAAAABJRU5ErkJggg==';
 
 describe('orboto_upload_doc_attachment', () => {

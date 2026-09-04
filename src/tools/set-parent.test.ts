@@ -1,5 +1,5 @@
 /**
- * ORB-799 — `orboto_set_parent` unit tests.
+ * ORB-799 - `orboto_set_parent` unit tests.
  *
  * Covers: re-parent happy path, detach (parentTicketKey=null),
  * cross-project rejection, self-parent rejection, API cycle rejection.

@@ -1,5 +1,5 @@
 /**
- * ORB-1576 — MCP transport hardening.
+ * ORB-1576 - MCP transport hardening.
  *
  *  1. Bearer rotation is only adopted when the presented bearer resolves
  *     to the SESSION OWNER (a session id + any valid token is no longer a
@@ -105,7 +105,7 @@ async function initSession(base: string, bearer: string): Promise<string> {
   return sid!;
 }
 
-describe('ORB-1576 — session binding', () => {
+describe('ORB-1576 - session binding', () => {
   it('rotation adopted for the SAME user, rejected for a different user', async () => {
     const base = await start();
     const sid = await initSession(base, 'orb_alice');
@@ -139,7 +139,7 @@ describe('ORB-1576 — session binding', () => {
   });
 });
 
-describe('ORB-1576 — request body cap', () => {
+describe('ORB-1576 - request body cap', () => {
   it('a >5 MB body is rejected (no memory growth, no 200)', async () => {
     const base = await start();
     const big = 'x'.repeat(6 * 1024 * 1024);

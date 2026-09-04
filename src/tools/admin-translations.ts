@@ -1,12 +1,12 @@
 /**
- * ORB-893 — admin-translation review queue MCP tools.
+ * ORB-893 - admin-translation review queue MCP tools.
  *
  * Three thin wrappers around `/admin/tickets/translations*`:
  *
- *  - `orboto_admin_translation_list` — paginated list of
+ * - `orboto_admin_translation_list` - paginated list of
  *    auto-translated tickets (pending review by default, or `all`).
- *  - `orboto_admin_translation_approve` — stamp the row reviewed.
- *  - `orboto_admin_translation_revert` — restore the pre-translation
+ * - `orboto_admin_translation_approve` - stamp the row reviewed.
+ * - `orboto_admin_translation_revert` - restore the pre-translation
  *    title + description from the audit comment.
  *
  * All three require `admin:translation_review` (super-admin holds it
@@ -76,7 +76,7 @@ export function makeListAdminTranslationsHandler(client: OrbotoClient) {
 export const approveTranslationToolConfig = {
   title: 'Approve an auto-translated ticket',
   description:
-    'Stamp `translation_reviewed_at` + `translation_reviewed_by` on a ticket the AI auto-translate flow rewrote. Idempotent — re-approving the same row simply refreshes the timestamp + reviewer. 409 if the ticket was never auto-translated. Requires `admin:translation_review`.',
+    'Stamp `translation_reviewed_at` + `translation_reviewed_by` on a ticket the AI auto-translate flow rewrote. Idempotent - re-approving the same row simply refreshes the timestamp + reviewer. 409 if the ticket was never auto-translated. Requires `admin:translation_review`.',
   inputSchema: z.object({
     ticketId: z.string().uuid().describe('UUID of the ticket to approve.'),
   }).shape,

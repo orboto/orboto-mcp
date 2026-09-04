@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase D — MCP resources.
+ * ORB-244 Phase D - MCP resources.
  *
  * Resources let MCP-aware clients (Claude Desktop, Cursor) read
  * orboto content as static blobs without explicitly invoking a tool.
@@ -7,13 +7,13 @@
  * is content at this address").
  *
  * Four URI templates exposed:
- *   orboto://ticket/{ticketKey}     — rendered Markdown of the ticket
- *   orboto://doc/{docId}            — doc body (Markdown)
- *   orboto://project/{projectKey}   — project summary
- *   orboto://search/{query}         — search results as Markdown
+ *   orboto://ticket/{ticketKey} - rendered Markdown of the ticket
+ *   orboto://doc/{docId} - doc body (Markdown)
+ *   orboto://project/{projectKey} - project summary
+ *   orboto://search/{query} - search results as Markdown
  *
  * No `list` callback for tickets/docs because the candidate set is
- * unbounded (every ticket, every doc) — the URI templates are
+ * unbounded (every ticket, every doc) - the URI templates are
  * sufficient. Clients discover content via tools first, then read a
  * specific resource. The required `list: undefined` pattern keeps
  * the SDK happy.
@@ -21,7 +21,7 @@
  * Implementation note: each resource handler delegates to the same
  * REST endpoints the tools use; the only difference is response
  * shape (Markdown text vs. structured tool result). Sharing logic
- * with tools/*.ts would couple the two surfaces too tightly — for
+ * with tools/*.ts would couple the two surfaces too tightly - for
  * now the resources are independent thin renderers.
  */
 import { ResourceTemplate, type McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -67,7 +67,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
   // -------------------------------------------------------------------------
   // orboto://rules
   //
-  // ORB-1177 — the COMPLETE assembled binding rules, cap-independent. The
+  // ORB-1177 - the COMPLETE assembled binding rules, cap-independent. The
   // MCP `instructions` block is budgeted + may be truncated by the client
   // (ORB-1168); this resource is never truncated, so a client can fetch
   // the full rule set on demand. Same source orboto_session_start reads.
@@ -97,7 +97,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     new ResourceTemplate('orboto://ticket/{ticketKey}', { list: undefined }),
     {
       title: 'orboto ticket',
-      description: 'A single ticket with description, assignees, comments, and labels — rendered as Markdown.',
+      description: 'A single ticket with description, assignees, comments, and labels - rendered as Markdown.',
       mimeType: 'text/markdown',
     },
     async (uri, vars) => {
@@ -129,7 +129,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     new ResourceTemplate('orboto://doc/{docId}', { list: undefined }),
     {
       title: 'orboto doc',
-      description: 'A wiki page from a doc space — Markdown body.',
+      description: 'A wiki page from a doc space - Markdown body.',
       mimeType: 'text/markdown',
     },
     async (uri, vars) => {
@@ -187,7 +187,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     new ResourceTemplate('orboto://search/{query}', { list: undefined }),
     {
       title: 'orboto search',
-      description: 'Full-text search across tickets, comments, docs — visibility-filtered.',
+      description: 'Full-text search across tickets, comments, docs - visibility-filtered.',
       mimeType: 'text/markdown',
     },
     async (uri, vars) => {
@@ -198,7 +198,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
         ? [`# Search: ${query}`, '', '_No hits._']
         : [
           `# Search: ${query}`,
-          `_${res.total} total hit(s) — top ${res.items.length} shown._`,
+          `_${res.total} total hit(s) - top ${res.items.length} shown._`,
           '',
           ...res.items.map((h) => {
             const tag = h.type.toUpperCase();
@@ -220,7 +220,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
   // -------------------------------------------------------------------------
   // orboto://user/me/notifications
   //
-  // ORB-706 — read the calling user's recent notifications.
+  // ORB-706 - read the calling user's recent notifications.
   // Subscribable: every `notification:new` event for this user
   // fires a `resources/updated` push. Used by agents that want to
   // react to mentions / agent_message / status-change pings in
@@ -231,7 +231,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     new ResourceTemplate('orboto://user/me/notifications', { list: undefined }),
     {
       title: 'My notifications',
-      description: 'Calling user\'s recent notifications. Subscribable — every new notification fires resources/updated. Use this to react to mentions, agent_message (ORB-705), and status-change pings in real time.',
+      description: 'Calling user\'s recent notifications. Subscribable - every new notification fires resources/updated. Use this to react to mentions, agent_message (ORB-705), and status-change pings in real time.',
       mimeType: 'text/markdown',
     },
     async (uri) => {
@@ -248,7 +248,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
           const subject = typeof n.payload.subject === 'string'
             ? n.payload.subject
             : typeof n.payload.message === 'string' ? n.payload.message : n.type;
-          lines.push(`- [${n.type}]${unread} — ${subject} _(${n.createdAt})_`);
+          lines.push(`- [${n.type}]${unread} - ${subject} _(${n.createdAt})_`);
         }
       }
       return {
@@ -262,7 +262,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
   );
 
   // -------------------------------------------------------------------------
-  // ORB-855 — LLM-Wiki resources. The index + log are the space's singleton
+  // ORB-855 - LLM-Wiki resources. The index + log are the space's singleton
   // kind='index'/'log' docs; a page is any doc by id (namespaced under the
   // space). A `page/` discriminator keeps the page template from colliding
   // with the static index/log segments.
@@ -321,7 +321,7 @@ function renderTicketMarkdown(
   if (comments.length > 0) {
     lines.push('', `## Comments (${comments.length})`);
     for (const c of comments) {
-      lines.push('', `**${c.userName ?? '(unknown)'}** — ${c.createdAt}${c.isInternal ? ' [internal]' : ''}`);
+      lines.push('', `**${c.userName ?? '(unknown)'}** - ${c.createdAt}${c.isInternal ? ' [internal]' : ''}`);
       lines.push(c.content);
     }
   }
@@ -334,7 +334,7 @@ function renderProjectMarkdown(
   members: MemberRow[],
 ): string {
   const lines = [
-    `# ${project.key} — ${project.name}`,
+    `# ${project.key} - ${project.name}`,
     `_Status: ${project.status}_`,
   ];
   if (project.description) lines.push('', project.description);
@@ -349,7 +349,7 @@ function renderProjectMarkdown(
     lines.push('', '## Members');
     for (const m of members) {
       const name = m.user.fullName || m.user.email;
-      lines.push(`- ${name} <${m.user.email}> — ${m.role.name}`);
+      lines.push(`- ${name} <${m.user.email}> - ${m.role.name}`);
     }
   }
   return lines.join('\n');

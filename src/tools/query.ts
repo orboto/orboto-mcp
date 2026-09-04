@@ -1,5 +1,5 @@
 /**
- * ORB-273 Phase F — `orboto_query`.
+ * ORB-273 Phase F - `orboto_query`.
  *
  * Lets the model reach for the OQL DSL when the per-entity list
  * tools (`orboto_list_tickets`, `orboto_my_tickets`) get too narrow:
@@ -29,7 +29,7 @@ export const queryToolConfig = {
     'Run a typed OQL (or Jira-shaped JQL) query against the workspace and return matching tickets. '
     + 'OQL grammar: `field operator value [AND|OR ...] [ORDER BY ...] [LIMIT n]`. '
     + 'Supported fields: key, status, statusName, statusCategory, priority, type, assignee, reporter, reporterType, assigneeType, labels, milestone, version, project, isPrivate, dueDate, startDate, createdAt, updatedAt, closedAt, estimatedTimeMinutes, loggedMinutes, parentKey. '
-    + 'reporterType / assigneeType are guest|internal — use `reporterType = guest OR assigneeType = guest` to pull up everything reported by or assigned to guests without listing each guest email. '
+    + 'reporterType / assigneeType are guest|internal - use `reporterType = guest OR assigneeType = guest` to pull up everything reported by or assigned to guests without listing each guest email. '
     + 'Operators: = != < <= > >= ~ !~ IN IS [NOT] NULL IS [NOT] EMPTY. '
     + 'Functions: currentUser(), now(), startOfWeek(), endOfWeek(), startOfMonth(), endOfMonth(), daysAgo(n). '
     + 'Examples: '

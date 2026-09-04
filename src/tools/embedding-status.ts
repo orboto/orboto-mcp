@@ -1,14 +1,14 @@
 /**
- * ORB-1309 — `orboto_embedding_status`.
+ * ORB-1309 - `orboto_embedding_status`.
  *
  * Operator diagnostic for the embedding pipeline: provider/model/dims, coverage
- * (embedded vs total, and how many are PENDING — never-embedded / stale — per
+ * (embedded vs total, and how many are PENDING - never-embedded / stale - per
  * tickets / comments / docs and overall), the circuit-breaker state, and when
  * the last embedding was written. Wraps GET /admin/ai/embedding-status.
  *
  * `orboto_ai_status` only reports whether embeddings are configured; this is the
  * deeper surface for "why is semantic search / duplicate detection / ask-docs
- * stale" — a tripped breaker, a stuck queue, or a provider that stopped
+ * stale" - a tripped breaker, a stuck queue, or a provider that stopped
  * responding. Admin:ai:read gated (403 for non-admin callers).
  */
 import { z } from 'zod';
@@ -52,7 +52,7 @@ interface EmbeddingStatusResponse {
 export const embeddingStatusToolConfig = {
   title: 'Embedding pipeline status (coverage + circuit breaker)',
   description:
-    'Operator diagnostic for AI search / embeddings. Returns the configured provider/model + vector dimensions, coverage (embedded vs total, and how many are PENDING — never-embedded / stale — per tickets / comments / docs and overall), the circuit-breaker state (tripped + reason + consecutive failures), and when the last embedding was written. Use this to diagnose why semantic search / duplicate detection / ask-docs are stale or empty — e.g. a tripped breaker, a stuck queue, or a provider that stopped responding. Deeper than orboto_ai_status (which only says whether embeddings are configured). Requires admin:ai:read — returns 403 for non-admin callers.',
+    'Operator diagnostic for AI search / embeddings. Returns the configured provider/model + vector dimensions, coverage (embedded vs total, and how many are PENDING - never-embedded / stale - per tickets / comments / docs and overall), the circuit-breaker state (tripped + reason + consecutive failures), and when the last embedding was written. Use this to diagnose why semantic search / duplicate detection / ask-docs are stale or empty - e.g. a tripped breaker, a stuck queue, or a provider that stopped responding. Deeper than orboto_ai_status (which only says whether embeddings are configured). Requires admin:ai:read - returns 403 for non-admin callers.',
   inputSchema: z.object({}).shape,
   outputSchema: z.object({
     configured: z.boolean(),
@@ -84,7 +84,7 @@ export function makeEmbeddingStatusHandler(client: OrbotoClient) {
     const o = s.coverage.overall;
     const lines: string[] = [];
     if (!s.configured) {
-      lines.push('Embeddings: NOT configured — no embedding provider set in Admin → AI Settings.');
+      lines.push('Embeddings: NOT configured - no embedding provider set in Admin → AI Settings.');
     } else {
       lines.push(`Embeddings: ${s.provider} / ${s.model} · ${s.dimensions} dims`);
       lines.push(`Coverage: ${o.embedded} / ${o.embeddable} embeddable embedded · ${o.pending} pending${o.noContent > 0 ? ` · ${o.noContent} with no embeddable content (excluded)` : ''}`);
@@ -92,7 +92,7 @@ export function makeEmbeddingStatusHandler(client: OrbotoClient) {
         `  tickets ${s.coverage.ticket.embedded}/${s.coverage.ticket.embeddable} · comments ${s.coverage.comment.embedded}/${s.coverage.comment.embeddable} · docs ${s.coverage.doc.embedded}/${s.coverage.doc.embeddable} (embeddable)`,
       );
       lines.push(
-        `Circuit breaker: ${s.breaker.tripped ? `TRIPPED — ${s.breaker.lastTrippedReason ?? 'unknown reason'} (${s.breaker.consecutiveFailures} consecutive failures)` : 'ok'}`,
+        `Circuit breaker: ${s.breaker.tripped ? `TRIPPED - ${s.breaker.lastTrippedReason ?? 'unknown reason'} (${s.breaker.consecutiveFailures} consecutive failures)` : 'ok'}`,
       );
       // ORB-1715 - a billing gate is the one cause the customer can fix
       // themselves; name it instead of letting it read as a provider fault.
@@ -112,12 +112,12 @@ export function makeEmbeddingStatusHandler(client: OrbotoClient) {
       if (s.stalled) {
         lines.push('');
         lines.push(
-          `STALLED — ${o.pending} pending, breaker healthy, but nothing has embedded for ${s.stalledMinutes} min. The provider is likely failing transiently (e.g. Ollama down / model unloaded); those errors don't trip the breaker. Check the embedding provider, then re-run the backfill.`,
+          `STALLED - ${o.pending} pending, breaker healthy, but nothing has embedded for ${s.stalledMinutes} min. The provider is likely failing transiently (e.g. Ollama down / model unloaded); those errors don't trip the breaker. Check the embedding provider, then re-run the backfill.`,
         );
       } else if (o.pending > 0 && !s.breaker.tripped) {
         lines.push('');
         lines.push(
-          `${o.pending} pending with a healthy breaker — trigger a backfill from Admin → AI Settings, or check the embedding worker / provider throughput if the count isn't draining.`,
+          `${o.pending} pending with a healthy breaker - trigger a backfill from Admin → AI Settings, or check the embedding worker / provider throughput if the count isn't draining.`,
         );
       }
     }

@@ -1,5 +1,5 @@
 /**
- * ORB-855 (LLM-Wiki Phase E) — MCP tools for the LLM-Wiki.
+ * ORB-855 (LLM-Wiki Phase E) - MCP tools for the LLM-Wiki.
  *
  * Thin REST wrappers over the Phase B/C/D routes so an interactive AI
  * client can ingest sources, query the wiki, lint it, and write back to it
@@ -56,7 +56,7 @@ export function makeWikiAskHandler(client: OrbotoClient) {
     if (input.spaceId) body.spaceId = input.spaceId;
     if (input.limit) body.limit = input.limit;
     const res = await client.post<{ answer: string; citations: Array<{ index: number; title: string; link: string }>; mode: string }>(`/ai/ask-docs`, body);
-    const cites = res.citations.map((c) => `[${c.index}] ${c.title} — ${c.link}`).join('\n');
+    const cites = res.citations.map((c) => `[${c.index}] ${c.title} - ${c.link}`).join('\n');
     return text(`${res.answer}\n\n${cites ? `Sources:\n${cites}` : ''}`.trim(), { answer: res.answer, citations: res.citations, mode: res.mode });
   };
 }
@@ -66,7 +66,7 @@ export function makeWikiAskHandler(client: OrbotoClient) {
 export const wikiLintToolConfig = {
   title: 'Run the LLM-Wiki lint pass on a space',
   description:
-    'Scan an LLM-Wiki space for inconsistencies (orphan pages, missing cross-references, stale pages, unprocessed sources, and — when AI is configured — contradictions and undocumented concepts). Returns the open issues, each with a suggested fix. Wraps POST /spaces/:id/llm-wiki/lint.',
+    'Scan an LLM-Wiki space for inconsistencies (orphan pages, missing cross-references, stale pages, unprocessed sources, and - when AI is configured - contradictions and undocumented concepts). Returns the open issues, each with a suggested fix. Wraps POST /spaces/:id/llm-wiki/lint.',
   inputSchema: z.object({
     spaceId: z.string().uuid().describe('The LLM-Wiki space to lint.'),
   }).shape,
@@ -100,7 +100,7 @@ export function makeWikiPlanUpdateHandler(client: OrbotoClient) {
     const body: Record<string, unknown> = { instruction: input.instruction };
     if (input.sourceDocId) body.sourceDocId = input.sourceDocId;
     const res = await client.post<{ planId: string; ops: Array<{ op: string; title?: string; summary: string }>; expiresAt: string }>(`/spaces/${input.spaceId}/docs/plan-update`, body);
-    const ops = res.ops.map((o, i) => `${i + 1}. ${o.op} ${o.title ?? ''} — ${o.summary}`).join('\n');
+    const ops = res.ops.map((o, i) => `${i + 1}. ${o.op} ${o.title ?? ''} - ${o.summary}`).join('\n');
     return text(`Plan ${res.planId} (expires ${res.expiresAt}):\n${ops}\n\nApply with orboto_wiki_apply_plan(planId).`, { planId: res.planId, ops: res.ops, expiresAt: res.expiresAt });
   };
 }
@@ -127,7 +127,7 @@ export function makeWikiApplyPlanHandler(client: OrbotoClient) {
 export const wikiRecordToolConfig = {
   title: 'Record a wiki update in one step (plan + apply)',
   description:
-    'Convenience wrapper that plans an edit from your instruction and immediately applies it — use mid-task to capture a fact or update a page without the two-step review loop. Internally calls plan-update then apply-plan. For a reviewable change, use orboto_wiki_plan_update instead.',
+    'Convenience wrapper that plans an edit from your instruction and immediately applies it - use mid-task to capture a fact or update a page without the two-step review loop. Internally calls plan-update then apply-plan. For a reviewable change, use orboto_wiki_plan_update instead.',
   inputSchema: z.object({
     spaceId: z.string().uuid(),
     instruction: z.string().min(1).max(4000).describe('What to record, in plain language.'),
@@ -161,7 +161,7 @@ export function makeWikiAppendSectionHandler(client: OrbotoClient) {
   return async (input: { docId: string; content: string }): Promise<CallToolResult> => {
     input.docId = await resolveDocId(client, input.docId);
     const res = await client.post<{ appended: boolean }>(`/docs/${input.docId}/append-section`, { content: input.content });
-    return text(res.appended ? 'Section appended.' : 'No change — an identical section is already present.', { appended: res.appended });
+    return text(res.appended ? 'Section appended.' : 'No change - an identical section is already present.', { appended: res.appended });
   };
 }
 

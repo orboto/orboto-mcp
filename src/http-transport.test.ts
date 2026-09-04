@@ -1,5 +1,5 @@
 /**
- * ORB-1175 — after a deploy the MCP container loses its in-memory session
+ * ORB-1175 - after a deploy the MCP container loses its in-memory session
  * map, so a client's existing mcp-session-id is unknown. The transport
  * must answer 404 (the Streamable-HTTP spec signal to re-initialise)
  * rather than the old opaque 400, so OAuth-connected clients recover
@@ -30,7 +30,7 @@ async function start(): Promise<string> {
 
 const NON_INIT = JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 });
 
-describe('ORB-1175 — stale MCP session recovery', () => {
+describe('ORB-1175 - stale MCP session recovery', () => {
   it('returns a clean 404 (re-initialise signal, no auth challenge) for an unknown session id on a non-init request', async () => {
     const base = await start();
     const res = await fetch(`${base}/mcp`, {
@@ -39,7 +39,7 @@ describe('ORB-1175 — stale MCP session recovery', () => {
       body: NON_INIT,
     });
     expect(res.status).toBe(404);
-    // ORB-1324 — NO WWW-Authenticate: the token is fine, only the session is
+    // ORB-1324 - NO WWW-Authenticate: the token is fine, only the session is
     // gone. Attaching an auth challenge made clients kick off a manual OAuth
     // re-auth instead of the automatic re-initialise the 404 already signals.
     // (Token expiry is still caught on the re-init path's preflight.)

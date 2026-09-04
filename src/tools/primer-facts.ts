@@ -1,10 +1,10 @@
 /**
- * ORB-510 / ORB-513 — primer-fact tools.
+ * ORB-510 / ORB-513 - primer-fact tools.
  *
  * Six tools that wrap the `/projects/:id/primer-facts` and
  * `/primer-facts/:id` REST surface from ORB-511. Agents call these to
- * record structured project facts — tech-stack details, conventions,
- * deployment quirks — that the AI primer (ORB-512) renders at the top
+ * record structured project facts - tech-stack details, conventions,
+ * deployment quirks - that the AI primer (ORB-512) renders at the top
  * of every session. The skill rule (ORB-514) tells agents *when* to
  * record; these tools are the *how*.
  *
@@ -98,7 +98,7 @@ function summariseFact(f: PrimerFactRow): string {
   if (f.source === 'imported') markers.push('imported');
   if (f.supersededById) markers.push('superseded');
   const tag = markers.length > 0 ? ` _(${markers.join(', ')})_` : '';
-  // Single-line preview of the value — multi-line bodies get truncated
+  // Single-line preview of the value - multi-line bodies get truncated
   // so the list output stays scannable.
   const valuePreview = f.value.length > 120 || f.value.includes('\n')
     ? `${f.value.replace(/\n/g, ' ').slice(0, 120)}…`
@@ -188,7 +188,7 @@ export function makePrimerFactListHandler(client: OrbotoClient) {
 export const primerFactAddToolConfig = {
   title: 'Record a new project primer fact',
   description:
-    'Record a new structured fact about the project that future AI agents should see at session start. Use when you learn something during work that is missing from the primer (a library version, a convention, a deployment quirk, an architecture decision). Note: the auto-generated primer does NOT automatically include CLAUDE.md / AGENTS.md content unless the operator configured repo briefings and the API host can read those files from disk — most deployments cannot. Treat key conventions documented in CLAUDE.md / AGENTS.md as fair game to record here so they survive cross-deployment. Set observed=true when you are recording from a bot/agent context — the fact will land as agent_observed and require operator verification before losing the (observed) marker.'
+    'Record a new structured fact about the project that future AI agents should see at session start. Use when you learn something during work that is missing from the primer (a library version, a convention, a deployment quirk, an architecture decision). Note: the auto-generated primer does NOT automatically include CLAUDE.md / AGENTS.md content unless the operator configured repo briefings and the API host can read those files from disk - most deployments cannot. Treat key conventions documented in CLAUDE.md / AGENTS.md as fair game to record here so they survive cross-deployment. Set observed=true when you are recording from a bot/agent context - the fact will land as agent_observed and require operator verification before losing the (observed) marker.'
     + FACT_WRITING_CONTRACT,
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key, e.g. "ORB". Case-insensitive.'),
@@ -448,7 +448,7 @@ export const primerFactDeleteToolConfig = {
 
 export function makePrimerFactDeleteHandler(client: OrbotoClient) {
   return async ({ factId, reason }: { factId: string; reason?: string }): Promise<CallToolResult> => {
-    // ORB-516 — pass the reason through so the audit-log entry
+    // ORB-516 - pass the reason through so the audit-log entry
     // captures it. Old API versions silently ignore the querystring
     // so there's no compat risk.
     const path = reason

@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase C Group 2 — time-tracking tool tests.
+ * ORB-244 Phase C Group 2 - time-tracking tool tests.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';

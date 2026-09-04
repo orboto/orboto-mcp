@@ -1,9 +1,9 @@
 /**
- * ORB-1093 — session-start composes 4 reads into a re-orientation
+ * ORB-1093 - session-start composes 4 reads into a re-orientation
  * digest. Assert it hits the right endpoints and folds the rules +
  * in-progress work + timer into the output.
  *
- * ORB-1607 — also covers the rules-hash ack (per-connection cache) and
+ * ORB-1607 - also covers the rules-hash ack (per-connection cache) and
  * the optional `ticketKey` one-shot bundle.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -59,7 +59,7 @@ describe('orboto_session_start (ORB-1093)', () => {
     expect(text).toContain('Running on ORB-42');
     expect(calls.some((c) => c.startsWith('/agent-instructions'))).toBe(true);
     expect(calls.some((c) => c.startsWith('/time/timer'))).toBe(true);
-    // ORB-1330 — the briefing must only ask for OPEN work; DONE tickets
+    // ORB-1330 - the briefing must only ask for OPEN work; DONE tickets
     // must never reach the "in-progress" section. Assert the status
     // filter is on the wire so a future refactor can't silently widen it.
     const assignedCall = calls.find((c) => c.startsWith('/users/me/assigned-tickets'));
@@ -80,7 +80,7 @@ describe('orboto_session_start (ORB-1093)', () => {
     expect(text).toContain('No timer running');
   });
 
-  // ORB-1605 — session-start fans out to GET /projects/:id/git-health for
+  // ORB-1605 - session-start fans out to GET /projects/:id/git-health for
   // every distinct project the caller has open work in, and surfaces a
   // warning when a connection is unhealthy.
   it('warns when a project git connection is unhealthy', async () => {
@@ -100,7 +100,7 @@ describe('orboto_session_start (ORB-1093)', () => {
     });
     const res = await makeSessionStartHandler(client)();
     const text = (res.content[0] as { text: string }).text;
-    expect(text).toContain('Git connection health — WARNING');
+    expect(text).toContain('Git connection health - WARNING');
     expect(text).toContain('orboto/orboto');
     expect(text).toContain('connection is deactivated');
     // ORB-1697 - unhealthy connections only; a healthy one is 11 fields
@@ -130,15 +130,15 @@ describe('orboto_session_start (ORB-1093)', () => {
     });
     const res = await makeSessionStartHandler(client)();
     const text = (res.content[0] as { text: string }).text;
-    expect(text).not.toContain('Git connection health — WARNING');
+    expect(text).not.toContain('Git connection health - WARNING');
   });
 });
 
-// ORB-1607 — rules-hash ack: the handler remembers the last rulesHash it
+// ORB-1607 - rules-hash ack: the handler remembers the last rulesHash it
 // saw FOR THE LIFETIME OF ONE `makeSessionStartHandler(client)` CLOSURE
 // (mirrors one MCP connection) and passes it back as `knownRulesHash` on
 // every subsequent call.
-describe('orboto_session_start — rules-hash ack (ORB-1607)', () => {
+describe('orboto_session_start - rules-hash ack (ORB-1607)', () => {
   it('sends no knownRulesHash on the first call, then passes the received hash back on the second', async () => {
     const calls: string[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
@@ -201,10 +201,10 @@ describe('orboto_session_start — rules-hash ack (ORB-1607)', () => {
   });
 });
 
-// ORB-1607 — the optional `ticketKey` one-shot bundle: project primer,
+// ORB-1607 - the optional `ticketKey` one-shot bundle: project primer,
 // full ticket (incl. dependencies + checklists), git health, and active
 // sessions folded into the same response.
-describe('orboto_session_start — ticketKey bundle (ORB-1607)', () => {
+describe('orboto_session_start - ticketKey bundle (ORB-1607)', () => {
   const bundleStubs = {
     '/projects/by-key/ORB': { id: 'proj-1', key: 'ORB', name: 'orboto' },
     '/projects/proj-1/tickets/by-key/42': { id: 'tick-1', projectId: 'proj-1', ticketKey: 'ORB-42', title: 'Bug', status: 'IN_PROGRESS' },
@@ -237,7 +237,7 @@ describe('orboto_session_start — ticketKey bundle (ORB-1607)', () => {
   };
 
   it('folds primer + ticket + dependencies + checklists + git health + active sessions into one response', async () => {
-    // bundleStubs first — the merged map is matched by `startsWith`, and
+    // bundleStubs first - the merged map is matched by `startsWith`, and
     // baseStubs' bare `/projects/proj-1/tickets/tick-1` would otherwise
     // shadow bundleStubs' longer `/projects/proj-1/tickets/tick-1/dependencies`
     // if it came first in iteration order.

@@ -1,5 +1,5 @@
 /**
- * ORB-1173 — guard against version literals drifting from package.json.
+ * ORB-1173 - guard against version literals drifting from package.json.
  *
  * Version used to be hardcoded ('0.51.0') in three spots and release.mjs
  * never touched them, so serverInfo + the User-Agent lied about the real
@@ -31,7 +31,7 @@ function walk(dir: string, acc: string[] = []): string[] {
   return acc;
 }
 
-describe('ORB-1173 — version literal guard', () => {
+describe('ORB-1173 - version literal guard', () => {
   it('VERSION matches package.json (and is not the runtime fallback)', () => {
     expect(VERSION).toBe(pkg.version);
     expect(VERSION).not.toBe('0.0.0');
@@ -39,7 +39,7 @@ describe('ORB-1173 — version literal guard', () => {
 
   it('no hardcoded semver string literal in src (use VERSION instead)', () => {
     const offenders: string[] = [];
-    // A quoted X.Y.Z literal — what a drifting hardcoded version looks
+    // A quoted X.Y.Z literal - what a drifting hardcoded version looks
     // like. Comments (// v0.110.1) and ticket refs (ORB-1166) are not
     // quoted semver, so they don't trip this.
     const semverLiteral = /['"]\d+\.\d+\.\d+['"]/;
@@ -49,6 +49,6 @@ describe('ORB-1173 — version literal guard', () => {
         if (semverLiteral.test(line)) offenders.push(`${file.replace(SRC, 'src')}:${i + 1}: ${line.trim()}`);
       });
     }
-    expect(offenders, `Hardcoded version literal(s) found — read VERSION from version.ts instead:\n${offenders.join('\n')}`).toEqual([]);
+    expect(offenders, `Hardcoded version literal(s) found - read VERSION from version.ts instead:\n${offenders.join('\n')}`).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
 /**
- * ORB-510 / ORB-513 — primer-fact tool tests.
+ * ORB-510 / ORB-513 - primer-fact tool tests.
  *
  * Each tool is a thin wrapper around a REST endpoint, so the tests
  * pin the wire shape: correct HTTP method, URL with key→UUID

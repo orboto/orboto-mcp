@@ -1,15 +1,15 @@
 /**
- * ORB-933 — write-side MCP tools for absences and the two admin tables
+ * ORB-933 - write-side MCP tools for absences and the two admin tables
  * that ride alongside them (public holidays, company closures).
  *
- *   - orboto_update_public_holiday   — PATCH /admin/public-holidays/:id
- *   - orboto_update_company_closure  — PATCH /admin/company-closures/:id
- *   - orboto_update_absence          — PATCH /absences/:id
+ * - orboto_update_public_holiday - PATCH /admin/public-holidays/:id
+ * - orboto_update_company_closure - PATCH /admin/company-closures/:id
+ * - orboto_update_absence - PATCH /absences/:id
  *
- * Today these surfaces only had POST + DELETE — typo correction or date
+ * Today these surfaces only had POST + DELETE - typo correction or date
  * fix meant delete + recreate, losing the original row id. PATCH fills
  * that gap. Listing endpoints stay on the existing routes (no read tools
- * here yet — that's Phase 3 of the CRUD parity epic, ORB-935).
+ * here yet - that's Phase 3 of the CRUD parity epic, ORB-935).
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -87,7 +87,7 @@ export function makeUpdatePublicHolidayHandler(client: OrbotoClient) {
 export const updateCompanyClosureToolConfig = {
   title: 'Edit a company closure',
   description:
-    'Update a workspace-wide non-working block (company offsite, holiday shutdown). Admin-only (`admin:absences:write`). Pass only the fields you want to change; at least one field is required. If only one of `startDate`/`endDate` is passed, the other is left as-is — the API still validates start ≤ end after the partial patch.',
+    'Update a workspace-wide non-working block (company offsite, holiday shutdown). Admin-only (`admin:absences:write`). Pass only the fields you want to change; at least one field is required. If only one of `startDate`/`endDate` is passed, the other is left as-is - the API still validates start ≤ end after the partial patch.',
   inputSchema: z.object({
     id: z.string().uuid(),
     name: z.string().min(1).optional(),
@@ -122,7 +122,7 @@ export function makeUpdateCompanyClosureHandler(client: OrbotoClient) {
 export const updateAbsenceToolConfig = {
   title: 'Edit a pending or draft absence request',
   description:
-    'Edit your own absence request before a reviewer acts on it. Locked once the status is `approved`, `rejected`, or `cancelled` — those transitions go through the approve / reject / cancel endpoints, not this one. Caller must be the absence owner or a super-admin. `durationDays` is recomputed automatically when dates move (uses the owner\'s working-day rules + holidays + closures).',
+    'Edit your own absence request before a reviewer acts on it. Locked once the status is `approved`, `rejected`, or `cancelled` - those transitions go through the approve / reject / cancel endpoints, not this one. Caller must be the absence owner or a super-admin. `durationDays` is recomputed automatically when dates move (uses the owner\'s working-day rules + holidays + closures).',
   inputSchema: z.object({
     id: z.string().uuid(),
     typeId: z.string().uuid().optional().describe('Absence-type id (vacation, sick, etc.).'),

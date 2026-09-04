@@ -1,10 +1,10 @@
 /**
- * ORB-244 Phase B — `orboto_list_tickets`.
+ * ORB-244 Phase B - `orboto_list_tickets`.
  *
  * Lists tickets in a project with optional filters. The API endpoint
  * (`GET /projects/:id/tickets`) supports cursor pagination; this
  * tool returns the first page (50 by default) because an MCP tool
- * call wants to fit inside a single model response — a power user
+ * call wants to fit inside a single model response - a power user
  * who wants more paginates via more-specific filters instead.
  */
 import { z } from 'zod';
@@ -94,7 +94,7 @@ export function makeListTicketsHandler(client: OrbotoClient) {
       : page.items.map((t) => `- ${ticketLine(t)}`).join('\n');
 
     const moreHint = page.nextCursor
-      ? `\n\n(${page.items.length} shown; more exist — narrow the filters to see them.)`
+      ? `\n\n(${page.items.length} shown; more exist - narrow the filters to see them.)`
       : '';
 
     return {

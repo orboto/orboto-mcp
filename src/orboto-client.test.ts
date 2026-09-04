@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase A — orboto REST client unit tests.
+ * ORB-244 Phase A - orboto REST client unit tests.
  *
  * We mock `fetch` and cover the shape we promise to every tool
  * handler: correct base URL, bearer header, User-Agent string,
@@ -93,7 +93,7 @@ describe('OrbotoClient', () => {
     expect(result).toBeUndefined();
   });
 
-  // ORB-799 — postMultipart sends FormData with no Content-Type header
+  // ORB-799 - postMultipart sends FormData with no Content-Type header
   // (fetch chooses the boundary). The bearer + UA headers still apply.
   it('postMultipart sends FormData body without Content-Type (boundary picked by fetch)', async () => {
     const spy = mockFetch({ json: async () => ({ docId: 'd1' }) });
@@ -105,7 +105,7 @@ describe('OrbotoClient', () => {
     const [, init] = spy.mock.calls[0]!;
     const headers = (init as { headers: Record<string, string> }).headers;
     expect(headers.Authorization).toBe('Bearer orb_test');
-    // No Content-Type header — fetch sets multipart/form-data; boundary=…
+    // No Content-Type header - fetch sets multipart/form-data; boundary=…
     expect(headers['Content-Type']).toBeUndefined();
     expect((init as { method: string }).method).toBe('POST');
   });

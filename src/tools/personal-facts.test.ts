@@ -1,5 +1,5 @@
 /**
- * ORB-862 — personal-fact MCP tools route to the owner-scoped endpoints.
+ * ORB-862 - personal-fact MCP tools route to the owner-scoped endpoints.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';

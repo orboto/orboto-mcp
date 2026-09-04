@@ -1,8 +1,8 @@
 /**
- * ORB-244 Phase B — doc tools.
+ * ORB-244 Phase B - doc tools.
  *
  * `orboto_list_doc_spaces` and `orboto_get_doc` share this file for the
- * same reason the milestone tools do — cheap neighbours on the same
+ * same reason the milestone tools do - cheap neighbours on the same
  * API root. Docs carry a human-readable key (`ORB-D12` / `DOC-5`,
  * ORB-1004) and spaces carry one too (`ORB-S1` / `SPACE-5`, ORB-1015);
  * both resolve by key or UUID.
@@ -14,7 +14,7 @@
  * roll back individual doc pages.
  *
  * Schema alignment: field names match `@orboto/shared-schema`
- * exactly — `content` not `body` on docs, `excerpt` not `snippet` on
+ * exactly - `content` not `body` on docs, `excerpt` not `snippet` on
  * hits, backlinks carry `{type, id, label, sourceDocId,
  * sourceDocTitle, sourceSpaceId}`. Getting those wrong 500s the tool
  * because the API's Zod response validator rejects off-shape rows
@@ -29,7 +29,7 @@ interface DocSpaceRow {
   id: string;
   name: string;
   slug: string;
-  // ORB-1015 — human-readable, typeable space key (`ORB-S1` / `SPACE-5`).
+  // ORB-1015 - human-readable, typeable space key (`ORB-S1` / `SPACE-5`).
   key: string | null;
   description: string | null;
   icon: string | null;
@@ -46,7 +46,7 @@ interface DocRow {
   title: string;
   content: string;
   slug: string;
-  // ORB-1004 — human-readable, typeable doc key (`ORB-D12` / `DOC-5`).
+  // ORB-1004 - human-readable, typeable doc key (`ORB-D12` / `DOC-5`).
   docKey: string | null;
   visibility: string;
   icon: string | null;
@@ -85,7 +85,7 @@ export function makeListDocSpacesHandler(client: OrbotoClient) {
         // populated when type === 'project'. We use the type flag so
         // the text rendering doesn't depend on an extra API join.
         const scope = s.type === 'project' ? 'project-scoped' : 'workspace-wide';
-        // ORB-1161 — show key AND uuid. Doc tools accept the key directly,
+        // ORB-1161 - show key AND uuid. Doc tools accept the key directly,
         // but surface the uuid too for any tool that still needs it.
         return `- ${s.name} (${scope}) - key: ${s.key ?? '(none)'}  id: ${s.id}`;
       }).join('\n');
@@ -112,7 +112,7 @@ export function makeListDocSpacesHandler(client: OrbotoClient) {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// ORB-1084 — every docId-taking tool accepts the human-readable doc
+// ORB-1084 - every docId-taking tool accepts the human-readable doc
 // key (ORB-D12 / DOC-5) as well; writes were UUID-only while no tool
 // exposed the full UUID, so agents could read but never write.
 export async function resolveDocId(client: OrbotoClient, docIdOrKey: string): Promise<string> {
@@ -133,7 +133,7 @@ export const getDocToolConfig = {
 
 export function makeGetDocHandler(client: OrbotoClient) {
   return async ({ docId }: { docId: string }): Promise<CallToolResult> => {
-    // ORB-1004 — accept a doc key too; resolve via the by-key route, then
+    // ORB-1004 - accept a doc key too; resolve via the by-key route, then
     // use the resolved UUID for the backlinks fetch.
     const doc = UUID_RE.test(docId)
       ? await client.get<DocRow>(`/docs/${docId}`)
@@ -151,7 +151,7 @@ export function makeGetDocHandler(client: OrbotoClient) {
       lines.push('', `## Backlinks (${backlinks.length})`);
       for (const b of backlinks) {
         // sourceDocTitle is the doc that links *to* this one; the
-        // `type` + `id` pair identifies the target — same row, target
+        // `type` + `id` pair identifies the target - same row, target
         // side. For most backlinks the target is this doc, so we
         // surface the source.
         lines.push(`- ${b.sourceDocTitle}`);
@@ -191,7 +191,7 @@ export function makeGetDocHandler(client: OrbotoClient) {
 export const createDocSpaceToolConfig = {
   title: 'Create a doc space',
   description:
-    'Create a new wiki space. IMPORTANT: every project ALREADY has an auto-generated general space (slug `<key>-general`, system-generated, holds the AI primer + manual notes) — do NOT create a second space just to hold a project\'s docs. Call orboto_list_doc_spaces first and reuse the existing project space; only create a new one for a genuinely separate collection. `type=global` creates a workspace-wide space (super-admin only); `type=project` creates a space scoped to a project — pass `projectKey` (e.g. "ORB"); a raw `projectId` UUID is still accepted for back-compat. The slug is derived from `name` when omitted. Returns the new space row.',
+    'Create a new wiki space. IMPORTANT: every project ALREADY has an auto-generated general space (slug `<key>-general`, system-generated, holds the AI primer + manual notes) - do NOT create a second space just to hold a project\'s docs. Call orboto_list_doc_spaces first and reuse the existing project space; only create a new one for a genuinely separate collection. `type=global` creates a workspace-wide space (super-admin only); `type=project` creates a space scoped to a project - pass `projectKey` (e.g. "ORB"); a raw `projectId` UUID is still accepted for back-compat. The slug is derived from `name` when omitted. Returns the new space row.',
   inputSchema: z.object({
     name: z.string().min(1).max(100).describe('Display name.'),
     type: z.enum(['global', 'project']).describe('Scope: workspace-wide or project-scoped.'),
@@ -276,7 +276,7 @@ export function makeUpdateDocSpaceHandler(client: OrbotoClient) {
     if (input.icon !== undefined) body.icon = input.icon;
     if (input.isPublic !== undefined) body.isPublic = input.isPublic;
     if (input.slug !== undefined) body.slug = input.slug;
-    // ORB-1080 — visibility settings (manage-gated server-side).
+    // ORB-1080 - visibility settings (manage-gated server-side).
     if (input.visibility !== undefined) body.visibility = input.visibility;
     if (input.guestsVisible !== undefined) body.guestsVisible = input.guestsVisible;
     if (input.memberIds !== undefined) body.memberIds = input.memberIds;
@@ -307,7 +307,7 @@ export function makeUpdateDocSpaceHandler(client: OrbotoClient) {
 export const deleteDocSpaceToolConfig = {
   title: 'Delete a doc space',
   description:
-    'DESTRUCTIVE — cascades through every doc in the space (the pages themselves are gone, not just hidden). System-generated project primer spaces refuse deletion (they cascade only when the owning project is deleted). Returns success silently; 404 surfaces as an OrbotoApiError.',
+    'DESTRUCTIVE - cascades through every doc in the space (the pages themselves are gone, not just hidden). System-generated project primer spaces refuse deletion (they cascade only when the owning project is deleted). Returns success silently; 404 surfaces as an OrbotoApiError.',
   inputSchema: z.object({
     spaceId: z.string().uuid(),
   }).shape,
@@ -331,7 +331,7 @@ export function makeDeleteDocSpaceHandler(client: OrbotoClient) {
 export const listDocsInSpaceToolConfig = {
   title: 'List docs inside a space',
   description:
-    'Return the flat list of doc pages in a space — each carries `parentDocId` so the caller can reconstruct the tree client-side. Use this when an agent needs to find a doc by title rather than asking for a UUID first. Pair with orboto_get_doc to read individual page bodies.',
+    'Return the flat list of doc pages in a space - each carries `parentDocId` so the caller can reconstruct the tree client-side. Use this when an agent needs to find a doc by title rather than asking for a UUID first. Pair with orboto_get_doc to read individual page bodies.',
   inputSchema: z.object({
     spaceId: z.string().min(1).describe('Space key (e.g. ORB-S1), name, or UUID. Discover via orboto_list_doc_spaces.'),
   }).shape,
@@ -348,7 +348,7 @@ export function makeListDocsInSpaceHandler(client: OrbotoClient) {
       };
     }
     // Index by parent so we can render a simple indented tree. The
-    // tree-walk runs in JS — the API hands us the flat list because
+    // tree-walk runs in JS - the API hands us the flat list because
     // sort-order is per-parent and traversal is the caller's concern.
     const byParent = new Map<string | null, DocRow[]>();
     for (const r of rows) {
@@ -366,7 +366,7 @@ export function makeListDocsInSpaceHandler(client: OrbotoClient) {
       for (const c of children) {
         const indent = '  '.repeat(depth);
         const iconPart = c.icon ? `${c.icon} ` : '';
-        // ORB-1004 — show the typeable key (falls back to UUID).
+        // ORB-1004 - show the typeable key (falls back to UUID).
         lines.push(`${indent}- ${iconPart}${c.title}  (${c.docKey ?? c.id})`);
         walk(c.id, depth + 1);
       }
@@ -444,7 +444,7 @@ export function makeCreateDocHandler(client: OrbotoClient) {
 export const updateDocToolConfig = {
   title: 'Update a doc page',
   description:
-    'Patch a doc\'s title / content / visibility / parent / icon. Content-only updates do not require sending the title. Every body or title change snapshots the previous version into the revision history automatically — agents can roll back via orboto_restore_doc_revision (when that tool ships in Phase 5). Re-embeds the doc when content or title change.',
+    'Patch a doc\'s title / content / visibility / parent / icon. Content-only updates do not require sending the title. Every body or title change snapshots the previous version into the revision history automatically - agents can roll back via orboto_restore_doc_revision (when that tool ships in Phase 5). Re-embeds the doc when content or title change.',
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     title: z.string().min(1).max(255).optional(),
@@ -494,7 +494,7 @@ export function makeUpdateDocHandler(client: OrbotoClient) {
 export const deleteDocToolConfig = {
   title: 'Delete a doc page',
   description:
-    'DESTRUCTIVE — removes the page from the tree. Revisions are NOT auto-cascaded; the API keeps them so an admin could in principle resurrect from history, but the page itself is gone from listings. System-generated primer docs refuse deletion (the regenerator re-creates them). Returns success silently; 404 is also silent (idempotent).',
+    'DESTRUCTIVE - removes the page from the tree. Revisions are NOT auto-cascaded; the API keeps them so an admin could in principle resurrect from history, but the page itself is gone from listings. System-generated primer docs refuse deletion (the regenerator re-creates them). Returns success silently; 404 is also silent (idempotent).',
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
   }).shape,
@@ -607,7 +607,7 @@ interface SmartLinkResolution {
 export const resolveDocSmartLinksToolConfig = {
   title: 'Batch-resolve smart-link references to display metadata',
   description:
-    'Resolve `[[doc:UUID]]` / `[[ticket:UUID]]` / `[[milestone:UUID]]` / `[[project:UUID]]` / commit-hash references to their current title + URL. Visibility-filtered — items the caller is not allowed to see come back as missing (the rendering frontend falls back to the literal label in that case). Useful when reading a doc body that contains many tokens and you want to display them with current titles in one round-trip rather than N+1 get-* calls. Max 200 items per call.',
+    'Resolve `[[doc:UUID]]` / `[[ticket:UUID]]` / `[[milestone:UUID]]` / `[[project:UUID]]` / commit-hash references to their current title + URL. Visibility-filtered - items the caller is not allowed to see come back as missing (the rendering frontend falls back to the literal label in that case). Useful when reading a doc body that contains many tokens and you want to display them with current titles in one round-trip rather than N+1 get-* calls. Max 200 items per call.',
   inputSchema: z.object({
     items: z.array(z.object({
       type: z.enum(['doc', 'ticket', 'milestone', 'project', 'commit']),
@@ -633,7 +633,7 @@ export function makeResolveDocSmartLinksHandler(client: OrbotoClient) {
       return `- ${r.type}:${r.id}  →  ${r.title}${extra}  ·  ${r.url}`;
     });
     if (missing.length > 0) {
-      lines.push('', `Unresolved (visibility or missing) — ${missing.length}:`);
+      lines.push('', `Unresolved (visibility or missing) - ${missing.length}:`);
       for (const m of missing) lines.push(`  - ${m.type}:${m.id}`);
     }
     return {

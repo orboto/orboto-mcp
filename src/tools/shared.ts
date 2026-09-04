@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase B — shared helpers for the read-tool suite.
+ * ORB-244 Phase B - shared helpers for the read-tool suite.
  *
  * Every user-facing MCP tool takes **keys** where possible
  * (`ACME` for a project, `ACME-42` for a ticket) because that's what
@@ -16,9 +16,9 @@ export interface ProjectRow {
   name: string;
   description: string | null;
   status: string;
-  // ORB-994 — per-project content language, null = inherit workspace.
+  // ORB-994 - per-project content language, null = inherit workspace.
   language?: string | null;
-  // ORB-1040 — RACI opt-in. Agents must not raise/set RACI unless true.
+  // ORB-1040 - RACI opt-in. Agents must not raise/set RACI unless true.
   raciEnabled?: boolean;
 }
 
@@ -40,7 +40,7 @@ export interface TicketRow {
   id: string;
   projectId: string;
   milestoneId: string | null;
-  /** ORB-1023 — resolved milestone name on enriched responses (by-id + lists);
+  /** ORB-1023 - resolved milestone name on enriched responses (by-id + lists);
    *  null when no milestone, undefined on the bare by-key resolver row. */
   milestoneName?: string | null;
   parentTicketId?: string | null;
@@ -53,7 +53,7 @@ export interface TicketRow {
   statusCategory?: string;
   type: string;
   priority: string;
-  // ORB-1608 — role-aware commit policy (implementation/docs/review/admin/
+  // ORB-1608 - role-aware commit policy (implementation/docs/review/admin/
   // epic). Absent on responses the enrich pipeline didn't touch (falls
   // back to the API's 'implementation' default when read).
   deliveryMode?: string;
@@ -66,14 +66,14 @@ export interface TicketRow {
   createdAt?: string;
   updatedAt?: string;
   assignees?: Array<{ id: string; email: string; fullName: string }>;
-  // ORB-1034 — full RACI roster (R/A/C/I). Present when the project has RACI
+  // ORB-1034 - full RACI roster (R/A/C/I). Present when the project has RACI
   // enabled; `assignees` above stays the Responsible+Accountable subset.
   raci?: Array<{ userId: string; email: string; fullName: string; role: 'R' | 'A' | 'C' | 'I' }>;
   labels?: Array<{ id: string; name: string }>;
   commentCount?: number;
   gitActivityCount?: number;
   checklistProgress?: { done: number; total: number };
-  // ORB-1605 — in_review, zero ingested git_activities, but the project
+  // ORB-1605 - in_review, zero ingested git_activities, but the project
   // HAS an active git connection: closing verification may be blocked
   // on stalled commit/PR ingestion rather than genuinely unlinked work.
   // Absent (not false) on responses the enrich pipeline didn't touch.
@@ -131,7 +131,7 @@ export function agentTicketListRow(t: TicketRow, verbose = false): Record<string
 
 /**
  * Resolve a `PROJ-123` ticket key to a fully-hydrated ticket row.
- * Splits on the first `-` — project keys are upper-case alphanumerics
+ * Splits on the first `-` - project keys are upper-case alphanumerics
  * (max 20 chars) and never contain `-`, so the split is unambiguous.
  */
 export async function resolveTicketByKey(
@@ -140,7 +140,7 @@ export async function resolveTicketByKey(
 ): Promise<TicketRow> {
   const idx = ticketKey.indexOf('-');
   if (idx <= 0) {
-    throw new Error(`Invalid ticket key "${ticketKey}" — expected format "PROJ-123".`);
+    throw new Error(`Invalid ticket key "${ticketKey}" - expected format "PROJ-123".`);
   }
   const projectKey = ticketKey.slice(0, idx);
   const numberPart = ticketKey.slice(idx + 1);
@@ -167,7 +167,7 @@ export function ticketLine(t: TicketRow): string {
   if (t.assignees && t.assignees.length > 0) {
     parts.push(`→ ${t.assignees.map((a) => a.fullName || a.email).join(', ')}`);
   }
-  // ORB-1605 — flag a ticket that's genuinely just waiting on stalled
+  // ORB-1605 - flag a ticket that's genuinely just waiting on stalled
   // commit/PR ingestion, not a ticket someone forgot to close.
   if (t.waitingForGitIngestion) parts.push('[waiting on Git ingestion]');
   return parts.join(' ');

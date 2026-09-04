@@ -1,5 +1,5 @@
 /**
- * ORB-1028 — `orboto_critical_path`. Phase 4 agent surface for the CPM
+ * ORB-1028 - `orboto_critical_path`. Phase 4 agent surface for the CPM
  * endpoint shipped in Phase 1. Wraps GET /projects/:id/critical-path,
  * resolving the project key (and optional milestone name) for the caller.
  */
@@ -68,7 +68,7 @@ export function makeCriticalPathHandler(client: OrbotoClient) {
 
     if (res.cycle) {
       return {
-        content: [{ type: 'text', text: `Dependency cycle — the critical path is undefined until it's broken. Tickets involved: ${res.cycle.ticketKeys.join(', ')}` }],
+        content: [{ type: 'text', text: `Dependency cycle - the critical path is undefined until it's broken. Tickets involved: ${res.cycle.ticketKeys.join(', ')}` }],
         structuredContent: { cycle: res.cycle, criticalPath: [], projectDurationDays: 0, tickets: [] },
       };
     }

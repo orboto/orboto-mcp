@@ -1,9 +1,9 @@
 /**
- * ORB-543 / ORB-1344 — agent-drift admin MCP tools.
+ * ORB-543 / ORB-1344 - agent-drift admin MCP tools.
  *
- *  - `orboto_admin_agent_drift_list` — paginated drift log with filters
+ * - `orboto_admin_agent_drift_list` - paginated drift log with filters
  *    (user, drift type, date range, resolved status) + aggregate metrics.
- *  - `orboto_admin_agent_drift_resolve` — mark one drift event handled.
+ * - `orboto_admin_agent_drift_resolve` - mark one drift event handled.
  *
  * Both wrap `/admin/agent-drift*` and require `admin:agent_drift:read` /
  * `admin:agent_drift:write` (super-admin holds both).
@@ -80,7 +80,7 @@ export function makeListAgentDriftHandler(client: OrbotoClient) {
     if (args.cursor) qs.set('cursor', args.cursor);
     const path = `/admin/agent-drift${qs.toString() ? `?${qs.toString()}` : ''}`;
     const res = await client.get<DriftListResponse>(path);
-    const header = res.enabled ? '' : '(drift detection is currently DISABLED — showing historical rows only)\n';
+    const header = res.enabled ? '' : '(drift detection is currently DISABLED - showing historical rows only)\n';
     const lines = res.items.length === 0
       ? '(no drift events)'
       : res.items.map((e) => {
@@ -89,7 +89,7 @@ export function makeListAgentDriftHandler(client: OrbotoClient) {
           ? `${e.commitSha?.slice(0, 8) ?? '?'} on ${e.repoUrl ?? '?'}`
           : `transition on ${e.ticketKey ?? e.ticketId?.slice(0, 8) ?? '?'}`;
         const state = e.resolvedAt ? 'resolved' : (e.retroTicketKey ? `retro ${e.retroTicketKey}` : 'open');
-        return `- [${e.id.slice(0, 8)}] ${e.driftType} — ${who} — ${where} (${state}, ${e.detectedAt})`;
+        return `- [${e.id.slice(0, 8)}] ${e.driftType} - ${who} - ${where} (${state}, ${e.detectedAt})`;
       }).join('\n');
     const metrics = `\n\nTotals: ${res.metrics.total} | ${Object.entries(res.metrics.byType).map(([k, v]) => `${k}=${v}`).join(', ')}`;
     return {

@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase B — `orboto_my_tickets`.
+ * ORB-244 Phase B - `orboto_my_tickets`.
  *
  * The caller's own assignments. Maps to
  * `GET /users/me/assigned-tickets`, which already does the
@@ -67,7 +67,7 @@ export function makeMyTicketsHandler(client: OrbotoClient) {
       : page.items.map((t) => {
         const key = t.ticketKey ?? t.id.slice(0, 8);
         const due = t.dueDate ? ` (due ${t.dueDate})` : '';
-        return `- [${key}] ${t.title} — ${t.status}, ${t.priority}${due}`;
+        return `- [${key}] ${t.title} - ${t.status}, ${t.priority}${due}`;
       }).join('\n');
 
     return {

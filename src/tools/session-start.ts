@@ -1,32 +1,32 @@
 /**
- * ORB-1093 — `orboto_session_start`: a re-orientation digest for the
+ * ORB-1093 - `orboto_session_start`: a re-orientation digest for the
  * start of a session AND right after a context compaction, the points
  * where coding agents lose the thread. Composes the workspace
  * working-rules + the caller's in-progress work + timer into one
  * briefing so the agent re-anchors on how to work and what it was
  * doing. Read-only.
  *
- * ORB-1605 — also surfaces git-connection health for the projects the
+ * ORB-1605 - also surfaces git-connection health for the projects the
  * caller currently has open work in. A dead/unhealthy connection means
  * commit ingestion may be stalled, which the agent should know about
  * BEFORE it assumes a closing check that depends on git activity is
  * reliable.
  *
- * ORB-1607 — lean startup contract:
+ * ORB-1607 - lean startup contract:
  *   (a) rules-hash ack. `/agent-instructions` now returns a stable
  *       `rulesHash`. This handler remembers the last hash it saw FOR
  *       THE LIFETIME OF THIS MCP CONNECTION (one handler closure per
- *       `buildOrbotoMcpServer` call — see server.ts) and passes it back
+ *       `buildOrbotoMcpServer` call - see server.ts) and passes it back
  *       as `knownRulesHash` on every subsequent call. An unchanged hash
  *       collapses the multi-thousand-token rules block into a one-line
  *       ack, which is most of the field-measured 12-18k token/session
  *       cost on a workspace with configured instruction blocks. Never
- *       exposed as a tool input — the caller (an LLM) just calls the
+ *       exposed as a tool input - the caller (an LLM) just calls the
  *       tool the same way every time; the cache is transparent.
  *   (b) optional `ticketKey` input bundles a project primer, the full
  *       ticket (incl. dependencies + checklists), that project's git
  *       health, and any other agent sessions currently working the same
- *       ticket into the SAME response — replacing what would otherwise
+ *       ticket into the SAME response - replacing what would otherwise
  *       be >=4 separate tool calls (get_project_primer, get_ticket,
  *       get_checklists, list_ticket_dependencies) at the point an agent
  *       has the least context loaded.
@@ -91,7 +91,7 @@ interface Ticket {
   landedIdleWorkingDays?: number | null;
 }
 interface Timer { ticketId?: string | null; ticketKey?: string; startedAt?: string }
-// ORB-1605 / ORB-1638 — mirrors GitConnectionHealthSchema in @orboto/shared-schema.
+// ORB-1605 / ORB-1638 - mirrors GitConnectionHealthSchema in @orboto/shared-schema.
 interface GitConnectionHealth {
   connectionId: string;
   name: string;
@@ -105,7 +105,7 @@ interface GitConnectionHealth {
   deliveryError: string | null;
   lastProbeAt: string | null;
 }
-// ORB-1607 — mirrors the GET /agent-instructions response shape.
+// ORB-1607 - mirrors the GET /agent-instructions response shape.
 interface RulesResponse {
   instructions?: string;
   requireSessionStart?: boolean;
@@ -167,13 +167,13 @@ const GIT_HEALTH_REASON_TEXT: Record<string, string> = {
   delivery_failing: 'webhook deliveries from the provider are not arriving',
 };
 
-// Cap how many distinct projects we probe for git health — a session's
+// Cap how many distinct projects we probe for git health - a session's
 // in-progress work is capped at 20 tickets already, so this rarely
 // exceeds a handful, but bound it defensively so a pathological account
 // can't turn session-start into N parallel requests.
 const MAX_GIT_HEALTH_PROJECTS = 8;
 
-/** ORB-1607 — build the `--ticket` one-shot bundle. Never throws: an
+/** ORB-1607 - build the `--ticket` one-shot bundle. Never throws: an
  *  unresolvable/unauthorized ticket key comes back as a text error
  *  section instead of failing the whole digest (the rules + in-progress
  *  work above it are still useful on their own). */
@@ -212,7 +212,7 @@ async function buildTicketBundle(
       .get<{ connections: GitConnectionHealth[] }>(`/projects/${resolved.projectId}/git-health`)
       .then((r) => (Array.isArray(r?.connections) ? r.connections : []))
       .catch(() => [] as GitConnectionHealth[]),
-    // ORB-704 — non-admins only see their own sessions; that's an
+    // ORB-704 - non-admins only see their own sessions; that's an
     // acceptable "cheaply available" degrade, not a bug to work around.
     client.get<ActiveAgentRow[]>('/v1/agent/presence').catch(() => [] as ActiveAgentRow[]),
   ]);
@@ -261,17 +261,17 @@ async function buildTicketBundle(
   lines.push('Blocked by:', fmtDeps(deps.blockedBy), 'Blocks:', fmtDeps(deps.blocks));
 
   if (unhealthy.length > 0) {
-    lines.push('', '### Git connection health — WARNING');
+    lines.push('', '### Git connection health - WARNING');
     for (const c of unhealthy) {
-      lines.push(`- "${c.name}" (${c.provider}) — ${GIT_HEALTH_REASON_TEXT[c.reason ?? ''] ?? c.reason ?? 'unknown reason'}`);
+      lines.push(`- "${c.name}" (${c.provider}) - ${GIT_HEALTH_REASON_TEXT[c.reason ?? ''] ?? c.reason ?? 'unknown reason'}`);
     }
   }
 
   lines.push('', '### Active agent sessions on this ticket');
   lines.push(
     sessionsOnTicket.length === 0
-      ? '(none visible — non-admin callers only see their own sessions)'
-      : sessionsOnTicket.map((s) => `- ${s.userFullName ?? s.userEmail} — ${s.status}, last seen ${s.lastSeenAt}`).join('\n'),
+      ? '(none visible - non-admin callers only see their own sessions)'
+      : sessionsOnTicket.map((s) => `- ${s.userFullName ?? s.userEmail} - ${s.status}, last seen ${s.lastSeenAt}`).join('\n'),
   );
 
   return {
@@ -304,7 +304,7 @@ async function buildTicketBundle(
 }
 
 export function makeSessionStartHandler(client: OrbotoClient) {
-  // ORB-1607 — per-connection rules-hash cache. `buildOrbotoMcpServer`
+  // ORB-1607 - per-connection rules-hash cache. `buildOrbotoMcpServer`
   // calls this factory once per MCP connection, so this closure variable
   // lives for exactly that connection's lifetime and resets on reconnect.
   //
@@ -365,7 +365,7 @@ export function makeSessionStartHandler(client: OrbotoClient) {
     const [me, rules, assigned, timer, inboxRaw] = await Promise.all([
       client.get<Me>('/users/me').catch(() => null),
       client.get<RulesResponse>(rulesPath).catch(() => ({}) as RulesResponse),
-      // ORB-1330 — a re-orientation briefing must only list OPEN work.
+      // ORB-1330 - a re-orientation briefing must only list OPEN work.
       // Filter to in_progress + in_review so DONE tickets can't pose as
       // "what you're working on" at the moment the agent has the least
       // context and would otherwise re-claim / re-report finished work.
@@ -382,9 +382,9 @@ export function makeSessionStartHandler(client: OrbotoClient) {
     if (rules.rulesHash) lastKnownRulesHash = rules.rulesHash;
     const tickets: Ticket[] = Array.isArray(assigned) ? assigned : (assigned?.items ?? []);
 
-    // ORB-1605 — git-connection health for every project the caller has
+    // ORB-1605 - git-connection health for every project the caller has
     // open work in right now. Cheap, computed, read-only (see
-    // services/git-health.ts) — safe to fan out on every session start.
+    // services/git-health.ts) - safe to fan out on every session start.
     const projectIds = [...new Set(tickets.map((t) => t.projectId).filter((id): id is string => !!id))].slice(0, MAX_GIT_HEALTH_PROJECTS);
     const gitHealthByProject = await Promise.all(
       projectIds.map(async (projectId) => ({
@@ -403,10 +403,10 @@ export function makeSessionStartHandler(client: OrbotoClient) {
     const unhealthyWarnings = gitHealthWithConnections.flatMap((p) =>
       p.connections
         .filter((c) => !c.healthy)
-        .map((c) => `- Project ${p.projectId}: connection "${c.name}" (${c.provider}) is unhealthy — ${GIT_HEALTH_REASON_TEXT[c.reason ?? ''] ?? c.reason ?? 'unknown reason'}. If closing a ticket here depends on commit/PR ingestion, verify manually — ingestion may be stalled.`),
+        .map((c) => `- Project ${p.projectId}: connection "${c.name}" (${c.provider}) is unhealthy - ${GIT_HEALTH_REASON_TEXT[c.reason ?? ''] ?? c.reason ?? 'unknown reason'}. If closing a ticket here depends on commit/PR ingestion, verify manually - ingestion may be stalled.`),
     );
 
-    // ORB-1607 — the optional one-shot ticket bundle, built after the
+    // ORB-1607 - the optional one-shot ticket bundle, built after the
     // rest so it doesn't hold up the core digest on a slow primer render.
     const bundle = input.ticketKey ? await buildTicketBundle(client, input.ticketKey) : null;
 
@@ -442,7 +442,7 @@ export function makeSessionStartHandler(client: OrbotoClient) {
       'Call orboto_session_start { rulesOnly: true } for the complete rule text (one call, never truncated). '
       + 'Do that whenever you do not already hold this exact rulesHash - after a compaction, a /clear, or as a fresh agent.';
     let rulesHandle: string | undefined;
-    lines.push('', '## Working rules — follow these');
+    lines.push('', '## Working rules - follow these');
     if (rules.rulesUnchanged) {
       // ORB-1697 - never assert that the caller still HAS the rules. This
       // connection delivered them once, which says nothing about whether
@@ -469,7 +469,7 @@ export function makeSessionStartHandler(client: OrbotoClient) {
       lines.push(rulesText || '(no workspace rules configured)');
     }
     lines.push('', '## Your in-progress work');
-    if (tickets.length === 0) lines.push('No tickets currently assigned to you — claim or create one before you start coding.');
+    if (tickets.length === 0) lines.push('No tickets currently assigned to you - claim or create one before you start coding.');
     else {
       for (const t of scopedTickets) {
         // ORB-1799 - the flag is the whole point of listing this ticket
@@ -485,7 +485,7 @@ export function makeSessionStartHandler(client: OrbotoClient) {
       lines.push(`(+ ${elsewhereCount} open ticket(s) assigned to you in other projects - call orboto_my_tickets to list them.)`);
     }
     if (unhealthyWarnings.length > 0) {
-      lines.push('', '## Git connection health — WARNING', ...unhealthyWarnings);
+      lines.push('', '## Git connection health - WARNING', ...unhealthyWarnings);
     }
     lines.push('', '## Timer');
     lines.push(timer?.ticketId ? `Running on ${timer.ticketKey ?? timer.ticketId} since ${timer.startedAt ?? 'earlier'}.` : 'No timer running.');

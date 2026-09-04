@@ -1,17 +1,17 @@
 /**
- * ORB-244 Phase C Group 2 — time-tracking tools.
+ * ORB-244 Phase C Group 2 - time-tracking tools.
  *
  * Three tools that wrap the existing /time/timer/* + /tickets/:id/time-entries
  * endpoints:
  *   - orboto_timer_start (ticketKey, description?, replace?)
- *   - orboto_timer_stop  — closes the running timer; the API converts
+ * - orboto_timer_stop - closes the running timer; the API converts
  *                         elapsed time into a time_entries row using the
  *                         description set at start.
- *   - orboto_log_time    — direct time-entry POST for after-the-fact
+ * - orboto_log_time - direct time-entry POST for after-the-fact
  *                         logging (no running timer involved).
  *
  * Note: the wrapper's `timer-stop "note"` syntax sends a `note` field
- * the API silently ignores — the time entry's description is whatever
+ * the API silently ignores - the time entry's description is whatever
  * was set on `start`. To attach a note to a stopped session, post a
  * comment afterwards via `orboto_comment`. The MCP tool only accepts
  * what the API actually accepts.
@@ -76,7 +76,7 @@ export function makeTimerStartHandler(client: OrbotoClient) {
       return {
         content: [{
           type: 'text',
-          text: `Timer started on [${ticket.ticketKey}] ${ticket.title}${description ? ` — note: ${description}` : ''}`,
+          text: `Timer started on [${ticket.ticketKey}] ${ticket.title}${description ? ` - note: ${description}` : ''}`,
         }],
         structuredContent: {
           ticketKey: ticket.ticketKey,
@@ -127,7 +127,7 @@ export function makeTimerStopHandler(client: OrbotoClient) {
       return {
         content: [{
           type: 'text',
-          text: `Timer stopped — logged ${res.durationMinutes} min.${res.laneFallback ? ' (matched via single-active-timer fallback - instance token differed from start)' : ''}`,
+          text: `Timer stopped - logged ${res.durationMinutes} min.${res.laneFallback ? ' (matched via single-active-timer fallback - instance token differed from start)' : ''}`,
         }],
         structuredContent: { durationMinutes: res.durationMinutes, ...(res.laneFallback ? { laneFallback: true } : {}) },
       };
@@ -150,7 +150,7 @@ export function makeTimerStopHandler(client: OrbotoClient) {
 export const logTimeToolConfig = {
   title: 'Log a time entry on a ticket',
   description:
-    'Direct time-entry POST — for "I just spent 90 minutes on this last Tuesday but forgot to start a timer". `loggedAt` defaults to now; pass an ISO datetime to back-date.',
+    'Direct time-entry POST - for "I just spent 90 minutes on this last Tuesday but forgot to start a timer". `loggedAt` defaults to now; pass an ISO datetime to back-date.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     durationMinutes: z.number().int().positive().describe('Minutes, > 0.'),
@@ -172,7 +172,7 @@ export function makeLogTimeHandler(client: OrbotoClient) {
     return {
       content: [{
         type: 'text',
-        text: `Logged ${entry.durationMinutes} min on [${ticket.ticketKey}]${entry.description ? ` — ${entry.description}` : ''}`,
+        text: `Logged ${entry.durationMinutes} min on [${ticket.ticketKey}]${entry.description ? ` - ${entry.description}` : ''}`,
       }],
       structuredContent: {
         ticketKey: ticket.ticketKey,

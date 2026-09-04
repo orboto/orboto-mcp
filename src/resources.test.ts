@@ -1,12 +1,12 @@
 /**
- * ORB-244 Phase D — resources unit tests.
+ * ORB-244 Phase D - resources unit tests.
  *
  * The MCP SDK's resource-template handlers are normal functions
  * once registered. Pulling them off the server's internal registry
  * would couple us to SDK internals; instead we register against a
  * real McpServer and read back via the protocol-shaped
  * `_registeredResourceTemplates` accessor. If the SDK renames it,
- * the test fails loudly, but that's the point — we want to know.
+ * the test fails loudly, but that's the point - we want to know.
  *
  * Each test exercises the URI → handler-output path with the
  * stubbed orboto REST client.
@@ -45,7 +45,7 @@ function buildServerWithResources() {
 function getTemplateHandler(server: McpServer, name: string) {
   const templates = (server as unknown as { _registeredResourceTemplates: Record<string, { readCallback: (uri: URL, vars: Record<string, string>) => Promise<{ contents: Array<{ text: string }> }> }> })._registeredResourceTemplates;
   const entry = templates[name];
-  if (!entry) throw new Error(`No registered resource template "${name}" — known: ${Object.keys(templates).join(', ')}`);
+  if (!entry) throw new Error(`No registered resource template "${name}" - known: ${Object.keys(templates).join(', ')}`);
   return entry.readCallback;
 }
 
@@ -145,11 +145,11 @@ describe('orboto:// project resource', () => {
     const handler = getTemplateHandler(server, 'project');
     const out = await handler(new URL('orboto://project/ACME'), { projectKey: 'ACME' });
     const text = out.contents[0]?.text;
-    expect(text).toContain('# ACME — Acme Inc');
+    expect(text).toContain('# ACME - Acme Inc');
     expect(text).toContain('## Milestones');
     expect(text).toContain('**v1** [active]');
     expect(text).toContain('## Members');
-    expect(text).toContain('Ada <ada@acme> — developer');
+    expect(text).toContain('Ada <ada@acme> - developer');
   });
 });
 

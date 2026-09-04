@@ -1,12 +1,12 @@
 /**
- * ORB-311 Phase F — withMetrics wrapper unit tests.
+ * ORB-311 Phase F - withMetrics wrapper unit tests.
  *
  * The wrapper's contract:
  *   - Always calls the underlying handler exactly once.
  *   - On success: posts {toolName, durationMs, success: true, ...}.
  *   - On thrown error: posts success: false + errorMessage, re-throws.
  *   - On `result.isError === true`: treats as success: false.
- *   - The instrument POST is fire-and-forget — never delays the caller.
+ * - The instrument POST is fire-and-forget - never delays the caller.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient, OrbotoApiError } from './orboto-client.js';
@@ -67,7 +67,7 @@ describe('withMetrics', () => {
     expect(body.errorMessage).toBe('kaboom');
   });
 
-  // ORB-1174 — an OrbotoApiError becomes a structured, actionable isError
+  // ORB-1174 - an OrbotoApiError becomes a structured, actionable isError
   // result (not the runtime's opaque generic) so the agent can self-correct.
   it('maps OrbotoApiError to a distinct, actionable isError result per status', async () => {
     captureFetch();
@@ -126,10 +126,10 @@ describe('withMetrics', () => {
     expect(body.clientHint).toBe('cursor');
   });
 
-  it('does not block when the instrument POST fails — handler still resolves', async () => {
+  it('does not block when the instrument POST fails - handler still resolves', async () => {
     // First call (the handler-as-fetch?) returns ok; but our handler
     // doesn't fetch; the only fetch the wrapper makes is to /instrument.
-    // Mock that one to fail — caller must still get the original
+    // Mock that one to fail - caller must still get the original
     // result back.
     vi.spyOn(globalThis, 'fetch').mockImplementation(async () => ({
       ok: false, status: 500, statusText: 'Server Error',
@@ -144,7 +144,7 @@ describe('withMetrics', () => {
     expect(result.content[0]).toEqual({ type: 'text', text: 'survives' });
   });
 
-  // ORB-1180 — admin-panel visibility: the failure log carries the
+  // ORB-1180 - admin-panel visibility: the failure log carries the
   // structured HTTP status, and any secret-shaped text is redacted.
   it('logs the structured statusCode on an OrbotoApiError', async () => {
     const calls = captureFetch();
@@ -159,7 +159,7 @@ describe('withMetrics', () => {
     expect(body.errorMessage).toContain('403');
   });
 
-  // ORB-1331 — the shared nudge state threads through the wrapper: the
+  // ORB-1331 - the shared nudge state threads through the wrapper: the
   // first non-session_start dispatch carries the one-time reminder,
   // later dispatches are clean, and a session_start-first flow never
   // sees it. structuredContent is left intact.

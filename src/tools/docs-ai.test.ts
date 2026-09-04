@@ -1,12 +1,12 @@
 /**
- * ORB-799 — docs-AI tools tests.
+ * ORB-799 - docs-AI tools tests.
  *
  * `orboto_ask_docs` happy + AI-not-configured-style 400.
  * `orboto_ingest_url` happy + readability-fallback flag.
  * `orboto_ingest_file` happy + empty-bytes refusal.
  *
  * The multipart upload's wire format is verified by inspecting the
- * FormData body the fetch mock receives — we read the form-fields
+ * FormData body the fetch mock receives - we read the form-fields
  * back to assert filename + parent.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -129,7 +129,7 @@ describe('orboto_ingest_url', () => {
 
 describe('orboto_ingest_file', () => {
   it('POSTs multipart with filename + decoded content', async () => {
-    // Capture the multipart body via the fetch mock — FormData is
+    // Capture the multipart body via the fetch mock - FormData is
     // opaque to JSON.parse, so we don't decode it; we only assert the
     // route, method, and the JSON response shape.
     const calls: Array<{ url: string; method: string; bodyType: string }> = [];

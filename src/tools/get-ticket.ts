@@ -1,15 +1,15 @@
 /**
- * ORB-244 Phase B — `orboto_get_ticket`.
+ * ORB-244 Phase B - `orboto_get_ticket`.
  *
- * Returns a ticket's full context — description, comments, assignees,
- * labels, checklists, git activity — in a shape the model can
+ * Returns a ticket's full context - description, comments, assignees,
+ * labels, checklists, git activity - in a shape the model can
  * reason about without follow-up calls. Comments and checklists are
  * fetched in parallel with the ticket payload; git activity is
  * skipped when the ticket's `gitActivityCount` is 0 so we don't waste
  * a round-trip on the common case.
  *
  * ORB-272: `/tickets/:id/comments` is cursor-paginated. We pull the
- * first page (50 by default) — if the ticket has more, a footer line
+ * first page (50 by default) - if the ticket has more, a footer line
  * nudges the user to open it in the UI. AI agents asking "give me
  * the full history" beyond 50 is a rare enough case not to fan out.
  */
@@ -40,7 +40,7 @@ interface CommentRow {
   // ORB-1368 - true when authored via an agent-flagged key or a bot account.
   isAgentWork?: boolean;
 }
-/** ORB-234 — checklist items can link to another ticket; when they do,
+/** ORB-234 - checklist items can link to another ticket; when they do,
  *  `effectiveCompleted` tracks the linked ticket's status category
  *  automatically ('done' → item checked). `storedCompleted` is the
  *  raw bit on this item's own row. The model wants the effective
@@ -115,12 +115,12 @@ export function makeGetTicketHandler(client: OrbotoClient) {
     // (cheap, metadata-only) fetches stay - the RESPONSE carries only the
     // count unless included.
     const [enriched, parent, childrenPage, attachments, commentsPage, checklists, gitActivity] = await Promise.all([
-      // ORB-1023 — `resolveTicketByKey` hits the by-key endpoint, which
+      // ORB-1023 - `resolveTicketByKey` hits the by-key endpoint, which
       // returns a BARE ticket row (no statusCategory, assignees, labels,
       // milestoneName, counts). Re-fetch the enriched by-id shape; falls
       // back to the bare row on a 404.
       client.get<TicketRow>(`/projects/${ticket.projectId}/tickets/${ticket.id}`).catch(swallow404<TicketRow | null>(null)),
-      // Parent ticket — only fetched when set. Lets the model say
+      // Parent ticket - only fetched when set. Lets the model say
       // "this is sub-ticket of [ACME-10]" without a second tool call.
       parentId
         ? client.get<TicketSummaryRow>(`/projects/${ticket.projectId}/tickets/${parentId}`).catch(swallow404<TicketSummaryRow | null>(null))
@@ -149,7 +149,7 @@ export function makeGetTicketHandler(client: OrbotoClient) {
     const comments = commentsPage.items;
     const hasMoreComments = !!commentsPage.nextCursor;
     const children = childrenPage.items;
-    // ORB-1023 — prefer the enriched by-id row (statusCategory, assignees,
+    // ORB-1023 - prefer the enriched by-id row (statusCategory, assignees,
     // labels, milestoneName); fall back to the bare resolver row.
     const full = enriched ?? ticket;
 
@@ -168,7 +168,7 @@ export function makeGetTicketHandler(client: OrbotoClient) {
     return {
       content: [{ type: 'text', text: formatTicket(full, inc, comments, hasMoreComments, checklists, gitActivity, parent, children, attachments, includeHint) }],
       structuredContent: {
-        // ORB-1179 — surface the uuid alongside the key.
+        // ORB-1179 - surface the uuid alongside the key.
         id: full.id,
         key: full.ticketKey,
         title: full.title,
@@ -179,7 +179,7 @@ export function makeGetTicketHandler(client: OrbotoClient) {
           : null,
         priority: full.priority,
         type: full.type,
-        // ORB-1608 — role-aware commit policy. The API defaults unset
+        // ORB-1608 - role-aware commit policy. The API defaults unset
         // rows to 'implementation'.
         deliveryMode: full.deliveryMode ?? 'implementation',
         dueDate: full.dueDate,
@@ -187,12 +187,12 @@ export function makeGetTicketHandler(client: OrbotoClient) {
         isPrivate: full.isPrivate,
         estimatedTimeMinutes: full.estimatedTimeMinutes,
         loggedMinutes: full.loggedMinutes ?? 0,
-        // ORB-1605 — true when in_review, zero ingested git_activities,
+        // ORB-1605 - true when in_review, zero ingested git_activities,
         // but the project HAS an active git connection: closing
         // verification may be blocked on stalled ingestion.
         waitingForGitIngestion: full.waitingForGitIngestion ?? false,
         description: full.description ?? null,
-        // Hierarchy — null when no parent, array of summary rows for
+        // Hierarchy - null when no parent, array of summary rows for
         // children (empty array when none). Sub-ticket consumers can
         // decide to call orboto_get_ticket on each for the full detail.
         parentTicket: parent ? {
@@ -211,7 +211,7 @@ export function makeGetTicketHandler(client: OrbotoClient) {
           })),
         } : {}),
         assignees: full.assignees ?? [],
-        // ORB-1034 — RACI roster (R/A/C/I); opt-in via include: ["raci"]
+        // ORB-1034 - RACI roster (R/A/C/I); opt-in via include: ["raci"]
         // (assignees above stay the always-on Responsible+Accountable set).
         ...(inc.has('raci') ? {
           raci: (full.raci ?? []).map((r) => ({ userId: r.userId, fullName: r.fullName, role: r.role })),
@@ -226,7 +226,7 @@ export function makeGetTicketHandler(client: OrbotoClient) {
         ...(includeHint ? { includeHint } : {}),
         ...(inc.has('comments') ? {
           comments: comments.map((c) => ({
-            id: c.id, // ORB-1285 — needed to target a comment for edit/delete
+            id: c.id, // ORB-1285 - needed to target a comment for edit/delete
             author: c.userName ?? null,
             body: c.content,
             createdAt: c.createdAt,
@@ -303,18 +303,18 @@ function formatTicket(
   const header = [
     `[${ticket.ticketKey}] ${ticket.title}`,
     `Status: ${ticket.statusName ?? ticket.status}  Priority: ${ticket.priority}  Type: ${ticket.type}`,
-    // ORB-1608 — only shown when it deviates from the 'implementation'
+    // ORB-1608 - only shown when it deviates from the 'implementation'
     // default, so a fresh ticket's card stays uncluttered.
     ticket.deliveryMode && ticket.deliveryMode !== 'implementation'
       ? `Delivery mode: ${ticket.deliveryMode}`
       : null,
-    // ORB-1605 — surface the stalled-ingestion signal right in the
+    // ORB-1605 - surface the stalled-ingestion signal right in the
     // header so an agent checking "is this really done?" sees it
     // before reading the (currently empty) git-activity section.
     ticket.waitingForGitIngestion
-      ? '⏳ Waiting for Git ingestion — this project has an active git connection but no commits/PRs have landed for this ticket yet. Closing verification may be blocked on stalled ingestion, not on unfinished work — check manually before assuming it is unlinked.'
+      ? '⏳ Waiting for Git ingestion - this project has an active git connection but no commits/PRs have landed for this ticket yet. Closing verification may be blocked on stalled ingestion, not on unfinished work - check manually before assuming it is unlinked.'
       : null,
-    // ORB-1023 — show the milestone name (not the UUID) when set.
+    // ORB-1023 - show the milestone name (not the UUID) when set.
     ticket.milestoneId ? `Milestone: ${ticket.milestoneName ?? '(unnamed)'}` : null,
     ticket.dueDate ? `Due: ${ticket.dueDate}` : null,
     parent ? `Parent: [${parent.ticketKey}] ${parent.title} (${parent.statusName ?? parent.status})` : null,
@@ -324,7 +324,7 @@ function formatTicket(
     ticket.assignees && ticket.assignees.length > 0
       ? `Assignees: ${ticket.assignees.map((a) => a.fullName || a.email).join(', ')}`
       : 'Assignees: (unassigned)',
-    // ORB-1034 — RACI summary, shown only when the project uses RACI and
+    // ORB-1034 - RACI summary, shown only when the project uses RACI and
     // someone holds a non-Responsible role (Accountable / Consulted / Informed).
     ticket.raci && ticket.raci.some((r) => r.role !== 'R')
       ? `RACI: ${(['A', 'R', 'C', 'I'] as const)
@@ -363,7 +363,7 @@ function formatTicket(
         `### ${cl.title} (${progressLabel})${cl.triggersDone ? ' · triggers done' : ''}`,
       );
       for (const i of cl.items) {
-        // Linked-ticket suffix on items that track another ticket —
+        // Linked-ticket suffix on items that track another ticket - 
         // lets the model say "item X is done because [ACME-42] shipped".
         const link = i.linkedTicketKey
           ? ` ↪ [${i.linkedTicketKey}] ${i.linkedTicketTitle ?? ''} (${i.linkedTicketStatusCategory ?? 'unknown'})`
@@ -384,7 +384,7 @@ function formatTicket(
     commentLines.push('', headerLine);
     for (const c of comments) {
       commentLines.push(
-        `**${c.userName ?? '(unknown author)'}** — ${c.createdAt}${c.isInternal ? ' [internal]' : ''}`,
+        `**${c.userName ?? '(unknown author)'}** - ${c.createdAt}${c.isInternal ? ' [internal]' : ''}`,
         c.content,
         '',
       );
@@ -398,7 +398,7 @@ function formatTicket(
   if (inc.has('git') && gitActivity.length > 0) {
     gitLines.push('', `## Git activity (${gitActivity.length})`);
     for (const g of gitActivity) {
-      gitLines.push(`- ${g.type} ${g.state ? `[${g.state}]` : ''} ${g.title}${g.url ? ` — ${g.url}` : ''}`);
+      gitLines.push(`- ${g.type} ${g.state ? `[${g.state}]` : ''} ${g.title}${g.url ? ` - ${g.url}` : ''}`);
     }
   }
 

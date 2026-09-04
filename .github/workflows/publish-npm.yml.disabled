@@ -1,4 +1,4 @@
-# ORB-939 — npm publish for @orboto/mcp.
+# ORB-939 - npm publish for @orboto/mcp.
 #
 # This file LIVES in the orboto/orboto monorepo at
 # `apps/mcp/.github/workflows/publish-npm.yml` and gets subtree-split
@@ -9,7 +9,7 @@
 # Tag-triggered. The parent repo's `scripts/release.mjs` produces a
 # tag like `v0.89.1`; once split-mcp.yml mirrors that tag to this
 # repo, this workflow runs and publishes the current `@orboto/mcp`
-# version to npm via OIDC (no NPM_TOKEN needed — npm verifies the
+# version to npm via OIDC (no NPM_TOKEN needed - npm verifies the
 # GitHub-issued OIDC token against the per-package "Trusted Publisher"
 # config on npmjs.com).
 #
@@ -64,7 +64,7 @@ jobs:
 
       - name: Verify tag matches package version
         # If the parent repo pushed v0.89.1 but the mirror's
-        # package.json still says 0.89.0, refuse — that's a release
+        # package.json still says 0.89.0, refuse - that's a release
         # script that forgot to bump apps/mcp/package.json.
         run: |
           tag="${GITHUB_REF_NAME#v}"
@@ -79,7 +79,7 @@ jobs:
         run: npm run build
 
       # Node 22 LTS ships with npm 10.9 which signs provenance but
-      # cannot use OIDC for auth — trusted publishing was added in
+      # cannot use OIDC for auth - trusted publishing was added in
       # npm 11.5.1. Run npm@latest ephemerally via npx so we don't
       # have to globally upgrade.
       - name: Publish

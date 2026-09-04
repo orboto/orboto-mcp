@@ -1,10 +1,10 @@
 /**
- * ORB-244 Phase A — thin HTTP client the MCP server uses to talk to
+ * ORB-244 Phase A - thin HTTP client the MCP server uses to talk to
  * the orboto API.
  *
  * Deliberately speaks HTTPS-REST rather than importing `@orboto/api`'s
  * services directly, for three reasons:
- *   1. One code path covers both delivery variants from the ticket —
+ *   1. One code path covers both delivery variants from the ticket - 
  *      Local-Proxy (`npx @orboto/mcp-cli`, running on the dev's laptop,
  *      pointing at the public orboto URL) AND Self-Hosted-inline
  *      (separate container in docker-compose, pointing at
@@ -13,7 +13,7 @@
  *      where it belongs. The MCP server is a pure transport adapter;
  *      it never sees the DB or trust boundary.
  *   3. The `orb_*` API-key flow is already wired into the API's
- *      `authenticate` decorator — reusing it means the existing
+ *      `authenticate` decorator - reusing it means the existing
  *      `mcp:use` + `api:use` scope checks, rate limits, and audit
  *      logs all light up for free.
  *
@@ -34,7 +34,7 @@ export interface OAuthTokenProviderLike {
 }
 
 export interface OrbotoClientConfig {
-  /** Base URL of the orboto API — e.g. `https://orboto.example.com` or
+  /** Base URL of the orboto API - e.g. `https://orboto.example.com` or
    *  `http://api:3000` when running inside docker-compose. No trailing
    *  slash; we'll strip one if the operator pastes it. */
   baseUrl: string;
@@ -198,7 +198,7 @@ export class OrbotoClient {
   }
 
   /**
-   * POST a `multipart/form-data` payload — used by ingest-file +
+   * POST a `multipart/form-data` payload - used by ingest-file +
    * attachment upload tools (ORB-799). The fetch API picks the boundary
    * automatically when we let it set `Content-Type`, so we deliberately
    * do NOT set `Content-Type: application/json` from the JSON helpers.
@@ -206,7 +206,7 @@ export class OrbotoClient {
   async postMultipart<T>(path: string, form: FormData): Promise<T> {
     const res = await this.authedFetch(this.fullUrl(path), {
       method: 'POST',
-      body: form, // no Content-Type — fetch sets the boundary
+      body: form, // no Content-Type - fetch sets the boundary
     });
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
@@ -214,7 +214,7 @@ export class OrbotoClient {
 
   /**
    * GET an endpoint that returns plain text (Markdown export, CSV
-   * downloads, etc.) — bypasses the `Accept: application/json` header
+   * downloads, etc.) - bypasses the `Accept: application/json` header
    * + the JSON-only parsing in `get()`. Returns the raw response body
    * as a string. (ORB-915.)
    */
@@ -225,7 +225,7 @@ export class OrbotoClient {
 
   /**
    * POST an endpoint that returns a binary body (PDF export, ZIP
-   * download, etc.). Returns the raw bytes as a Uint8Array — caller
+   * download, etc.). Returns the raw bytes as a Uint8Array - caller
    * decides whether to base64 it for an MCP resource attachment or
    * spill it to disk. (ORB-915.)
    */
@@ -271,7 +271,7 @@ export async function preflightMcpSession(client: OrbotoClient): Promise<{
   interface StatusResponse {
     enabled: boolean;
     mcpUseGranted: boolean;
-    // ORB-942 — the caller's own users.mcp_enabled flag.
+    // ORB-942 - the caller's own users.mcp_enabled flag.
     userMcpEnabled: boolean;
     userEmail: string;
   }
@@ -290,7 +290,7 @@ export async function preflightMcpSession(client: OrbotoClient): Promise<{
   if (!status.mcpUseGranted) {
     throw new Error(`MCP preflight failed: user ${status.userEmail} lacks the mcp:use permission. Ask an admin to grant it.`);
   }
-  // ORB-942 — per-user opt-out. Distinct message pointing at the toggle so
+  // ORB-942 - per-user opt-out. Distinct message pointing at the toggle so
   // the user knows this is their own setting, not an admin / permission block.
   if (!status.userMcpEnabled) {
     throw new Error('MCP preflight failed: you have disabled MCP access for your account. Re-enable it in Profile - Connect an AI Client.');

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Orboto-Enterprise-1.0
 /**
- * ORB-632 / ORB-945 — Cross-Project Linking MCP tools.
+ * ORB-632 / ORB-945 - Cross-Project Linking MCP tools.
  *
- *   - orboto_list_cross_project_links — GET /tickets/:id/cross-project-links
- *   - orboto_add_cross_project_link   — POST /tickets/:id/cross-project-links
- *   - orboto_update_cross_project_link — PATCH /tickets/:id/cross-project-links/:linkId
- *   - orboto_remove_cross_project_link — DELETE /tickets/:id/cross-project-links/:linkId
+ * - orboto_list_cross_project_links - GET /tickets/:id/cross-project-links
+ * - orboto_add_cross_project_link - POST /tickets/:id/cross-project-links
+ * - orboto_update_cross_project_link - PATCH /tickets/:id/cross-project-links/:linkId
+ * - orboto_remove_cross_project_link - DELETE /tickets/:id/cross-project-links/:linkId
  *
  * Business-tier feature (`.ee.*`). The API records the EE soft-warn
  * event on mutating calls; the tool surface here is identical to
@@ -13,7 +13,7 @@
  * Authorization-header path.
  *
  * Accepts BOTH a UUID and a ticket-key (`OCP-42`, case-insensitive) on
- * every input — the API resolves either form.
+ * every input - the API resolves either form.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -55,7 +55,7 @@ interface LinkView {
 export const listCrossProjectLinksToolConfig = {
   title: 'List cross-project links on a ticket',
   description:
-    'Return every cross-project link touching the ticket — both outgoing (this → other) and incoming (other → this). Each row carries the other end\'s project key, ticket key, title, and current status, so the model can see the linked work\'s state without a follow-up tool call. ACL-filtered: rows whose other-end project the caller cannot read are dropped silently.',
+    'Return every cross-project link touching the ticket - both outgoing (this → other) and incoming (other → this). Each row carries the other end\'s project key, ticket key, title, and current status, so the model can see the linked work\'s state without a follow-up tool call. ACL-filtered: rows whose other-end project the caller cannot read are dropped silently.',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key (e.g. "ORB-42") or UUID.'),
   }).shape,
@@ -92,7 +92,7 @@ export function makeListCrossProjectLinksHandler(client: OrbotoClient) {
 export const addCrossProjectLinkToolConfig = {
   title: 'Add a cross-project link between two tickets',
   description:
-    'Create a formal relation between two tickets in different projects. Caller must be a member of BOTH the source and target projects. Relation types: counterpart (parallel work in two repos — bidirectional), depends_on (this ticket waits for the other), blocks (the other waits for this), related (loose association). Pass statusSyncEnabled=true to opt into auto-close: when a counterpart-linked ticket moves to done, the other auto-closes too. Off by default.',
+    'Create a formal relation between two tickets in different projects. Caller must be a member of BOTH the source and target projects. Relation types: counterpart (parallel work in two repos - bidirectional), depends_on (this ticket waits for the other), blocks (the other waits for this), related (loose association). Pass statusSyncEnabled=true to opt into auto-close: when a counterpart-linked ticket moves to done, the other auto-closes too. Off by default.',
   inputSchema: z.object({
     sourceTicketKey: z.string().min(3),
     targetTicketKey: z.string().min(3),
@@ -161,7 +161,7 @@ export function makeUpdateCrossProjectLinkHandler(client: OrbotoClient) {
 export const removeCrossProjectLinkToolConfig = {
   title: 'Remove a cross-project link',
   description:
-    'DESTRUCTIVE — drops the cross-project link between two tickets. Caller must be a member of both source and target projects (or super-admin). The underlying tickets are unaffected; only the relation row is deleted.',
+    'DESTRUCTIVE - drops the cross-project link between two tickets. Caller must be a member of both source and target projects (or super-admin). The underlying tickets are unaffected; only the relation row is deleted.',
   inputSchema: z.object({
     sourceTicketKey: z.string().min(3),
     linkId: z.string().uuid(),

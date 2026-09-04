@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase A — reference test for `orboto_list_projects` tool
+ * ORB-244 Phase A - reference test for `orboto_list_projects` tool
  * mapping. Confirms that the tool handler:
  *   - calls `GET /projects`
  *   - produces both a text block (for the model) and structured content
@@ -32,11 +32,11 @@ describe('tools/list-projects', () => {
     const result = await makeListProjectsHandler(client)();
     expect(result.content[0]).toEqual({
       type: 'text',
-      text: '- ACME — Acme (active)\n- TOOL — Internal Tools (draft)\n(2 project(s), complete.)',
+      text: '- ACME - Acme (active)\n- TOOL - Internal Tools (draft)\n(2 project(s), complete.)',
     });
     expect(result.structuredContent).toEqual({
       projects: [
-        // ORB-1179 — uuid surfaced alongside the key
+        // ORB-1179 - uuid surfaced alongside the key
         { id: 'p1', key: 'ACME', name: 'Acme', status: 'active', description: 'Customer portal' },
         { id: 'p2', key: 'TOOL', name: 'Internal Tools', status: 'draft', description: null },
       ],
@@ -53,7 +53,7 @@ describe('tools/list-projects', () => {
       { id: 'p3', key: 'TOOL', name: 'Internal Tools', description: null, status: 'draft' },
     ]);
     const result = await makeListProjectsHandler(client)({ query: '10m' });
-    expect(result.content[0]).toEqual({ type: 'text', text: '- 10M — Math World (active)\n(1 project(s) matching "10m", complete.)' });
+    expect(result.content[0]).toEqual({ type: 'text', text: '- 10M - Math World (active)\n(1 project(s) matching "10m", complete.)' });
     expect(result.structuredContent).toMatchObject({ total: 1, totalProjects: 3, query: '10m' });
   });
 

@@ -90,7 +90,7 @@ function ticketStructured(t: TicketRow) {
     statusCategory: t.statusCategory ?? null,
     type: t.type,
     priority: t.priority,
-    // ORB-1608 — role-aware commit policy. Absent on responses the API's
+    // ORB-1608 - role-aware commit policy. Absent on responses the API's
     // enrich pipeline didn't touch; the API itself defaults unset rows to
     // 'implementation'.
     deliveryMode: t.deliveryMode ?? 'implementation',

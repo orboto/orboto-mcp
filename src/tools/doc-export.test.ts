@@ -1,5 +1,5 @@
 /**
- * ORB-915 — doc-export tool tests.
+ * ORB-915 - doc-export tool tests.
  *
  * Markdown export: stub fetch returning a string + content-type
  * text/markdown. Verify the tool returns the Markdown verbatim.
@@ -103,7 +103,7 @@ describe('orboto_export_doc_pdf', () => {
     expect(first.type).toBe('resource');
     expect(first.resource.uri).toBe(`orboto://doc/${DOC_ID}/export.pdf`);
     expect(first.resource.mimeType).toBe('application/pdf');
-    // The blob is the base64 of the bytes — decode it back and compare.
+    // The blob is the base64 of the bytes - decode it back and compare.
     const decoded = Buffer.from(first.resource.blob, 'base64');
     expect(Array.from(decoded)).toEqual(Array.from(pdfBytes));
     expect(res.structuredContent).toMatchObject({

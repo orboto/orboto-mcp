@@ -1,14 +1,14 @@
 /**
- * ORB-916 — doc revision history MCP tools (epic ORB-911 Phase 5).
+ * ORB-916 - doc revision history MCP tools (epic ORB-911 Phase 5).
  *
- *   - orboto_list_doc_revisions   — GET /docs/:id/revisions  (cursor-paged)
- *   - orboto_get_doc_revision     — GET /docs/:id/revisions/:rid
- *   - orboto_restore_doc_revision — POST /docs/:id/revisions/:rid/restore
+ * - orboto_list_doc_revisions - GET /docs/:id/revisions  (cursor-paged)
+ * - orboto_get_doc_revision - GET /docs/:id/revisions/:rid
+ * - orboto_restore_doc_revision - POST /docs/:id/revisions/:rid/restore
  *
  * Revisions are auto-captured by PATCH /docs/:id every time the title
  * or body changes, so by the time an agent wants to roll back there's
  * usually a long history to walk. The list endpoint is cursor-paged
- * (newest-first by editedAt DESC + id tiebreak) — the tool surfaces
+ * (newest-first by editedAt DESC + id tiebreak) - the tool surfaces
  * `nextCursor` in structuredContent so the caller can page through if
  * the default 25-row page isn't enough.
  *
@@ -54,7 +54,7 @@ interface DocRow {
 export const listDocRevisionsToolConfig = {
   title: 'List the revision history of a doc page',
   description:
-    'Return saved revisions for a doc page, newest-first. Each row carries the revision id, title at snapshot time, editor user id, and editedAt timestamp; the body content is NOT in this list (use orboto_get_doc_revision to fetch one). Cursor-paged — pass `cursor` to walk older pages.',
+    'Return saved revisions for a doc page, newest-first. Each row carries the revision id, title at snapshot time, editor user id, and editedAt timestamp; the body content is NOT in this list (use orboto_get_doc_revision to fetch one). Cursor-paged - pass `cursor` to walk older pages.',
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     limit: z.number().int().min(1).max(100).optional().describe('Page size. Defaults to API default (25).'),
@@ -85,7 +85,7 @@ export function makeListDocRevisionsHandler(client: OrbotoClient) {
       return `- ${r.editedAt}  ·  ${r.title}  ·  by ${editor}  ·  id: ${r.id}`;
     });
     if (page.nextCursor) {
-      lines.push('', `(more available — pass cursor: ${page.nextCursor})`);
+      lines.push('', `(more available - pass cursor: ${page.nextCursor})`);
     }
     return {
       content: [{ type: 'text', text: lines.join('\n') }],

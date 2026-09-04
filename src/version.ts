@@ -1,5 +1,5 @@
 /**
- * ORB-1166 — single source of truth for the MCP server version.
+ * ORB-1166 - single source of truth for the MCP server version.
  *
  * Read from package.json (which release.mjs bumps) so serverInfo.version
  * + the User-Agent header always reflect the real release instead of a
@@ -20,7 +20,7 @@ function readVersion(): string {
     const pkg = createRequire(import.meta.url)('../package.json') as { version?: string };
     if (typeof pkg?.version === 'string' && pkg.version) return pkg.version;
   } catch {
-    // package.json not present in this runtime — fall through to the default.
+    // package.json not present in this runtime - fall through to the default.
   }
   return '0.0.0';
 }

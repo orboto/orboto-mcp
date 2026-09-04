@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase B — key-resolver helpers.
+ * ORB-244 Phase B - key-resolver helpers.
  *
  * The two-step ticket resolution (project key → project UUID →
  * ticket) is the most reused code path in the tool suite, so
@@ -102,7 +102,7 @@ describe('ticketLine', () => {
     expect(line).toBe('[ACME-2] Docs update (To Do)');
   });
 
-  // ORB-1605 — flags the stalled-ingestion signal in the one-line summary.
+  // ORB-1605 - flags the stalled-ingestion signal in the one-line summary.
   it('appends the waiting-on-ingestion marker when waitingForGitIngestion is true', () => {
     const line = ticketLine({
       id: 't1', projectId: 'p1', milestoneId: null,

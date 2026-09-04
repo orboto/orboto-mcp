@@ -1,5 +1,5 @@
 /**
- * ORB-1089 — MCP tools to manage the configurable coding-agent
+ * ORB-1089 - MCP tools to manage the configurable coding-agent
  * working-rule blocks. Mirrors the REST CRUD (admin:ai:read/write
  * gated server-side; a 403 means the caller's key lacks the slug).
  * Part of the 4-way sync (REST + MCP + skill + in-app chat).
@@ -40,7 +40,7 @@ function renderBlock(b: BlockRow): string {
 export const listAgentInstructionsToolConfig = {
   title: 'MANAGE the workspace coding-agent rule blocks (admin)',
   description:
-    'ADMIN/MANAGEMENT tool — lists the individual rule BLOCKS at a scope (workspace: needs admin:ai:read; project: needs project:edit; personal: your own) so they can be edited/toggled/reordered. This is NOT how you read the rules to follow. To LOAD the rules you must follow as an agent, call orboto_session_start instead — it returns the complete assembled rule set.',
+    'ADMIN/MANAGEMENT tool - lists the individual rule BLOCKS at a scope (workspace: needs admin:ai:read; project: needs project:edit; personal: your own) so they can be edited/toggled/reordered. This is NOT how you read the rules to follow. To LOAD the rules you must follow as an agent, call orboto_session_start instead - it returns the complete assembled rule set.',
   inputSchema: z.object({
     scope: z.enum(['workspace', 'customer', 'project', 'personal']).default('workspace'),
     projectId: z.string().uuid().optional().describe('Required for scope=project.'),
@@ -193,7 +193,7 @@ export function makeResetAgentInstructionHandler(client: OrbotoClient) {
 export const deleteAgentInstructionToolConfig = {
   title: 'Delete a custom coding-agent rule block',
   description:
-    'Delete a CUSTOM rule block. Default (builtin) blocks cannot be deleted — disable them via update instead. Needs admin:ai:write.',
+    'Delete a CUSTOM rule block. Default (builtin) blocks cannot be deleted - disable them via update instead. Needs admin:ai:write.',
   inputSchema: z.object({ id: z.string().uuid() }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };

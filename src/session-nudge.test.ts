@@ -1,5 +1,5 @@
 /**
- * ORB-1331 — session-start nudge state machine + prepend helper.
+ * ORB-1331 - session-start nudge state machine + prepend helper.
  *
  * Unit-level proof of the semantics the transport tests then exercise
  * end-to-end: fire once, only on the first tool call, never when that
@@ -39,7 +39,7 @@ describe('shouldNudge (ORB-1331)', () => {
     const a = createNudgeState();
     const b = createNudgeState();
     expect(shouldNudge(a, 'orboto_list_projects')).toBe(true);
-    // b is untouched by a — its own first call still nudges.
+    // b is untouched by a - its own first call still nudges.
     expect(shouldNudge(b, 'orboto_list_projects')).toBe(true);
     expect(shouldNudge(a, 'orboto_list_projects')).toBe(false);
     expect(shouldNudge(b, 'orboto_list_projects')).toBe(false);
@@ -90,7 +90,7 @@ describe('SESSION_START_NUDGE text (ORB-1331)', () => {
   it('is English, ASCII-only, and free of em/en-dashes', () => {
     // eslint-disable-next-line no-control-regex
     expect(/^[\x00-\x7F]*$/.test(SESSION_START_NUDGE)).toBe(true);
-    expect(SESSION_START_NUDGE).not.toMatch(/[–—]/); // en/em dash
+    expect(SESSION_START_NUDGE).not.toMatch(/[\u2013\u2014]/); // en/em dash
     expect(SESSION_START_NUDGE).toContain('orboto_session_start');
   });
 });
@@ -105,7 +105,7 @@ describe('prependNudge (ORB-1331)', () => {
     expect(out.content).toHaveLength(2);
     expect(out.content[0]).toEqual({ type: 'text', text: SESSION_START_NUDGE });
     expect(out.content[1]).toEqual({ type: 'text', text: 'tool output' });
-    // structuredContent consumers are unaffected — same reference-equal payload.
+    // structuredContent consumers are unaffected - same reference-equal payload.
     expect(out.structuredContent).toBe(original.structuredContent);
     // input is not mutated.
     expect(original.content).toHaveLength(1);

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Orboto-Enterprise-1.0
 /**
- * ORB-945 — cross-project-link MCP tools.
+ * ORB-945 - cross-project-link MCP tools.
  *
  *   - list: renders outgoing + incoming with arrow + sync marker, empty-state
  *   - add: POSTs the right body, surfaces sync-on hint

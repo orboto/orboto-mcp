@@ -1,26 +1,26 @@
 /**
- * ORB-799 — docs-AI surface (ask + ingest).
+ * ORB-799 - docs-AI surface (ask + ingest).
  *
  * Three tools that mirror the wrapper's `ask-docs` / `ingest-url` /
  * `ingest-file` subcommands. Together they're the foundation for any
  * agent that needs to "remember this URL" / "add this PDF to our
  * wiki" workflows.
  *
- *   - orboto_ask_docs   — RAG Q&A across wiki docs, returns answer +
+ * - orboto_ask_docs - RAG Q&A across wiki docs, returns answer +
  *                         citations. Requires both `configured` and
  *                         `embeddingsConfigured` on `/ai/status`
  *                         (RAG retrieval needs an embedding-capable
  *                         provider).
- *   - orboto_ingest_url — fetch + extract + create doc from a public
+ * - orboto_ingest_url - fetch + extract + create doc from a public
  *                         URL via the Readability-fallback pipeline.
- *   - orboto_ingest_file — upload + extract + create doc from a local
+ * - orboto_ingest_file - upload + extract + create doc from a local
  *                         file (PDF / DOCX / Markdown / plain text).
  *                         Uses the multipart-upload route, so the MCP
  *                         tool receives the bytes as a base64 string
  *                         to avoid the model needing local FS access.
  *
  * AI-gated note: the `ai_status` tool exists for pre-flight. We do NOT
- * pre-check inside the handlers — the API returns the same gating
+ * pre-check inside the handlers - the API returns the same gating
  * error regardless and a pre-check would double the latency of every
  * call. Models are expected to call `orboto_ai_status` once per
  * session if they're unsure of workspace shape.
@@ -67,7 +67,7 @@ interface IngestFileResponse {
 export const askDocsToolConfig = {
   title: 'Ask a question against the wiki (RAG)',
   description:
-    'Run a natural-language question against the wiki via the workspace\'s RAG pipeline. Returns an `answer` (Markdown) + `citations` array `[{index, title, link, spaceName}]`. The model is the workspace\'s configured AI provider; retrieval requires the embedding provider too — call `orboto_ai_status` to verify both before relying on this. Restrict to a single doc space with `spaceId` when scoping a query (e.g. "only the runbooks space"). Latency is dominated by retrieval + LLM round-trip; expect 2-10s.',
+    'Run a natural-language question against the wiki via the workspace\'s RAG pipeline. Returns an `answer` (Markdown) + `citations` array `[{index, title, link, spaceName}]`. The model is the workspace\'s configured AI provider; retrieval requires the embedding provider too - call `orboto_ai_status` to verify both before relying on this. Restrict to a single doc space with `spaceId` when scoping a query (e.g. "only the runbooks space"). Latency is dominated by retrieval + LLM round-trip; expect 2-10s.',
   inputSchema: z.object({
     question: z.string().min(3),
     spaceId: z.string().min(1).optional().describe('Limit RAG retrieval to one doc space - key (e.g. ORB-S1), name, or UUID.'),
@@ -110,10 +110,10 @@ export function makeAskDocsHandler(client: OrbotoClient) {
 export const ingestUrlToolConfig = {
   title: 'Ingest a public URL into a wiki space',
   description:
-    'Fetch a public URL, run Readability extraction, store the result as a Markdown doc in `spaceId`. Optionally nest under `parentDocId` to keep the tree tidy. Sets `readabilityFallback: true` when the page didn\'t look like a recognisable article (the body falls back to full-page text — a flag the caller should surface to the operator for review).',
+    'Fetch a public URL, run Readability extraction, store the result as a Markdown doc in `spaceId`. Optionally nest under `parentDocId` to keep the tree tidy. Sets `readabilityFallback: true` when the page didn\'t look like a recognisable article (the body falls back to full-page text - a flag the caller should surface to the operator for review).',
   inputSchema: z.object({
     url: z.string().url(),
-    spaceId: z.string().uuid().describe('Target doc space — find IDs via `orboto_list_doc_spaces`.'),
+    spaceId: z.string().uuid().describe('Target doc space - find IDs via `orboto_list_doc_spaces`.'),
     parentDocId: z.string().uuid().optional().describe('Optional parent doc to nest under.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -133,7 +133,7 @@ export function makeIngestUrlHandler(client: OrbotoClient) {
       `  fetched ${Math.round(res.fetchedBytes / 1024)} KB → ${res.markdownChars} chars of markdown`,
     ];
     if (res.readabilityFallback) {
-      lines.push('  ! Readability couldn\'t identify a main article — body is full-page text. Review before relying.');
+      lines.push('  ! Readability couldn\'t identify a main article - body is full-page text. Review before relying.');
     }
     return {
       content: [{ type: 'text', text: lines.join('\n') }],
@@ -164,7 +164,7 @@ function mimetypeFor(filename: string): string {
 export const ingestFileToolConfig = {
   title: 'Ingest a local file into a wiki space (multipart upload)',
   description:
-    'Upload a file (PDF / DOCX / Markdown / plain text) into `spaceId` via multipart. The model passes the bytes as a base64 `contentBase64` field (so this works without local FS access on the agent side). Use `filename` to give the doc a meaningful title — the backend sniffs the mimetype but also uses the filename for display. Optional `parentDocId` nests under an existing doc.',
+    'Upload a file (PDF / DOCX / Markdown / plain text) into `spaceId` via multipart. The model passes the bytes as a base64 `contentBase64` field (so this works without local FS access on the agent side). Use `filename` to give the doc a meaningful title - the backend sniffs the mimetype but also uses the filename for display. Optional `parentDocId` nests under an existing doc.',
   inputSchema: z.object({
     spaceId: z.string().uuid(),
     filename: z.string().min(1).describe('Display filename, e.g. "ADR-12-secrets-rotation.pdf".'),
@@ -188,7 +188,7 @@ export function makeIngestFileHandler(client: OrbotoClient) {
       throw new Error('contentBase64 is not valid base64.');
     }
     if (arrayBuffer.byteLength === 0) {
-      throw new Error('contentBase64 decoded to 0 bytes — refuse to upload an empty file.');
+      throw new Error('contentBase64 decoded to 0 bytes - refuse to upload an empty file.');
     }
     const form = new FormData();
     form.append(

@@ -1,5 +1,5 @@
 /**
- * ORB-1037 — RACI agent surfaces.
+ * ORB-1037 - RACI agent surfaces.
  *   - orboto_raci      : read the RACI matrix (tickets x members x role).
  *   - orboto_set_raci  : set a person's R/A/C/I role on a ticket.
  * Both wrap the same routes the web UI uses. Setting a second Accountable
@@ -27,7 +27,7 @@ async function resolveMemberId(client: OrbotoClient, projectId: string, email: s
 }
 
 // ---------------------------------------------------------------------------
-// orboto_raci — read the matrix
+// orboto_raci - read the matrix
 // ---------------------------------------------------------------------------
 
 export const raciToolConfig = {
@@ -94,7 +94,7 @@ export function makeRaciHandler(client: OrbotoClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orboto_set_raci — write a role
+// orboto_set_raci - write a role
 // ---------------------------------------------------------------------------
 
 export const setRaciToolConfig = {
@@ -117,7 +117,7 @@ export function makeSetRaciHandler(client: OrbotoClient) {
       await client.put(`/projects/${ticket.projectId}/tickets/${ticket.id}/raci/${userId}`, { role });
     } catch (err) {
       if (err instanceof OrbotoApiError && err.status === 409) {
-        // Single-A violation or RACI-not-enabled — surface the clean message
+        // Single-A violation or RACI-not-enabled - surface the clean message
         // the API put in the response body.
         let msg = err.body;
         try { msg = (JSON.parse(err.body) as { error?: string }).error ?? err.body; } catch { /* keep raw */ }

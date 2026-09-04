@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase A — Streamable HTTP transport for the MCP server.
+ * ORB-244 Phase A - Streamable HTTP transport for the MCP server.
  *
  * Used by the Self-Hosted-inline delivery variant: a separate
  * container alongside the API, listening on `ORBOTO_MCP_PORT` (default
@@ -7,7 +7,7 @@
  *
  * Per-request auth: every POST must carry `Authorization: Bearer
  * orb_*` in the header. We build one `McpServer` per session so each
- * session gets its own OrbotoClient bound to that session's token —
+ * session gets its own OrbotoClient bound to that session's token - 
  * no mid-session token mutation, no cross-session leakage.
  *
  * Sessions are indexed by the MCP-spec-mandated `mcp-session-id`
@@ -26,7 +26,7 @@
  * requests without valid auth; the kill-switch + mcp:use preflight still fires
  * on every (re)hydration.
  *
- * No Express dep — Node's built-in http server is enough for a
+ * No Express dep - Node's built-in http server is enough for a
  * single-route MCP endpoint and keeps the production image small.
  */
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
@@ -247,7 +247,7 @@ export async function closeAllMcpSessions(
 
 /** Read the request body as JSON. Fails hard on empty body for POSTs
  *  that need one; MCP clients always send a body on /mcp.
- *  ORB-1576 — byte cap: the auth check runs AFTER the body is buffered,
+ *  ORB-1576 - byte cap: the auth check runs AFTER the body is buffered,
  *  so an unauthenticated client could otherwise grow container memory
  *  with an endless POST. JSON-RPC envelopes are small (the fat
  *  attachment payloads ride the api directly, not /mcp). */
@@ -284,12 +284,12 @@ function sendError(res: ServerResponse, status: number, message: string, extraHe
   res.end(JSON.stringify({ error: message }));
 }
 
-/** ORB-957 — RFC 6750 §3 WWW-Authenticate challenge for /mcp 401s.
+/** ORB-957 - RFC 6750 §3 WWW-Authenticate challenge for /mcp 401s.
  *  MCP-aware clients (Claude Desktop, Cursor, VS Code Copilot) follow
  *  the resource_metadata URL to auto-discover the OAuth flow.
  *
  *  The resource_metadata URL must point at the PUBLIC host the AI
- *  client can reach — NOT the internal `http://api:3000` baseUrl the
+ *  client can reach - NOT the internal `http://api:3000` baseUrl the
  *  MCP container uses to talk to the API. We derive the public URL
  *  from the incoming request's Host + X-Forwarded-Proto headers,
  *  which the reverse proxy (nginx → web container) sets for us.
@@ -364,7 +364,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
   // Rehydrate/adopt: stand up a session bound to `token` and force it into the
   // initialized state under `chosenSessionId` WITHOUT replaying the initialize
   // handshake, so the client's in-flight non-init request validates against it.
-  /** ORB-1576 — resolve a bearer's owner identity via the status preflight;
+  /** ORB-1576 - resolve a bearer's owner identity via the status preflight;
    *  null on any failure (invalid token, MCP off, network) = fail closed. */
   async function resolveUserEmail(token: string): Promise<string | null> {
     try {
@@ -443,7 +443,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
   killSwitchTimer.unref?.();
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-    // Health probe — stays cheap, zero-auth so docker healthchecks
+    // Health probe - stays cheap, zero-auth so docker healthchecks
     // don't need a token. Doesn't reveal anything about config.
     if (req.method === 'GET' && req.url === '/health') {
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -500,13 +500,13 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
       return;
     }
 
-    // Extract the bearer token. Per-session auth — the same token
+    // Extract the bearer token. Per-session auth - the same token
     // is used for the session's whole lifetime (reconnect without
     // re-init would land on a new session id and fresh auth anyway).
     //
     // Two acceptable token shapes:
-    //   orb_*          — service-account API key (operator-minted)
-    //   JWT (3 segs)   — OAuth-issued access token from the /oauth/
+    //   orb_* - service-account API key (operator-minted)
+    //   JWT (3 segs) - OAuth-issued access token from the /oauth/
     //                    authorize + /oauth/token flow (ORB-957)
     // Both go to the API unchanged; the API's authenticate decorator
     // distinguishes them.
@@ -528,7 +528,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
     if (req.method === 'DELETE') {
       const existing = sessions.get(sessionId);
       if (existing) {
-        // ORB-1576 — only the session's owner may tear it down (a leaked id
+        // ORB-1576 - only the session's owner may tear it down (a leaked id
         // must not let someone kill or probe another user's session).
         const presented = await resolveUserEmail(token);
         if (!presented || presented !== existing.userEmail) {
@@ -573,7 +573,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
       // kill-switch client, and the SSE bridge in one assignment.
       if (session.tokenHolder.current !== token) {
         // The client rotated its access token mid-session (the exact case that
-        // used to brick the session). ORB-1576 — adopt the new bearer ONLY
+        // used to brick the session). ORB-1576 - adopt the new bearer ONLY
         // after it resolves to the session owner's identity: a session id
         // plus ANY valid token must not hijack the session's subscription set
         // / token holder (the id is a 122-bit UUID, but a leaked id is no
@@ -682,7 +682,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
     }
 
     if (!sessionId && isInitializeRequest(body)) {
-      // New session — mint a transport + server pair bound to this
+      // New session - mint a transport + server pair bound to this
       // request's token, register with the session map once
       // `onsessioninitialized` fires.
 
@@ -731,7 +731,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
       return;
     }
 
-    // Neither an init nor a known session — the client is confused.
+    // Neither an init nor a known session - the client is confused.
     sendError(res, 400, 'Missing mcp-session-id header or initialize request');
   });
 

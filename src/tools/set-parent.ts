@@ -1,5 +1,5 @@
 /**
- * ORB-799 (gap-cluster 8) — re-parent existing tickets.
+ * ORB-799 (gap-cluster 8) - re-parent existing tickets.
  *
  * `orboto_update_ticket` accepts most ticket fields but NOT
  * `parentTicketId` / `parentTicketKey`, mirroring an API choice made
@@ -11,11 +11,11 @@
  * new epic (e.g. discovering during cluster-formation that ORB-600
  * belongs under ORB-800 as a sub-ticket) had no MCP-side path and
  * required falling back to the Bash wrapper's raw `patch /projects/...`
- * route — documented in `feedback_mcp_reparent_limitation.md`.
+ * route - documented in `feedback_mcp_reparent_limitation.md`.
  *
  * Design choice: separate `orboto_set_parent` tool rather than
  * extending `orboto_update_ticket`'s patch shape. Symmetric to
- * `orboto_set_milestone` which exists for the same reason — a
+ * `orboto_set_milestone` which exists for the same reason - a
  * dedicated tool with clearer semantics, easier permission gating
  * thinking, and a natural `parentTicketKey: null` path for detaching.
  */
@@ -27,7 +27,7 @@ import { resolveTicketByKey, type TicketRow } from './shared.js';
 export const setParentToolConfig = {
   title: 'Set or clear a ticket\'s parent',
   description:
-    'Re-parent an existing ticket. Pass `parentTicketKey` to make this ticket a sub-ticket of another, or pass `parentTicketKey: null` to detach from any parent (back to top-level). Both tickets must live in the same project. Cycle detection + self-parenting are rejected by the API. Symmetric to `orboto_set_milestone` — use this rather than `orboto_update_ticket` for parent moves.',
+    'Re-parent an existing ticket. Pass `parentTicketKey` to make this ticket a sub-ticket of another, or pass `parentTicketKey: null` to detach from any parent (back to top-level). Both tickets must live in the same project. Cycle detection + self-parenting are rejected by the API. Symmetric to `orboto_set_milestone` - use this rather than `orboto_update_ticket` for parent moves.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     parentTicketKey: z.string().nullable().describe('New parent ticket key (e.g. "ACME-10"), or null to detach.'),

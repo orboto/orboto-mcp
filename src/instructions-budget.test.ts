@@ -1,5 +1,5 @@
 /**
- * ORB-1177 — the instructions block stays under a length budget so the
+ * ORB-1177 - the instructions block stays under a length budget so the
  * client can't silently truncate it mid-rule; the head always survives
  * and the rules are cut at a whole-line boundary with a pointer to the
  * cap-independent full set.

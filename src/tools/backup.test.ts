@@ -1,5 +1,5 @@
 /**
- * ORB-1301 — backup tool tests.
+ * ORB-1301 - backup tool tests.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';

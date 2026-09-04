@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase D — prompt template unit tests.
+ * ORB-244 Phase D - prompt template unit tests.
  *
  * Prompts are stateless: handler returns a `messages[]` shape based
  * purely on input args. We register against a real McpServer and
@@ -24,7 +24,7 @@ function buildServerWithPrompts() {
 function getPromptHandler(server: McpServer, name: string): PromptEntry['callback'] {
   const prompts = (server as unknown as { _registeredPrompts: Record<string, PromptEntry> })._registeredPrompts;
   const entry = prompts[name];
-  if (!entry) throw new Error(`No prompt "${name}" — known: ${Object.keys(prompts).join(', ')}`);
+  if (!entry) throw new Error(`No prompt "${name}" - known: ${Object.keys(prompts).join(', ')}`);
   return entry.callback;
 }
 

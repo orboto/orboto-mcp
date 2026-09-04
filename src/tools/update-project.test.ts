@@ -1,5 +1,5 @@
 /**
- * ORB-885 — unit tests for `orboto_update_project`.
+ * ORB-885 - unit tests for `orboto_update_project`.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
@@ -173,7 +173,7 @@ describe('orboto_archive_project', () => {
     expect(res.structuredContent).toMatchObject({ status: 'archived', alreadyArchived: false });
   });
 
-  it('is idempotent — short-circuits with no PATCH when already archived', async () => {
+  it('is idempotent - short-circuits with no PATCH when already archived', async () => {
     const calls = stub([
       { json: { ...PROJ, status: 'archived' } },
     ]);

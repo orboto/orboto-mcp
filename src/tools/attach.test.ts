@@ -1,5 +1,5 @@
 /**
- * ORB-799 — `orboto_attach_to_ticket` unit tests.
+ * ORB-799 - `orboto_attach_to_ticket` unit tests.
  *
  * Covers upload-only, embed=true (re-PATCHes description), and the
  * empty-base64 refusal. The multipart wire format is opaque to JSON

@@ -1,11 +1,11 @@
 /**
- * ORB-244 Phase C Group 3 — checklist write tools (ORB-234).
+ * ORB-244 Phase C Group 3 - checklist write tools (ORB-234).
  *
  * Four tools:
- *   - orboto_check / orboto_uncheck — toggle a single item's `isCompleted`
- *   - orboto_add_check — append a new item to a list (default: first list
+ * - orboto_check / orboto_uncheck - toggle a single item's `isCompleted`
+ * - orboto_add_check - append a new item to a list (default: first list
  *                       on the ticket)
- *   - orboto_new_checklist — create a fresh list with optional triggers-done
+ * - orboto_new_checklist - create a fresh list with optional triggers-done
  *
  * Item identifier: agents prefer 1-based indexes ("check item 3 on
  * ACME-42") because UUIDs are ergonomic disasters in a chat. The
@@ -40,7 +40,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /**
  * Resolve an item identifier (1-based index OR UUID) to its UUID.
- * Index is global across all checklists on the ticket — same model
+ * Index is global across all checklists on the ticket - same model
  * the wrapper's `check ORB-X 3` uses, so the agent's mental model
  * is stable across the two surfaces.
  */
@@ -57,12 +57,12 @@ async function resolveItemId(
 
   const idx = typeof identifier === 'number' ? identifier : parseInt(identifier, 10);
   if (!Number.isFinite(idx) || idx < 1) {
-    throw new Error(`Invalid item identifier "${identifier}" — must be a 1-based index or a UUID.`);
+    throw new Error(`Invalid item identifier "${identifier}" - must be a 1-based index or a UUID.`);
   }
   const flat = checklists.flatMap((cl) => cl.items);
   const target = flat[idx - 1];
   if (!target) {
-    throw new Error(`Item index ${idx} is out of range — ticket has ${flat.length} items.`);
+    throw new Error(`Item index ${idx} is out of range - ticket has ${flat.length} items.`);
   }
   return { itemId: target.id, checklists };
 }
@@ -99,14 +99,14 @@ const toggleInputSchema = z.object({
   ticketKey: z.string().min(3),
   item: z.union([
     z.number().int().min(1).describe('1-based index, global across all checklists on this ticket'),
-    z.string().describe('Item UUID — for callers that already have it'),
+    z.string().describe('Item UUID - for callers that already have it'),
   ]),
 }).shape;
 
 export const checkToolConfig = {
   title: 'Check a checklist item',
   description:
-    'Mark a checklist item as completed. `item` is either a 1-based index (count across all checklists on the ticket, top to bottom) or the item\'s UUID. Linked-ticket items are checked automatically when the linked ticket transitions to `done` — checking those manually is ignored.',
+    'Mark a checklist item as completed. `item` is either a 1-based index (count across all checklists on the ticket, top to bottom) or the item\'s UUID. Linked-ticket items are checked automatically when the linked ticket transitions to `done` - checking those manually is ignored.',
   inputSchema: toggleInputSchema,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -123,14 +123,14 @@ export const makeCheckHandler = (client: OrbotoClient) => makeToggleHandler(clie
 export const makeUncheckHandler = (client: OrbotoClient) => makeToggleHandler(client, false);
 
 // ---------------------------------------------------------------------------
-// orboto_remove_check (ORB-1095) — agent parity for DELETE
+// orboto_remove_check (ORB-1095) - agent parity for DELETE
 // /checklist-items/:id. The surfaces could append but not remove.
 // ---------------------------------------------------------------------------
 
 export const removeCheckToolConfig = {
   title: 'Remove a checklist item',
   description:
-    'Delete a checklist item from a ticket. `item` is either a 1-based index (global across all checklists on the ticket, top to bottom) or the item\'s UUID — same semantics as orboto_check. Destructive: the item is gone, not just unchecked.',
+    'Delete a checklist item from a ticket. `item` is either a 1-based index (global across all checklists on the ticket, top to bottom) or the item\'s UUID - same semantics as orboto_check. Destructive: the item is gone, not just unchecked.',
   inputSchema: toggleInputSchema,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
@@ -221,7 +221,7 @@ export function makeAddCheckHandler(client: OrbotoClient) {
 export const newChecklistToolConfig = {
   title: 'Create a new checklist on a ticket',
   description:
-    'Create a fresh checklist on a ticket. `triggersDone=true` gates the ticket\'s auto-done transition on this list (the ticket can\'t move to done until every item here is checked). Optional `items` seed the list with content in one call — saves a round-trip per item.',
+    'Create a fresh checklist on a ticket. `triggersDone=true` gates the ticket\'s auto-done transition on this list (the ticket can\'t move to done until every item here is checked). Optional `items` seed the list with content in one call - saves a round-trip per item.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     title: z.string().min(1).max(300),
@@ -245,7 +245,7 @@ export function makeNewChecklistHandler(client: OrbotoClient) {
       list = await client.post<Checklist>(`/tickets/${ticket.id}/checklists`, body);
     } catch (err) {
       if (err instanceof OrbotoApiError && err.status === 403) {
-        throw new Error(`Forbidden — you need ticket:edit on [${ticket.ticketKey}]'s project to add checklists.`);
+        throw new Error(`Forbidden - you need ticket:edit on [${ticket.ticketKey}]'s project to add checklists.`);
       }
       throw err;
     }

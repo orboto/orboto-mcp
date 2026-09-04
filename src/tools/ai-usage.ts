@@ -1,5 +1,5 @@
 /**
- * ORB-1321 — `orboto_ai_usage`.
+ * ORB-1321 - `orboto_ai_usage`.
  *
  * Operator diagnostic for AI *consumption*: total calls / tokens in+out /
  * errors over a date range, plus per-user, per-operation, and per-day
@@ -27,7 +27,7 @@ interface AiUsageResponse {
 export const aiUsageToolConfig = {
   title: 'AI usage (calls / tokens / errors)',
   description:
-    'Operator diagnostic for AI consumption over a date range (defaults to the last 30 days). Returns totals (calls, tokens in / out, error count) plus per-user, per-operation and per-day breakdowns and the AI-Chat slice (conversation count + top chat users). Use this to see spend / call volume / which operations run most / how many calls are erroring. Aggregates only — not the per-row error messages. Pair with orboto_embedding_status (pipeline health) and orboto_ai_status (is AI configured). Requires admin:ai:read — 403 for non-admin callers.',
+    'Operator diagnostic for AI consumption over a date range (defaults to the last 30 days). Returns totals (calls, tokens in / out, error count) plus per-user, per-operation and per-day breakdowns and the AI-Chat slice (conversation count + top chat users). Use this to see spend / call volume / which operations run most / how many calls are erroring. Aggregates only - not the per-row error messages. Pair with orboto_embedding_status (pipeline health) and orboto_ai_status (is AI configured). Requires admin:ai:read - 403 for non-admin callers.',
   inputSchema: z.object({
     start: z.string().optional().describe('Range start, YYYY-MM-DD (inclusive). Defaults to 30 days ago.'),
     end: z.string().optional().describe('Range end, YYYY-MM-DD (inclusive). Defaults to today.'),
@@ -58,7 +58,7 @@ export function makeAiUsageHandler(client: OrbotoClient) {
     lines.push(`AI usage${args.start || args.end ? ` (${args.start ?? 'start'} → ${args.end ?? 'today'})` : ' (last 30 days)'}`);
     lines.push(`Totals: ${u.totals.calls} calls · ${u.totals.tokensIn} tokens in · ${u.totals.tokensOut} out · ${u.totals.errors} errors`);
     if (u.totals.errors > 0) {
-      lines.push(`  ⚠ ${u.totals.errors} call(s) errored — check Admin → AI → Usage (or the ai_usage_log) for the messages; aggregates don't carry them.`);
+      lines.push(`  ⚠ ${u.totals.errors} call(s) errored - check Admin → AI → Usage (or the ai_usage_log) for the messages; aggregates don't carry them.`);
     }
     if (topOps.length) lines.push(`Top operations: ${topOps.map((o) => `${o.operation} (${o.calls})`).join(', ')}`);
     if (topUsers.length) lines.push(`Top users: ${topUsers.map((x) => `${x.userName ?? 'unknown'} (${x.calls})`).join(', ')}`);

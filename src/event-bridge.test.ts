@@ -1,11 +1,11 @@
 /**
- * ORB-940 — EventBridge unit tests.
+ * ORB-940 - EventBridge unit tests.
  *
  * Three concerns:
  *   1. Event → URI mapping (pure function, no I/O)
- *   2. Dispatch behaviour — subscribed URIs trigger
+ *   2. Dispatch behaviour - subscribed URIs trigger
  *      sendResourceUpdated, unsubscribed do not
- *   3. Backpressure — > 100 forwarded events → one
+ *   3. Backpressure - > 100 forwarded events → one
  *      sendResourceListChanged instead of more updates
  *
  * The actual SSE consumption path is exercised via a streaming
@@ -134,7 +134,7 @@ describe('EventBridge.dispatch', () => {
   it('falls back to sendResourceListChanged after the overflow threshold', async () => {
     const mcp = mockMcp();
     const subscriptions = new Set(['orboto://timer']);
-    // 101 timer events — one more than the threshold so the 101st
+    // 101 timer events - one more than the threshold so the 101st
     // round trips through the list_changed path.
     const frames = Array.from({ length: 101 }, () => ({ type: 'timer:changed', userId: 'u1' }));
     const fetchFn = vi.fn().mockResolvedValueOnce(mockSseResponse(frames));
@@ -158,7 +158,7 @@ describe('EventBridge.dispatch', () => {
   it('survives malformed frames without aborting the stream', async () => {
     const mcp = mockMcp();
     const subscriptions = new Set(['orboto://ticket/ORB-42']);
-    // Inject one bad frame between two good ones — the bad frame is
+    // Inject one bad frame between two good ones - the bad frame is
     // a non-JSON 'data:' line, which the bridge should skip.
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({

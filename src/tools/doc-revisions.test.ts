@@ -1,9 +1,9 @@
 /**
- * ORB-916 — doc-revisions tool tests.
+ * ORB-916 - doc-revisions tool tests.
  *
- *   - list  — happy + empty + nextCursor follow-up
- *   - get   — happy
- *   - restore — happy + 404 bubble-up
+ * - list - happy + empty + nextCursor follow-up
+ * - get - happy
+ * - restore - happy + 404 bubble-up
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';

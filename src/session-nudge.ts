@@ -1,5 +1,5 @@
 /**
- * ORB-1331 — session-start nudge.
+ * ORB-1331 - session-start nudge.
  *
  * The binding operating rules are delivered as prose in the MCP
  * `instructions` block (see server.ts) with a "FIRST ACTION: call
@@ -11,7 +11,7 @@
  * This adds SOFT technical enforcement: per MCP session, if the FIRST
  * tool call is not `orboto_session_start`, prepend a one-time reminder
  * text block to that first call's response. It is a reminder, never a
- * refusal — read-only exploration and benign one-shot clients keep
+ * refusal - read-only exploration and benign one-shot clients keep
  * working. It fires at most once and never when the first call already
  * IS `orboto_session_start`.
  *
@@ -23,12 +23,12 @@
  */
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
-/** The tool whose whole job is to load the rules — never nudge on it. */
+/** The tool whose whole job is to load the rules - never nudge on it. */
 export const SESSION_START_TOOL = 'orboto_session_start';
 
 /**
  * The one-time reminder. English, ASCII-only, no em/en-dashes so it
- * survives every client. Prepended as a leading text block only —
+ * survives every client. Prepended as a leading text block only - 
  * structuredContent and the tool's own content are left untouched.
  */
 export const SESSION_START_NUDGE =
@@ -63,7 +63,7 @@ export function createNudgeState(gateEnabled = false): NudgeState {
  * Advance the state for one dispatch and report whether this dispatch
  * should carry the nudge. True ONLY for the first tool call of the
  * session when that call is not `orboto_session_start`. Every later call
- * — and the session_start-first case — returns false. Idempotent after
+ * - and the session_start-first case - returns false. Idempotent after
  * the first call because the flag is already set.
  */
 export function shouldNudge(state: NudgeState, toolName: string): boolean {

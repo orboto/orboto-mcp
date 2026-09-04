@@ -1,5 +1,5 @@
 /**
- * ORB-543 / ORB-1344 — unit tests for the agent-drift admin MCP tools.
+ * ORB-543 / ORB-1344 - unit tests for the agent-drift admin MCP tools.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';

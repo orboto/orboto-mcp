@@ -1,10 +1,10 @@
 /**
- * ORB-244 Phase B — end-to-end shape tests for the read-tool suite.
+ * ORB-244 Phase B - end-to-end shape tests for the read-tool suite.
  *
  * Each tool gets one happy-path test that confirms it hits the
  * expected API endpoints in order and produces structured content
  * with the advertised keys. The fixtures below use the REAL shapes
- * from `@orboto/shared-schema` — if a schema drift lands, these tests
+ * from `@orboto/shared-schema` - if a schema drift lands, these tests
  * break, which is exactly what we want.
  */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
@@ -149,7 +149,7 @@ describe('orboto_list_tickets', () => {
     ).rejects.toThrow(/Milestone "ghost" not found/);
   });
 
-  // ORB-1605 — the stalled-ingestion signal passes through into structuredContent.
+  // ORB-1605 - the stalled-ingestion signal passes through into structuredContent.
   it('surfaces waitingForGitIngestion per ticket', async () => {
     stub([
       { json: PROJ },
@@ -244,7 +244,7 @@ describe('orboto_get_ticket', () => {
       parentTicket: unknown;
     };
     expect(sc.comments[0]).toEqual({
-      id: 'c1', // ORB-1285 — comment id is surfaced for edit/delete targeting
+      id: 'c1', // ORB-1285 - comment id is surfaced for edit/delete targeting
       body: 'first thought',
       author: 'Ada',
       createdAt: 'now',
@@ -255,7 +255,7 @@ describe('orboto_get_ticket', () => {
     expect(sc.parentTicket).toBeNull();
   });
 
-  // ORB-1605 — the stalled-ingestion signal surfaces in both the header
+  // ORB-1605 - the stalled-ingestion signal surfaces in both the header
   // text and structuredContent.
   it('surfaces waitingForGitIngestion in the header and structured content', async () => {
     stub([
@@ -350,7 +350,7 @@ describe('orboto_get_ticket', () => {
     stub([
       { json: PROJ },
       // Bare by-key resolver row: milestoneId set, but no milestoneName /
-      // statusCategory — this is the shape that dropped the milestone.
+      // statusCategory - this is the shape that dropped the milestone.
       { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-9', title: 'Bug', status: 'DONE', milestoneId: 'm1', gitActivityCount: 0, parentTicketId: null } },
       // Enriched by-id refetch: carries statusCategory + the resolved name.
       { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-9', title: 'Bug', status: 'DONE', statusName: 'Done', statusCategory: 'done', type: 'bug', priority: 'normal', milestoneId: 'm1', milestoneName: 'Sprint 7' } },

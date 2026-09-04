@@ -1,5 +1,5 @@
 /**
- * ORB-917 — doc-comments tool tests.
+ * ORB-917 - doc-comments tool tests.
  *
  *   - list: happy + tree-render + empty + nextCursor
  *   - post: happy + reply (parentCommentId) + anchor passthrough
@@ -212,7 +212,7 @@ describe('orboto_update_doc_comment', () => {
   });
 
   it('bubbles up a 403 when editing someone else\'s comment', async () => {
-    stubJSON([{ ok: false, status: 403, json: { error: 'Forbidden — only the author can edit this comment' } }]);
+    stubJSON([{ ok: false, status: 403, json: { error: 'Forbidden - only the author can edit this comment' } }]);
     await expect(
       makeUpdateDocCommentHandler(client)({ docId: DOC_ID, commentId: COMMENT_ID, content: 'X' }),
     ).rejects.toBeInstanceOf(OrbotoApiError);

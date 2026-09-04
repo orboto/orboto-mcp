@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase B — `orboto_search`.
+ * ORB-244 Phase B - `orboto_search`.
  *
  * Unified full-text search across tickets, comments, and docs. Maps
  * to the existing `/search` route (Phase 21 global search) which
@@ -9,7 +9,7 @@
  * ORB-272: /search is cursor-paginated. Response shape is
  * `{items, nextCursor, total}`. We surface `total` so the model
  * knows how many hits exist globally, but don't expose `cursor` on
- * the tool input — repeat MCP tool calls to walk a search cursor is
+ * the tool input - repeat MCP tool calls to walk a search cursor is
  * an awkward UX. Users who need to see more narrow the query or
  * open the full-page /search in the web UI.
  */
@@ -45,7 +45,7 @@ interface SearchResponse {
 export const searchToolConfig = {
   title: 'Search across orboto',
   description:
-    'Full-text search across tickets, comments, and docs. Honours the caller\'s visibility — private tickets and internal comments never appear unless the caller can already see them. Recall (ORB-1695): when the strict all-terms pass finds nothing, the server automatically retries with an OR-relaxed pass plus semantic (embedding) recall - the response\'s `pass` field says which pass produced the hits, and relaxed-pass hits deserve a skeptical read (they matched SOME terms or only the meaning, not all terms). Still prefer a single distinctive STABLE token (file/component/error-string fragment like "AdminCodesPage") and search the SYMPTOM, not your intended fix.',
+    'Full-text search across tickets, comments, and docs. Honours the caller\'s visibility - private tickets and internal comments never appear unless the caller can already see them. Recall (ORB-1695): when the strict all-terms pass finds nothing, the server automatically retries with an OR-relaxed pass plus semantic (embedding) recall - the response\'s `pass` field says which pass produced the hits, and relaxed-pass hits deserve a skeptical read (they matched SOME terms or only the meaning, not all terms). Still prefer a single distinctive STABLE token (file/component/error-string fragment like "AdminCodesPage") and search the SYMPTOM, not your intended fix.',
   inputSchema: z.object({
     query: z.string().min(1).describe('Search terms, e.g. "queue worker retry".'),
     types: z.array(z.enum(['ticket', 'comment', 'doc'])).optional()
@@ -85,7 +85,7 @@ export function makeSearchHandler(client: OrbotoClient) {
       ? `No hits for "${input.query}".`
       : `Hits${headerHint}${relaxedNote}:\n\n` + res.items.map((h) => {
         const tag = h.type.toUpperCase();
-        // ORB-1084 — non-ticket hits carry the FULL id: the truncated
+        // ORB-1084 - non-ticket hits carry the FULL id: the truncated
         // form was unusable as input for the doc write tools.
         const ident = h.ticketKey ?? h.id;
         const project = h.projectName ? ` · ${h.projectName}` : '';
@@ -101,7 +101,7 @@ export function makeSearchHandler(client: OrbotoClient) {
         pass: res.pass ?? 'strict',
         hits: res.items.map((h) => ({
           type: h.type,
-          id: h.id, // ORB-1084 — full id, usable as write-tool input
+          id: h.id, // ORB-1084 - full id, usable as write-tool input
           title: h.title,
           excerpt: h.excerpt,
           ticketKey: h.ticketKey ?? null,

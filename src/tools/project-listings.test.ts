@@ -1,5 +1,5 @@
 /**
- * ORB-799 — `orboto_list_ticket_statuses` + `orboto_list_labels` tests.
+ * ORB-799 - `orboto_list_ticket_statuses` + `orboto_list_labels` tests.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';

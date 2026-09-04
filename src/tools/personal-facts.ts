@@ -1,10 +1,10 @@
 /**
- * ORB-862 (LLM-Wiki Phase L) — personal AI-preference facts.
+ * ORB-862 (LLM-Wiki Phase L) - personal AI-preference facts.
  *
  * The caller's OWN personal primer facts (communication style, coding
  * conventions, domain self-description). Privacy-strict: every route is
  * owner-scoped server-side, so these tools can only ever touch the
- * authenticated user's own facts — never another user's. English-only.
+ * authenticated user's own facts - never another user's. English-only.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -19,7 +19,7 @@ const CATEGORY = z.enum(['tech_stack', 'conventions', 'deployment', 'architectur
 
 export const personalFactListToolConfig = {
   title: 'List my personal AI preferences',
-  description: 'List the calling user\'s own personal primer facts (their AI preferences). Privacy-strict — only your own facts, never another user\'s. These load into the project primer for your sessions only when you have enabled the opt-in in Profile -> AI Preferences. Wraps GET /users/me/primer-facts.',
+  description: 'List the calling user\'s own personal primer facts (their AI preferences). Privacy-strict - only your own facts, never another user\'s. These load into the project primer for your sessions only when you have enabled the opt-in in Profile -> AI Preferences. Wraps GET /users/me/primer-facts.',
   inputSchema: z.object({}).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -50,7 +50,7 @@ export function makePersonalFactAddHandler(client: OrbotoClient) {
 
 export const personalFactUpdateToolConfig = {
   title: 'Update a personal AI preference',
-  description: 'Update one of the calling user\'s personal primer facts. Owner-scoped — you can only edit your own. Wraps PATCH /users/me/primer-facts/:id.',
+  description: 'Update one of the calling user\'s personal primer facts. Owner-scoped - you can only edit your own. Wraps PATCH /users/me/primer-facts/:id.',
   inputSchema: z.object({
     id: z.string().uuid(),
     category: CATEGORY.optional(),

@@ -1,5 +1,5 @@
 /**
- * ORB-799 — `orboto_whoami` unit tests.
+ * ORB-799 - `orboto_whoami` unit tests.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';

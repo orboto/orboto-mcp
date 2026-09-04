@@ -1,5 +1,5 @@
 /**
- * ORB-1331 — end-to-end transport proof of the session-start nudge.
+ * ORB-1331 - end-to-end transport proof of the session-start nudge.
  *
  * Drives the REAL server (buildOrbotoMcpServer → registerWithMetrics →
  * withMetrics → prependNudge) over an in-memory MCP transport with a
@@ -58,7 +58,7 @@ function firstText(res: Awaited<ReturnType<Client['callTool']>>): string {
   return content[0]?.text ?? '';
 }
 
-describe('ORB-1331 — HTTP transport (per-session nudge)', () => {
+describe('ORB-1331 - HTTP transport (per-session nudge)', () => {
   it('prepends the nudge exactly once when the first call is orboto_list_projects; the second call is clean', async () => {
     const client = await connectSession();
 
@@ -81,7 +81,7 @@ describe('ORB-1331 — HTTP transport (per-session nudge)', () => {
     expect(firstText(second)).not.toContain(SESSION_START_NUDGE);
   });
 
-  it('isolates the nudge per session — a second, independent session nudges on its own first call', async () => {
+  it('isolates the nudge per session - a second, independent session nudges on its own first call', async () => {
     const a = await connectSession();
     const b = await connectSession();
 
@@ -94,7 +94,7 @@ describe('ORB-1331 — HTTP transport (per-session nudge)', () => {
   });
 });
 
-describe('ORB-1331 — stdio transport (process-local nudge)', () => {
+describe('ORB-1331 - stdio transport (process-local nudge)', () => {
   it('fires once for the process: first non-session_start call nudged, all later calls clean', async () => {
     // stdio builds one server per process → one nudge state reused for
     // every call on this single connected client.

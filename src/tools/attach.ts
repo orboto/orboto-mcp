@@ -1,10 +1,10 @@
 /**
- * ORB-799 — attach files to a ticket.
+ * ORB-799 - attach files to a ticket.
  *
  * Mirrors `orboto.mjs attach <ticket> <path...> [--alt "text"] [--embed]`.
  *
  * MCP-side, the model doesn't have local FS access, so the bytes come
- * over the wire as a base64 `contentBase64` field — same approach as
+ * over the wire as a base64 `contentBase64` field - same approach as
  * `orboto_ingest_file`. To keep the surface simple, this tool uploads
  * one file per call; the wrapper's multi-file shorthand is unrolled
  * into N tool calls on the agent side.
@@ -48,7 +48,7 @@ function mimetypeFor(filename: string): string {
 export const attachToTicketToolConfig = {
   title: 'Attach a file to a ticket',
   description:
-    'Upload a file as an attachment on a ticket and return its markdown image-embed line + raw URL. The bytes come in as base64 (`contentBase64`) so this works without local FS access on the agent side. Set `embed=true` to also PATCH the ticket\'s description with the markdown line appended (idempotent only up to duplicate detection — re-running with the same file appends another copy). Use `altText` for accessibility / image alt-text; defaults to the filename. Mirrors `orboto.mjs attach`.',
+    'Upload a file as an attachment on a ticket and return its markdown image-embed line + raw URL. The bytes come in as base64 (`contentBase64`) so this works without local FS access on the agent side. Set `embed=true` to also PATCH the ticket\'s description with the markdown line appended (idempotent only up to duplicate detection - re-running with the same file appends another copy). Use `altText` for accessibility / image alt-text; defaults to the filename. Mirrors `orboto.mjs attach`.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     filename: z.string().min(1).describe('Display filename, e.g. "graph-q3.png".'),
@@ -81,7 +81,7 @@ export function makeAttachToTicketHandler(client: OrbotoClient) {
       throw new Error('contentBase64 is not valid base64.');
     }
     if (arrayBuffer.byteLength === 0) {
-      throw new Error('contentBase64 decoded to 0 bytes — refuse to upload an empty file.');
+      throw new Error('contentBase64 decoded to 0 bytes - refuse to upload an empty file.');
     }
 
     const ticket = await resolveTicketByKey(client, ticketKey);
@@ -101,7 +101,7 @@ export function makeAttachToTicketHandler(client: OrbotoClient) {
 
     let embedded = false;
     if (embed === true) {
-      // Read the current description first — the PATCH replaces, not
+      // Read the current description first - the PATCH replaces, not
       // appends, so we have to construct the new body.
       const current = await client.get<TicketRow>(
         `/projects/${ticket.projectId}/tickets/${ticket.id}`,

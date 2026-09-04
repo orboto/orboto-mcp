@@ -1,5 +1,5 @@
 /**
- * ORB-799 — bulk-* tools unit tests.
+ * ORB-799 - bulk-* tools unit tests.
  *
  * Each tool gets one happy-path test (all keys succeed, structured
  * outcome shape correct) and one partial-failure test (a mix of
@@ -55,7 +55,7 @@ function ticket(n: number) {
 }
 
 // Resolution responses for keys ACME-1, ACME-2 (project lookup is shared
-// — but the client re-fetches each time. We supply one per key.)
+// - but the client re-fetches each time. We supply one per key.)
 function resolveOK(n: number) {
   return [
     { json: PROJ },

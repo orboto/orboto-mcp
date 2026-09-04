@@ -1,5 +1,5 @@
 /**
- * ORB-1089 — agent-instruction management MCP tools. Assert the
+ * ORB-1089 - agent-instruction management MCP tools. Assert the
  * outgoing wire shape (method + URL + body) against the admin REST
  * surface, catching shape drift at the unit layer.
  */

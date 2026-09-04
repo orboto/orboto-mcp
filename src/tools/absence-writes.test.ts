@@ -1,5 +1,5 @@
 /**
- * ORB-933 — tests for the PATCH-side MCP tools across the
+ * ORB-933 - tests for the PATCH-side MCP tools across the
  * absences / public-holidays / company-closures resources.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

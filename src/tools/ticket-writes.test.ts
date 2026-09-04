@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase C Group 1 — ticket-mutation tool unit tests.
+ * ORB-244 Phase C Group 1 - ticket-mutation tool unit tests.
  *
  * One happy-path + one permission-denied test per tool. The mutation
  * tools share the same resolution chain (project → ticket → optional
@@ -110,7 +110,7 @@ describe('orboto_create_ticket', () => {
   it('surfaces a 403 from the API as an OrbotoApiError', async () => {
     stub([
       { json: PROJ },
-      { ok: false, status: 403, json: { error: 'Forbidden — missing ticket:create' } },
+      { ok: false, status: 403, json: { error: 'Forbidden - missing ticket:create' } },
     ]);
     await expect(
       makeCreateTicketHandler(client)({ projectKey: 'ACME', title: 'x' })
@@ -141,7 +141,7 @@ describe('orboto_create_ticket', () => {
     expect(text).toContain('ACME-13');
     const sc = res.structuredContent as { similarWarnings: Record<string, unknown>[]; createdTicketKey: string };
     expect(sc.similarWarnings).toHaveLength(2);
-    // ORB-1176 — createdTicketKey is the NEW key, never a warning's key.
+    // ORB-1176 - createdTicketKey is the NEW key, never a warning's key.
     expect(sc.createdTicketKey).toBe('ACME-99');
     expect(sc.similarWarnings.map((w) => w.ticketKey)).not.toContain(sc.createdTicketKey);
     // ORB-1693 - the agent projection is pinned: exactly these fields, no
@@ -581,7 +581,7 @@ describe('orboto_set_milestone', () => {
   });
 });
 
-describe('orboto_add_ticket_dependency / remove / list — ORB-453', () => {
+describe('orboto_add_ticket_dependency / remove / list - ORB-453', () => {
   const TICKET_B = { ...TICKET, id: 't2', ticketKey: 'ACME-2', ticketNumber: 2, title: 'Other' };
 
   it('add resolves both ticket keys then POSTs dependsOnId', async () => {

@@ -1,12 +1,12 @@
 /**
- * ORB-244 Phase B — `orboto_get_checklists`.
+ * ORB-244 Phase B - `orboto_get_checklists`.
  *
  * Dedicated read tool for a ticket's checklists. Two callers want
  * this without paying for the full ticket payload:
  *
- *   1. Models asking "what's still unchecked on ACME-42?" — don't
+ *   1. Models asking "what's still unchecked on ACME-42?" - don't
  *      need description + comments + git activity for that.
- *   2. Phase-C write tools (`orboto_check` / `orboto_uncheck`) — the
+ *   2. Phase-C write tools (`orboto_check` / `orboto_uncheck`) - the
  *      user usually wants to confirm the item exists before
  *      toggling it, and this tool is the cheap round-trip.
  *

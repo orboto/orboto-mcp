@@ -1,19 +1,19 @@
 /**
- * ORB-917 — doc-comments MCP tools (epic ORB-911 Phase 6).
+ * ORB-917 - doc-comments MCP tools (epic ORB-911 Phase 6).
  *
- *   - orboto_list_doc_comments      — GET /docs/:id/comments  (cursor-paged, oldest-first)
- *   - orboto_post_doc_comment       — POST /docs/:id/comments
- *   - orboto_resolve_doc_comment    — POST /docs/:id/comments/:cid/resolve
- *   - orboto_delete_doc_comment     — DELETE /docs/:id/comments/:cid
+ * - orboto_list_doc_comments - GET /docs/:id/comments  (cursor-paged, oldest-first)
+ * - orboto_post_doc_comment - POST /docs/:id/comments
+ * - orboto_resolve_doc_comment - POST /docs/:id/comments/:cid/resolve
+ * - orboto_delete_doc_comment - DELETE /docs/:id/comments/:cid
  *
- * Comments support replies (single-level — replying to a reply lands as
+ * Comments support replies (single-level - replying to a reply lands as
  * a sibling of the original reply because the API auto-flattens past
  * one level) and optional anchors (a 3-tuple of {text, before, after}
  * the frontend uses to re-locate a highlight even after the doc body
  * has shifted).
  *
  * resolve acts on the thread root by design so resolving from a reply
- * folds the whole conversation — mirrors the web UI's behaviour.
+ * folds the whole conversation - mirrors the web UI's behaviour.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -47,7 +47,7 @@ interface CommentPage {
 export const listDocCommentsToolConfig = {
   title: 'List comments on a doc page',
   description:
-    'Return comments on a doc page, oldest-first so the reply tree reads top-to-bottom. Each row carries the author name + content + resolved state. Cursor-paged — pass `cursor` from the previous call\'s nextCursor to walk older pages.',
+    'Return comments on a doc page, oldest-first so the reply tree reads top-to-bottom. Each row carries the author name + content + resolved state. Cursor-paged - pass `cursor` from the previous call\'s nextCursor to walk older pages.',
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     limit: z.number().int().min(1).max(100).optional(),
@@ -109,7 +109,7 @@ export function makeListDocCommentsHandler(client: OrbotoClient) {
       lines.push(''); // blank line between root threads
     }
     if (page.nextCursor) {
-      lines.push(`(more available — pass cursor: ${page.nextCursor})`);
+      lines.push(`(more available - pass cursor: ${page.nextCursor})`);
     }
     return {
       content: [{ type: 'text', text: lines.join('\n').trimEnd() }],
@@ -140,7 +140,7 @@ export function makeListDocCommentsHandler(client: OrbotoClient) {
 export const postDocCommentToolConfig = {
   title: 'Post a comment on a doc page (or reply to one)',
   description:
-    'Add a comment to a doc page. Pass `parentCommentId` to reply (the API flattens reply chains past one level so a reply-of-reply lands as a sibling of the original reply). Optional `anchor` (`{text, before, after}`) attaches the comment to a specific highlight in the body — the frontend uses the surrounding context to re-locate the anchor even after the doc has been edited. Mentions in the content body (`@username`) fire notifications automatically.',
+    'Add a comment to a doc page. Pass `parentCommentId` to reply (the API flattens reply chains past one level so a reply-of-reply lands as a sibling of the original reply). Optional `anchor` (`{text, before, after}`) attaches the comment to a specific highlight in the body - the frontend uses the surrounding context to re-locate the anchor even after the doc has been edited. Mentions in the content body (`@username`) fire notifications automatically.',
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     content: z.string().min(1).max(4000),
@@ -188,7 +188,7 @@ export function makePostDocCommentHandler(client: OrbotoClient) {
 export const resolveDocCommentToolConfig = {
   title: 'Mark a doc comment thread as resolved (or reopen it)',
   description:
-    'Toggle a comment thread\'s resolved state. Pass `resolved=true` to fold the conversation, `resolved=false` to reopen. Always acts on the thread ROOT — resolving from a reply folds the whole conversation, same as the web UI.',
+    'Toggle a comment thread\'s resolved state. Pass `resolved=true` to fold the conversation, `resolved=false` to reopen. Always acts on the thread ROOT - resolving from a reply folds the whole conversation, same as the web UI.',
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     commentId: z.string().uuid(),
@@ -221,7 +221,7 @@ export function makeResolveDocCommentHandler(client: OrbotoClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orboto_update_doc_comment — ORB-933
+// orboto_update_doc_comment - ORB-933
 // ---------------------------------------------------------------------------
 
 export const updateDocCommentToolConfig = {
@@ -260,7 +260,7 @@ export function makeUpdateDocCommentHandler(client: OrbotoClient) {
 export const deleteDocCommentToolConfig = {
   title: 'Delete a doc comment',
   description:
-    'DESTRUCTIVE — drops the comment + (via FK cascade) every reply under it. Only the author can delete their own comments; super-admins can delete anyone\'s. Returns success silently; 403 surfaces as an OrbotoApiError.',
+    'DESTRUCTIVE - drops the comment + (via FK cascade) every reply under it. Only the author can delete their own comments; super-admins can delete anyone\'s. Returns success silently; 403 surfaces as an OrbotoApiError.',
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     commentId: z.string().uuid(),

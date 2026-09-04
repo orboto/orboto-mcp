@@ -1,5 +1,5 @@
 /**
- * ORB-705 — Multi-Agent Coordination MCP tools.
+ * ORB-705 - Multi-Agent Coordination MCP tools.
  *
  * Pins the contract that each tool wraps the right REST endpoint
  * with the right body shape and surfaces the response. The actual
@@ -84,8 +84,8 @@ describe('orboto_agent_presence', () => {
     const result = await handler();
     const text = (result.content[0] as { text: string }).text;
     expect(text).toContain('2 active session(s)');
-    expect(text).toContain('Alice (claude-code) — working · working on [ORB] ORB-42');
-    expect(text).toContain('bot@x.test (dispatcher-daemon) — idle');
+    expect(text).toContain('Alice (claude-code) - working · working on [ORB] ORB-42');
+    expect(text).toContain('bot@x.test (dispatcher-daemon) - idle');
     expect((result.structuredContent as { sessions: unknown[] }).sessions).toHaveLength(2);
   });
 

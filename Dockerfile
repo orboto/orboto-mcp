@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1.7
-# BuildKit cache-mount support — Coolify exports DOCKER_BUILDKIT=1.
+# BuildKit cache-mount support - Coolify exports DOCKER_BUILDKIT=1.
 
 # ── builder ─────────────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
 
-# Install pnpm from GitHub (avoids registry.npmjs.org flakiness — same
+# Install pnpm from GitHub (avoids registry.npmjs.org flakiness - same
 # rationale as apps/api/Dockerfile). Pin version in lockstep with the
 # root package.json `packageManager` field.
 ARG TARGETARCH
@@ -22,7 +22,7 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
 COPY apps/mcp/package.json ./apps/mcp/
 COPY packages/shared-schema/package.json ./packages/shared-schema/
 
-# pnpm content-addressable store cache — same pattern as the API image.
+# pnpm content-addressable store cache - same pattern as the API image.
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store,sharing=locked \
     pnpm install --frozen-lockfile --prefer-offline
 
@@ -31,13 +31,13 @@ COPY apps/mcp/src ./apps/mcp/src
 COPY apps/mcp/tsconfig.json ./apps/mcp/tsconfig.json
 
 # Build shared-schema first (workspace dep), then rewrite its package.json
-# so prod node resolves dist/* — identical hack to the API Dockerfile.
+# so prod node resolves dist/* - identical hack to the API Dockerfile.
 RUN pnpm --filter @orboto/shared-schema build
 RUN node -e "const p=require('./packages/shared-schema/package.json'); p.main='./dist/index.js'; p.types='./dist/index.d.ts'; p.files=['dist']; require('fs').writeFileSync('./packages/shared-schema/package.json', JSON.stringify(p, null, 2));"
 
 RUN NODE_OPTIONS=--max-old-space-size=4096 pnpm --filter @orboto/mcp build
 
-# pnpm deploy — copies the package + workspace deps as concrete modules
+# pnpm deploy - copies the package + workspace deps as concrete modules
 # under /deploy/mcp. --legacy preserves pre-pnpm-v10 behaviour (no
 # inject-workspace-packages requirement) since shared-schema has already
 # been rewired to its dist output above.
@@ -48,7 +48,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# ORB-668 — default container timezone. Alpine ships without
+# ORB-668 - default container timezone. Alpine ships without
 # /usr/share/zoneinfo, so without tzdata installed, setting TZ=…
 # evaluates to UTC. Operator can override via a TZ service env var
 # at runtime; this just makes the out-of-the-box default match the
@@ -56,10 +56,10 @@ ENV NODE_ENV=production
 RUN apk add --no-cache tzdata
 ENV TZ=Europe/Berlin
 
-# Default to the HTTP transport — that's the container's reason to exist.
+# Default to the HTTP transport - that's the container's reason to exist.
 # Operators running stdio mode locally don't go through this image at all
 # (they `node apps/mcp/dist/index.js` directly).
-# ORB-1172 — these MUST be ORBOTO_* (what src/index.ts reads). The old
+# ORB-1172 - these MUST be ORBOTO_* (what src/index.ts reads). The old
 # ORBIT_* names were dead, so the image silently fell back to the stdio
 # default and never listened on :3100. The container-boot smoke test now
 # catches exactly this class of regression.
@@ -68,14 +68,14 @@ ENV ORBOTO_MCP_TRANSPORT=http \
 
 COPY --from=builder /deploy/mcp/node_modules ./node_modules
 COPY --from=builder /deploy/mcp/dist ./dist
-# ORB-1166 — version.ts reads package.json at runtime; the stripped image
+# ORB-1166 - version.ts reads package.json at runtime; the stripped image
 # must ship it or the require throws and crash-loops the container.
 COPY --from=builder /deploy/mcp/package.json ./package.json
 
-# wget already ships in the busybox base — used by the compose
+# wget already ships in the busybox base - used by the compose
 # healthcheck against /health. No extra apk install needed.
 
 EXPOSE 3100
-# ORB-1577 — run as the unprivileged `node` user (previously root).
+# ORB-1577 - run as the unprivileged `node` user (previously root).
 USER node
 CMD ["node", "dist/index.js"]

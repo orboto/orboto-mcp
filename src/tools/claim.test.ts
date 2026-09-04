@@ -1,5 +1,5 @@
 /**
- * ORB-799 — `orboto_claim` / `orboto_unclaim` unit tests.
+ * ORB-799 - `orboto_claim` / `orboto_unclaim` unit tests.
  *
  * Covers the composite happy paths, the idempotent re-claim shortcut,
  * the `sole=true` destructive take-over, the `force=true` reopen-done
@@ -90,7 +90,7 @@ describe('orboto_claim', () => {
         ...TICKET_TODO, status: 'IN_PROGRESS', statusName: 'In Progress', statusCategory: 'in_progress',
         assignees: [{ id: 'me1', email: 'agent-e@orboto.io', fullName: 'Agent E' }],
       } },
-      { json: { ticketId: 't1' } }, // GET /time/timer — already on same ticket
+      { json: { ticketId: 't1' } }, // GET /time/timer - already on same ticket
     ]);
     const res = await makeClaimHandler(client)({ ticketKey: 'ACME-1' });
     // 4 calls total: /users/me, by-key project, by-key ticket, GET /time/timer.
@@ -170,7 +170,7 @@ describe('orboto_claim', () => {
       { json: TICKET_TODO },
       { json: {} },
       { json: { ...TICKET_TODO, status: 'IN_PROGRESS', statusName: 'In Progress', statusCategory: 'in_progress' } },
-      { json: null },                                                          // GET /time/timer — empty
+      { json: null },                                                          // GET /time/timer - empty
       { ok: false, status: 409, json: { error: 'timer already running' } },    // POST /timer/start fails
     ]);
     const res = await makeClaimHandler(client)({ ticketKey: 'ACME-1' });

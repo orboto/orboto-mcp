@@ -1,15 +1,15 @@
 /**
- * ORB-799 — per-project metadata listings.
+ * ORB-799 - per-project metadata listings.
  *
  * Two cheap read tools that round-trip the project-scoped enum tables
  * agents repeatedly need:
  *
- *   - orboto_list_ticket_statuses — the workflow's status rows with
+ * - orboto_list_ticket_statuses - the workflow's status rows with
  *     their IDs, categories, colors, and terminal flag. Needed for
  *     typed-transition flows where the standard `move_ticket` (which
  *     picks the first status per category) isn't precise enough.
  *
- *   - orboto_list_labels — the per-project label catalogue with
+ * - orboto_list_labels - the per-project label catalogue with
  *     colors. Lets agents see what labels exist before calling
  *     `create_ticket` with a `labels` array (unknown names error).
  *
@@ -43,7 +43,7 @@ interface LabelRow {
 export const listTicketStatusesToolConfig = {
   title: 'List a project\'s ticket statuses',
   description:
-    'Return the project\'s workflow rows — `{id, name, category, color, sortOrder, isTerminal}`. The `category` is the broad bucket (todo / in_progress / in_review / done / wont_fix); `name` is the workspace\'s display label (e.g. "Code Review"). Use the `id` to do typed transitions through `orboto_update_ticket` when the standard category-based move is too coarse.',
+    'Return the project\'s workflow rows - `{id, name, category, color, sortOrder, isTerminal}`. The `category` is the broad bucket (todo / in_progress / in_review / done / wont_fix); `name` is the workspace\'s display label (e.g. "Code Review"). Use the `id` to do typed transitions through `orboto_update_ticket` when the standard category-based move is too coarse.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
   }).shape,
@@ -83,7 +83,7 @@ export function makeListTicketStatusesHandler(client: OrbotoClient) {
 export const listLabelsToolConfig = {
   title: 'List a project\'s labels',
   description:
-    'Return the project\'s label catalogue — `{id, name, color}`. Labels must be referenced by exact name when assigning via `orboto_create_ticket` (the API errors on unknown names rather than auto-creating); use this tool to discover what\'s available before assigning.',
+    'Return the project\'s label catalogue - `{id, name, color}`. Labels must be referenced by exact name when assigning via `orboto_create_ticket` (the API errors on unknown names rather than auto-creating); use this tool to discover what\'s available before assigning.',
   inputSchema: z.object({
     projectKey: z.string().min(1),
   }).shape,
@@ -108,7 +108,7 @@ export function makeListLabelsHandler(client: OrbotoClient) {
 }
 
 // ---------------------------------------------------------------------------
-// orboto_create_label — ORB-1041
+// orboto_create_label - ORB-1041
 // ---------------------------------------------------------------------------
 
 export const createLabelToolConfig = {

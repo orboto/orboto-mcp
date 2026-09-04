@@ -1,5 +1,5 @@
 /**
- * ORB-244 Phase C Group 4 — admin-only tool tests.
+ * ORB-244 Phase C Group 4 - admin-only tool tests.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';

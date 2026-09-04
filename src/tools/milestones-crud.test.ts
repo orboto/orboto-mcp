@@ -1,5 +1,5 @@
 /**
- * ORB-799 — milestone CRUD additions to `milestones.ts`.
+ * ORB-799 - milestone CRUD additions to `milestones.ts`.
  *
  * `list_milestones` + `get_milestone` already have coverage in
  * `phase-b-tools.test.ts`. This file covers the new write surface:

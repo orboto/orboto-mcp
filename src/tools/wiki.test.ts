@@ -1,5 +1,5 @@
 /**
- * ORB-855 (LLM-Wiki Phase E) — wiki MCP tool tests. The injector is a
+ * ORB-855 (LLM-Wiki Phase E) - wiki MCP tool tests. The injector is a
  * stubbed fetch; we assert each tool hits the right route with the right
  * body and renders a sensible result, plus one error-path per surface.
  */
