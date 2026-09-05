@@ -1,6 +1,6 @@
 # @orboto/mcp
 
-Model Context Protocol server for [orboto](https://github.com/orboto/orboto) - a self-hosted ticket and project management platform. Connect Claude Desktop, Cursor, GitHub Copilot Chat, or any MCP-aware AI client and operate orboto as a structured set of tools.
+Model Context Protocol server for [orboto](https://orboto.io) - a self-hosted ticket and project management platform. Connect Claude Desktop, Cursor, GitHub Copilot Chat, or any MCP-aware AI client and operate orboto as a structured set of tools.
 
 131 tools cover tickets, projects, milestones, time tracking, documents, primer facts, alerts and absences. Every call respects the caller's permission set - what the API key behind the MCP session cannot do in the web UI, the MCP session cannot do either.
 
