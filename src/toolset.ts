@@ -126,6 +126,7 @@ export const CURATED_TOOLS: ReadonlySet<string> = new Set([
   'orboto_response_expand',
   // ORB-1741 - the way back from one-line manifest summaries: full
   // guidance on demand. Must ride every manifest the summaries ride.
+  'orboto_report_feedback', // ORB-1910 - an agent that hits a bug reports it without ?toolset=full
   'orboto_help', // ORB-1697 - the way back from a budget cut
   'orboto_api_search',      // ORB-1518 - discovery half of the escape hatch
   'orboto_api_call',        // ORB-1519 - execute half of the escape hatch
