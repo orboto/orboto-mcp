@@ -184,8 +184,19 @@ describe('orboto:// search resource', () => {
 });
 
 describe('orboto:// rules resource (ORB-1177)', () => {
+  it.each([null, {}, [], { instructions: '' }])('refuses unavailable or malformed rules %#', async (body) => {
+    stub([{ json: body }]);
+    const handler = getTemplateHandler(buildServerWithResources(), 'rules');
+    await expect(handler(new URL('orboto://rules'), {})).rejects.toThrow('Required agent rules');
+  });
+
+  it('refuses a failed fetch instead of returning an empty placeholder', async () => {
+    stub([{ ok: false, status: 503 }]);
+    const handler = getTemplateHandler(buildServerWithResources(), 'rules');
+    await expect(handler(new URL('orboto://rules'), {})).rejects.toThrow('Required agent rules');
+  });
   it('returns the complete assembled workspace rules', async () => {
-    stub([{ json: { instructions: 'RULE 1: ticket-first.\nRULE 2: one commit per ticket.' } }]);
+    stub([{ json: { instructions: 'RULE 1: ticket-first.\nRULE 2: one commit per ticket.', rulesHash: 'fixture' } }]);
     const server = buildServerWithResources();
     const handler = getTemplateHandler(server, 'rules');
     const out = await handler(new URL('orboto://rules'), {});
@@ -196,7 +207,7 @@ describe('orboto:// rules resource (ORB-1177)', () => {
   });
 
   it('degrades to a placeholder when no rules are configured', async () => {
-    stub([{ json: { instructions: '' } }]);
+    stub([{ json: { instructions: '', rulesHash: 'empty' } }]);
     const server = buildServerWithResources();
     const handler = getTemplateHandler(server, 'rules');
     const out = await handler(new URL('orboto://rules'), {});

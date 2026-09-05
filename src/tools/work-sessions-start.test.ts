@@ -131,6 +131,9 @@ describe('orboto_work_start', () => {
     expect(post2.body?.knownRulesHash).toBe('abc123');
     const text2 = (res2.content[0] as { text: string }).text;
     expect(text2).toContain('Unchanged since your last work-start');
+    expect(text2).toContain('not currently in your context');
+    expect(text2).toContain('rulesOnly: true');
+    expect(text2).not.toContain('keep following what you already loaded');
     expect(text2).toContain('Renewed your existing');
   });
 

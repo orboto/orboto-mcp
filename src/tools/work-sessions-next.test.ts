@@ -71,7 +71,7 @@ const RESERVED = {
 
 describe('orboto_work_next', () => {
   it('reserves the winning candidate and renders the full bundle, sending projectKey straight through', async () => {
-    const calls = stub([{ json: { reserved: RESERVED, reason: null, retryAfterSeconds: null, earliestFreeAt: null, candidatesConsidered: 3 } }]);
+    const calls = stub([{ json: { reserved: RESERVED, reason: null, retryAfterSeconds: null, earliestFreeAt: null, candidatesConsidered: 3, landedIdle: [] } }]);
     const res = await makeWorkNextHandler(client)({ projectKey: 'ACME' });
 
     expect(calls).toHaveLength(1);
@@ -95,19 +95,22 @@ describe('orboto_work_next', () => {
 
   it('caches the rules hash across calls and renders "Renewed" on a reused session', async () => {
     const handler = makeWorkNextHandler(client);
-    stub([{ json: { reserved: RESERVED, reason: null, retryAfterSeconds: null, earliestFreeAt: null, candidatesConsidered: 1 } }]);
+    stub([{ json: { reserved: RESERVED, reason: null, retryAfterSeconds: null, earliestFreeAt: null, candidatesConsidered: 1, landedIdle: [] } }]);
     await handler({ projectKey: 'ACME' });
 
     const calls2 = stub([{
       json: {
         reserved: { ...RESERVED, reused: true, rulesUnchanged: true, rules: undefined },
-        reason: null, retryAfterSeconds: null, earliestFreeAt: null, candidatesConsidered: 1,
+        reason: null, retryAfterSeconds: null, earliestFreeAt: null, candidatesConsidered: 1, landedIdle: [],
       },
     }]);
     const res2 = await handler({ projectKey: 'ACME' });
     expect(calls2[0].body?.knownRulesHash).toBe('abc123');
     const text2 = (res2.content[0] as { text: string }).text;
     expect(text2).toContain('Unchanged since your last call');
+    expect(text2).toContain('not currently in your context');
+    expect(text2).toContain('rulesOnly: true');
+    expect(text2).not.toContain('keep following what you already loaded');
     expect(text2).toContain('Renewed your existing');
   });
 
@@ -115,7 +118,7 @@ describe('orboto_work_next', () => {
     stub([{
       json: {
         reserved: null, reason: 'all-leased', retryAfterSeconds: 420,
-        earliestFreeAt: '2026-07-24T10:15:00Z', candidatesConsidered: 4,
+        earliestFreeAt: '2026-07-24T10:15:00Z', candidatesConsidered: 4, landedIdle: [],
       },
     }]);
     const res = await makeWorkNextHandler(client)({ projectKey: 'ACME' });
@@ -135,7 +138,7 @@ describe('orboto_work_next', () => {
     stub([{
       json: {
         reserved: null, reason: 'none-matching', retryAfterSeconds: null,
-        earliestFreeAt: null, candidatesConsidered: 0,
+        earliestFreeAt: null, candidatesConsidered: 0, landedIdle: [],
       },
     }]);
     const res = await makeWorkNextHandler(client)({ projectKey: 'ACME' });
@@ -146,7 +149,7 @@ describe('orboto_work_next', () => {
   });
 
   it('forwards role, leaseSeconds, and resourceClaims to the API', async () => {
-    const calls = stub([{ json: { reserved: RESERVED, reason: null, retryAfterSeconds: null, earliestFreeAt: null, candidatesConsidered: 1 } }]);
+    const calls = stub([{ json: { reserved: RESERVED, reason: null, retryAfterSeconds: null, earliestFreeAt: null, candidatesConsidered: 1, landedIdle: [] } }]);
     await makeWorkNextHandler(client)({
       projectKey: 'ACME',
       role: 'review',

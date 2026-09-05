@@ -17,7 +17,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from './orboto-client.js';
-import { type NudgeState, shouldNudge, prependNudge, shouldGate, gateResult } from './session-nudge.js';
+import { type NudgeState, shouldNudge, prependNudge, shouldGate, gateResult, recordSessionStartResult } from './session-nudge.js';
+import { RequiredRulesError } from './required-rules.js';
 import { applyResponseBudget, TruncationBlockAdvertisedSchema } from './response-budget.js';
 import { buildStrictInputSchema, isRawShape } from './input-schema.js';
 import { captureToolDoc, summarizeToolDescription } from './tool-docs.js';
@@ -88,8 +89,7 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
     // regardless of its outcome. Applied to the returned result below.
     const wantsNudge = nudge ? shouldNudge(nudge, toolName) : false;
     // ORB-1471 - HARD session-start gate. When the workspace requires it,
-    // refuse every tool call until `orboto_session_start` has run (this also
-    // flips the "ran" flag when the tool IS session_start). The gate message
+    // refuse every tool call until `orboto_session_start` succeeds. The gate message
     // supersedes the soft nudge, so we return it directly without running the
     // handler. Disabled by default => `shouldGate` returns false and nothing
     // below changes.
@@ -118,6 +118,7 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
       // as success=false in the log so dashboards reflect actual
       // user-visible failures.
       const isError = result.isError === true;
+      if (nudge) recordSessionStartResult(nudge, toolName, !isError);
       void postLogEntry(client, {
         toolName,
         durationMs: Date.now() - start,
@@ -138,6 +139,11 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
       return wantsNudge ? prependNudge(withMail) : withMail;
     } catch (err) {
       const durationMs = Date.now() - start;
+      if (nudge) recordSessionStartResult(nudge, toolName, false);
+      if (err instanceof RequiredRulesError) {
+        void postLogEntry(client, { toolName, durationMs, success: false, statusCode: err.status, errorMessage: err.message, clientHint });
+        return { isError: true, content: [{ type: 'text', text: err.message }], structuredContent: { errorKey: err.errorKey, reason: err.reason, ...(err.status ? { status: err.status } : {}) } };
+      }
       // ORB-1174 - an OrbotoApiError carries a real HTTP status + message.
       // Return it as a structured isError result so the agent + human see
       // WHY (401 vs 404 vs 500) and can self-correct, instead of the

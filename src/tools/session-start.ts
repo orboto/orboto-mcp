@@ -52,6 +52,8 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { resolveTicketByKey, type TicketRow , applyAgentProfile } from './shared.js';
 import { PROTECT_TEXT_META, storePayload } from '../response-budget.js';
+import { loadRequiredRules } from '../required-rules.js';
+import { GIT_HEALTH_REASON_TEXT } from './git-health-reasons.js';
 
 export const sessionStartToolConfig = {
   title: 'Load the rules you must follow + re-orient',
@@ -105,18 +107,6 @@ interface GitConnectionHealth {
   deliveryError: string | null;
   lastProbeAt: string | null;
 }
-// ORB-1607 - mirrors the GET /agent-instructions response shape.
-interface RulesResponse {
-  instructions?: string;
-  requireSessionStart?: boolean;
-  rulesHash?: string;
-  rulesUnchanged?: boolean;
-  // ORB-1818 - one entry per rule block that binds this caller, in
-  // delivery order. Absent on an older API (then the full text is
-  // delivered inline, exactly as before).
-  rulesIndex?: Array<{ title: string; chars: number }>;
-  rulesChars?: number;
-}
 interface ChecklistItemRow {
   content: string;
   effectiveCompleted: boolean;
@@ -153,19 +143,6 @@ interface ActiveAgentRow {
   workingOnTicket: { id: string; key: string | null; title: string } | null;
   lastSeenAt: string;
 }
-
-const GIT_HEALTH_REASON_TEXT: Record<string, string> = {
-  connection_inactive: 'connection is deactivated',
-  app_installation_suspended: 'GitHub App installation is suspended',
-  oauth_token_expired: 'OAuth token expired with no refresh path',
-  history_backfill_error: 'last history backfill failed',
-  // ORB-1638
-  awaiting_first_event: 'webhook installed but has never delivered an event',
-  outbound_unreachable: 'orboto cannot reach the provider',
-  // ORB-1785 - two derivations now: the provider reporting a failed
-  // delivery, and the probe inferring one from commits that never arrived.
-  delivery_failing: 'webhook deliveries from the provider are not arriving',
-};
 
 // Cap how many distinct projects we probe for git health - a session's
 // in-progress work is capped at 20 tickets already, so this rarely
@@ -338,9 +315,9 @@ export function makeSessionStartHandler(client: OrbotoClient) {
     // rules from the API instead, costs one call, and skips the whole rest
     // of the digest. Protected in both halves: it IS the rule text.
     if (input.rulesOnly) {
-      const rules = await client.get<RulesResponse>(rulesPath).catch(() => ({}) as RulesResponse);
+      const rules = await loadRequiredRules(client, rulesPath);
       if (rules.rulesHash) lastKnownRulesHash = rules.rulesHash;
-      const text = rules.instructions?.trim() ?? '';
+      const text = rules.instructions ?? '';
       return {
         _meta: { [PROTECT_TEXT_META]: true },
         content: [{
@@ -364,7 +341,7 @@ export function makeSessionStartHandler(client: OrbotoClient) {
 
     const [me, rules, assigned, timer, inboxRaw] = await Promise.all([
       client.get<Me>('/users/me').catch(() => null),
-      client.get<RulesResponse>(rulesPath).catch(() => ({}) as RulesResponse),
+      loadRequiredRules(client, rulesPath, rulesParams.get('knownRulesHash') ?? undefined),
       // ORB-1330 - a re-orientation briefing must only list OPEN work.
       // Filter to in_progress + in_review so DONE tickets can't pose as
       // "what you're working on" at the moment the agent has the least
@@ -379,7 +356,6 @@ export function makeSessionStartHandler(client: OrbotoClient) {
         .catch(() => []),
     ]);
     const pendingMessages = inboxRaw.map((m) => ({ id: m.id, fromUserId: m.fromUserId, kind: m.kind, subject: m.subject, createdAt: m.createdAt }));
-    if (rules.rulesHash) lastKnownRulesHash = rules.rulesHash;
     const tickets: Ticket[] = Array.isArray(assigned) ? assigned : (assigned?.items ?? []);
 
     // ORB-1605 - git-connection health for every project the caller has
@@ -428,7 +404,7 @@ export function makeSessionStartHandler(client: OrbotoClient) {
     //   index  - one line per rule + the hash + a handle; the default.
     //   full   - the text inline (forceRules, or an API too old to send
     //            an index - never leave a caller without its rules).
-    const rulesText = rules.instructions?.trim() ?? '';
+    const rulesText = rules.instructions ?? '';
     const rulesIndex = Array.isArray(rules.rulesIndex)
       ? rules.rulesIndex.map((e) => e?.title).filter((t): t is string => typeof t === 'string' && t.length > 0)
       : [];
@@ -496,7 +472,7 @@ export function makeSessionStartHandler(client: OrbotoClient) {
     }
     if (bundle) lines.push(...bundle.lines);
     lines.push('', 'Re-run this after any context compaction to re-sync.');
-    return {
+    const result: CallToolResult = {
       // ORB-1818 - when the full rule text IS the payload, neither half
       // may be cut; see PROTECT_TEXT_META. The index answer carries no
       // rule text and is budgeted like any other response.
@@ -539,5 +515,7 @@ export function makeSessionStartHandler(client: OrbotoClient) {
         ...(bundle ? { ticketBundle: bundle.structured } : {}),
       },
     };
+    lastKnownRulesHash = rules.rulesHash;
+    return result;
   };
 }

@@ -66,6 +66,7 @@ describe('orboto_help handler', () => {
 
 describe('live manifest vs help registry (no guidance lost)', () => {
   it('every tool in the full manifest has a one-line wire description and full docs behind orboto_help', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ instructions: '', rulesHash: 'empty', requireSessionStart: false }), { status: 200 }));
     const server = await buildOrbotoMcpServer({
       baseUrl: 'https://orboto.example.com', apiKey: 'orb_test', toolset: 'full',
     });

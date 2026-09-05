@@ -26,6 +26,7 @@ import { aiStatusToolConfig, makeAiStatusHandler } from './tools/ai-status.js';
 import { embeddingStatusToolConfig, makeEmbeddingStatusHandler } from './tools/embedding-status.js';
 import { aiUsageToolConfig, makeAiUsageHandler } from './tools/ai-usage.js';
 import { sessionStartToolConfig, makeSessionStartHandler } from './tools/session-start.js';
+import { loadRequiredRules } from './required-rules.js';
 import { responseExpandToolConfig, makeResponseExpandHandler } from './tools/response-expand.js';
 import { helpToolConfig, makeHelpHandler } from './tools/help.js';
 import { apiSearchToolConfig, makeApiSearchHandler } from './tools/api-search.js';
@@ -373,14 +374,13 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   // ORB-1090 - fetch the workspace's configurable working-rules at
   // connect so admin edits propagate to every new MCP session. The
   // instructions block is the one place every MCP client reliably sees
-  // the rules (clients don't read the repo's CLAUDE.md). Best-effort:
-  // fall back to the built-in rules if the instance predates ORB-1086
-  // or the fetch fails.
+  // the rules (clients don't read the repo's CLAUDE.md). If unavailable,
+  // keep the connection usable for recovery but gate all other tools.
   let workingRules = FALLBACK_WORKING_RULES;
   // ORB-1471 - the same connect-time fetch also reports whether this
   // workspace requires `orboto_session_start` before any other tool call
-  // (the hard gate). Default off; a fetch failure keeps it off.
-  let requireSessionStart = false;
+  // (the hard gate). Unknown policy must never silently disable the gate.
+  let requireSessionStart = true;
   try {
     // ORB-1753 - stdio deployments can declare their profile via
     // ORBOTO_AGENT_KIND / ORBOTO_MODEL_TIER; api-key standing profiles
@@ -388,11 +388,11 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
     const connectParams = new URLSearchParams();
     applyAgentProfile(connectParams);
     const connectQs = connectParams.toString();
-    const res = await client.get<{ instructions: string; requireSessionStart?: boolean }>(`/agent-instructions${connectQs ? `?${connectQs}` : ''}`);
+    const res = await loadRequiredRules(client, `/agent-instructions${connectQs ? `?${connectQs}` : ''}`);
     if (res?.instructions?.trim()) workingRules = res.instructions.trim();
-    requireSessionStart = res?.requireSessionStart === true;
+    requireSessionStart = res.requireSessionStart ?? true;
   } catch {
-    // keep the fallback
+    workingRules = 'Workspace rules are unavailable. Built-in hints are not a substitute. Call orboto_session_start with forceRules and retry after connectivity or authentication recovers.';
   }
 
   const server = new McpServer(

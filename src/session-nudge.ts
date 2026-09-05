@@ -40,7 +40,7 @@ export interface NudgeState {
   /** Flips true on the first tool dispatch of the session, whatever it was. */
   firstToolCallSeen: boolean;
   /**
-   * ORB-1471 - flips true once `orboto_session_start` has run this session.
+   * Flips true only after `orboto_session_start` successfully loads rules.
    * Drives the HARD gate (see shouldGate) when the workspace flag
    * `mcp_require_session_start` is on: every other tool call is refused until
    * this is true.
@@ -98,27 +98,30 @@ export const SESSION_START_GATE_MESSAGE =
   'must follow plus your in-progress work - then retry this call.';
 
 /**
- * ORB-1471 - advance the gate state for one dispatch and report whether this
+ * Advance the gate state for one dispatch and report whether this
  * dispatch must be REFUSED (returned an instructive error without running the
  * handler).
  *
  * Semantics when the gate is enabled: every tool call other than
  * `orboto_session_start` is refused until `orboto_session_start` has run once
- * this session. Calling `orboto_session_start` marks the session unlocked
+ * this session. A rule refresh locks the session until its result succeeds
  * (and is itself never gated). When the gate is disabled, nothing is ever
  * refused (returns false) - default behaviour is unchanged.
  *
- * Idempotent bookkeeping: running `orboto_session_start` flips
- * `sessionStartRan` so all later calls pass.
+ * The metrics wrapper records successful completion separately; dispatch
+ * alone is not evidence of rule delivery.
  */
 export function shouldGate(state: NudgeState, toolName: string): boolean {
   if (toolName === SESSION_START_TOOL) {
-    // The rule-loading tool always runs, and running it unlocks the session.
-    state.sessionStartRan = true;
+    state.sessionStartRan = false;
     return false;
   }
   if (!state.gateEnabled) return false;
   return !state.sessionStartRan;
+}
+
+export function recordSessionStartResult(state: NudgeState, toolName: string, success: boolean): void {
+  if (toolName === SESSION_START_TOOL) state.sessionStartRan = success;
 }
 
 /** ORB-1471 - the instructive refusal result the gate returns. */

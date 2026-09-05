@@ -14,6 +14,7 @@ import {
   createNudgeState,
   shouldNudge,
   shouldGate,
+  recordSessionStartResult,
   gateResult,
   prependNudge,
 } from './session-nudge.js';
@@ -59,16 +60,21 @@ describe('shouldGate (ORB-1471)', () => {
     // Pre session_start: every other tool is gated.
     expect(shouldGate(state, 'orboto_list_projects')).toBe(true);
     expect(shouldGate(state, 'orboto_create_ticket')).toBe(true);
-    // session_start itself is never gated AND unlocks the session.
+    // Dispatch is not proof of delivery; only successful completion unlocks.
     expect(shouldGate(state, SESSION_START_TOOL)).toBe(false);
+    expect(shouldGate(state, 'orboto_list_projects')).toBe(true);
+    recordSessionStartResult(state, SESSION_START_TOOL, true);
     // Post session_start: everything passes.
     expect(shouldGate(state, 'orboto_list_projects')).toBe(false);
     expect(shouldGate(state, 'orboto_create_ticket')).toBe(false);
   });
 
-  it('session_start as the very first call unlocks immediately (one-call cost avoided)', () => {
+  it('a failed refresh keeps the gate closed and a successful retry unlocks', () => {
     const state = createNudgeState(true);
     expect(shouldGate(state, SESSION_START_TOOL)).toBe(false);
+    recordSessionStartResult(state, SESSION_START_TOOL, false);
+    expect(shouldGate(state, 'orboto_get_ticket')).toBe(true);
+    recordSessionStartResult(state, SESSION_START_TOOL, true);
     expect(shouldGate(state, 'orboto_get_ticket')).toBe(false);
   });
 

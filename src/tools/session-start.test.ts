@@ -49,7 +49,7 @@ describe('orboto_session_start (ORB-1093)', () => {
     const calls = stubByPath({
       '/users/me/assigned-tickets': { items: [{ ticketKey: 'ORB-42', title: 'Wire it up', statusName: 'In Progress' }] },
       '/users/me': { email: 'dev@x.io', fullName: 'Dev', workspaceLocale: 'en' },
-      '/agent-instructions': { instructions: 'claim -> commit -> close' },
+      '/agent-instructions': { instructions: 'claim -> commit -> close', rulesHash: 'fixture' },
       '/time/timer': { ticketId: 't1', ticketKey: 'ORB-42', startedAt: '2026-06-15T10:00:00Z' },
     });
     const res = await makeSessionStartHandler(client)();
@@ -71,7 +71,7 @@ describe('orboto_session_start (ORB-1093)', () => {
     stubByPath({
       '/users/me/assigned-tickets': { items: [] },
       '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
-      '/agent-instructions': { instructions: 'rules here' },
+      '/agent-instructions': { instructions: 'rules here', rulesHash: 'fixture' },
       '/time/timer': {},
     });
     const res = await makeSessionStartHandler(client)();
@@ -89,7 +89,7 @@ describe('orboto_session_start (ORB-1093)', () => {
         items: [{ ticketKey: 'ORB-42', title: 'Wire it up', statusName: 'In Review', projectId: 'proj-1' }],
       },
       '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
-      '/agent-instructions': { instructions: 'rules here' },
+      '/agent-instructions': { instructions: 'rules here', rulesHash: 'fixture' },
       '/time/timer': {},
       '/projects/proj-1/git-health': {
         connections: [{
@@ -119,7 +119,7 @@ describe('orboto_session_start (ORB-1093)', () => {
         items: [{ ticketKey: 'ORB-42', title: 'Wire it up', statusName: 'In Review', projectId: 'proj-1' }],
       },
       '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
-      '/agent-instructions': { instructions: 'rules here' },
+      '/agent-instructions': { instructions: 'rules here', rulesHash: 'fixture' },
       '/time/timer': {},
       '/projects/proj-1/git-health': {
         connections: [{
@@ -329,7 +329,7 @@ describe('orboto_session_start - context cost (ORB-1697)', () => {
         items: [{ ticketKey: 'ORB-42', title: 'Wire it up', statusName: 'In Review', projectId: 'proj-1' }],
       },
       '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
-      '/agent-instructions': { instructions: 'rules here' },
+      '/agent-instructions': { instructions: 'rules here', rulesHash: 'fixture' },
       '/time/timer': {},
       '/projects/proj-1/git-health': {
         connections: [{
@@ -364,7 +364,7 @@ describe('orboto_session_start - context cost (ORB-1697)', () => {
         ],
       },
       '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
-      '/agent-instructions': { instructions: 'rules here' },
+      '/agent-instructions': { instructions: 'rules here', rulesHash: 'fixture' },
       '/time/timer': {},
       '/v1/agent/presence': [],
     });
@@ -391,7 +391,7 @@ describe('orboto_session_start - context cost (ORB-1697)', () => {
         ],
       },
       '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
-      '/agent-instructions': { instructions: 'rules here' },
+      '/agent-instructions': { instructions: 'rules here', rulesHash: 'fixture' },
       '/time/timer': {},
     });
     const res = await makeSessionStartHandler(client)();
@@ -424,7 +424,7 @@ describe('orboto_session_start - a 200 with an unexpected body never kills the d
       '/projects/proj-1/tickets/by-key/42': { id: 'tick-1', projectId: 'proj-1', ticketKey: 'ORB-42', title: 'Bug' },
       '/users/me/assigned-tickets': { items: [] },
       '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
-      '/agent-instructions': { instructions: 'rules here' },
+      '/agent-instructions': { instructions: 'rules here', rulesHash: 'fixture' },
     });
 
     const res = await makeSessionStartHandler(client)({ ticketKey: 'ORB-42' });

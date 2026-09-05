@@ -19,6 +19,8 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { mcpInstanceToken, resolveTicketByKey } from './shared.js';
+import { validateRulesReceipt, validateNextWorkEnvelope } from '../required-rules.js';
+import { GIT_HEALTH_REASON_TEXT } from './git-health-reasons.js';
 
 /** ORB-1610 - `state`/`requestedAt` are optional in the wire shape only
  *  for backwards compatibility with pre-ORB-1610 rows; every claim this
@@ -114,16 +116,6 @@ function describe(s: WorkSessionRow): string {
 // ---------------------------------------------------------------------------
 // orboto_work_start - ORB-1611
 // ---------------------------------------------------------------------------
-
-// Mirrors apps/mcp/src/tools/session-start.ts's local shapes - kept
-// duplicated rather than imported, same choice that file already made for
-// its own bundle types (no shared MCP-side schema layer for these).
-const GIT_HEALTH_REASON_TEXT: Record<string, string> = {
-  connection_inactive: 'connection is deactivated',
-  app_installation_suspended: 'GitHub App installation is suspended',
-  oauth_token_expired: 'OAuth token expired with no refresh path',
-  history_backfill_error: 'last history backfill failed',
-};
 
 interface GitConnectionHealth {
   connectionId: string;
@@ -250,7 +242,7 @@ export function makeWorkStartHandler(client: OrbotoClient) {
           ...(lastKnownRulesHash ? { knownRulesHash: lastKnownRulesHash } : {}),
         },
       );
-      if (res.rulesHash) lastKnownRulesHash = res.rulesHash;
+      validateRulesReceipt(res, lastKnownRulesHash, 'rules');
 
       const lines: string[] = [
         res.reused
@@ -274,7 +266,7 @@ export function makeWorkStartHandler(client: OrbotoClient) {
 
       lines.push('', '## Working rules');
       if (res.rulesUnchanged) {
-        lines.push(`Unchanged since your last work-start on this connection (hash ${res.rulesHash}) - keep following what you already loaded.`);
+        lines.push(`Unchanged since your last work-start on this connection (hash ${res.rulesHash}). If these rules are not currently in your context, call orboto_session_start with rulesOnly: true before proceeding.`);
       } else {
         lines.push(res.rules?.trim() || '(no workspace rules configured)');
       }
@@ -323,6 +315,7 @@ export function makeWorkStartHandler(client: OrbotoClient) {
           : res.siblingSessions.map((s) => `  - [${s.role}] ${s.userFullName ?? s.userEmail ?? 'unknown'} - lease until ${s.leaseUntil}`).join('\n'),
       );
 
+      lastKnownRulesHash = res.rulesHash;
       return {
         content: [{ type: 'text', text: lines.join('\n') }],
         structuredContent: {
@@ -738,6 +731,7 @@ export function makeWorkNextHandler(client: OrbotoClient) {
       ...(lastKnownRulesHash ? { knownRulesHash: lastKnownRulesHash } : {}),
     });
 
+    validateNextWorkEnvelope(res);
     if (!res.reserved) {
       // ORB-1774 - a pause is an operator decision, not a backoff situation:
       // tell the agent to idle, not to poll for a free slot.
@@ -782,7 +776,7 @@ export function makeWorkNextHandler(client: OrbotoClient) {
     }
 
     const r = res.reserved;
-    if (r.rulesHash) lastKnownRulesHash = r.rulesHash;
+    validateRulesReceipt(r, lastKnownRulesHash, 'rules');
 
     const lines: string[] = [
       r.reused
@@ -801,7 +795,7 @@ export function makeWorkNextHandler(client: OrbotoClient) {
 
     lines.push('', '## Working rules');
     if (r.rulesUnchanged) {
-      lines.push(`Unchanged since your last call on this connection (hash ${r.rulesHash}) - keep following what you already loaded.`);
+      lines.push(`Unchanged since your last call on this connection (hash ${r.rulesHash}). If these rules are not currently in your context, call orboto_session_start with rulesOnly: true before proceeding.`);
     } else {
       lines.push(r.rules?.trim() || '(no workspace rules configured)');
     }
@@ -849,6 +843,7 @@ export function makeWorkNextHandler(client: OrbotoClient) {
     );
     lines.push(...landedIdleLines(res.landedIdle));
 
+    lastKnownRulesHash = r.rulesHash;
     return {
       content: [{ type: 'text', text: lines.join('\n') }],
       structuredContent: {

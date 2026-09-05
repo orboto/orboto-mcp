@@ -25,14 +25,14 @@ import { SESSION_START_NUDGE } from './session-nudge.js';
 // Every API call the tools make resolves to a benign empty payload so
 // the handlers succeed without a live backend. list_projects → [] →
 // "no projects" text + valid structuredContent; session_start's sub-
-// calls are all .catch-guarded so [] is harmless.
+// rules read is required and carries an explicit valid empty ruleset.
 function mockApi() {
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async () => ({
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => ({
     ok: true,
     status: 200,
     statusText: 'OK',
     headers: new Headers({ 'content-type': 'application/json' }),
-    json: async () => [],
+    json: async () => String(url).includes('/agent-instructions') ? { instructions: '', rulesHash: 'empty', requireSessionStart: false } : [],
     text: async () => '[]',
   } as unknown as Response));
 }
@@ -59,6 +59,21 @@ function firstText(res: Awaited<ReturnType<Client['callTool']>>): string {
 }
 
 describe('ORB-1331 - HTTP transport (per-session nudge)', () => {
+  it('keeps an unavailable connect policy gated until rules are loaded successfully', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('secret offline'));
+    const client = await connectSession();
+    try {
+      const blocked = await client.callTool({ name: 'orboto_list_projects', arguments: {} });
+      expect(blocked.isError).toBe(true);
+      const failed = await client.callTool({ name: 'orboto_session_start', arguments: { rulesOnly: true } });
+      expect(failed.isError).toBe(true);
+      expect(firstText(failed)).not.toContain('secret');
+      mockApi();
+      const recovered = await client.callTool({ name: 'orboto_session_start', arguments: { rulesOnly: true } });
+      expect(recovered.isError).not.toBe(true);
+      expect((await client.callTool({ name: 'orboto_list_projects', arguments: {} })).isError).not.toBe(true);
+    } finally { await client.close(); }
+  });
   it('prepends the nudge exactly once when the first call is orboto_list_projects; the second call is clean', async () => {
     const client = await connectSession();
 

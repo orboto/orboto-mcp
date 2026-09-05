@@ -142,8 +142,8 @@ export class OrbotoClient {
   }
 
   /** GET a JSON endpoint. Throws `OrbotoApiError` on non-2xx. */
-  async get<T>(path: string): Promise<T> {
-    const res = await this.authedFetch(this.fullUrl(path), { method: 'GET' });
+  async get<T>(path: string, options: { signal?: AbortSignal } = {}): Promise<T> {
+    const res = await this.authedFetch(this.fullUrl(path), { method: 'GET', signal: options.signal });
     return (await res.json()) as T;
   }
 

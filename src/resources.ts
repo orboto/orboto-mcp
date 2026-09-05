@@ -26,6 +26,7 @@
  */
 import { ResourceTemplate, type McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { OrbotoApiError, type OrbotoClient } from './orboto-client.js';
+import { loadRequiredRules } from './required-rules.js';
 import { resolveProjectByKey, resolveTicketByKey, type TicketRow } from './tools/shared.js';
 
 interface CommentPage {
@@ -81,8 +82,8 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
       mimeType: 'text/markdown',
     },
     async (uri) => {
-      const res = await client.get<{ instructions: string }>('/agent-instructions').catch(() => ({ instructions: '' }));
-      const rules = res?.instructions?.trim() || '(no workspace rules configured)';
+      const res = await loadRequiredRules(client, '/agent-instructions');
+      const rules = res.instructions || '(no workspace rules configured)';
       return {
         contents: [{ uri: uri.href, mimeType: 'text/markdown', text: `# orboto workspace agent rules\n\n${rules}` }],
       };
