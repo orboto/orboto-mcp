@@ -257,8 +257,8 @@ import {
   workSessionClaimsReleaseToolConfig, makeWorkSessionClaimsReleaseHandler,
   workStartToolConfig, makeWorkStartHandler,
   workFinishToolConfig, makeWorkFinishHandler,
-  workNextToolConfig, makeWorkNextHandler,
 } from './tools/work-sessions.js';
+import { workNextToolConfig, makeWorkNextHandler } from './tools/work-next.js';
 import {
   listAdminTranslationsToolConfig, makeListAdminTranslationsHandler,
   approveTranslationToolConfig, makeApproveTranslationHandler,
