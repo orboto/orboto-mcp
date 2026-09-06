@@ -45,6 +45,7 @@ const TITLE_MAX = 64;
 interface ListedTool {
   name: string;
   title?: string;
+  inputSchema?: { properties?: Record<string, unknown> };
   annotations?: {
     title?: string;
     readOnlyHint?: boolean;
@@ -55,6 +56,13 @@ interface ListedTool {
 }
 
 let tools: ListedTool[];
+
+function unsafeTakeoverTools(list: ListedTool[]): string[] {
+  return list
+    .filter((tool) => Object.prototype.hasOwnProperty.call(tool.inputSchema?.properties ?? {}, 'takeover'))
+    .filter((tool) => tool.annotations?.readOnlyHint !== false || tool.annotations?.destructiveHint !== true)
+    .map((tool) => tool.name);
+}
 
 beforeAll(async () => {
   // Port 1 is never listened on -> the connect-time /agent-instructions
@@ -108,6 +116,24 @@ describe('MCP tool safety annotations (ORB-1669)', () => {
       .filter((t) => t.annotations?.readOnlyHint === true && t.annotations?.destructiveHint === true)
       .map((t) => t.name);
     expect(offenders, `Contradictory annotations on: ${offenders.join(', ')}`).toEqual([]);
+  });
+
+  it('every takeover-capable tool is a destructive write for all argument combinations', () => {
+    const capable = tools.filter((tool) => Object.prototype.hasOwnProperty.call(tool.inputSchema?.properties ?? {}, 'takeover'));
+    // Pin the actual siblings so losing schema discovery cannot pass vacuously.
+    expect(capable.map((tool) => tool.name)).toEqual(expect.arrayContaining(['orboto_work_start', 'orboto_work_session_start']));
+    expect(unsafeTakeoverTools(tools)).toEqual([]);
+    // Reservation without a takeover path is not an account-state takeover.
+    expect(tools.find((tool) => tool.name === 'orboto_work_next')?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+  });
+
+  it('the takeover ratchet catches missing, false and contradictory hints on future tools', () => {
+    const future: ListedTool = { name: 'future_takeover', inputSchema: { properties: { takeover: { type: 'boolean' } } } };
+    for (const annotations of [undefined, { readOnlyHint: false }, { readOnlyHint: false, destructiveHint: false }, { readOnlyHint: true, destructiveHint: true }]) {
+      expect(unsafeTakeoverTools([{ ...future, annotations }])).toEqual(['future_takeover']);
+    }
+    expect(unsafeTakeoverTools([{ ...future, annotations: { readOnlyHint: false, destructiveHint: true } }])).toEqual([]);
+    expect(unsafeTakeoverTools([{ name: 'ordinary_read', annotations: { readOnlyHint: true } }])).toEqual([]);
   });
 
   it(`every tool has a human-readable title of at most ${TITLE_MAX} characters`, () => {

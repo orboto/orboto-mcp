@@ -85,7 +85,8 @@ export const workStartToolConfig = {
     onConflict: z.enum(['reject', 'queue']).optional()
       .describe('Only matters when `resourceClaims` is set. Default `reject`.'),
   }).shape,
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+  // takeover=true cancels another holder; hints describe the worst allowed call.
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeWorkStartHandler(client: OrbotoClient) {
@@ -286,7 +287,8 @@ export const workSessionStartToolConfig = {
     onConflict: z.enum(['reject', 'queue']).optional()
       .describe('Only matters when `resourceClaims` is set. Default `reject`: a conflicting write claim fails the WHOLE call with the conflicting holder(s) named - if this call would have created a brand-new session, that session is rolled back rather than left holding the lease without its claims. `queue`: the conflicting claim is accepted as `state: "waiting"` instead of failing; it is promoted automatically once the conflict clears (release, finish, or the next orboto_work_sessions read).'),
   }).shape,
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+  // The optional takeover can displace someone else's active session.
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeWorkSessionStartHandler(client: OrbotoClient) {
