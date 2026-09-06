@@ -4,6 +4,13 @@ import { defineConfig } from 'vitest/config';
 // exists for the coverage block (same shape as api/web).
 export default defineConfig({
   test: {
+    // ORB-1948 - the 5 s vitest default was sized for an idle laptop. On the
+    // saturated CI host (release + develop + tag + PR runs sharing one
+    // runner) page-render smokes and cold lazy-route transforms exceeded it
+    // and a green suite went red on the release commit twice in one day.
+    // Same budget the api suite carries since ORB-1551; a hang still fails.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
     include: ['src/**/*.test.ts'],
     // ORB-1853 - coverage is measured on every CI run and ratcheted per
     // package by scripts/check-coverage.mjs (json-summary is what it reads).
