@@ -556,25 +556,26 @@ interface CommentResponse {
 }
 
 export const commentToolConfig = {
-  title: 'Post a comment on a ticket',
+  title: 'Post a comment',
   description:
-    'Append a comment. Supports Markdown. `isInternal=true` hides the comment from external/guest users (use for implementation chatter the customer shouldn\'t see).',
+    'Post Markdown. isInternal=true hides it from guests. Attachment drafts are claimed atomically with the comment; never use public ticket uploads for private comments.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     text: z.string().min(1),
-    isInternal: z.boolean().optional().describe('Default: false (visible to all members + guests).'),
+    isInternal: z.boolean().optional().describe('Default false: guests can read.'),
+    attachmentDraftIds: z.array(z.string().uuid()).max(20).optional().describe('Private /attachment-drafts/tickets/:ticketId uploads only.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeCommentHandler(client: OrbotoClient) {
-  return async ({ ticketKey, text, isInternal }: {
-    ticketKey: string; text: string; isInternal?: boolean;
+  return async ({ ticketKey, text, isInternal, attachmentDraftIds }: {
+    ticketKey: string; text: string; isInternal?: boolean; attachmentDraftIds?: string[];
   }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
     const created = await client.post<CommentResponse>(
       `/tickets/${ticket.id}/comments`,
-      { content: text, isInternal: isInternal ?? false },
+      { content: text, isInternal: isInternal ?? false, ...(attachmentDraftIds ? { attachmentDraftIds } : {}) },
     );
     return {
       content: [{

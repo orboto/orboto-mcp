@@ -431,6 +431,12 @@ describe('orboto_delete_ticket', () => {
 });
 
 describe('orboto_comment', () => {
+  it('forwards private upload claims without dropping the internal flag', async () => {
+    const calls = stub([{ json: PROJ }, { json: TICKET }, { json: { id: 'c1', content: 'private image', isInternal: true, createdAt: 'now' } }]);
+    const ids = ['aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'];
+    await makeCommentHandler(client)({ ticketKey: 'ACME-1', text: 'private image', isInternal: true, attachmentDraftIds: ids });
+    expect(calls[2].body).toEqual({ content: 'private image', isInternal: true, attachmentDraftIds: ids });
+  });
   it('posts a regular (non-internal) comment by default', async () => {
     const calls = stub([
       { json: PROJ },
