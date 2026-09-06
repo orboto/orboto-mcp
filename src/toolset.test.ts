@@ -58,6 +58,13 @@ describe('toolInToolset', () => {
     expect(toolInToolset('orboto_claim', 'curated')).toBe(true);
     expect(toolInToolset('orboto_api_call', 'curated')).toBe(true);
   });
+  // ORB-1959 - coordination is part of the default connection, not an opt-in.
+  it('curated carries the four agent-coordination tools; minimal stays the 12-tool loop', () => {
+    for (const name of ['orboto_messages', 'orboto_agent_notify', 'orboto_agent_broadcast', 'orboto_agent_heartbeat']) {
+      expect(toolInToolset(name, 'curated'), name).toBe(true);
+      expect(toolInToolset(name, 'minimal'), name).toBe(false);
+    }
+  });
   it('minimal admits only the daily loop + the escape hatch', () => {
     expect(toolInToolset('orboto_claim', 'minimal')).toBe(true);
     expect(toolInToolset('orboto_api_search', 'minimal')).toBe(true);

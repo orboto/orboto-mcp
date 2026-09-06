@@ -58,7 +58,14 @@ afterEach(() => { vi.restoreAllMocks(); });
  * schema to the minimum (one describe() on `page`); ceiling re-pinned to
  * 32,500 (~6 % headroom), deliberately, for that one addition.
  */
-const CURATED_MAX_CHARS = 32_500;
+// ORB-1959 - re-pinned at 37,500 (measured 36,714): the four agent
+// coordination tools (messages, notify, broadcast, heartbeat) joined the
+// curated tier so an agent on the DEFAULT connection can fetch, act on and
+// ack its mail - the binding workspace rule the old manifest made impossible
+// to follow. Their descriptions were cut to the load-bearing facts first
+// (286 chars); the remaining ~4.2k chars are input/output schemas and the
+// per-tool keys the SDK emits. Decision by the operator, 2026-09-06.
+const CURATED_MAX_CHARS = 37_500;
 const FULL_MAX_CHARS = 155_000;
 
 /**
@@ -97,7 +104,7 @@ const MINIMAL_MAX_TOKENS = 3_100;
  */
 // ORB-1910 - re-pinned with CURATED_MAX_CHARS (32,500 / 3.6): the curated set
 // gained orboto_report_feedback; measured 8,514 estimated tokens.
-const CURATED_SCHEMA_MAX_TOKENS = 9_050;
+const CURATED_SCHEMA_MAX_TOKENS = 10_450; // ORB-1959: measured 10,198 with the coordination tools
 
 interface Measurement { count: number; chars: number; instructionsChars: number }
 
@@ -140,8 +147,9 @@ describe('ORB-1521 - eager-load manifest size', () => {
     // eslint-disable-next-line no-console
     console.log(`[manifest-size] curated: ${count} tools, ${chars} chars (~${estTokens(chars)} tokens)`);
     // 31 = the ORB-1741-dieted set + the two ORB-1694 bulk tools (each
-    // REPLACES dozens of per-call responses, so they earn their slot).
-    expect(count).toBeLessThanOrEqual(32);
+    // REPLACES dozens of per-call responses, so they earn their slot);
+    // ORB-1910 added report_feedback, ORB-1959 the four coordination tools.
+    expect(count).toBeLessThanOrEqual(36);
     expect(chars).toBeLessThanOrEqual(CURATED_MAX_CHARS);
     expect(estTokens(chars)).toBeLessThanOrEqual(CURATED_SCHEMA_MAX_TOKENS);
   });

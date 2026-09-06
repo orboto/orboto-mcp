@@ -28,13 +28,13 @@ interface AgentMessage {
 export const agentMessagesToolConfig = {
   title: 'Fetch / acknowledge your agent inbox',
   description:
-    'Read the messages other agents sent you while you were not connected (store-and-forward inbox; sending happens via orboto_agent_notify). Default lists UNREAD messages and marks them delivered; pass ackIds to acknowledge messages as read (acked messages stop triggering the pending-mail pointer on tool responses and prune after 30 days). Reply by calling orboto_agent_notify with threadId = the message id you are answering.',
+    'Your store-and-forward inbox: messages other agents sent you plus broadcasts to your scopes (payload.broadcast names the scope). Default = unread, marked delivered on fetch; ackIds marks read. Reply via orboto_agent_notify with threadId = the message id.',
   inputSchema: z.object({
     all: z.boolean().default(false).describe('true = include already-read messages'),
     limit: z.number().int().min(1).max(200).default(50),
-    project: z.string().min(1).max(64).optional().describe('Project key or UUID: narrow to messages scoped to this project PLUS unscoped ones. Pass the project you are working when your identity runs multiple sessions; only ack messages that are yours.'),
+    project: z.string().min(1).max(64).optional().describe('Project key or UUID: scoped messages for this project plus unscoped ones. Ack only messages that are yours.'),
     // ORB-1742 - self-echo exclusion, on by default for MCP sessions.
-    includeOwnSends: z.boolean().default(false).describe('true = ALSO list messages this very session sent (they are hidden by default so a shared identity never wakes itself with its own outbound mail).'),
+    includeOwnSends: z.boolean().default(false).describe('true = also list messages this session sent (hidden by default so a shared identity never wakes itself).'),
     ackIds: z.array(z.string().uuid()).max(200).optional().describe('Message ids to mark as read'),
   }).shape,
   outputSchema: z.object({

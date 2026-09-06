@@ -30,7 +30,7 @@ interface HeartbeatResponse {
 export const agentHeartbeatToolConfig = {
   title: 'Agent heartbeat (Multi-Agent Coordination)',
   description:
-    'Register or refresh this agent\'s presence in the workspace. Call on startup AND every ~30 s thereafter; rows missing for >90 s count as offline. Returns the `sessionToken` to persist + send on subsequent heartbeats so the same row is bumped instead of churning new ones. `status` can be `idle` (default), `working` (set `workingOnTicketId` too if relevant), or `blocked`. `capabilities` is a free-form list of strings the operator can use to filter (e.g. `["read-only", "writes-tickets", "writes-code"]`). `clientInfo` describes the runtime - fill `name` with the agent runtime (`claude-desktop`, `claude-code`, `dispatcher-daemon`, `cursor`, ...).',
+    'Register or refresh this agent\'s presence. Call on startup and every ~30 s; rows older than 90 s count as offline. Persist the returned sessionToken and send it on later heartbeats. status: idle (default) | working (+workingOnTicketId) | blocked. capabilities: free-form strings for operator filters. clientInfo.name = the runtime (claude-code, cursor, ...).',
   inputSchema: z.object({
     sessionToken: z.string().nullable().optional(),
     status: z.enum(['idle', 'working', 'blocked']).optional(),
@@ -148,7 +148,7 @@ interface NotifyResponse {
 export const agentNotifyToolConfig = {
   title: 'Notify another agent / user',
   description:
-    'Dispatch a fire-and-forget message to a target user (bot or human) identified by email. The recipient sees it via the standard notification channel - in-app for human users, MCP push for subscribed agents (ORB-706). Use cases: lead agent telling a worker a sub-task is ready; a worker reporting back to the orchestrator; a CI agent pinging a reviewer when a PR is staged. The `kind` field tags the semantic intent so the recipient can filter (`info` for general updates, `request` when a response is expected, `complete` when reporting a finished sub-task). `payload` is a free-form jsonb blob.',
+    'Send a fire-and-forget message to a user (bot or human) by email; it lands in their inbox (orboto_messages) and, for humans, in-app. kind: info | request (answer expected) | complete (sub-task done) | error. payload: free-form JSON; threadId links a reply to the message it answers.',
   inputSchema: z.object({
     targetEmail: z.string().email(),
     kind: z.enum(['info', 'request', 'complete', 'error']).default('info'),
@@ -158,10 +158,10 @@ export const agentNotifyToolConfig = {
     threadId: z.string().uuid().optional(),
     // ORB-1732 - optional project scope: address "the agent working project
     // X" when the recipient identity runs multiple sessions.
-    project: z.string().min(1).max(64).optional().describe('Project key (ORB) or UUID: scope the message to the recipient session working that project. Recipients fetching with a project filter see scoped messages for their project plus unscoped ones.'),
+    project: z.string().min(1).max(64).optional().describe('Project key or UUID: scope the message to the recipient session working that project.'),
     // ORB-1742 - defaults to this MCP session's instance token so a shared
     // identity never wakes itself with its own outbound mail.
-    senderRef: z.string().min(1).max(128).optional().describe('Sender-session ref for self-echo exclusion. Defaults to this MCP session automatically - only override when sending on behalf of another session.'),
+    senderRef: z.string().min(1).max(128).optional().describe('Sender-session ref for self-echo exclusion; defaults to this MCP session.'),
   }).shape,
   outputSchema: z.object({
     ok: z.literal(true),
@@ -177,7 +177,7 @@ export const agentNotifyToolConfig = {
 export const agentBroadcastToolConfig = {
   title: 'Scoped broadcast to other agents',
   description:
-    'Fan-out a message to every subscribed agent in a scope. `scopeType=workspace` reaches every internal member; `scopeType=project` reaches members of `scopeId` (project UUID); `scopeType=topic` reaches everyone subscribed to the topic string. The recipient sees it via a `notifications/resources/updated` push on `orboto://broadcast/<scope>/<scope_id>`. Use for lead-agent → workers (workspace), project-team status updates (project), or ad-hoc cross-cutting coordination (topic). Retention is 24 h - late subscribers can replay via the resource read.',
+    'Fan-out to every agent in a scope: workspace (all internal members), project (members of scopeId = project UUID) or topic (any string). Each recipient gets an inbox copy (orboto_messages, ackable); live subscribers also get a resources/updated push on orboto://broadcast/<scope>/<scope_id>. The scope replay keeps agent_broadcast_retention_days (default 7).',
   inputSchema: z.object({
     scopeType: z.enum(['workspace', 'project', 'topic']),
     scopeId: z.string().default(''),

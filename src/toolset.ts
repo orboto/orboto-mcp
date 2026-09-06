@@ -84,7 +84,10 @@ export const MINIMAL_TOOLS: ReadonlySet<string> = new Set([
   'orboto_close_ticket',
   'orboto_timer_start',
   'orboto_timer_stop',
-  // Everything else, on demand
+  // Everything else, on demand (ORB-1959 measured orboto_messages at ~3k
+  // chars - a fifth of this tier's whole window - so the inbox stays in
+  // curated, where the default connection lives; minimal is the explicit
+  // small-model opt-in and reaches the inbox through orboto_api_call).
   'orboto_api_search',
   'orboto_api_call',
 ]);
@@ -122,6 +125,17 @@ export const CURATED_TOOLS: ReadonlySet<string> = new Set([
   'orboto_timer_stop',      // 772
   'orboto_log_time',        // 130
   'orboto_get_timer',       // 43
+  // ORB-1959 - agent coordination on the DEFAULT connection. Without
+  // these four an agent on curated could neither receive nor acknowledge
+  // mail (broadcasts included, they land in the inbox since ORB-1959),
+  // announce itself (heartbeat / presence) nor reach another agent - the
+  // workspace rules demand exactly that, and every fresh `mcp add` forgot
+  // the ?toolset=full workaround. Four small schemas; measured cost in
+  // manifest-size.test.ts.
+  'orboto_messages',
+  'orboto_agent_notify',
+  'orboto_agent_broadcast',
+  'orboto_agent_heartbeat',
   // Transport plumbing + the escape hatch itself
   'orboto_response_expand',
   // ORB-1741 - the way back from one-line manifest summaries: full
