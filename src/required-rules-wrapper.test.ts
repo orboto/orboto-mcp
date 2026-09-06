@@ -47,6 +47,13 @@ async function fixture() {
   return { run, cache, ruleReads: () => ruleReads, set: (body: string, code = 200) => { rules = body; status = code; }, setNext: (body: string) => { next = body; } };
 }
 
+// ORB-1948 - each test spawns the REAL wrapper CLI (a 6,000-line module,
+// about 1 s locally); on a saturated CI host (tag run: boot gate, three
+// image builds, CLI binaries and the MCP split in parallel) that exceeded
+// vitest's 5 s default and blocked the v0.182.1 rollout. The budget is per
+// test and generous on purpose - a hang still fails, only slower.
+const SPAWN_TEST_TIMEOUT_MS = 60_000;
+
 describe('wrapper required rules through the real CLI', () => {
   it('does not turn malformed work-next responses into an idle result', async () => {
     const f = await fixture();
@@ -70,7 +77,7 @@ describe('wrapper required rules through the real CLI', () => {
     expect(ack.out).toContain('not currently in your context');
     expect(ack.out).toContain('session-start --force-rules');
     expect(ack.out).not.toContain('keep following what you already loaded');
-  });
+  }, SPAWN_TEST_TIMEOUT_MS);
   it('does not silently omit an explicitly requested init rules snapshot', async () => {
     const f = await fixture();
     f.set('{}');
@@ -78,7 +85,7 @@ describe('wrapper required rules through the real CLI', () => {
     expect(result.code).toBe(1);
     expect(result.err).toContain('Required agent rules');
     expect(f.ruleReads()).toBe(1);
-  });
+  }, SPAWN_TEST_TIMEOUT_MS);
   it('fails closed without poisoning the cache, then recovers with a valid empty ruleset', async () => {
     const f = await fixture();
     for (const body of ['{}', 'null', '[]', '{"instructions":', '<html>secret-token</html>', '{"instructions":"","rulesHash":null}', '{"rulesHash":"keep-hash","rulesUnchanged":true}']) {
@@ -102,5 +109,5 @@ describe('wrapper required rules through the real CLI', () => {
     expect(result.code).toBe(0);
     expect(result.out).toContain('no workspace rules configured');
     expect((await readFile(f.cache, 'utf8')).trim()).toBe('empty');
-  });
+  }, SPAWN_TEST_TIMEOUT_MS);
 });
