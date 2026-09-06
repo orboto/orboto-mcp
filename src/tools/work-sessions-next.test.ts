@@ -7,7 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';
-import { makeWorkNextHandler } from './work-sessions.js';
+import { makeWorkNextHandler } from './work-next.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
 afterEach(() => { vi.restoreAllMocks(); });
@@ -70,6 +70,32 @@ const RESERVED = {
 };
 
 describe('orboto_work_next', () => {
+  const peekResponse = {
+    reserved: null, reason: null, retryAfterSeconds: null, earliestFreeAt: null,
+    candidatesConsidered: 1, landedIdle: [],
+    candidate: { ticketId: 't1', ticketKey: 'ACME-42', title: 'Ready', priority: null },
+  };
+
+  it('validates a peek candidate without claiming rules delivery or a reservation', async () => {
+    const calls = stub([{ json: peekResponse }, { json: peekResponse }]);
+    const handler = makeWorkNextHandler(client);
+    const result = await handler({ projectKey: 'ACME', peek: true });
+    expect(result.structuredContent).toMatchObject({ reserved: null, candidate: peekResponse.candidate });
+    expect(calls[0].body).toMatchObject({ peek: true });
+    expect(calls[0].body).not.toHaveProperty('knownRulesHash');
+    await expect(handler({ projectKey: 'ACME' })).rejects.toMatchObject({ reason: 'invalid_response' });
+  });
+
+  it.each([
+    { candidate: {} }, { candidate: { ticketId: '', ticketKey: null, title: '', priority: null } },
+    { candidate: { ticketId: 't1', title: 'Ready', priority: null } },
+    { candidate: { ticketId: 't1', ticketKey: null, title: 42, priority: null } },
+    { reason: 'none-matching' }, { reserved: RESERVED }, { candidatesConsidered: -1 },
+  ])('rejects malformed or contradictory peek responses %#', async patch => {
+    stub([{ json: { ...peekResponse, ...patch } }]);
+    await expect(makeWorkNextHandler(client)({ projectKey: 'ACME', peek: true })).rejects.toMatchObject({ reason: 'invalid_response' });
+  });
+
   it('reserves the winning candidate and renders the full bundle, sending projectKey straight through', async () => {
     const calls = stub([{ json: { reserved: RESERVED, reason: null, retryAfterSeconds: null, earliestFreeAt: null, candidatesConsidered: 3, landedIdle: [] } }]);
     const res = await makeWorkNextHandler(client)({ projectKey: 'ACME' });

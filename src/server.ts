@@ -204,6 +204,7 @@ import {
   claimToolConfig, makeClaimHandler,
   unclaimToolConfig, makeUnclaimHandler,
 } from './tools/claim.js';
+import { reportFeedbackToolConfig, makeReportFeedbackHandler } from './tools/feedback.js';
 import {
   listApprovalsToolConfig, makeListApprovalsHandler,
   approvalDecideToolConfig, makeApprovalDecideHandler,
@@ -257,8 +258,8 @@ import {
   workSessionClaimsReleaseToolConfig, makeWorkSessionClaimsReleaseHandler,
   workStartToolConfig, makeWorkStartHandler,
   workFinishToolConfig, makeWorkFinishHandler,
-  workNextToolConfig, makeWorkNextHandler,
 } from './tools/work-sessions.js';
+import { workNextToolConfig, makeWorkNextHandler } from './tools/work-next.js';
 import {
   listAdminTranslationsToolConfig, makeListAdminTranslationsHandler,
   approveTranslationToolConfig, makeApproveTranslationHandler,
@@ -679,6 +680,8 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_whoami', whoamiToolConfig, makeWhoamiHandler(client));
   reg('orboto_claim', claimToolConfig, makeClaimHandler(client));
   reg('orboto_unclaim', unclaimToolConfig, makeUnclaimHandler(client));
+  // ORB-1910 - feedback / bug report to the operator through the tenant relay.
+  reg('orboto_report_feedback', reportFeedbackToolConfig, makeReportFeedbackHandler(client));
   // ORB-1223 - approval / sign-off gates.
   reg('orboto_list_approvals', listApprovalsToolConfig, makeListApprovalsHandler(client));
   reg('orboto_approval_decide', approvalDecideToolConfig, makeApprovalDecideHandler(client));

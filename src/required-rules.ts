@@ -41,11 +41,18 @@ export function validateRulesReceipt(value: unknown, knownHash?: string, textFie
   }
 }
 
-export function validateNextWorkEnvelope(value: unknown): void {
+export function validateNextWorkEnvelope(value: unknown, peek = false): void {
   const integer = (n: unknown) => Number.isInteger(n) && Number(n) >= 0;
+  const candidate = record(value) ? value.candidate : undefined;
+  const hasCandidate = candidate !== undefined && candidate !== null;
   if (!record(value) || !('reserved' in value) || (value.reserved !== null && !record(value.reserved))
+    || (peek && value.reserved !== null)
+    || (hasCandidate && (!peek || value.reserved !== null || value.reason !== null
+      || !record(candidate) || typeof candidate.ticketId !== 'string' || !candidate.ticketId
+      || (candidate.ticketKey !== null && typeof candidate.ticketKey !== 'string')
+      || typeof candidate.title !== 'string' || (candidate.priority !== null && typeof candidate.priority !== 'string')))
     || (value.reserved === null
-      ? typeof value.reason !== 'string' || !['all-blocked', 'all-leased', 'none-matching', 'autonomy_paused', 'lane_paused', 'lane_limit_reached'].includes(value.reason)
+      ? !hasCandidate && (typeof value.reason !== 'string' || !['all-blocked', 'all-leased', 'none-matching', 'autonomy_paused', 'lane_paused', 'lane_limit_reached'].includes(value.reason))
       : value.reason !== null)
     || !integer(value.candidatesConsidered)
     || (value.retryAfterSeconds !== null && !integer(value.retryAfterSeconds))

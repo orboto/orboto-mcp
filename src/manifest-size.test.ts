@@ -51,8 +51,14 @@ afterEach(() => { vi.restoreAllMocks(); });
  * fat. Measured cost: minimal +688 chars (12 tools), curated +1,276,
  * full +9,836 (175 tools, ~56 chars each). FULL_MAX_CHARS and
  * MINIMAL_MAX_TOKENS were raised by exactly that, deliberately.
+ *
+ * ORB-1910 (2026-09-05): orboto_report_feedback joins the curated set (32
+ * tools) - an agent that hits a bug must be able to report it without
+ * ?toolset=full. Measured curated = 30,652 chars after trimming the tool's
+ * schema to the minimum (one describe() on `page`); ceiling re-pinned to
+ * 32,500 (~6 % headroom), deliberately, for that one addition.
  */
-const CURATED_MAX_CHARS = 30_000;
+const CURATED_MAX_CHARS = 32_500;
 const FULL_MAX_CHARS = 155_000;
 
 /**
@@ -89,7 +95,9 @@ const MINIMAL_MAX_TOKENS = 3_100;
  * is `minimal`; curated is the desktop-client default, and this ceiling
  * holds the 18 % the diet won.
  */
-const CURATED_SCHEMA_MAX_TOKENS = 8_200;
+// ORB-1910 - re-pinned with CURATED_MAX_CHARS (32,500 / 3.6): the curated set
+// gained orboto_report_feedback; measured 8,514 estimated tokens.
+const CURATED_SCHEMA_MAX_TOKENS = 9_050;
 
 interface Measurement { count: number; chars: number; instructionsChars: number }
 
