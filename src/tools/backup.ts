@@ -31,7 +31,7 @@ const mb = (n: number): string => `${Math.round((n / 1024 / 1024) * 10) / 10} MB
 export const createFullBackupToolConfig = {
   title: 'Create + download a full workspace backup',
   description:
-    'Create an on-demand FULL workspace backup (database + storage) and return the ZIP as a base64 application/zip resource attachment - create, wait and download in one call (the server runs the export as a background run and this tool polls it; large workspaces can take minutes). Requires admin:backup:export. For the scheduled named jobs use orboto_trigger_backup instead.',
+    'Create an on-demand FULL workspace backup (database + storage) and return the ZIP as a base64 application/zip resource attachment - create, wait and download in one call (the server runs the export as a background run and this tool polls it; large workspaces can take minutes). Rows and file references share one snapshot; missing or incomplete files fail the run, never return a partial ZIP. Requires admin:backup:export. For the scheduled named jobs use orboto_trigger_backup instead.',
   inputSchema: z.object({}).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };

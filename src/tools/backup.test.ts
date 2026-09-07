@@ -77,20 +77,22 @@ describe('orboto_create_full_backup (ORB-1301 / async since ORB-1717)', () => {
     }
   });
 
-  it('a failed run surfaces the error instead of a partial ZIP', async () => {
+  it.each(['disk full', 'Backup source object is missing, unreadable or incomplete'])('a failed run surfaces %s instead of a partial ZIP', async (message) => {
     vi.useFakeTimers();
+    const download = vi.spyOn(client, 'getBinary');
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, _init) => {
       const u = url.toString();
       if (u.endsWith('/admin/backup/full')) {
         return { ok: true, status: 202, statusText: 'Accepted', headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ runId: 'run-2' }), text: async () => '' } as unknown as Response;
       }
-      return { ok: true, status: 200, statusText: 'OK', headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ status: 'failed', errorMessage: 'disk full' }), text: async () => '' } as unknown as Response;
+      return { ok: true, status: 200, statusText: 'OK', headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ status: 'failed', errorMessage: message }), text: async () => '' } as unknown as Response;
     });
     try {
       const pending = makeCreateFullBackupHandler(client)();
-      const assertion = expect(pending).rejects.toThrow('disk full');
+      const assertion = expect(pending).rejects.toThrow(message);
       await vi.advanceTimersByTimeAsync(6_000);
       await assertion;
+      expect(download).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
