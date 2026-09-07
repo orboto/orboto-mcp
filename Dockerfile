@@ -2,7 +2,7 @@
 # BuildKit cache-mount support - Coolify exports DOCKER_BUILDKIT=1.
 
 # ── builder ─────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:24.20.0-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS builder
 
 # Install pnpm from GitHub (avoids registry.npmjs.org flakiness - same
 # rationale as apps/api/Dockerfile). Pin version in lockstep with the
@@ -44,7 +44,7 @@ RUN NODE_OPTIONS=--max-old-space-size=4096 pnpm --filter @orboto/mcp build
 RUN pnpm --filter @orboto/mcp deploy --legacy --prod /deploy/mcp
 
 # ── runner ──────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:24.20.0-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 

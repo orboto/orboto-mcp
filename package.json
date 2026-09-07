@@ -37,7 +37,7 @@
     "vitest": "^1.6.1"
   },
   "engines": {
-    "node": ">=20"
+    "node": "^22.20.0 || ^24.0.0"
   },
   "keywords": [
     "orboto",
