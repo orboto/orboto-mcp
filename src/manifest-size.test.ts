@@ -66,7 +66,9 @@ afterEach(() => { vi.restoreAllMocks(); });
 // (286 chars); the remaining ~4.2k chars are input/output schemas and the
 // per-tool keys the SDK emits. Decision by the operator, 2026-09-06.
 const CURATED_MAX_CHARS = 37_500;
-const FULL_MAX_CHARS = 155_000;
+// ORB-2000 - orboto_draft_customer_reply joins the full tier (measured
+// 155,669 chars with it); ceiling re-pinned with ~6 % headroom.
+const FULL_MAX_CHARS = 165_000;
 
 /**
  * ORB-1805 - the estimator the ticket measured the failure with

@@ -23,6 +23,7 @@ import { registerWithMetrics } from './with-metrics.js';
 import { resolveToolset, toolInToolset, type Toolset } from './toolset.js';
 import { createNudgeState } from './session-nudge.js';
 import { aiStatusToolConfig, makeAiStatusHandler } from './tools/ai-status.js';
+import { draftCustomerReplyToolConfig, makeDraftCustomerReplyHandler } from './tools/customer-draft.js';
 import { embeddingStatusToolConfig, makeEmbeddingStatusHandler } from './tools/embedding-status.js';
 import { aiUsageToolConfig, makeAiUsageHandler } from './tools/ai-usage.js';
 import { sessionStartToolConfig, makeSessionStartHandler } from './tools/session-start.js';
@@ -474,6 +475,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   // Tools - alphabetical-ish by concept. Each tool file owns its
   // input/output schema; the server just glues names to handlers.
   reg('orboto_ai_status', aiStatusToolConfig, makeAiStatusHandler(client));
+  reg('orboto_draft_customer_reply', draftCustomerReplyToolConfig, makeDraftCustomerReplyHandler(client)); // ORB-2000
   reg('orboto_embedding_status', embeddingStatusToolConfig, makeEmbeddingStatusHandler(client));
   reg('orboto_ai_usage', aiUsageToolConfig, makeAiUsageHandler(client));
   // ORB-1093 - session-start / post-compact re-orientation digest.
