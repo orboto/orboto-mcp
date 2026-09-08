@@ -8,13 +8,8 @@ FROM node:24.20.0-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de6
 # rationale as apps/api/Dockerfile). Pin version in lockstep with the
 # root package.json `packageManager` field.
 ARG TARGETARCH
-RUN case "$TARGETARCH" in \
-      amd64) PNPM_ARCH=x64 ;; \
-      arm64) PNPM_ARCH=arm64 ;; \
-      *) echo "unsupported arch: $TARGETARCH" >&2; exit 1 ;; \
-    esac \
- && wget -qO /usr/local/bin/pnpm "https://github.com/pnpm/pnpm/releases/download/v10.33.0/pnpm-linuxstatic-${PNPM_ARCH}" \
- && chmod +x /usr/local/bin/pnpm \
+COPY scripts/install-pnpm.mjs scripts/pnpm-release.json /tmp/pnpm-bootstrap/
+RUN node /tmp/pnpm-bootstrap/install-pnpm.mjs "$TARGETARCH" \
  && pnpm --version
 WORKDIR /app
 
