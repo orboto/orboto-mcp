@@ -40,6 +40,8 @@ interface AskDocsResponse {
   answer: string;
   citations: AskDocsCitation[];
   mode: string;
+  /** ORB-1999 - true when no claim could be tied to a retrieved doc: the answer is the fixed "not in the sources" phrase. */
+  abstained?: boolean;
 }
 
 interface IngestUrlResponse {
@@ -91,6 +93,7 @@ export function makeAskDocsHandler(client: OrbotoClient) {
         lines.push(`  [${c.index}] ${spaceTag}${c.title}  ${c.link}`);
       }
     }
+    if (res.abstained) lines.push('', '(abstained: no claim in the answer could be tied to a retrieved doc - treat as "not in the docs", do not guess)');
     lines.push('', `(retrieval mode: ${res.mode})`);
     return {
       content: [{ type: 'text', text: lines.join('\n') }],
@@ -98,6 +101,7 @@ export function makeAskDocsHandler(client: OrbotoClient) {
         answer: res.answer,
         citations: res.citations,
         mode: res.mode,
+        abstained: res.abstained ?? false,
       },
     };
   };

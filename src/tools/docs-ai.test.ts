@@ -52,6 +52,7 @@ describe('orboto_ask_docs', () => {
           { index: 1, title: 'Queue worker', link: '/docs/queue', spaceName: 'Runbooks' },
         ],
         mode: 'rag',
+        abstained: false,
       } },
     ]);
     const res = await makeAskDocsHandler(client)({
@@ -72,7 +73,15 @@ describe('orboto_ask_docs', () => {
     expect(res.structuredContent).toMatchObject({
       answer: 'The retry backoff is 200ms × 2^n.',
       mode: 'rag',
+      abstained: false,
     });
+  });
+
+  it('ORB-1999 - marks an abstained answer in text and structured content', async () => {
+    stubJSON([{ json: { answer: "I couldn't find that in the sources provided.", citations: [], mode: 'empty', abstained: true } }]);
+    const res = await makeAskDocsHandler(client)({ question: 'What is the office wifi password?' });
+    expect((res.content[0] as { text: string }).text).toContain('(abstained:');
+    expect(res.structuredContent).toMatchObject({ abstained: true, mode: 'empty' });
   });
 
   it('surfaces a 400 (AI not configured) as OrbotoApiError', async () => {
