@@ -1,7 +1,7 @@
 /**
  * ORB-1615 - structural review policy tools.
  *
- *   - orboto_review_fingerprint     - normalize + hash raw diff text into a
+ *   - orboto_review_fingerprint     - hash exact raw diff text into a
  *                                     canonical fingerprint (+ real size
  *                                     metrics), server-side (one algorithm,
  *                                     not one per client).
@@ -58,7 +58,7 @@ interface ReviewPolicyDecision {
 export const reviewFingerprintToolConfig = {
   title: 'Compute a canonical diff fingerprint',
   description:
-    'Normalize + hash raw diff text (e.g. `git diff` output) into a canonical fingerprint, server-side - so every agent hashes the same way instead of each fudging its own. Whitespace-only / blank-line-only edits and file ORDER are invisible to the hash (an approval survives a reflow); any real content change, a permission/mode change, or an added/removed/renamed file is NOT (an approval never survives those). Also returns real size metrics (filesChanged/linesAdded/linesRemoved/paths) derived from the same diff. Use the returned `fingerprint` with `orboto_review_policy_check` and `orboto_review_approval_record`.',
+    'Hash the exact submitted diff text server-side with sha256-diff-v2. Every text change, including indentation, blank lines, binary blob identities, mode/rename metadata and file order, changes the fingerprint. This is submitted-text identity, NOT independent repository attestation. Returns size/path metrics too. Preserve the complete opaque version-prefixed `fingerprint` for `orboto_review_policy_check` and `orboto_review_approval_record`; legacy v1 approvals remain history only and must be reviewed again.',
   inputSchema: z.object({
     diff: z.string().min(1).describe('Raw unified diff text, e.g. the output of `git diff` / `git diff --no-color`.'),
   }).shape,
@@ -123,7 +123,7 @@ export function makeReviewPolicyCheckHandler(client: OrbotoClient) {
 export const reviewApprovalRecordToolConfig = {
   title: 'Record a review decision against a diff fingerprint',
   description:
-    'Record your review verdict (approve/reject) against a ticket\'s diff fingerprint (from orboto_review_fingerprint). A recorded APPROVAL is reusable: orboto_review_policy_check reports it as valid for the SAME fingerprint, letting a later finish/close skip re-review - until the diff changes, which produces a different fingerprint and naturally stops matching. Requires ticket:record_review_approval.',
+    'Record your review verdict (approve/reject) against the complete version-prefixed fingerprint from orboto_review_fingerprint. A current-algorithm approval is reusable only for identical submitted diff text; even whitespace or file-order changes require a fresh review. Legacy/unversioned records remain history only. This advisory review ledger does not itself enforce ticket closure. Requires ticket:record_review_approval.',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key, e.g. ORB-42.'),
     fingerprint: z.string().min(8).describe('From orboto_review_fingerprint.'),

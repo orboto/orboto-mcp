@@ -27,15 +27,18 @@ function stub(responses: Array<{ ok?: boolean; status?: number; json?: unknown }
 const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
 const PROJ = { id: 'p1', key: 'ACME', name: 'Acme', description: null, status: 'active' };
 const TICKET = { id: 't1', projectId: 'p1', ticketKey: 'ACME-1', ticketNumber: 1, title: 'Bug', description: null, status: 'IN_PROGRESS', statusName: 'In Progress', statusCategory: 'in_progress', type: 'bug', priority: 'normal', estimatedTimeMinutes: 0, dueDate: null, isPrivate: false };
+const FINGERPRINT = 'sha256-diff-v2:' + 'a'.repeat(64);
 
 describe('orboto_review_fingerprint', () => {
   it('computes a fingerprint + size metrics from raw diff text', async () => {
-    const calls = stub([{ json: { fingerprint: 'abc123', algo: 'sha256-diff-v1', filesChanged: 1, linesAdded: 1, linesRemoved: 1, paths: ['src/foo.ts'] } }]);
-    const res = await makeReviewFingerprintHandler(client)({ diff: 'diff --git a/src/foo.ts b/src/foo.ts\n-a\n+b\n' });
+    const calls = stub([{ json: { fingerprint: FINGERPRINT, algo: 'sha256-diff-v2', filesChanged: 1, linesAdded: 1, linesRemoved: 1, paths: ['src/foo.ts'] } }]);
+    const diff = 'diff --git a/src/foo.ts b/src/foo.ts\r\n-a\r\n+  b  \r\n+\r\n';
+    const res = await makeReviewFingerprintHandler(client)({ diff });
     expect(calls[0].url).toContain('/review-policy/fingerprint');
     expect(calls[0].method).toBe('POST');
-    expect(res.structuredContent?.fingerprint).toBe('abc123');
-    expect((res.content[0] as { text: string }).text).toContain('abc123');
+    expect(calls[0].body).toEqual({ diff });
+    expect(res.structuredContent).toMatchObject({ fingerprint: FINGERPRINT, algo: 'sha256-diff-v2' });
+    expect((res.content[0] as { text: string }).text).toContain(FINGERPRINT);
   });
 });
 
@@ -46,10 +49,10 @@ describe('orboto_review_policy_check', () => {
       fingerprintChecked: true, hasValidApproval: false, latestApproval: null,
     };
     const calls = stub([{ json: PROJ }, { json: TICKET }, { json: decision }]);
-    const res = await makeReviewPolicyCheckHandler(client)({ ticketKey: 'ACME-1', fingerprint: 'abc123' });
+    const res = await makeReviewPolicyCheckHandler(client)({ ticketKey: 'ACME-1', fingerprint: FINGERPRINT });
     const check = calls.find((c) => c.method === 'POST');
     expect(check?.url).toContain('/projects/p1/tickets/t1/review-policy/check');
-    expect(check?.body).toMatchObject({ fingerprint: 'abc123' });
+    expect(check?.body).toMatchObject({ fingerprint: FINGERPRINT });
     expect(res.structuredContent).toMatchObject({ riskLevel: 'required', hasValidApproval: false });
     expect((res.content[0] as { text: string }).text).toContain('required');
     expect((res.content[0] as { text: string }).text).toContain('No valid approval');
@@ -68,11 +71,11 @@ describe('orboto_review_policy_check', () => {
 
 describe('orboto_review_approval_record', () => {
   it('records an approval against a fingerprint', async () => {
-    const approval = { id: 'ra1', ticketId: 't1', fingerprint: 'abc123', decision: 'approved', reviewerLabel: 'reviewer@orboto.test', note: null, revokedAt: null, createdAt: '2026-01-01T00:00:00Z' };
+    const approval = { id: 'ra1', ticketId: 't1', fingerprint: FINGERPRINT, decision: 'approved', reviewerLabel: 'reviewer@orboto.test', note: null, revokedAt: null, createdAt: '2026-01-01T00:00:00Z' };
     const calls = stub([{ json: PROJ }, { json: TICKET }, { json: approval }]);
-    const res = await makeReviewApprovalRecordHandler(client)({ ticketKey: 'ACME-1', fingerprint: 'abc123', decision: 'approved', note: 'looks good' });
+    const res = await makeReviewApprovalRecordHandler(client)({ ticketKey: 'ACME-1', fingerprint: FINGERPRINT, decision: 'approved', note: 'looks good' });
     const record = calls.find((c) => c.method === 'POST' && c.url.includes('review-approvals'));
-    expect(record?.body).toMatchObject({ fingerprint: 'abc123', decision: 'approved', note: 'looks good' });
+    expect(record?.body).toMatchObject({ fingerprint: FINGERPRINT, decision: 'approved', note: 'looks good' });
     // ticketKey must NOT leak into the request body sent to the API - the
     // route resolves the ticket from the URL, not the payload.
     expect(record?.body).not.toHaveProperty('ticketKey');
