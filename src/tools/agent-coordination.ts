@@ -30,7 +30,7 @@ interface HeartbeatResponse {
 export const agentHeartbeatToolConfig = {
   title: 'Agent heartbeat (Multi-Agent Coordination)',
   description:
-    'Register or refresh this agent\'s presence. Call on startup and every ~30 s; rows older than 90 s count as offline. Persist the returned sessionToken and send it on later heartbeats. status: idle (default) | working (+workingOnTicketId) | blocked. capabilities: free-form strings for operator filters. clientInfo.name = the runtime (claude-code, cursor, ...).',
+    'Register or refresh this agent\'s presence with status detail. A live connection already counts as online (an open MCP event stream, `orboto messages --follow`, the agent WebSocket) - the heartbeat adds status: idle (default) | working (+workingOnTicketId) | blocked, capabilities (free-form strings for operator filters) and clientInfo.name (the runtime), and is the only presence path for turn-based clients without a standing connection. Rows older than 90 s count as offline; persist the returned sessionToken and send it on later heartbeats.',
   inputSchema: z.object({
     sessionToken: z.string().nullable().optional(),
     status: z.enum(['idle', 'working', 'blocked']).optional(),
