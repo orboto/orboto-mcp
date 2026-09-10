@@ -23,7 +23,6 @@ describe('shouldNudge (ORB-1331)', () => {
   it('nudges on the first tool call when it is not session_start, then never again', () => {
     const state = createNudgeState();
     expect(shouldNudge(state, 'orboto_list_projects')).toBe(true);
-    // Every subsequent call is clean regardless of tool.
     expect(shouldNudge(state, 'orboto_get_ticket')).toBe(false);
     expect(shouldNudge(state, 'orboto_list_projects')).toBe(false);
     expect(shouldNudge(state, SESSION_START_TOOL)).toBe(false);
@@ -32,7 +31,6 @@ describe('shouldNudge (ORB-1331)', () => {
   it('never nudges when the first call IS session_start', () => {
     const state = createNudgeState();
     expect(shouldNudge(state, SESSION_START_TOOL)).toBe(false);
-    // and does not resurface on later calls either.
     expect(shouldNudge(state, 'orboto_list_projects')).toBe(false);
   });
 
@@ -40,7 +38,6 @@ describe('shouldNudge (ORB-1331)', () => {
     const a = createNudgeState();
     const b = createNudgeState();
     expect(shouldNudge(a, 'orboto_list_projects')).toBe(true);
-    // b is untouched by a - its own first call still nudges.
     expect(shouldNudge(b, 'orboto_list_projects')).toBe(true);
     expect(shouldNudge(a, 'orboto_list_projects')).toBe(false);
     expect(shouldNudge(b, 'orboto_list_projects')).toBe(false);
@@ -49,7 +46,7 @@ describe('shouldNudge (ORB-1331)', () => {
 
 describe('shouldGate (ORB-1471)', () => {
   it('never gates when the gate is disabled (default), whatever the tool', () => {
-    const state = createNudgeState(); // gateEnabled defaults false
+    const state = createNudgeState();
     expect(shouldGate(state, 'orboto_list_projects')).toBe(false);
     expect(shouldGate(state, 'orboto_create_ticket')).toBe(false);
     expect(shouldGate(state, SESSION_START_TOOL)).toBe(false);
@@ -57,14 +54,11 @@ describe('shouldGate (ORB-1471)', () => {
 
   it('when enabled, refuses every non-session-start tool until session_start runs', () => {
     const state = createNudgeState(true);
-    // Pre session_start: every other tool is gated.
     expect(shouldGate(state, 'orboto_list_projects')).toBe(true);
     expect(shouldGate(state, 'orboto_create_ticket')).toBe(true);
-    // Dispatch is not proof of delivery; only successful completion unlocks.
     expect(shouldGate(state, SESSION_START_TOOL)).toBe(false);
     expect(shouldGate(state, 'orboto_list_projects')).toBe(true);
     recordSessionStartResult(state, SESSION_START_TOOL, true);
-    // Post session_start: everything passes.
     expect(shouldGate(state, 'orboto_list_projects')).toBe(false);
     expect(shouldGate(state, 'orboto_create_ticket')).toBe(false);
   });
@@ -96,7 +90,7 @@ describe('SESSION_START_NUDGE text (ORB-1331)', () => {
   it('is English, ASCII-only, and free of em/en-dashes', () => {
     // eslint-disable-next-line no-control-regex
     expect(/^[\x00-\x7F]*$/.test(SESSION_START_NUDGE)).toBe(true);
-    expect(SESSION_START_NUDGE).not.toMatch(/[\u2013\u2014]/); // en/em dash
+    expect(SESSION_START_NUDGE).not.toMatch(/[\u2013\u2014]/);
     expect(SESSION_START_NUDGE).toContain('orboto_session_start');
   });
 });
@@ -111,9 +105,7 @@ describe('prependNudge (ORB-1331)', () => {
     expect(out.content).toHaveLength(2);
     expect(out.content[0]).toEqual({ type: 'text', text: SESSION_START_NUDGE });
     expect(out.content[1]).toEqual({ type: 'text', text: 'tool output' });
-    // structuredContent consumers are unaffected - same reference-equal payload.
     expect(out.structuredContent).toBe(original.structuredContent);
-    // input is not mutated.
     expect(original.content).toHaveLength(1);
   });
 

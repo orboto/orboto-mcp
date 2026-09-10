@@ -27,7 +27,6 @@ function stub(responses: Array<{ ok?: boolean; status?: number; json?: unknown }
       status: r.status ?? 200,
       statusText: 'OK',
       json: async () => payload,
-      // delete<T> reads text() then JSON.parses it - serialise the payload.
       text: async () => JSON.stringify(payload),
     } as unknown as Response;
   });

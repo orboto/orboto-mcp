@@ -1,19 +1,5 @@
 /**
  * ORB-917 - doc-comments MCP tools (epic ORB-911 Phase 6).
- *
- * - orboto_list_doc_comments - GET /docs/:id/comments  (cursor-paged, oldest-first)
- * - orboto_post_doc_comment - POST /docs/:id/comments
- * - orboto_resolve_doc_comment - POST /docs/:id/comments/:cid/resolve
- * - orboto_delete_doc_comment - DELETE /docs/:id/comments/:cid
- *
- * Comments support replies (single-level - replying to a reply lands as
- * a sibling of the original reply because the API auto-flattens past
- * one level) and optional anchors (a 3-tuple of {text, before, after}
- * the frontend uses to re-locate a highlight even after the doc body
- * has shifted).
- *
- * resolve acts on the thread root by design so resolving from a reply
- * folds the whole conversation - mirrors the web UI's behaviour.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -39,10 +25,6 @@ interface CommentPage {
   items: DocCommentRow[];
   nextCursor: string | null;
 }
-
-// ---------------------------------------------------------------------------
-// orboto_list_doc_comments
-// ---------------------------------------------------------------------------
 
 export const listDocCommentsToolConfig = {
   title: 'List comments on a doc page',
@@ -74,9 +56,6 @@ export function makeListDocCommentsHandler(client: OrbotoClient) {
       };
     }
 
-    // Build a parent-keyed tree so the Markdown rendering can indent
-    // replies one level under their root. The API already flattens
-    // past one level, so depth is always 0 or 1.
     const byParent = new Map<string | null, DocCommentRow[]>();
     for (const c of page.items) {
       const key = c.parentCommentId ?? null;
@@ -91,22 +70,18 @@ export function makeListDocCommentsHandler(client: OrbotoClient) {
       const author = c.userName ?? `user ${c.userId.slice(0, 8)}`;
       const resolved = c.resolvedAt ? ' [resolved]' : '';
       lines.push(`${indent}- ${author}  ·  ${c.createdAt}${resolved}  ·  id: ${c.id}`);
-      // Anchor preview helps the model understand what part of the
-      // doc the comment is anchored to. Truncate to keep the output
-      // compact.
       if (c.anchor) {
         const snippet = c.anchor.text.length > 80 ? c.anchor.text.slice(0, 77) + '...' : c.anchor.text;
         lines.push(`${indent}  anchored on: "${snippet}"`);
       }
       const body = c.content.split('\n').map((l) => `${indent}  ${l}`).join('\n');
       lines.push(body);
-      // Render direct replies one level deeper.
       const replies = byParent.get(c.id) ?? [];
       for (const r of replies) renderOne(r, depth + 1);
     };
     for (const root of byParent.get(null) ?? []) {
       renderOne(root, 0);
-      lines.push(''); // blank line between root threads
+      lines.push('');
     }
     if (page.nextCursor) {
       lines.push(`(more available - pass cursor: ${page.nextCursor})`);
@@ -132,10 +107,6 @@ export function makeListDocCommentsHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_post_doc_comment
-// ---------------------------------------------------------------------------
 
 export const postDocCommentToolConfig = {
   title: 'Post a comment on a doc page (or reply to one)',
@@ -181,10 +152,6 @@ export function makePostDocCommentHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_resolve_doc_comment
-// ---------------------------------------------------------------------------
-
 export const resolveDocCommentToolConfig = {
   title: 'Mark a doc comment thread as resolved (or reopen it)',
   description:
@@ -220,10 +187,6 @@ export function makeResolveDocCommentHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_update_doc_comment - ORB-933
-// ---------------------------------------------------------------------------
-
 export const updateDocCommentToolConfig = {
   title: 'Edit your own doc comment',
   description:
@@ -252,10 +215,6 @@ export function makeUpdateDocCommentHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_delete_doc_comment
-// ---------------------------------------------------------------------------
 
 export const deleteDocCommentToolConfig = {
   title: 'Delete a doc comment',

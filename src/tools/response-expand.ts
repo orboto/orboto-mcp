@@ -1,20 +1,6 @@
 /**
  * ORB-1697 - `orboto_response_expand`: the way back from a truncated
  * response.
- *
- * The central response budget (`../response-budget.ts`) caps what a
- * single tool result may inject into the session, because a result is
- * re-sent on every later request and therefore costs its size times the
- * turns that follow it. A cap is only acceptable if nothing is lost, so
- * every truncated response carries a handle, and this tool serves the
- * omitted remainder from the in-process store in budget-sized chunks.
- *
- * Deliberately NOT a REST call: the handle addresses the payload the
- * ORIGINAL call already produced, so expanding cannot return anything
- * the caller was not already authorised to see, and it costs no
- * additional API round-trip. The store is per-process and short-lived
- * (15 min, 16 payloads) - an expired handle is answered with "re-run the
- * original tool", never with a wrong or stale chunk.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -60,8 +46,6 @@ export function makeResponseExpandHandler() {
 
     const omitted = stored.omitted ?? [];
 
-    // No path - list what can be expanded. Cheap by construction: paths
-    // and counts only, never the content itself.
     if (!input.path) {
       const lines = [
         `# Truncated content available for handle "${input.handle}"`,
@@ -92,9 +76,6 @@ export function makeResponseExpandHandler() {
     }
 
     const full = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 1) ?? '';
-    // Leave room for the framing lines so a chunk plus its header still
-    // fits this tool's own budget - a continuation tool that gets
-    // truncated itself would be a loop, not a fix.
     const chunkSize = Math.max(500, budgetFor('orboto_response_expand') - 800);
     const cursor = Math.min(input.cursor ?? 0, full.length);
     const chunk = full.slice(cursor, cursor + chunkSize);

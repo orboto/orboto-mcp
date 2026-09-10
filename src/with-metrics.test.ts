@@ -42,7 +42,6 @@ describe('withMetrics', () => {
     const result = await wrapped({});
     expect(result.content[0]).toEqual({ type: 'text', text: 'ok' });
 
-    // Wait one microtask so the fire-and-forget POST resolves.
     await new Promise((r) => setImmediate(r));
 
     expect(calls).toHaveLength(1);
@@ -67,8 +66,6 @@ describe('withMetrics', () => {
     expect(body.errorMessage).toBe('kaboom');
   });
 
-  // ORB-1174 - an OrbotoApiError becomes a structured, actionable isError
-  // result (not the runtime's opaque generic) so the agent can self-correct.
   it('maps OrbotoApiError to a distinct, actionable isError result per status', async () => {
     captureFetch();
     const run = async (status: number, body: string) => {
@@ -83,7 +80,7 @@ describe('withMetrics', () => {
     const unauth = await run(401, '{"error":"Invalid API key"}');
     expect(unauth).toContain('401');
     expect(unauth).toMatch(/re-?authenticate/i);
-    expect(unauth).toContain('Invalid API key'); // the API's own message
+    expect(unauth).toContain('Invalid API key');
 
     const notFound = await run(404, '{"error":"Ticket not found"}');
     expect(notFound).toContain('404');
@@ -93,7 +90,6 @@ describe('withMetrics', () => {
     expect(server).toContain('503');
     expect(server).toMatch(/retry/i);
 
-    // distinct messages, not the same opaque blob
     expect(unauth).not.toBe(notFound);
     expect(notFound).not.toBe(server);
   });
@@ -127,10 +123,6 @@ describe('withMetrics', () => {
   });
 
   it('does not block when the instrument POST fails - handler still resolves', async () => {
-    // First call (the handler-as-fetch?) returns ok; but our handler
-    // doesn't fetch; the only fetch the wrapper makes is to /instrument.
-    // Mock that one to fail - caller must still get the original
-    // result back.
     vi.spyOn(globalThis, 'fetch').mockImplementation(async () => ({
       ok: false, status: 500, statusText: 'Server Error',
       json: async () => ({ error: 'kaboom' }),
@@ -144,8 +136,6 @@ describe('withMetrics', () => {
     expect(result.content[0]).toEqual({ type: 'text', text: 'survives' });
   });
 
-  // ORB-1180 - admin-panel visibility: the failure log carries the
-  // structured HTTP status, and any secret-shaped text is redacted.
   it('logs the structured statusCode on an OrbotoApiError', async () => {
     const calls = captureFetch();
     const wrapped = withMetrics(client, 'orboto_x', undefined, async () => {
@@ -159,10 +149,6 @@ describe('withMetrics', () => {
     expect(body.errorMessage).toContain('403');
   });
 
-  // ORB-1331 - the shared nudge state threads through the wrapper: the
-  // first non-session_start dispatch carries the one-time reminder,
-  // later dispatches are clean, and a session_start-first flow never
-  // sees it. structuredContent is left intact.
   it('prepends the session-start nudge on the first non-session_start dispatch, once', async () => {
     captureFetch();
     const nudge = createNudgeState();
@@ -175,10 +161,10 @@ describe('withMetrics', () => {
     const first = await list({});
     expect((first.content[0] as { text: string }).text).toBe(SESSION_START_NUDGE);
     expect((first.content[1] as { text: string }).text).toBe('ok');
-    expect(first.structuredContent).toEqual({ a: 1 }); // untouched
+    expect(first.structuredContent).toEqual({ a: 1 });
 
     const second = await list({});
-    expect((second.content[0] as { text: string }).text).toBe('ok'); // clean
+    expect((second.content[0] as { text: string }).text).toBe('ok');
   });
 
   it('does not nudge when the first dispatch IS orboto_session_start', async () => {
@@ -189,10 +175,10 @@ describe('withMetrics', () => {
     const list = withMetrics(client, 'orboto_list_projects', undefined, handler, nudge);
 
     const first = await start({});
-    expect((first.content[0] as { text: string }).text).toBe('rules'); // no nudge
+    expect((first.content[0] as { text: string }).text).toBe('rules');
 
     const second = await list({});
-    expect((second.content[0] as { text: string }).text).toBe('rules'); // still clean
+    expect((second.content[0] as { text: string }).text).toBe('rules');
   });
 
   it('surfaces the nudge alongside an OrbotoApiError on a first-call failure', async () => {
@@ -207,19 +193,14 @@ describe('withMetrics', () => {
     expect((res.content[1] as { text: string }).text).toContain('403');
   });
 
-  // ORB-1471 - the HARD session-start gate. When the workspace requires it,
-  // the wrapper REFUSES a non-session-start tool without running its handler,
-  // returns the instructive gate message, and logs the refusal. A
-  // session_start call unlocks the session; after that everything runs.
   it('gates a non-session-start tool until session_start runs, without invoking the handler', async () => {
     const calls = captureFetch();
-    const nudge = createNudgeState(true); // gate ON
+    const nudge = createNudgeState(true);
     const listHandler = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'projects' }] }));
     const startHandler = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'rules' }] }));
     const list = withMetrics(client, 'orboto_list_projects', undefined, listHandler, nudge);
     const start = withMetrics(client, 'orboto_session_start', undefined, startHandler, nudge);
 
-    // First call is refused - handler never runs.
     const refused = await list({});
     expect(refused.isError).toBe(true);
     expect((refused.content[0] as { text: string }).text).toBe(SESSION_START_GATE_MESSAGE);
@@ -228,12 +209,10 @@ describe('withMetrics', () => {
     const gateLog = calls.find((c) => (c.body as { errorMessage?: string })?.errorMessage?.includes('session-start gate'));
     expect(gateLog).toBeDefined();
 
-    // Running session_start unlocks the session.
     const rules = await start({});
     expect((rules.content[0] as { text: string }).text).toBe('rules');
     expect(startHandler).toHaveBeenCalledTimes(1);
 
-    // Now the previously-gated tool runs normally.
     const ok = await list({});
     expect((ok.content[0] as { text: string }).text).toBe('projects');
     expect(listHandler).toHaveBeenCalledTimes(1);
@@ -241,11 +220,10 @@ describe('withMetrics', () => {
 
   it('does not gate anything when the gate is disabled (default)', async () => {
     captureFetch();
-    const nudge = createNudgeState(); // gate OFF
+    const nudge = createNudgeState();
     const handler = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'ok' }] }));
     const list = withMetrics(client, 'orboto_list_projects', undefined, handler, nudge);
     const res = await list({});
-    // Still nudged (soft), but NOT refused - the handler ran.
     expect((res.content[1] as { text: string }).text).toBe('ok');
     expect(handler).toHaveBeenCalledTimes(1);
   });

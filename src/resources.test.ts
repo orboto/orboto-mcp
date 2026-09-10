@@ -1,15 +1,5 @@
 /**
  * ORB-244 Phase D - resources unit tests.
- *
- * The MCP SDK's resource-template handlers are normal functions
- * once registered. Pulling them off the server's internal registry
- * would couple us to SDK internals; instead we register against a
- * real McpServer and read back via the protocol-shaped
- * `_registeredResourceTemplates` accessor. If the SDK renames it,
- * the test fails loudly, but that's the point - we want to know.
- *
- * Each test exercises the URI → handler-output path with the
- * stubbed orboto REST client.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -52,9 +42,7 @@ function getTemplateHandler(server: McpServer, name: string) {
 describe('orboto:// ticket resource', () => {
   it('renders a ticket as Markdown with description + comments', async () => {
     stub([
-      // resolveTicketByKey: project lookup
       { json: { id: 'p1', key: 'ACME', name: 'Acme', description: null, status: 'active' } },
-      // resolveTicketByKey: ticket
       {
         json: {
           id: 't1', projectId: 'p1', ticketKey: 'ACME-7', title: 'Login bug',
@@ -65,7 +53,6 @@ describe('orboto:// ticket resource', () => {
           labels: [{ id: 'l1', name: 'bug' }],
         },
       },
-      // comments page
       {
         json: {
           items: [
@@ -134,11 +121,8 @@ describe('orboto:// doc resource', () => {
 describe('orboto:// project resource', () => {
   it('aggregates project + milestones + members into Markdown', async () => {
     stub([
-      // resolveProjectByKey
       { json: { id: 'p1', key: 'ACME', name: 'Acme Inc', description: 'CRM build', status: 'active' } },
-      // milestones
       { json: [{ id: 'm1', name: 'v1', status: 'active', startDate: '2026-04-01', endDate: '2026-05-01' }] },
-      // members
       { json: [{ user: { email: 'ada@acme', fullName: 'Ada' }, role: { name: 'developer' } }] },
     ]);
     const server = buildServerWithResources();

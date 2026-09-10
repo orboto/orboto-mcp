@@ -1,17 +1,7 @@
 /**
  * ORB-244 Phase B - `orboto_search`.
  *
- * Unified full-text search across tickets, comments, and docs. Maps
- * to the existing `/search` route (Phase 21 global search) which
- * already respects PBAC visibility (private tickets, internal
- * comments, doc ACL).
- *
- * ORB-272: /search is cursor-paginated. Response shape is
- * `{items, nextCursor, total}`. We surface `total` so the model
- * knows how many hits exist globally, but don't expose `cursor` on
- * the tool input - repeat MCP tool calls to walk a search cursor is
- * an awkward UX. Users who need to see more narrow the query or
- * open the full-page /search in the web UI.
+ * @see ORB-272
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -85,8 +75,6 @@ export function makeSearchHandler(client: OrbotoClient) {
       ? `No hits for "${input.query}".`
       : `Hits${headerHint}${relaxedNote}:\n\n` + res.items.map((h) => {
         const tag = h.type.toUpperCase();
-        // ORB-1084 - non-ticket hits carry the FULL id: the truncated
-        // form was unusable as input for the doc write tools.
         const ident = h.ticketKey ?? h.id;
         const project = h.projectName ? ` · ${h.projectName}` : '';
         return `- [${tag} ${ident}${project}] ${h.title}\n  ${h.excerpt}`;

@@ -2,14 +2,7 @@
  * ORB-933 - write-side MCP tools for absences and the two admin tables
  * that ride alongside them (public holidays, company closures).
  *
- * - orboto_update_public_holiday - PATCH /admin/public-holidays/:id
- * - orboto_update_company_closure - PATCH /admin/company-closures/:id
- * - orboto_update_absence - PATCH /absences/:id
- *
- * Today these surfaces only had POST + DELETE - typo correction or date
- * fix meant delete + recreate, losing the original row id. PATCH fills
- * that gap. Listing endpoints stay on the existing routes (no read tools
- * here yet - that's Phase 3 of the CRUD parity epic, ORB-935).
+ * @see ORB-935
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -42,10 +35,6 @@ interface AbsenceRow {
   status: 'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled';
   note: string | null;
 }
-
-// ---------------------------------------------------------------------------
-// orboto_update_public_holiday
-// ---------------------------------------------------------------------------
 
 export const updatePublicHolidayToolConfig = {
   title: 'Edit a public holiday',
@@ -80,10 +69,6 @@ export function makeUpdatePublicHolidayHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_update_company_closure
-// ---------------------------------------------------------------------------
-
 export const updateCompanyClosureToolConfig = {
   title: 'Edit a company closure',
   description:
@@ -114,10 +99,6 @@ export function makeUpdateCompanyClosureHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_update_absence
-// ---------------------------------------------------------------------------
 
 export const updateAbsenceToolConfig = {
   title: 'Edit a pending or draft absence request',

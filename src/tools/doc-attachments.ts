@@ -1,20 +1,5 @@
 /**
  * ORB-914 - doc-attachments MCP tools (epic ORB-911 Phase 3).
- *
- * Mirrors the ticket-attachment surface (apps/mcp/src/tools/attach.ts)
- * for doc pages. Three tools:
- *
- * - orboto_upload_doc_attachment - multipart upload + optional embed
- * - orboto_list_doc_attachments - flat list with download URLs
- * - orboto_delete_doc_attachment - destructive
- *
- * The embed branch on upload PATCHes the doc body to append a Markdown
- * image-or-link line, same pattern as orboto_attach_to_ticket. Useful
- * when an agent wants to drop a screenshot into a page in one call.
- *
- * MIME / extension policy is enforced server-side via `isAttachmentAllowed`
- * - the tool just surfaces the 415 as an OrbotoApiError so the caller
- * can pick a different file.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -70,10 +55,6 @@ function isImage(mimetype: string): boolean {
   return mimetype.startsWith('image/');
 }
 
-// ---------------------------------------------------------------------------
-// orboto_upload_doc_attachment
-// ---------------------------------------------------------------------------
-
 export const uploadDocAttachmentToolConfig = {
   title: 'Upload an attachment to a doc page',
   description:
@@ -96,8 +77,6 @@ export function makeUploadDocAttachmentHandler(client: OrbotoClient) {
     docId = await resolveDocId(client, docId);
     let arrayBuffer: ArrayBuffer;
     try {
-      // Buffer → fresh ArrayBuffer copy (see attach.ts for the Blob
-      // type-constraint rationale).
       const buf = Buffer.from(contentBase64, 'base64');
       arrayBuffer = new ArrayBuffer(buf.byteLength);
       new Uint8Array(arrayBuffer).set(buf);
@@ -120,8 +99,6 @@ export function makeUploadDocAttachmentHandler(client: OrbotoClient) {
 
     let embedded = false;
     if (embed === true) {
-      // Read the current body first - PATCH /docs/:id replaces, not
-      // appends. Then write the new body in one go.
       const current = await client.get<DocRow>(`/docs/${docId}`);
       const existing = current.content ?? '';
       const next = existing ? `${existing}\n\n${markdown}` : markdown;
@@ -147,10 +124,6 @@ export function makeUploadDocAttachmentHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_list_doc_attachments
-// ---------------------------------------------------------------------------
 
 export const listDocAttachmentsToolConfig = {
   title: 'List attachments on a doc page',
@@ -193,10 +166,6 @@ export function makeListDocAttachmentsHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_delete_doc_attachment
-// ---------------------------------------------------------------------------
 
 export const deleteDocAttachmentToolConfig = {
   title: 'Delete an attachment from a doc page',

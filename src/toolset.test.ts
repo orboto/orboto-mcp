@@ -8,8 +8,6 @@ import { CURATED_TOOLS, MINIMAL_TOOLS, resolveToolset, toolInToolset } from './t
 
 beforeEach(() => {
   vi.restoreAllMocks();
-  // buildOrbotoMcpServer fetches /agent-instructions at connect; offline
-  // in unit tests - the catch keeps the fallback rules, which is fine.
   vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline test'));
   delete process.env.ORBOTO_MCP_TOOLSET;
 });
@@ -19,9 +17,6 @@ afterEach(() => {
 });
 
 function registeredTools(server: unknown): string[] {
-  // The SDK keeps its registry on `_registeredTools` (verified against
-  // @modelcontextprotocol/sdk 1.29). If a bump renames it, this helper
-  // fails loudly rather than passing on an empty object.
   const tools = (server as { _registeredTools?: Record<string, unknown> })._registeredTools;
   if (!tools || Object.keys(tools).length === 0) {
     throw new Error('SDK _registeredTools not found or empty - did the SDK internals change?');
@@ -40,9 +35,6 @@ describe('resolveToolset', () => {
     expect(resolveToolset('bogus', 'full')).toBe('full');
     expect(resolveToolset('bogus', 'nonsense')).toBe('curated');
   });
-  // ORB-1805 - the small-context tier resolves on both surfaces and,
-  // like the others, a typo still degrades to curated rather than
-  // silently handing an 8k model 175 tools.
   it('minimal resolves from either surface and keeps the safe fallback', () => {
     expect(resolveToolset('minimal', undefined)).toBe('minimal');
     expect(resolveToolset(undefined, 'minimal')).toBe('minimal');
@@ -58,7 +50,6 @@ describe('toolInToolset', () => {
     expect(toolInToolset('orboto_claim', 'curated')).toBe(true);
     expect(toolInToolset('orboto_api_call', 'curated')).toBe(true);
   });
-  // ORB-1959 - coordination is part of the default connection, not an opt-in.
   it('curated carries the four agent-coordination tools; minimal stays the 12-tool loop', () => {
     for (const name of ['orboto_messages', 'orboto_agent_notify', 'orboto_agent_broadcast', 'orboto_agent_heartbeat']) {
       expect(toolInToolset(name, 'curated'), name).toBe(true);
@@ -69,7 +60,6 @@ describe('toolInToolset', () => {
     expect(toolInToolset('orboto_claim', 'minimal')).toBe(true);
     expect(toolInToolset('orboto_api_search', 'minimal')).toBe(true);
     expect(toolInToolset('orboto_api_call', 'minimal')).toBe(true);
-    // In curated, out of minimal.
     expect(toolInToolset('orboto_list_projects', 'minimal')).toBe(false);
     expect(toolInToolset('orboto_help', 'minimal')).toBe(false);
     expect(toolInToolset('orboto_wiki_ask', 'minimal')).toBe(false);
@@ -78,10 +68,6 @@ describe('toolInToolset', () => {
 
 describe('ORB-1805 - the tiers nest', () => {
   it('MINIMAL_TOOLS is a strict subset of CURATED_TOOLS', () => {
-    // A name that is not registered in curated cannot register in
-    // minimal either - the tier ordering minimal < curated < full is
-    // what the docs promise, and a typo here would silently ship an
-    // empty slot.
     const notInCurated = [...MINIMAL_TOOLS].filter((t) => !CURATED_TOOLS.has(t));
     expect(notInCurated).toEqual([]);
     expect(MINIMAL_TOOLS.size).toBeLessThan(CURATED_TOOLS.size);
@@ -123,9 +109,6 @@ describe('buildOrbotoMcpServer toolset gating', () => {
   it('curated instructions point at the escape hatch; full keeps get_checklists', async () => {
     const curated = await buildOrbotoMcpServer(baseOpts);
     const full = await buildOrbotoMcpServer({ ...baseOpts, toolset: 'full' });
-    // `_instructions` verified against @modelcontextprotocol/sdk 1.29
-    // (server/index.js). Assert non-empty first so an SDK rename fails
-    // this test loudly instead of green-skipping.
     const instructionsOf = (s: unknown) =>
       String((s as { server: { _instructions?: string } }).server._instructions ?? '');
     const curatedText = instructionsOf(curated);
@@ -148,12 +131,9 @@ describe('buildOrbotoMcpServer toolset gating', () => {
     const minimal = await buildOrbotoMcpServer({ ...baseOpts, toolset: 'minimal' });
     const text = String((minimal as unknown as { server: { _instructions?: string } }).server._instructions ?? '');
     expect(text.length).toBeGreaterThan(100);
-    // The two things a minimal-tier agent cannot work without.
     expect(text).toContain('orboto_session_start');
     expect(text).toContain('orboto_api_search');
     expect(text).toContain('MINIMAL');
-    // ORB-1805 - the workspace rules block is deliberately absent; it
-    // arrives via orboto_session_start, on the caller's budget.
     expect(text).not.toContain('Working rules for this workspace:');
   });
 

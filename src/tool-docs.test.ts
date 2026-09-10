@@ -40,7 +40,7 @@ describe('summarizeToolDescription', () => {
     const s = summarizeToolDescription('orboto_unknown_tool', long);
     expect(s.length).toBeLessThanOrEqual(SUMMARY_MAX_CHARS);
     expect(s.endsWith('...')).toBe(true);
-    expect(s).not.toMatch(/\swor\.\.\.$/); // never cuts inside a word
+    expect(s).not.toMatch(/\swor\.\.\.$/);
   });
 });
 
@@ -78,20 +78,14 @@ describe('live manifest vs help registry (no guidance lost)', () => {
       expect(tools.length).toBeGreaterThan(150);
       for (const t of tools) {
         const wire = t.description ?? '';
-        // Acceptance: no registered wire description exceeds the cap.
         expect(wire.length, `${t.name} wire description too long`).toBeLessThanOrEqual(SUMMARY_MAX_CHARS);
-        // The full text is behind the registry and STARTS where the
-        // summary came from (override tools aside, whose full text is
-        // still captured verbatim).
         const full = getToolDoc(t.name);
         expect(full, `${t.name} missing from the help registry`).toBeTruthy();
         expect(summarizeToolDescription(t.name, full!)).toBe(wire);
       }
-      // Spot-check the measured worst offender end to end via the tool.
       const res = await client.callTool({ name: 'orboto_help', arguments: { tool: 'orboto_create_ticket' } });
-      // First block can be the ORB-1331 session-start nudge - join all.
       const text = (res.content as Array<{ type: string; text?: string }>).map((c) => c.text ?? '').join('\n');
-      expect(text.length).toBeGreaterThan(1000); // the old 2.9k essay, intact
+      expect(text.length).toBeGreaterThan(1000);
       expect(text).toContain('Duplicate-detection safety-net');
     } finally {
       await client.close();

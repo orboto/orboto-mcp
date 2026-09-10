@@ -64,10 +64,6 @@ const factStub = {
   updatedAt: '2026-04-30T10:00:00Z',
 };
 
-// ---------------------------------------------------------------------------
-// orboto_primer_fact_list
-// ---------------------------------------------------------------------------
-
 describe('orboto_primer_fact_list', () => {
   it('resolves projectKey then GETs /projects/<id>/primer-facts with filters', async () => {
     const calls = stub([
@@ -140,10 +136,6 @@ describe('orboto_primer_fact_list', () => {
     expect(result.success).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// orboto_primer_fact_add
-// ---------------------------------------------------------------------------
 
 describe('orboto_primer_fact_add', () => {
   it('observed=false (default) sends source=manual', async () => {
@@ -220,10 +212,6 @@ describe('orboto_primer_fact_add', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// orboto_primer_fact_update
-// ---------------------------------------------------------------------------
-
 describe('orboto_primer_fact_update', () => {
   it('PATCHes /primer-facts/<id> with only the provided fields', async () => {
     const calls = stub([{ json: { ...factStub, value: 'pnpm 10' } }]);
@@ -250,10 +238,6 @@ describe('orboto_primer_fact_update', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// orboto_primer_fact_supersede
-// ---------------------------------------------------------------------------
-
 describe('orboto_primer_fact_supersede', () => {
   it('POSTs /primer-facts/<id>/supersede with category + key + value', async () => {
     const calls = stub([{ json: { ...factStub, id: 'new-uuid', value: 'pnpm 10' } }]);
@@ -279,10 +263,6 @@ describe('orboto_primer_fact_supersede', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// orboto_primer_fact_verify
-// ---------------------------------------------------------------------------
-
 describe('orboto_primer_fact_verify', () => {
   it('POSTs /primer-facts/<id>/verify with empty body', async () => {
     const calls = stub([{ json: { ...factStub, verified: true, verifiedBy: 'u1', verifiedAt: 'now' } }]);
@@ -292,10 +272,6 @@ describe('orboto_primer_fact_verify', () => {
     expect(calls[0].body).toEqual({});
   });
 });
-
-// ---------------------------------------------------------------------------
-// orboto_primer_fact_delete
-// ---------------------------------------------------------------------------
 
 describe('orboto_primer_fact_delete', () => {
   it('DELETEs /primer-facts/<id>', async () => {
@@ -325,8 +301,6 @@ describe('orboto_primer_fact_delete', () => {
   });
 });
 
-// ORB-1819 - the writing-for-tokens size contract, passed through from the
-// REST route's warn (200/201 + sizeWarning) / block (422) responses.
 describe('ORB-1819 size contract', () => {
   it('add surfaces a soft-limit sizeWarning in the success text, not as an error', async () => {
     stub([

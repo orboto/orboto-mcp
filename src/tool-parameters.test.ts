@@ -1,24 +1,5 @@
 /**
  * ORB-1805 - the schema diet must never cost a PARAMETER.
- *
- * The diet trims description text: tool prose moved into
- * `orboto_help` / the skill's REFERENCE.md, per-parameter prose
- * shortened to the phrase a caller acts on. What it must never do is
- * drop a field, flip a required field to optional, or shrink an enum -
- * those are the changes that silently break a caller.
- *
- * `tool-parameters.baseline.json` is the snapshot taken from the FULL
- * manifest immediately BEFORE the ORB-1805 diet: for every tool, every
- * property path in its input schema (nested objects and array items
- * included, as dotted paths), its required list, and every enum's
- * values. This test walks the live manifest the same way and fails on
- * any loss.
- *
- * Direction matters: it is a SUPERSET check. Adding a parameter, making
- * a required one optional-to-required is caught, and adding an enum
- * value is fine - only removal fails. Re-baseline ONLY when a parameter
- * is intentionally removed (which is an API break in its own right and
- * belongs in its own ticket), never to make this test go quiet.
  */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';

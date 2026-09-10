@@ -1,37 +1,15 @@
 /**
  * ORB-510 / ORB-513 - primer-fact tools.
  *
- * Six tools that wrap the `/projects/:id/primer-facts` and
- * `/primer-facts/:id` REST surface from ORB-511. Agents call these to
- * record structured project facts - tech-stack details, conventions,
- * deployment quirks - that the AI primer (ORB-512) renders at the top
- * of every session. The skill rule (ORB-514) tells agents *when* to
- * record; these tools are the *how*.
- *
- * All tool descriptions and parameter `.describe()` strings are in
- * English so the international LLM tool-selection path is reliable.
- *
- * Wire order in server.ts:
- *   - orboto_primer_fact_list
- *   - orboto_primer_fact_add
- *   - orboto_primer_fact_update
- *   - orboto_primer_fact_supersede
- *   - orboto_primer_fact_verify
- *   - orboto_primer_fact_delete
+ * @see ORB-511, ORB-512, ORB-514
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey, sizeBlockResult } from './shared.js';
 
-// ORB-1819 - the writing contract, verbatim in every write-tool
-// description so the writing agent sees it at the moment of writing.
 const FACT_WRITING_CONTRACT =
   ' Fact: <= 300 chars, one fact per key, the value is the fact - long material goes into a doc, the fact holds the doc key.';
-
-// ---------------------------------------------------------------------------
-// Shared types + helpers
-// ---------------------------------------------------------------------------
 
 const PRIMER_FACT_CATEGORIES = [
   'tech_stack',
@@ -41,11 +19,7 @@ const PRIMER_FACT_CATEGORIES = [
   'integrations',
   'gotchas',
   'commands',
-  // ORB-1403 - explicit non-functional requirements (performance, security,
-  // DSGVO, operations, i18n, ...) for the Pflichtenheft NFR chapter.
   'non_functional',
-  // ORB-1413 - glossary/terminology facts for the Pflichtenheft glossary
-  // chapter (chapter 11) only, so they no longer double-render via `other`.
   'glossary',
   'other',
 ] as const;
@@ -98,18 +72,12 @@ function summariseFact(f: PrimerFactRow): string {
   if (f.source === 'imported') markers.push('imported');
   if (f.supersededById) markers.push('superseded');
   const tag = markers.length > 0 ? ` _(${markers.join(', ')})_` : '';
-  // Single-line preview of the value - multi-line bodies get truncated
-  // so the list output stays scannable.
   const valuePreview = f.value.length > 120 || f.value.includes('\n')
     ? `${f.value.replace(/\n/g, ' ').slice(0, 120)}…`
     : f.value;
   const scope = f.projectId === null ? '[workspace]' : '[project]';
   return `- ${scope} **${f.category}/${f.key}**: ${valuePreview}${tag}`;
 }
-
-// ---------------------------------------------------------------------------
-// orboto_primer_fact_list
-// ---------------------------------------------------------------------------
 
 export const primerFactListToolConfig = {
   title: 'List structured project primer facts',
@@ -180,10 +148,6 @@ export function makePrimerFactListHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_primer_fact_add
-// ---------------------------------------------------------------------------
 
 export const primerFactAddToolConfig = {
   title: 'Record a new project primer fact',
@@ -263,10 +227,6 @@ export function makePrimerFactAddHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_primer_fact_update
-// ---------------------------------------------------------------------------
-
 export const primerFactUpdateToolConfig = {
   title: 'Update an existing primer fact',
   description:
@@ -333,10 +293,6 @@ export function makePrimerFactUpdateHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_primer_fact_supersede
-// ---------------------------------------------------------------------------
-
 export const primerFactSupersedeToolConfig = {
   title: 'Replace a primer fact while preserving history',
   description:
@@ -394,10 +350,6 @@ export function makePrimerFactSupersedeHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_primer_fact_verify
-// ---------------------------------------------------------------------------
-
 export const primerFactVerifyToolConfig = {
   title: 'Verify an agent-observed primer fact',
   description:
@@ -429,10 +381,6 @@ export function makePrimerFactVerifyHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_primer_fact_delete
-// ---------------------------------------------------------------------------
-
 export const primerFactDeleteToolConfig = {
   title: 'Delete a primer fact',
   description:
@@ -448,9 +396,6 @@ export const primerFactDeleteToolConfig = {
 
 export function makePrimerFactDeleteHandler(client: OrbotoClient) {
   return async ({ factId, reason }: { factId: string; reason?: string }): Promise<CallToolResult> => {
-    // ORB-516 - pass the reason through so the audit-log entry
-    // captures it. Old API versions silently ignore the querystring
-    // so there's no compat risk.
     const path = reason
       ? `/primer-facts/${factId}?reason=${encodeURIComponent(reason)}`
       : `/primer-facts/${factId}`;

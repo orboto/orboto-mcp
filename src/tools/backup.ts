@@ -24,10 +24,6 @@ interface BackupRun {
 
 const mb = (n: number): string => `${Math.round((n / 1024 / 1024) * 10) / 10} MB`;
 
-// ---------------------------------------------------------------------------
-// orboto_create_full_backup
-// ---------------------------------------------------------------------------
-
 export const createFullBackupToolConfig = {
   title: 'Create + download a full workspace backup',
   description:
@@ -38,10 +34,6 @@ export const createFullBackupToolConfig = {
 
 export function makeCreateFullBackupHandler(client: OrbotoClient) {
   return async (): Promise<CallToolResult> => {
-    // ORB-1717 - the export is async server-side (the old synchronous
-    // stream aborted silently under load). Enqueue, poll the run row to a
-    // terminal state, then download the stored artifact - so an aborted
-    // wait never yields a partial ZIP.
     const { runId } = await client.post<{ runId: string }>('/admin/backup/full', {});
     const t0 = Date.now();
     for (;;) {
@@ -62,10 +54,6 @@ export function makeCreateFullBackupHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_list_backups
-// ---------------------------------------------------------------------------
 
 export const listBackupsToolConfig = {
   title: 'List backup runs',
@@ -88,10 +76,6 @@ export function makeListBackupsHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_download_backup
-// ---------------------------------------------------------------------------
 
 export const downloadBackupToolConfig = {
   title: 'Download a stored backup run',

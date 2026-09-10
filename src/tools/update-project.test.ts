@@ -178,7 +178,7 @@ describe('orboto_archive_project', () => {
       { json: { ...PROJ, status: 'archived' } },
     ]);
     const res = await makeArchiveProjectHandler(client)({ projectKey: 'ACME' });
-    expect(calls).toHaveLength(1);                       // only the resolve, no PATCH
+    expect(calls).toHaveLength(1);
     expect((res.content[0] as { text: string }).text).toMatch(/already archived/);
     expect(res.structuredContent).toMatchObject({ alreadyArchived: true });
   });

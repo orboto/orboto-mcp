@@ -1,31 +1,10 @@
 /**
  * ORB-244 Phase D - MCP prompts.
- *
- * Prompts are reusable instruction templates an MCP-aware client
- * (Claude Desktop, Cursor) surfaces in its UI as a one-click action.
- * Each handler returns `messages[]` that become the start of the
- * conversation; the user's model then drives the work, typically
- * by calling orboto MCP tools.
- *
- * Five v1 templates - each a thin wrapper that hands the model a
- * focused goal + a tool sequence to execute:
- * - plan-sprint(projectKey) - draft a sprint plan from open work
- * - triage-my-tickets() - sort caller's open assignments
- * - summarize-project(projectKey) - quick project briefing
- * - estimate-ticket(ticketKey) - rough effort guess via similar work
- * - find-duplicates(ticketKey) - search for overlapping tickets
- *
- * No backend AI calls - the prompts steer the model, the model
- * uses tools. Keeps the surface stateless and the AI provider
- * irrelevant (works with any MCP client).
  */
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 export function registerOrbotoPrompts(server: McpServer): void {
-  // -------------------------------------------------------------------------
-  // plan-sprint
-  // -------------------------------------------------------------------------
   server.registerPrompt(
     'plan-sprint',
     {
@@ -59,9 +38,6 @@ export function registerOrbotoPrompts(server: McpServer): void {
     }),
   );
 
-  // -------------------------------------------------------------------------
-  // triage-my-tickets
-  // -------------------------------------------------------------------------
   server.registerPrompt(
     'triage-my-tickets',
     {
@@ -94,9 +70,6 @@ export function registerOrbotoPrompts(server: McpServer): void {
     }),
   );
 
-  // -------------------------------------------------------------------------
-  // summarize-project
-  // -------------------------------------------------------------------------
   server.registerPrompt(
     'summarize-project',
     {
@@ -125,9 +98,6 @@ export function registerOrbotoPrompts(server: McpServer): void {
     }),
   );
 
-  // -------------------------------------------------------------------------
-  // estimate-ticket
-  // -------------------------------------------------------------------------
   server.registerPrompt(
     'estimate-ticket',
     {
@@ -157,9 +127,6 @@ export function registerOrbotoPrompts(server: McpServer): void {
     }),
   );
 
-  // -------------------------------------------------------------------------
-  // find-duplicates
-  // -------------------------------------------------------------------------
   server.registerPrompt(
     'find-duplicates',
     {
@@ -192,9 +159,6 @@ export function registerOrbotoPrompts(server: McpServer): void {
     }),
   );
 
-  // -------------------------------------------------------------------------
-  // ORB-855 - wiki-ingest: guided URL ingest flow.
-  // -------------------------------------------------------------------------
   server.registerPrompt(
     'wiki-ingest',
     {
@@ -222,9 +186,6 @@ export function registerOrbotoPrompts(server: McpServer): void {
     }),
   );
 
-  // -------------------------------------------------------------------------
-  // ORB-855 - wiki-maintain: guided lint + fix flow.
-  // -------------------------------------------------------------------------
   server.registerPrompt(
     'wiki-maintain',
     {

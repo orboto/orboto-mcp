@@ -1,19 +1,5 @@
 /**
  * ORB-916 - doc revision history MCP tools (epic ORB-911 Phase 5).
- *
- * - orboto_list_doc_revisions - GET /docs/:id/revisions  (cursor-paged)
- * - orboto_get_doc_revision - GET /docs/:id/revisions/:rid
- * - orboto_restore_doc_revision - POST /docs/:id/revisions/:rid/restore
- *
- * Revisions are auto-captured by PATCH /docs/:id every time the title
- * or body changes, so by the time an agent wants to roll back there's
- * usually a long history to walk. The list endpoint is cursor-paged
- * (newest-first by editedAt DESC + id tiebreak) - the tool surfaces
- * `nextCursor` in structuredContent so the caller can page through if
- * the default 25-row page isn't enough.
- *
- * Restore writes a new revision capturing the current body before
- * rolling back, so the restore itself is also undoable.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -46,10 +32,6 @@ interface DocRow {
   sortOrder: number;
   updatedAt: string;
 }
-
-// ---------------------------------------------------------------------------
-// orboto_list_doc_revisions
-// ---------------------------------------------------------------------------
 
 export const listDocRevisionsToolConfig = {
   title: 'List the revision history of a doc page',
@@ -103,10 +85,6 @@ export function makeListDocRevisionsHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_get_doc_revision
-// ---------------------------------------------------------------------------
-
 export const getDocRevisionToolConfig = {
   title: 'Get a single doc revision',
   description:
@@ -140,10 +118,6 @@ export function makeGetDocRevisionHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_restore_doc_revision
-// ---------------------------------------------------------------------------
 
 export const restoreDocRevisionToolConfig = {
   title: 'Restore a doc page to a saved revision',

@@ -32,7 +32,6 @@ describe('PKCE', () => {
     expect(method).toBe('S256');
     const recomputed = createHash('sha256').update(verifier).digest('base64url');
     expect(recomputed).toBe(challenge);
-    // base64url, no padding
     expect(challenge).not.toContain('=');
     expect(challenge).not.toContain('+');
   });
@@ -125,7 +124,6 @@ describe('token cache', () => {
     expect(loadCachedGrant('https://a.test', path)?.clientId).toBe('c');
     expect(loadCachedGrant('https://b.test', path)?.refreshToken).toBe('r2');
     expect(loadCachedGrant('https://missing.test', path)).toBeNull();
-    // 0600 perms (owner rw only)
     const mode = statSync(path).mode & 0o777;
     expect(mode).toBe(0o600);
   });
@@ -142,13 +140,11 @@ describe('token cache', () => {
 });
 
 describe('createTokenProvider', () => {
-  // expiresAt comfortably larger than EXPIRY_SKEW_MS so "fresh" and "within
-  // skew" are both expressible with a fake clock.
   const base: OAuthTokenSet = { accessToken: 'at0', refreshToken: 'rt0', expiresAt: 10_000_000, scope: 'mcp' };
 
   it('returns the cached access token while fresh', async () => {
     const refresh = vi.fn();
-    const now = () => 0; // well before expiry
+    const now = () => 0;
     const p = createTokenProvider(base, refresh, undefined, now);
     expect(await p.getAccessToken()).toBe('at0');
     expect(refresh).not.toHaveBeenCalled();
@@ -157,7 +153,7 @@ describe('createTokenProvider', () => {
   it('refreshes when within the expiry skew and rotates the refresh token', async () => {
     const refresh = vi.fn().mockResolvedValue({ accessToken: 'at1', refreshToken: 'rt1', expiresAt: 10_000_000, scope: 'mcp' });
     const onRefreshed = vi.fn();
-    const now = () => base.expiresAt - EXPIRY_SKEW_MS + 1; // inside skew window
+    const now = () => base.expiresAt - EXPIRY_SKEW_MS + 1;
     const p = createTokenProvider(base, refresh, onRefreshed, now);
     expect(await p.getAccessToken()).toBe('at1');
     expect(refresh).toHaveBeenCalledWith('rt0');
@@ -186,9 +182,6 @@ describe('createTokenProvider', () => {
   });
 
   it('ORB-1419 - single-flights concurrent getAccessToken calls into ONE refresh', async () => {
-    // Two concurrent callers that both see an expired token must share a single
-    // in-flight refresh rather than each firing one (which would present the OLD
-    // refresh token twice and trip server-side reuse-detection).
     let resolveRefresh: (v: OAuthTokenSet) => void = () => {};
     const refresh = vi.fn().mockImplementation(
       () => new Promise<OAuthTokenSet>((r) => { resolveRefresh = r; }),
@@ -197,7 +190,6 @@ describe('createTokenProvider', () => {
 
     const a = p.getAccessToken();
     const b = p.getAccessToken();
-    // Both callers are now awaiting; only one refresh should have been started.
     expect(refresh).toHaveBeenCalledOnce();
     expect(refresh).toHaveBeenCalledWith('rt0');
 
@@ -230,7 +222,6 @@ describe('bootstrapOAuth cached-grant path', () => {
     });
     expect(await provider.getAccessToken()).toBe('fresh-at');
     expect(openBrowser).not.toHaveBeenCalled();
-    // rotation persisted
     expect(loadCachedGrant('https://x.test', path)?.refreshToken).toBe('rt1');
   });
 
@@ -238,12 +229,9 @@ describe('bootstrapOAuth cached-grant path', () => {
     saveCachedGrant('https://x.test', {
       clientId: 'cid', refreshToken: 'dead', scope: 'mcp', tokenEndpoint: 'https://x.test/oauth/token',
     }, path);
-    // First call (refresh) 400s; then discovery is attempted (which we fail so
-    // we don't need to drive the whole interactive flow) - the point is the
-    // dead grant is cleared and discovery is reached.
     const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(new Response('{"error":"invalid_grant"}', { status: 400 })) // refresh
-      .mockResolvedValueOnce(new Response('nope', { status: 500 })); // discovery
+      .mockResolvedValueOnce(new Response('{"error":"invalid_grant"}', { status: 400 }))
+      .mockResolvedValueOnce(new Response('nope', { status: 500 }));
     await expect(bootstrapOAuth({
       apiBaseUrl: 'https://x.test/api', fetchImpl: fetchImpl as unknown as typeof fetch,
       openBrowser: vi.fn(), cachePath: path, log: () => {},

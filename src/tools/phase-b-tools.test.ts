@@ -32,9 +32,6 @@ function stub(responses: Array<{ ok?: boolean; status?: number; json?: unknown }
       ok: r.ok ?? true,
       status: r.status ?? 200,
       statusText: 'OK',
-      // `'json' in r` so an explicit `json: null` preserves null;
-      // `r.json ?? {}` would collapse null → {} and hide nullable
-      // endpoints (e.g. GET /time/timer returns the row or null).
       json: async () => ('json' in r ? r.json : {}),
       text: async () => '',
     } as unknown as Response;
@@ -52,7 +49,6 @@ describe('orboto_get_project', () => {
       { json: PROJ },
       { json: [{ id: 'm1', name: 'v1', status: 'active', startDate: '2026-01-01', endDate: '2026-03-01' }] },
       { json: [{ id: 'l1', name: 'bug', color: '#f00' }] },
-      // Members endpoint response: nested user + role objects per the real schema.
       { json: [{ userId: 'u1', projectId: 'p1', roleId: 'r1',
         user: { id: 'u1', email: 'ada@acme', fullName: 'Ada', avatarUrl: null },
         role: { id: 'r1', name: 'developer' } }] },
@@ -81,7 +77,6 @@ describe('orboto_list_tickets', () => {
     expect(calls[1]).toContain('limit=10');
   });
 
-  // ORB-14 - the backlog flag.
   it('passes unscheduled=true for the backlog', async () => {
     const calls = stub([
       { json: PROJ },
@@ -99,8 +94,6 @@ describe('orboto_list_tickets', () => {
     ).rejects.toThrow(/not both/);
   });
 
-  // ORB-1696 - the shared resolver contract: key, name, OR UUID; an
-  // ambiguous name errors listing candidates. One test per form.
   it('resolves milestone KEY (ORB-1696)', async () => {
     const calls = stub([
       { json: PROJ },
@@ -167,7 +160,6 @@ describe('orboto_list_tickets', () => {
     ).rejects.toThrow(/Milestone "ghost" not found/);
   });
 
-  // ORB-1605 - the stalled-ingestion signal passes through into structuredContent.
   it('surfaces waitingForGitIngestion per ticket', async () => {
     stub([
       { json: PROJ },
@@ -192,8 +184,6 @@ describe('orboto_list_tickets', () => {
 });
 
 describe('orboto_get_ticket', () => {
-  // Fixture: empty children page (children METADATA is always fetched; the
-  // rows only surface with include: ["children"] since ORB-1698).
   const NO_CHILDREN = { json: { items: [], nextCursor: null } };
 
   it('ORB-1698 default card: only enriched + children + attachments are fetched - comments/checklists/git untouched', async () => {
@@ -210,7 +200,6 @@ describe('orboto_get_ticket', () => {
     expect(calls.some((c) => c.includes('/checklists'))).toBe(false);
     expect(calls.some((c) => c.includes('/git-activity'))).toBe(false);
     const sc = res.structuredContent as Record<string, unknown>;
-    // Counts always present; bodies absent by default - never silently.
     expect(sc.commentCount).toBe(3);
     expect(sc.checklistProgress).toEqual({ done: 1, total: 2 });
     expect(sc.attachmentCount).toBe(0);
@@ -273,8 +262,6 @@ describe('orboto_get_ticket', () => {
     expect(sc.parentTicket).toBeNull();
   });
 
-  // ORB-1605 - the stalled-ingestion signal surfaces in both the header
-  // text and structuredContent.
   it('surfaces waitingForGitIngestion in the header and structured content', async () => {
     stub([
       { json: PROJ },
@@ -324,9 +311,7 @@ describe('orboto_get_ticket', () => {
     stub([
       { json: PROJ },
       { json: { id: 't5', projectId: 'p1', ticketKey: 'ACME-5', title: 'Phase A', status: 'DONE', statusName: 'Done', statusCategory: 'done', type: 'task', priority: 'normal', gitActivityCount: 0, parentTicketId: 't1' } },
-      // Enriched by-id refetch
       { json: { id: 't5', projectId: 'p1', ticketKey: 'ACME-5', title: 'Phase A', status: 'DONE', statusName: 'Done', statusCategory: 'done', type: 'task', priority: 'normal' } },
-      // Parent ticket fetch
       { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-1', title: 'Epic foo', status: 'IN_PROGRESS', statusName: 'In Progress', statusCategory: 'in_progress' } },
       NO_CHILDREN,
       { json: [] },
@@ -367,10 +352,7 @@ describe('orboto_get_ticket', () => {
   it('ORB-1023: surfaces milestone (name, not UUID) + statusCategory from the enriched by-id refetch', async () => {
     stub([
       { json: PROJ },
-      // Bare by-key resolver row: milestoneId set, but no milestoneName /
-      // statusCategory - this is the shape that dropped the milestone.
       { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-9', title: 'Bug', status: 'DONE', milestoneId: 'm1', gitActivityCount: 0, parentTicketId: null } },
-      // Enriched by-id refetch: carries statusCategory + the resolved name.
       { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-9', title: 'Bug', status: 'DONE', statusName: 'Done', statusCategory: 'done', type: 'bug', priority: 'normal', milestoneId: 'm1', milestoneName: 'Sprint 7' } },
       NO_CHILDREN,
       { json: [] },
@@ -466,7 +448,6 @@ describe('milestone tools', () => {
       { json: { total: 12, byStatus: { TODO: 12 } } },
     ]);
     const res = await makeGetMilestoneHandler(client)({ projectKey: 'ACME', milestone: 'acme-m19' });
-    // The resolver spans closed milestones too.
     expect(calls[1]).toContain('includeClosed=true');
     const sc = res.structuredContent as { milestone: { name: string } };
     expect(sc.milestone.name).toBe('Phase 35');
@@ -541,7 +522,6 @@ describe('orboto_get_checklists', () => {
           id: 'cl1', title: 'Before ship', triggersDone: true,
           progress: { done: 1, total: 2 },
           items: [
-            // One plain item, one linked-to-another-ticket item.
             { id: 'i1', content: 'Docs updated', storedCompleted: true, effectiveCompleted: true,
               linkedTicketId: null, linkedTicketKey: null, linkedTicketTitle: null, linkedTicketStatusCategory: null, sortOrder: 0 },
             { id: 'i2', content: 'Sub-task done', storedCompleted: false, effectiveCompleted: false,
@@ -589,11 +569,10 @@ describe('orboto_get_timer', () => {
   });
 
   it('computes totalSeconds including elapsed time since startedAt', async () => {
-    const startedAt = new Date(Date.now() - 120_000).toISOString(); // 2 min ago
+    const startedAt = new Date(Date.now() - 120_000).toISOString();
     stub([{ json: { id: 'tm1', userId: 'u1', ticketId: 't1', ticketTitle: 'Bug', startedAt, pausedAt: null, accumulatedSeconds: 300, description: 'debug' } }]);
     const res = await makeGetTimerHandler(client)();
     const sc = res.structuredContent as { timer: { totalSeconds: number; paused: boolean; ticketTitle: string | null } };
-    // 300 accumulated + ~120 elapsed. Allow ±5s for test timing jitter.
     expect(sc.timer.totalSeconds).toBeGreaterThanOrEqual(418);
     expect(sc.timer.totalSeconds).toBeLessThanOrEqual(425);
     expect(sc.timer.paused).toBe(false);

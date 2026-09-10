@@ -76,8 +76,6 @@ describe('orboto_review_approval_record', () => {
     const res = await makeReviewApprovalRecordHandler(client)({ ticketKey: 'ACME-1', fingerprint: FINGERPRINT, decision: 'approved', note: 'looks good' });
     const record = calls.find((c) => c.method === 'POST' && c.url.includes('review-approvals'));
     expect(record?.body).toMatchObject({ fingerprint: FINGERPRINT, decision: 'approved', note: 'looks good' });
-    // ticketKey must NOT leak into the request body sent to the API - the
-    // route resolves the ticket from the URL, not the payload.
     expect(record?.body).not.toHaveProperty('ticketKey');
     expect((res.content[0] as { text: string }).text).toContain('approved');
   });

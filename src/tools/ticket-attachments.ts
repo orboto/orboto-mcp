@@ -1,22 +1,7 @@
 /**
  * ORB-1455 - read + view ticket attachments from MCP.
  *
- * Every agent surface could WRITE attachments (orboto_attach_to_ticket) but
- * none could READ them: an agent working a ticket could not tell the ticket
- * HAD files, let alone SEE an attached screenshot. These two tools close that
- * hole (orboto_get_ticket also gains an `attachments` array):
- *
- *   - orboto_list_ticket_attachments - thin wrapper on the ticket-attachment
- *     list route; mirrors orboto_list_doc_attachments (ORB-914).
- *   - orboto_get_attachment - fetch an attachment's bytes via the new
- *     authenticated base64 route and return them to the model:
- *       * images (image/*)      -> an MCP image content block so the model
- *                                  actually VIEWS the screenshot, plus a text
- *                                  line with filename/size.
- *       * everything else       -> a text block with metadata + the base64
- *                                  (small files) or a pointer to the skill
- *                                  download shortcut (large files).
- *     Works for ticket/doc/comment attachments - the id is global.
+ * @see ORB-914
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -51,10 +36,6 @@ const MAX_INLINE_BYTES = 5 * 1024 * 1024;
 function isImage(mimetype: string): boolean {
   return mimetype.startsWith('image/');
 }
-
-// ---------------------------------------------------------------------------
-// orboto_list_ticket_attachments
-// ---------------------------------------------------------------------------
 
 export const listTicketAttachmentsToolConfig = {
   title: 'List attachments on a ticket',
@@ -102,10 +83,6 @@ export function makeListTicketAttachmentsHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_get_attachment
-// ---------------------------------------------------------------------------
-
 export const getAttachmentToolConfig = {
   title: 'View or fetch an attachment\'s bytes',
   description:
@@ -121,8 +98,6 @@ export function makeGetAttachmentHandler(client: OrbotoClient) {
     const att = await client.get<AttachmentBytesResponse>(`/attachments/${attachmentId}/base64`);
     const kb = Math.round(att.sizeBytes / 1024);
 
-    // Over the inline cap: refuse to spill a multi-MB blob into the model's
-    // context. Point at the skill download shortcut, which streams to disk.
     if (att.sizeBytes > MAX_INLINE_BYTES) {
       return {
         content: [{
@@ -149,7 +124,6 @@ export function makeGetAttachmentHandler(client: OrbotoClient) {
       };
     }
 
-    // Non-image: return metadata + the base64 so an agent can decode / save it.
     return {
       content: [{
         type: 'text',

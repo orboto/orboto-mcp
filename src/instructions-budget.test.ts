@@ -28,11 +28,9 @@ describe('assembleInstructions (ORB-1177)', () => {
     expect(out).toContain('orboto_session_start');
     expect(out).toContain('truncated');
 
-    // Every kept rule line is a COMPLETE original line (no mid-line cut).
     const body = out.slice(`${head}\n\n${HEADING}`.length).split('\n\n[... rules truncated')[0];
     const kept = body.length ? body.split('\n') : [];
     for (const line of kept) expect(lines).toContain(line);
-    // And it actually kept fewer than all lines (proves truncation happened).
     expect(kept.length).toBeLessThan(lines.length);
   });
 });

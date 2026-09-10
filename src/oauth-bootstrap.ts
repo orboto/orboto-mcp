@@ -1,26 +1,5 @@
 /**
  * ORB-943 - OAuth bootstrap for the stdio local-proxy.
- *
- * The stdio proxy (`@orboto/mcp` spawned by Claude Desktop / Cursor) was
- * PAT-only: the operator had to paste a long-lived `orb_*` key into the
- * client config. This module gives the stdio proxy the SAME short-lived,
- * SSO-backed OAuth path the HTTP transport already offers - a browser-assisted
- * loopback flow (RFC 8252) so a desktop user connects without ever pasting a
- * token. The PAT stays the documented fallback for headless service accounts
- * (see index.ts).
- *
- * Design:
- *   - No new API surface. This reuses the shipped provider-side OAuth stack
- *     (discovery + DCR + PKCE + rotating refresh) exactly as an HTTP MCP client
- *     would: discover -> register -> authorize-in-browser -> exchange -> use
- *     the access token as the REST Bearer (the api's `authenticate` decorator
- *     already accepts OAuth access tokens alongside `orb_*` keys).
- *   - The refresh token is cached on disk (0600) keyed by the instance origin,
- *     so a subsequent boot refreshes silently instead of re-opening a browser.
- *   - The pure pieces (PKCE, request building, response parsing, the cache
- *     round-trip, the token-provider refresh math) are exported so they unit
- *     test without a browser or a live server. The loopback listener + browser
- *     open is the thin I/O shell.
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
@@ -66,10 +45,6 @@ export interface CachedGrant {
 
 type FetchLike = typeof fetch;
 
-// ---------------------------------------------------------------------------
-// PKCE (RFC 7636)
-// ---------------------------------------------------------------------------
-
 export interface Pkce {
   verifier: string;
   challenge: string;
@@ -88,10 +63,6 @@ export function generatePkce(): Pkce {
 export function generateState(): string {
   return randomBytes(16).toString('base64url');
 }
-
-// ---------------------------------------------------------------------------
-// Origin derivation + discovery
-// ---------------------------------------------------------------------------
 
 /**
  * The OAuth authorization server lives at the instance ORIGIN, while the stdio
@@ -119,10 +90,6 @@ export async function discoverAuthServer(origin: string, fetchImpl: FetchLike = 
   return meta as AuthServerMetadata;
 }
 
-// ---------------------------------------------------------------------------
-// Dynamic Client Registration (RFC 7591)
-// ---------------------------------------------------------------------------
-
 /** Register a public client for the loopback redirect. Returns the client_id. */
 export async function registerLoopbackClient(
   registrationEndpoint: string,
@@ -148,10 +115,6 @@ export async function registerLoopbackClient(
   if (!json.client_id) throw new Error('OAuth client registration returned no client_id');
   return json.client_id;
 }
-
-// ---------------------------------------------------------------------------
-// Authorize URL + token exchange
-// ---------------------------------------------------------------------------
 
 export function buildAuthorizeUrl(
   authorizationEndpoint: string,
@@ -229,10 +192,6 @@ export async function refreshTokens(
   return parseTokenResponse(await res.json());
 }
 
-// ---------------------------------------------------------------------------
-// Token cache (0600, keyed by origin)
-// ---------------------------------------------------------------------------
-
 /** Cache file path. Honours ORBOTO_MCP_TOKEN_CACHE for tests / custom homes. */
 export function tokenCachePath(): string {
   const override = process.env.ORBOTO_MCP_TOKEN_CACHE;
@@ -261,8 +220,6 @@ export function saveCachedGrant(origin: string, grant: CachedGrant, path = token
   file[origin] = grant;
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(file, null, 2), { mode: 0o600 });
-  // writeFileSync's mode only applies on create; force 0600 on an existing file
-  // too so a cache written before this code shipped is tightened.
   try { chmodSync(path, 0o600); } catch { /* best-effort on platforms without chmod */ }
 }
 
@@ -274,10 +231,6 @@ export function clearCachedGrant(origin: string, path = tokenCachePath()): void 
   writeFileSync(path, JSON.stringify(file, null, 2), { mode: 0o600 });
   try { chmodSync(path, 0o600); } catch { /* best-effort */ }
 }
-
-// ---------------------------------------------------------------------------
-// Token provider - the object the OrbotoClient calls per request
-// ---------------------------------------------------------------------------
 
 /**
  * A live token source. `getAccessToken()` returns a valid bearer, refreshing
@@ -309,8 +262,6 @@ export function createTokenProvider(
       throw new Error('OAuth session expired and no refresh token is available - reconnect the client.');
     }
     const next = await refresh(current.refreshToken);
-    // The AS rotates the refresh token; if a response omits it (shouldn't with
-    // offline_access) keep the prior one so the chain isn't lost.
     current = { ...next, refreshToken: next.refreshToken ?? current.refreshToken };
     onRefreshed?.(current);
     return current.accessToken;
@@ -328,10 +279,6 @@ export function createTokenProvider(
     },
   };
 }
-
-// ---------------------------------------------------------------------------
-// Interactive loopback flow (the I/O shell)
-// ---------------------------------------------------------------------------
 
 /** Open a URL in the user's default browser. Returns false if no opener is
  *  available (headless) so the caller can print the URL for manual paste. */
@@ -434,9 +381,6 @@ export async function runLoopbackAuthorization(opts: {
       reject(e);
     });
 
-    // Bind to an ephemeral loopback port, THEN register the client at that exact
-    // redirect_uri (the api allows any loopback port at authorize time per RFC
-    // 8252, but DCR still needs a concrete uri).
     server.listen(0, '127.0.0.1', async () => {
       try {
         const addr = server.address();
@@ -463,10 +407,6 @@ export async function runLoopbackAuthorization(opts: {
     });
   });
 }
-
-// ---------------------------------------------------------------------------
-// Top-level bootstrap: cache -> refresh -> interactive, returns a provider
-// ---------------------------------------------------------------------------
 
 /**
  * Resolve an OAuth token provider for the stdio proxy. Order:
@@ -509,7 +449,6 @@ export async function bootstrapOAuth(opts: {
         (next) => persist(cached.clientId, cached.tokenEndpoint, next),
       );
     } catch (e) {
-      // A revoked / expired refresh token drops us back to interactive.
       log(`[orboto-mcp] cached OAuth session no longer valid (${(e as Error).message}); re-authorizing`);
       clearCachedGrant(origin, cachePath);
     }

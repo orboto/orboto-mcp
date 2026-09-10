@@ -26,10 +26,6 @@ async function resolveMemberId(client: OrbotoClient, projectId: string, email: s
   return m.userId;
 }
 
-// ---------------------------------------------------------------------------
-// orboto_raci - read the matrix
-// ---------------------------------------------------------------------------
-
 export const raciToolConfig = {
   title: 'RACI matrix',
   description:
@@ -60,8 +56,6 @@ export function makeRaciHandler(client: OrbotoClient) {
 
     const qs = new URLSearchParams();
     if (input.milestone) {
-      // ORB-1696 - shared resolver: key (ORB-M3), name or UUID, ambiguous
-      // name -> explicit error. Matches create_ticket/set_milestone/OQL.
       const m = await resolveMilestoneByNameOrId(client, project.id, input.milestone);
       qs.set('milestoneId', m.id);
     }
@@ -76,7 +70,6 @@ export function makeRaciHandler(client: OrbotoClient) {
       };
     }
 
-    // Compact text rendering: one line per ticket listing each held role.
     const lines = data.rows.map((r) => {
       const byUser = new Map(data.members.map((m) => [m.userId, m.fullName] as const));
       const held = Object.entries(r.cells)
@@ -92,10 +85,6 @@ export function makeRaciHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_set_raci - write a role
-// ---------------------------------------------------------------------------
 
 export const setRaciToolConfig = {
   title: 'Set a RACI role',
@@ -117,8 +106,6 @@ export function makeSetRaciHandler(client: OrbotoClient) {
       await client.put(`/projects/${ticket.projectId}/tickets/${ticket.id}/raci/${userId}`, { role });
     } catch (err) {
       if (err instanceof OrbotoApiError && err.status === 409) {
-        // Single-A violation or RACI-not-enabled - surface the clean message
-        // the API put in the response body.
         let msg = err.body;
         try { msg = (JSON.parse(err.body) as { error?: string }).error ?? err.body; } catch { /* keep raw */ }
         return {

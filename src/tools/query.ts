@@ -1,17 +1,7 @@
 /**
  * ORB-273 Phase F - `orboto_query`.
  *
- * Lets the model reach for the OQL DSL when the per-entity list
- * tools (`orboto_list_tickets`, `orboto_my_tickets`) get too narrow:
- * combined `assignee + dueDate + label + statusCategory` filters
- * with explicit ORDER BY are awkward to express through tool
- * arguments but trivial in OQL. Falls back to JQL syntax via
- * `syntax: 'jql'` for migrants who copy-pasted a Jira query.
- *
- * The endpoint is `POST /query` (ORB-531) which honours PBAC,
- * cursor-paginates, and rate-limits at 60/min. We expose the
- * underlying envelope unchanged so a future "give me the next page"
- * tool can plumb the cursor through.
+ * @see ORB-531
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -76,7 +66,6 @@ export function makeQueryHandler(client: OrbotoClient) {
       structuredContent: {
         count: page.items.length,
         nextCursor: page.nextCursor,
-        // ORB-1699 - shared lean row; verbose restores uuid/labels/minutes.
         tickets: page.items.map((t) => agentTicketListRow(t, input.verbose ?? false)),
       },
     };

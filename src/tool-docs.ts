@@ -1,18 +1,7 @@
 /**
  * ORB-1741 - the manifest diet (epic ORB-1691).
  *
- * Every tool description in the manifest is STANDING context cost: an
- * eager-loading client pays it on connect, every session. The curated
- * toolset (ORB-1520) cut the tool COUNT; this module cuts the per-tool
- * TEXT. At registration time (with-metrics.ts) the full description is
- * captured here and the wire manifest carries only a one-sentence
- * summary; `orboto_help { tool }` serves the full guidance lazily - the
- * same deferred-docs pattern ToolSearch uses for deferred tools.
- *
- * The full texts stay where they always lived - in each tool file's
- * `description` - so authors keep writing complete guidance and nothing
- * is lost: the summary is DERIVED (first sentence, or a hand-written
- * override for the few whose first sentence overruns the cap).
+ * @see ORB-1520
  */
 
 /** Soft cap for a wire description; the ratchet in manifest-size.test.ts

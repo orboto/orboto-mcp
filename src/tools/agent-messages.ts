@@ -33,7 +33,6 @@ export const agentMessagesToolConfig = {
     all: z.boolean().default(false).describe('true = include already-read messages'),
     limit: z.number().int().min(1).max(200).default(50),
     project: z.string().min(1).max(64).optional().describe('Project key or UUID: scoped messages for this project plus unscoped ones. Ack only messages that are yours.'),
-    // ORB-1742 - self-echo exclusion, on by default for MCP sessions.
     includeOwnSends: z.boolean().default(false).describe('true = also list messages this session sent (hidden by default so a shared identity never wakes itself).'),
     ackIds: z.array(z.string().uuid()).max(200).optional().describe('Message ids to mark as read'),
   }).shape,

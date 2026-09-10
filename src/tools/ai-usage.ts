@@ -1,15 +1,5 @@
 /**
  * ORB-1321 - `orboto_ai_usage`.
- *
- * Operator diagnostic for AI *consumption*: total calls / tokens in+out /
- * errors over a date range, plus per-user, per-operation, and per-day
- * breakdowns and the AI-Chat slice. Wraps GET /admin/ai/usage.
- *
- * Complements the other two AI diagnostics: `orboto_ai_status` says whether AI
- * is configured; `orboto_embedding_status` covers the embedding pipeline's
- * health; this one answers "how much are we spending / how many calls are
- * erroring". Aggregates only (no per-row error text). admin:ai:read gated
- * (403 for non-admin callers).
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';

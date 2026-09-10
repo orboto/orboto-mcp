@@ -35,16 +35,9 @@ export const apiCallToolConfig = {
       .describe('Route path, e.g. "/projects/<uuid>/milestones". No query string.'),
     query: z.record(z.union([z.string(), z.number(), z.boolean(), z.array(z.string())])).optional()
       .describe('Query parameters as an object.'),
-    // ORB-1710 - typed union, NOT z.unknown(): a typeless argument is
-    // serialized as a STRING by real MCP clients (the OCP-540 class),
-    // which used to reach the inner route without a JSON content type
-    // and 415. The union renders a typed anyOf so clients send real
-    // JSON; the handler still parses a string arrival as belt-and-braces.
     body: z.union([z.record(z.unknown()), z.array(z.unknown()), z.string(), z.number(), z.boolean()]).optional()
       .describe('JSON body - a real object/array, not a stringified one.'),
   }).shape,
-  // Dispatches arbitrary methods - never advertise as read-only.
-  // ORB-1669 - the escape hatch can issue DELETE through the proxy: destructive by contract.
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
 };
 
@@ -55,11 +48,6 @@ export function makeApiCallHandler(client: OrbotoClient) {
     query?: Record<string, string | number | boolean | string[]>;
     body?: unknown;
   }): Promise<CallToolResult> => {
-    // ORB-1710 - belt-and-braces for clients that still stringify the
-    // body: a string that parses as JSON is un-stringified here, so the
-    // proxy receives real JSON even against an older API without the
-    // server-side coercion. An unparseable string passes through and
-    // gets the proxy's clear 400.
     let body = input.body;
     if (typeof body === 'string') {
       try { body = JSON.parse(body); } catch { /* pass through */ }

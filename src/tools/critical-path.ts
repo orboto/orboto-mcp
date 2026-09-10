@@ -17,11 +17,6 @@ interface CpTicket {
   isCritical: boolean;
   deadlineCritical?: boolean;
   bindingConstraint?: 'project_end' | 'successors' | 'due_date';
-  // ORB-1614 - true when this node was pulled in from another project as a
-  // one-hop cross-project dependency neighbour of something in this
-  // project's window. Only ever present for a ticket the caller can
-  // already read - an unreadable foreign blocker is dropped from the
-  // graph entirely, not shown at all.
   external?: boolean;
   externalProjectId?: string | null;
 }
@@ -56,8 +51,6 @@ export function makeCriticalPathHandler(client: OrbotoClient) {
     const project = await resolveProjectByKey(client, input.projectKey);
     const params = new URLSearchParams();
     if (input.milestone) {
-      // ORB-1696 - shared resolver: key (ORB-M3), name or UUID, ambiguous
-      // name -> explicit error. Matches create_ticket/set_milestone/OQL.
       const m = await resolveMilestoneByNameOrId(client, project.id, input.milestone);
       params.set('milestoneId', m.id);
     }
@@ -73,15 +66,12 @@ export function makeCriticalPathHandler(client: OrbotoClient) {
       };
     }
 
-    // ORB-1614 - flag cross-project neighbours pulled into the graph so the
-    // reader knows a key like "OVB-55" is not a typo for this project.
     const externalKeys = new Set(res.tickets.filter((t) => t.external).map((t) => t.ticketKey));
     const slack = res.tickets
       .filter((t) => !t.isCritical && t.totalFloat > 0)
       .sort((a, b) => a.totalFloat - b.totalFloat)
       .map((t) => `  ${t.ticketKey}${t.external ? ' [external]' : ''}: ${t.totalFloat}d slack`)
       .join('\n');
-    // ORB-1459 - surface tickets whose deadline can't be met (negative float).
     const risks = (res.deadlineRisks ?? [])
       .map((r) => {
         const via = r.constrainingTicketKey && r.constrainingTicketKey !== r.ticketKey

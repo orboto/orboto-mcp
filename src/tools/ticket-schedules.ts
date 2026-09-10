@@ -40,10 +40,6 @@ function scheduleLine(s: TicketScheduleRow): string {
   return `- ${s.title}${state} - ${when} - ${people} attendee(s) (id ${s.id})`;
 }
 
-// ---------------------------------------------------------------------------
-// orboto_list_ticket_schedules
-// ---------------------------------------------------------------------------
-
 export const listTicketSchedulesToolConfig = {
   title: 'List a ticket\'s scheduled working sessions',
   description:
@@ -71,10 +67,6 @@ export function makeListTicketSchedulesHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_schedule_ticket_session
-// ---------------------------------------------------------------------------
 
 export const scheduleTicketSessionToolConfig = {
   title: 'Schedule a working session on a ticket',
@@ -119,10 +111,6 @@ export function makeScheduleTicketSessionHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_cancel_ticket_session
-// ---------------------------------------------------------------------------
 
 export const cancelTicketSessionToolConfig = {
   title: 'Cancel a scheduled working session',

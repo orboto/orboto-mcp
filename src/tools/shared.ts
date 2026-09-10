@@ -16,9 +16,7 @@ export interface ProjectRow {
   name: string;
   description: string | null;
   status: string;
-  // ORB-994 - per-project content language, null = inherit workspace.
   language?: string | null;
-  // ORB-1040 - RACI opt-in. Agents must not raise/set RACI unless true.
   raciEnabled?: boolean;
 }
 
@@ -53,9 +51,6 @@ export interface TicketRow {
   statusCategory?: string;
   type: string;
   priority: string;
-  // ORB-1608 - role-aware commit policy (implementation/docs/review/admin/
-  // epic). Absent on responses the enrich pipeline didn't touch (falls
-  // back to the API's 'implementation' default when read).
   deliveryMode?: string;
   estimatedTimeMinutes: number;
   loggedMinutes?: number;
@@ -66,20 +61,13 @@ export interface TicketRow {
   createdAt?: string;
   updatedAt?: string;
   assignees?: Array<{ id: string; email: string; fullName: string }>;
-  // ORB-1034 - full RACI roster (R/A/C/I). Present when the project has RACI
-  // enabled; `assignees` above stays the Responsible+Accountable subset.
   raci?: Array<{ userId: string; email: string; fullName: string; role: 'R' | 'A' | 'C' | 'I' }>;
   labels?: Array<{ id: string; name: string }>;
   commentCount?: number;
   gitActivityCount?: number;
   checklistProgress?: { done: number; total: number };
-  // ORB-1605 - in_review, zero ingested git_activities, but the project
-  // HAS an active git connection: closing verification may be blocked
-  // on stalled commit/PR ingestion rather than genuinely unlinked work.
-  // Absent (not false) on responses the enrich pipeline didn't touch.
   waitingForGitIngestion?: boolean;
 }
-
 
 /**
  * ORB-1699 - the ONE agent-facing list-row builder. A list call is a
@@ -93,7 +81,6 @@ export interface TicketRow {
 export function agentTicketListRow(t: TicketRow, verbose = false): Record<string, unknown> {
   if (verbose) {
     return {
-      // ORB-1179 - uuid for write tools that want it without a lookup.
       id: t.id,
       key: t.ticketKey,
       title: t.title,
@@ -112,9 +99,6 @@ export function agentTicketListRow(t: TicketRow, verbose = false): Record<string
       ...(t.waitingForGitIngestion ? { waitingForGitIngestion: true } : {}),
     };
   }
-  // Lean row: fields at their DEFAULT value are omitted entirely - a
-  // reader treats absence as "task / normal / no due date / unassigned".
-  // The list is a decision aid; the full picture is one get_ticket away.
   const assigneeNames = (t.assignees ?? []).map((a) => a.fullName || a.email);
   return {
     key: t.ticketKey,
@@ -124,7 +108,6 @@ export function agentTicketListRow(t: TicketRow, verbose = false): Record<string
     ...(t.type && t.type !== 'task' ? { type: t.type } : {}),
     ...(t.dueDate ? { dueDate: t.dueDate } : {}),
     ...(assigneeNames.length > 0 ? { assigneeNames } : {}),
-    // ORB-1605 - only present when it fires; absent costs zero chars.
     ...(t.waitingForGitIngestion ? { waitingForGitIngestion: true } : {}),
   };
 }
@@ -167,25 +150,10 @@ export function ticketLine(t: TicketRow): string {
   if (t.assignees && t.assignees.length > 0) {
     parts.push(`→ ${t.assignees.map((a) => a.fullName || a.email).join(', ')}`);
   }
-  // ORB-1605 - flag a ticket that's genuinely just waiting on stalled
-  // commit/PR ingestion, not a ticket someone forgot to close.
   if (t.waitingForGitIngestion) parts.push('[waiting on Git ingestion]');
   return parts.join(' ');
 }
 
-// ---------------------------------------------------------------------------
-// ORB-1252 / ORB-1283 / ORB-1609 - the agent-instance token.
-//
-// One MCP server process = one agent instance. Every surface that scopes work
-// to an instance (timers, and since ORB-1609 work-session leases) MUST derive
-// the token the same way, or the same agent ends up in two lanes: a claim
-// starting a timer in lane A while its work session holds the lease in lane B
-// is precisely the class of bug ORB-1603 had to paper over.
-//
-// A per-process random UUID rather than the PID: PIDs are recycled by the OS,
-// so a fresh process could inherit a recycled PID and adopt a previous
-// instance's stale timer or lease.
-// ---------------------------------------------------------------------------
 import { randomUUID } from 'node:crypto';
 
 const MCP_PROCESS_INSTANCE = `mcp-${randomUUID()}`;
@@ -216,15 +184,6 @@ export function applyAgentProfile(params: URLSearchParams, explicit?: { agentKin
   if (tier) params.set('modelTier', tier);
 }
 
-// ---------------------------------------------------------------------------
-// ORB-1819 - the writing-for-tokens size gate shared by the rule-block and
-// primer-fact write tools. The backend body is
-// `{ error, errorKey, errorParams, sizeWarning }`; this turns the hard-cap
-// 422 into a clear, non-throwing tool result that tells the agent HOW to
-// proceed (shorten it, or retry with allowOversize + oversizeReason) instead
-// of letting the raw API error bubble up. Returns null if the error isn't
-// this route's size-cap block (mirrors ticket-writes.ts's languageBlockResult).
-// ---------------------------------------------------------------------------
 interface SizeWarningLike { chars: number; limit: number; hint: string }
 
 export function sizeBlockResult(err: unknown, verb: string): CallToolResult | null {
@@ -242,28 +201,6 @@ export function sizeBlockResult(err: unknown, verb: string): CallToolResult | nu
     isError: true,
   };
 }
-
-// ---------------------------------------------------------------------------
-// ORB-1826 - shared name-matching normaliser for free-text milestone /
-// label / status resolvers. An agent surface can hand back a name that
-// differs from the canonical DB row only in mechanically-recoverable ways:
-// leftover HTML entities from a rendering step upstream of the agent
-// (`QA &amp; Testing`), a different case, or extra/collapsed whitespace.
-// The workspace rule is normalise, never reject - if the canonical form is
-// mechanically derivable, derive it instead of rejecting the call.
-//
-// Resolution order for every call site that uses `resolveByName`: raw exact
-// match first (zero-cost, preserves today's behaviour for clean names),
-// then a UNIQUE normalised match, then the existing ambiguity error listing
-// the candidates.
-//
-// Twin: `apps/api/src/lib/name-normalize.ts` (same two functions, same
-// semantics). This package ships standalone to npm with a deliberately
-// minimal dependency set (MCP SDK + zod only) and does not depend on the
-// API workspace package, so the ~20 lines below are duplicated rather than
-// imported. The Go CLI (`cli/internal/cmd/normalize.go`) carries a third
-// copy for the same reason. Keep all three in sync.
-// ---------------------------------------------------------------------------
 
 const NAMED_HTML_ENTITIES: Record<string, string> = {
   amp: '&',

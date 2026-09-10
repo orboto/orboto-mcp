@@ -75,7 +75,6 @@ describe('orboto_get_audit_log', () => {
       { json: { items: [], nextCursor: null } },
     ]);
     await makeGetAuditLogHandler(client)({ actorEmail: 'ada@acme' });
-    // Call 0 = users-search lookup, Call 1 = audit-log with actorId=u1
     expect(calls[0].url).toContain('/admin/users');
     expect(calls[1].url).toContain('actorId=u1');
   });

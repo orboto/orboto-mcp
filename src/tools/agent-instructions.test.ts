@@ -89,8 +89,6 @@ describe('agent-instruction MCP tools (ORB-1089)', () => {
     expect(res.structuredContent).toMatchObject({ deleted: true });
   });
 
-  // ORB-1819 - the writing-for-tokens size contract, passed through from
-  // the REST route's warn (200 + sizeWarning) / block (422) responses.
   describe('ORB-1819 size contract', () => {
     it('create surfaces a soft-limit sizeWarning in the success text, not as an error', async () => {
       const oversizeBlock = { ...BLOCK, body: 'x'.repeat(450), sizeWarning: { chars: 450, limit: 400, hint: 'move it to a doc' } };

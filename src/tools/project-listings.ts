@@ -1,20 +1,5 @@
 /**
  * ORB-799 - per-project metadata listings.
- *
- * Two cheap read tools that round-trip the project-scoped enum tables
- * agents repeatedly need:
- *
- * - orboto_list_ticket_statuses - the workflow's status rows with
- *     their IDs, categories, colors, and terminal flag. Needed for
- *     typed-transition flows where the standard `move_ticket` (which
- *     picks the first status per category) isn't precise enough.
- *
- * - orboto_list_labels - the per-project label catalogue with
- *     colors. Lets agents see what labels exist before calling
- *     `create_ticket` with a `labels` array (unknown names error).
- *
- * Both mirror the wrapper's `statuses <project>` / `labels <project>`
- * subcommands.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -35,10 +20,6 @@ interface LabelRow {
   name: string;
   color: string;
 }
-
-// ---------------------------------------------------------------------------
-// orboto_list_ticket_statuses
-// ---------------------------------------------------------------------------
 
 export const listTicketStatusesToolConfig = {
   title: 'List a project\'s ticket statuses',
@@ -76,10 +57,6 @@ export function makeListTicketStatusesHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_list_labels
-// ---------------------------------------------------------------------------
-
 export const listLabelsToolConfig = {
   title: 'List a project\'s labels',
   description:
@@ -107,10 +84,6 @@ export function makeListLabelsHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_create_label - ORB-1041
-// ---------------------------------------------------------------------------
-
 export const createLabelToolConfig = {
   title: 'Create a project label',
   description:
@@ -126,7 +99,6 @@ export const createLabelToolConfig = {
 export function makeCreateLabelHandler(client: OrbotoClient) {
   return async ({ projectKey, name, color }: { projectKey: string; name: string; color?: string }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, projectKey);
-    // Idempotent: return an existing same-name label rather than erroring.
     const existing = await client.get<LabelRow[]>(`/projects/${project.id}/labels`);
     const match = existing.find((l) => l.name.toLowerCase() === name.toLowerCase());
     if (match) {

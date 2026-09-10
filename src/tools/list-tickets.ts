@@ -66,25 +66,15 @@ export function makeListTicketsHandler(client: OrbotoClient) {
     const qs = new URLSearchParams();
     qs.set('limit', String(input.limit ?? 25));
     if (input.statusCategory) qs.set('statusCategory', input.statusCategory);
-    // ORB-14 - the backlog. Mutually exclusive with `milestone` on the API
-    // (one asks for a milestone, the other for the absence of any); say so
-    // here instead of letting the caller decode a 400.
     if (input.unscheduled && input.milestone) {
       throw new Error('Pass either `milestone` or `unscheduled: true`, not both.');
     }
     if (input.unscheduled) qs.set('unscheduled', 'true');
-    // Milestone + assignee need a UUID on the API; resolve them here
-    // from the project payload instead of forcing the caller to paste
-    // a UUID.
     if (input.milestone) {
-      // ORB-1696 - shared resolver: key (ORB-M3), name or UUID, ambiguous
-      // name -> explicit error. Matches create_ticket/set_milestone/OQL.
       const m = await resolveMilestoneByNameOrId(client, project.id, input.milestone);
       qs.set('milestoneId', m.id);
     }
     if (input.assigneeEmail) {
-      // Members endpoint returns `{userId, user: {email, ...}, role: {...}}`;
-      // we need to peek inside `user` to match by email.
       const members = await client.get<Array<{ userId: string; user: { email: string } }>>(
         `/projects/${project.id}/members`,
       );
@@ -115,7 +105,6 @@ export function makeListTicketsHandler(client: OrbotoClient) {
         project: { key: project.key },
         count: page.items.length,
         hasMore: !!page.nextCursor,
-        // ORB-1699 - shared lean row; verbose restores uuid/labels/minutes.
         tickets: page.items.map((t) => agentTicketListRow(t, input.verbose ?? false)),
       },
     };

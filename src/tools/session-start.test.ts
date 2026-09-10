@@ -59,9 +59,6 @@ describe('orboto_session_start (ORB-1093)', () => {
     expect(text).toContain('Running on ORB-42');
     expect(calls.some((c) => c.startsWith('/agent-instructions'))).toBe(true);
     expect(calls.some((c) => c.startsWith('/time/timer'))).toBe(true);
-    // ORB-1330 - the briefing must only ask for OPEN work; DONE tickets
-    // must never reach the "in-progress" section. Assert the status
-    // filter is on the wire so a future refactor can't silently widen it.
     const assignedCall = calls.find((c) => c.startsWith('/users/me/assigned-tickets'));
     expect(assignedCall).toBeDefined();
     expect(assignedCall).toContain('statuses=IN_PROGRESS,IN_REVIEW');
@@ -80,9 +77,6 @@ describe('orboto_session_start (ORB-1093)', () => {
     expect(text).toContain('No timer running');
   });
 
-  // ORB-1605 - session-start fans out to GET /projects/:id/git-health for
-  // every distinct project the caller has open work in, and surfaces a
-  // warning when a connection is unhealthy.
   it('warns when a project git connection is unhealthy', async () => {
     stubByPath({
       '/users/me/assigned-tickets': {
@@ -103,8 +97,6 @@ describe('orboto_session_start (ORB-1093)', () => {
     expect(text).toContain('Git connection health - WARNING');
     expect(text).toContain('orboto/orboto');
     expect(text).toContain('connection is deactivated');
-    // ORB-1697 - unhealthy connections only; a healthy one is 11 fields
-    // the agent never acts on, so it is reduced to a count.
     const structured = res.structuredContent as {
       gitHealth: { unhealthy: Array<{ projectId: string; connections: unknown[] }>; healthyCount: number };
     };
@@ -134,10 +126,6 @@ describe('orboto_session_start (ORB-1093)', () => {
   });
 });
 
-// ORB-1607 - rules-hash ack: the handler remembers the last rulesHash it
-// saw FOR THE LIFETIME OF ONE `makeSessionStartHandler(client)` CLOSURE
-// (mirrors one MCP connection) and passes it back as `knownRulesHash` on
-// every subsequent call.
 describe('orboto_session_start - rules-hash ack (ORB-1607)', () => {
   it('sends no knownRulesHash on the first call, then passes the received hash back on the second', async () => {
     const calls: string[] = [];
@@ -176,9 +164,6 @@ describe('orboto_session_start - rules-hash ack (ORB-1607)', () => {
     const secondCall = calls.find((c) => c.startsWith('/agent-instructions'));
     expect(secondCall).toBe('/agent-instructions?knownRulesHash=abc123def456');
     const secondText = (second.content[0] as { text: string }).text;
-    // ORB-1697 - the ack must not assert that the CALLER still holds the
-    // rules (a stdio server outlives /clear and every compaction), and it
-    // must name the way to get them back.
     expect(secondText).toContain('Unchanged since this connection last delivered them');
     expect(secondText).toContain('forceRules=true');
     expect(secondText).not.toContain('keep following what you already loaded');
@@ -201,9 +186,6 @@ describe('orboto_session_start - rules-hash ack (ORB-1607)', () => {
   });
 });
 
-// ORB-1607 - the optional `ticketKey` one-shot bundle: project primer,
-// full ticket (incl. dependencies + checklists), git health, and active
-// sessions folded into the same response.
 describe('orboto_session_start - ticketKey bundle (ORB-1607)', () => {
   const bundleStubs = {
     '/projects/by-key/ORB': { id: 'proj-1', key: 'ORB', name: 'orboto' },
@@ -228,7 +210,6 @@ describe('orboto_session_start - ticketKey bundle (ORB-1607)', () => {
     '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
     '/agent-instructions': { instructions: 'rules here', rulesHash: 'h1' },
     '/time/timer': {},
-    // Re-fetch of the enriched by-id row (mirrors orboto_get_ticket).
     '/projects/proj-1/tickets/tick-1': {
       id: 'tick-1', projectId: 'proj-1', ticketKey: 'ORB-42', title: 'Bug',
       status: 'IN_PROGRESS', statusName: 'In Progress', priority: 'high', type: 'bug',
@@ -237,10 +218,6 @@ describe('orboto_session_start - ticketKey bundle (ORB-1607)', () => {
   };
 
   it('folds primer + ticket + dependencies + checklists + git health + active sessions into one response', async () => {
-    // bundleStubs first - the merged map is matched by `startsWith`, and
-    // baseStubs' bare `/projects/proj-1/tickets/tick-1` would otherwise
-    // shadow bundleStubs' longer `/projects/proj-1/tickets/tick-1/dependencies`
-    // if it came first in iteration order.
     const calls = stubByPath({ ...bundleStubs, ...baseStubs });
     const res = await makeSessionStartHandler(client)({ ticketKey: 'ORB-42' });
     const text = (res.content[0] as { text: string }).text;
@@ -259,7 +236,6 @@ describe('orboto_session_start - ticketKey bundle (ORB-1607)', () => {
     expect(structured.ticketBundle.dependencies.blockedBy).toHaveLength(1);
     expect(structured.ticketBundle.activeSessions).toHaveLength(1);
 
-    // Replaces what would otherwise be several separate calls.
     expect(calls.some((c) => c.startsWith('/projects/proj-1/ai-primer'))).toBe(true);
     expect(calls.some((c) => c.startsWith('/tickets/tick-1/checklists'))).toBe(true);
     expect(calls.some((c) => c.startsWith('/projects/proj-1/tickets/tick-1/dependencies'))).toBe(true);
@@ -274,7 +250,6 @@ describe('orboto_session_start - ticketKey bundle (ORB-1607)', () => {
     const text = (res.content[0] as { text: string }).text;
     expect(text).toContain('## Ticket bundle: ORB-999');
     expect(text).toContain('Could not load this ticket');
-    // The rest of the digest (rules, in-progress work, timer) still renders.
     expect(text).toContain('## Working rules');
     expect(text).toContain('## Timer');
     const structured = res.structuredContent as { ticketBundle: { error: string } };
@@ -303,11 +278,10 @@ describe('orboto_session_start - context cost (ORB-1697)', () => {
     const calls = stubByPath(rulesStub);
     const handler = makeSessionStartHandler(client);
 
-    await handler();                       // primes the per-connection hash
+    await handler();
     calls.length = 0;
     const forced = await handler({ forceRules: true });
 
-    // No knownRulesHash means the API cannot answer with an ack.
     expect(calls.find((c) => c.startsWith('/agent-instructions'))).toBe('/agent-instructions');
     const text = (forced.content[0] as { text: string }).text;
     expect(text).toContain('THE FULL RULE TEXT');
@@ -343,7 +317,6 @@ describe('orboto_session_start - context cost (ORB-1697)', () => {
     const structured = res.structuredContent as { gitHealth: { unhealthy: unknown[]; healthyCount: number } };
     expect(structured.gitHealth.unhealthy).toEqual([]);
     expect(structured.gitHealth.healthyCount).toBe(1);
-    // And the connection object itself is nowhere in the payload.
     expect(JSON.stringify(structured)).not.toContain('lastProbeAt');
   });
 
@@ -355,7 +328,6 @@ describe('orboto_session_start - context cost (ORB-1697)', () => {
         id: 'tick-1', projectId: 'proj-1', ticketKey: 'ORB-42', title: 'Bug',
         status: 'IN_PROGRESS', statusName: 'In Progress', priority: 'high', type: 'bug',
       },
-      // Longest path first - the stub map is matched by startsWith.
       '/users/me/assigned-tickets': {
         items: [
           { ticketKey: 'ORB-42', title: 'Same project', statusName: 'In Progress', projectId: 'proj-1' },
@@ -376,7 +348,6 @@ describe('orboto_session_start - context cost (ORB-1697)', () => {
     expect(structured.inProgress.map((t) => t.ticketKey)).toEqual(['ORB-42']);
     expect(structured.inProgressElsewhereCount).toBe(2);
     const text = (res.content[0] as { text: string }).text;
-    // Nothing is hidden: the count is stated, with the way to list them.
     expect(text).toContain('2 open ticket(s) assigned to you in other projects');
     expect(text).toContain('orboto_my_tickets');
     expect(text).not.toContain('Another project entirely');
@@ -417,8 +388,6 @@ describe('orboto_session_start - a 200 with an unexpected body never kills the d
   const client = new OrbotoClient({ baseUrl: 'http://api.test', apiKey: 'orb_k' });
 
   it('renders the digest when every optional endpoint answers 200 with {}', async () => {
-    // Only the paths the digest cannot work without return real data; every
-    // optional read answers `{}`, which is what the fallthrough produces.
     stubByPath({
       '/projects/by-key/ORB': { id: 'proj-1', key: 'ORB', name: 'orboto' },
       '/projects/proj-1/tickets/by-key/42': { id: 'tick-1', projectId: 'proj-1', ticketKey: 'ORB-42', title: 'Bug' },
@@ -466,7 +435,6 @@ describe('ORB-1753 - rule targeting passthrough', () => {
     calls = stubByPath({ '/agent-instructions': { instructions: 'RULES', rulesHash: 'h2' } });
     handler = makeSessionStartHandler(client);
     await handler({});
-    // env applies, lowercase-normalized client-side.
     expect(calls.find((c) => c.startsWith('/agent-instructions'))).toContain('agentKind=coding');
     expect(calls.find((c) => c.startsWith('/agent-instructions'))).toContain('modelTier=frontier');
 
@@ -474,7 +442,6 @@ describe('ORB-1753 - rule targeting passthrough', () => {
     calls = stubByPath({ '/agent-instructions': { instructions: 'RULES', rulesHash: 'h3' } });
     handler = makeSessionStartHandler(client);
     await handler({ agentKind: 'reviewer' });
-    // explicit input beats the env default.
     expect(calls.find((c) => c.startsWith('/agent-instructions'))).toContain('agentKind=reviewer');
   });
 });
@@ -515,10 +482,8 @@ describe('ORB-1818 - rules index instead of the full rule text', () => {
     const res = await makeSessionStartHandler(client)();
     const budgeted = applyResponseBudget('orboto_session_start', res, {});
 
-    // The whole point: no truncation, because there is nothing big left.
     expect(budgeted.truncatedChars).toBe(0);
     expect(budgeted.responseChars).toBeLessThan(DEFAULT_BUDGET_CHARS);
-    // ...and the tool no longer buys itself a special budget.
     expect(budgetFor('orboto_session_start', {})).toBe(DEFAULT_BUDGET_CHARS);
 
     const structured = res.structuredContent as {
@@ -528,14 +493,10 @@ describe('ORB-1818 - rules index instead of the full rule text', () => {
     };
     expect(structured.rulesDelivery).toBe('index');
     expect(structured.rules).toBe('');
-    // One line per enabled block, in delivery order.
     expect(structured.rulesIndex).toEqual(BLOCK_TITLES);
     expect(structured.rulesChars).toBe(RULES_TEXT.length);
-    // The way back must live in the STRUCTURED half too - Claude Code
-    // keeps that one and drops the text block.
     expect(structured.rulesHowToRead).toContain('rulesOnly');
     expect(structured.rulesHandle).toBeTruthy();
-    // The rest of the digest is unchanged (ORB-1799 landed-idle included).
     expect(structured.inProgress).toHaveLength(2);
     expect(structured.inProgress[1].landedIdle).toBe(true);
     expect(structured.timer?.ticketKey).toBe('ORB-42');
@@ -593,13 +554,9 @@ describe('ORB-1818 - rules index instead of the full rule text', () => {
 
     const budgeted = applyResponseBudget('orboto_session_start', res, {});
     expect(budgeted.truncatedChars).toBe(0);
-    // Both halves survive: the structured one via PROTECTED_PATHS, the
-    // text one via the per-call PROTECT_TEXT_META flag...
     expect((budgeted.result.structuredContent as { rules: string }).rules).toBe(RULES_TEXT);
     expect((budgeted.result.content[0] as { text: string }).text).toContain(RULES_TEXT);
-    // ...and no misleading "response truncated" notice is appended.
     expect((budgeted.result.content[0] as { text: string }).text).not.toContain('Response truncated');
-    // The marker itself never reaches the wire.
     expect((budgeted.result as { _meta?: unknown })._meta).toBeUndefined();
   });
 

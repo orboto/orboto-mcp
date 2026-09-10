@@ -1,30 +1,7 @@
 /**
  * ORB-244 Phase C Group 1 - ticket mutation tools.
  *
- * Eight tools that round-trip the API's existing PBAC cascade. Every
- * write is gated on the caller's project-level permissions; a 403
- * from the API surfaces as `isError: true` on the MCP response with
- * the API's error message intact, so the model can either retry
- * elsewhere or explain the lock to the user.
- *
- * Resolution patterns mirror Phase B:
- *   - `projectKey` (`ACME`) → UUID via `/projects/by-key/:key`
- *   - `ticketKey` (`ACME-42`) → UUID via `/projects/:id/tickets/by-key/:n`
- *   - `assigneeEmail` → userId via the project members list
- *   - `milestone` (name) → milestoneId via the project milestones list
- *
- * Tools in this file:
- *   - orboto_create_ticket
- *   - orboto_update_ticket
- *   - orboto_move_ticket
- *   - orboto_close_ticket
- *   - orboto_comment
- *   - orboto_assign
- *   - orboto_unassign
- *   - orboto_set_milestone
- *   - orboto_add_ticket_dependency       (ORB-453)
- *   - orboto_remove_ticket_dependency    (ORB-453)
- *   - orboto_list_ticket_dependencies    (ORB-453)
+ * @see ORB-453
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -32,10 +9,6 @@ import { trimSimilarEntries } from './similar-projection.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey, resolveTicketByKey, resolveByName, type TicketRow } from './shared.js';
 import { resolveMilestoneByNameOrId } from './milestones.js';
-
-// ---------------------------------------------------------------------------
-// Local helpers
-// ---------------------------------------------------------------------------
 
 const STATUS_CATEGORIES = ['todo', 'in_progress', 'in_review', 'done', 'wont_fix'] as const;
 type StatusCategory = (typeof STATUS_CATEGORIES)[number];
@@ -90,27 +63,16 @@ function ticketStructured(t: TicketRow) {
     statusCategory: t.statusCategory ?? null,
     type: t.type,
     priority: t.priority,
-    // ORB-1608 - role-aware commit policy. Absent on responses the API's
-    // enrich pipeline didn't touch; the API itself defaults unset rows to
-    // 'implementation'.
     deliveryMode: t.deliveryMode ?? 'implementation',
     dueDate: t.dueDate,
     isPrivate: t.isPrivate,
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_create_ticket
-// ---------------------------------------------------------------------------
-
 export const createTicketToolConfig = {
   title: 'Create a ticket',
   description:
     'Create a new ticket in the given project. Creating more than ~3 tickets? Use `orboto_bulk_create_tickets` instead - one call, one compact response. Returns the new ticket\'s key (e.g. "ACME-42") so callers can chain follow-ups. **Read the new key from `structuredContent.createdTicketKey` (ORB-1176) - never from `similarWarnings[].ticketKey`, which are OTHER, possibly-duplicate tickets.** The caller must have `ticket:create` on the project. **Duplicate-detection safety-net (ORB-831):** if `similarWarnings` appears in the response with one or more entries, the ticket WAS created but you should review whether to close it as a duplicate of the listed ticket(s) instead. The warnings are advisory - never blocking - but each entry is a ticket the system thinks the new one overlaps with. Prefer `orboto_check_similar` BEFORE creating when you want a dry-run. **Deferred check under load (ORB-1437):** if `duplicateCheckDeferred: true` appears, the project was under a create burst so the duplicate-check was run in the background instead of inline - `similarWarnings` is then empty because it did NOT run synchronously, which is NOT the same as "no duplicates found". A strong match, if any, is posted as an advisory comment on the new ticket a moment later; check the ticket comments before treating it as new work. **Duplicate-check recall (ORB-1121):** when you search/check-similar first, results rank by term co-occurrence - a long, solution-framed title with rare terms can return 0 hits even when a short, symptom-framed dup sharing one distinctive token exists. Probe with a single distinctive STABLE token (file/component/error-string fragment), keep queries SHORT, and search the SYMPTOM not your fix; a 0-result long query is not "no dup". **Language-mismatch warning (ORB-890):** if `languageWarning` appears, the ticket was written in a language different from the workspace default. Consider rewriting in the expected language so search + duplicate-detection stay consistent. Non-blocking. **Before a mass-create (ORB-989):** call `orboto_whoami` first - its `workspaceLocale` field is the language you should write every ticket in. If the same `languageWarning` repeats, stop and clarify the intended language rather than pushing through the whole batch. **Strict mode (ORB-990):** if the workspace enforces ticket language, a mismatch is rejected (the tool returns a `blocked` result, not a created ticket) - rewrite in the workspace language, or set `allowLanguageMismatch: true` only when the language is genuinely intentional. **Hard duplicate-block (ORB-1471):** some workspaces REFUSE a create whose top similarity match is at/above a configured threshold - the tool returns a `duplicateBlocked` result (NOT a created ticket) listing the matching tickets. Extend or comment on one of those instead. If you have confirmed none of them cover this work, retry with `allowDuplicate: true` AND a `duplicateJustification` explaining why - the justification is persisted as a comment on the new ticket. '
-    // ORB-1805 - parameter prose moved out of the input schema (which
-    // every client pays for on connect) into this text, which the
-    // manifest summarises to one sentence and orboto_help serves in
-    // full. Same rows also live in the skill's REFERENCE.md.
     + '**Parameter notes.** `deliveryMode` (ORB-1608) is the role-aware commit policy that replaced the blanket one-commit-per-ticket rule: implementation/docs expect exactly one linked commit (closing without one is a non-blocking warning); review/admin/epic never expect one - reviews are read-only, admin work carries external evidence, epics derive completion from their children; unset defaults to "epic" when type=epic, else "implementation". `milestone` takes a key ("ORB-M3"), a name, or a UUID and is looked up in the project including closed milestones - unknown or ambiguous is an error, so pass the key/UUID when a name repeats. `labels` and `assigneeEmails` attach ATOMICALLY inside the create (ORB-1416): an unknown label or non-member email rolls the whole create back with a 400, leaving no orphan ticket - there is no separate attach call to retry.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
@@ -151,12 +113,8 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
       type: input.type ?? 'task',
       priority: input.priority ?? 'normal',
       isPrivate: input.isPrivate ?? false,
-      // ORB-1608 - leave unset when the caller didn't pass one; the API
-      // defaults it (epic for type=epic, else implementation).
       ...(input.deliveryMode ? { deliveryMode: input.deliveryMode } : {}),
     };
-    // ORB-1471 - the override justification rides in the body; the override
-    // flag itself is a querystring param (see createPath below).
     if (input.allowDuplicate && input.duplicateJustification) body.duplicateJustification = input.duplicateJustification;
     if (input.dueDate) body.dueDate = input.dueDate;
     if (input.milestone) body.milestoneId = await resolveMilestoneId(client, project.id, input.milestone);
@@ -164,17 +122,9 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
       const parent = await resolveTicketByKey(client, input.parentTicketKey);
       body.parentTicketId = parent.id;
     }
-    // ORB-1416 - labels + assignees attach INLINE in the create
-    // transaction so the whole thing is atomic (one round-trip). No more
-    // post-create attach loops: a bad label/assignee reference now rolls
-    // the create back on the API side (clean 400, no orphan ticket) rather
-    // than leaving a half-created ticket the agent retries into a dup.
     if (input.labels && input.labels.length > 0) body.labelNames = input.labels;
     if (input.assigneeEmails && input.assigneeEmails.length > 0) body.assigneeEmails = input.assigneeEmails;
 
-    // ORB-990 - strict ticket-language enforcement may reject this with a
-    // 422; ORB-1471 - the hard duplicate-block may reject it with a 409.
-    // Surface each as a clear block result instead of a raw error.
     const qs: string[] = [];
     if (input.allowLanguageMismatch) qs.push('allowLanguageMismatch=true');
     if (input.allowDuplicate) qs.push('allowDuplicate=true');
@@ -198,21 +148,11 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
       throw err;
     }
 
-    // ORB-831 / ORB-887 - surface the backend's `similarWarnings` to the
-    // calling agent. The text block prepends a clearly-visible warning
-    // when matches exist so a model scanning the result for "warning"
-    // / "duplicate" notices and self-corrects.
-    // ORB-890 / ORB-891 - same surface for `languageWarning` when the
-    // detected language doesn't match the workspace default.
     const warnings = created.similarWarnings ?? [];
     const langWarning = created.languageWarning;
     const deferred = created.duplicateCheckDeferred === true;
     const baseText = ticketSummaryText('Created', created);
     const parts: string[] = [baseText];
-    // ORB-1437 - under a create burst the backend defers the duplicate-check
-    // to a background job (empty similarWarnings, duplicateCheckDeferred:true).
-    // Tell the agent so an empty warnings list isn't read as "no duplicates":
-    // a strong match will land as an advisory comment on the new ticket shortly.
     if (deferred) {
       parts.push(
         `\nℹ Duplicate-check deferred - the project is under high create load, so the check runs in the background. `
@@ -238,14 +178,7 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
       content: [{ type: 'text', text }],
       structuredContent: {
         ...ticketStructured(created),
-        // ORB-1176 - the one unambiguous field for the NEW ticket's key.
-        // `similarWarnings[].ticketKey` are OTHER tickets; read
-        // `createdTicketKey` (never a warning's key) to avoid grabbing the
-        // wrong one.
         createdTicketKey: created.ticketKey,
-        // ORB-1693 - agent projection: key/title/category/2dp-similarity/
-        // relation only. The rich shape (UUID, colours, statusName, 15dp)
-        // stays on the REST response for the web UI.
         similarWarnings: trimSimilarEntries(warnings),
         ...(deferred ? { duplicateCheckDeferred: true } : {}),
         ...(langWarning ? { languageWarning: langWarning } : {}),
@@ -266,15 +199,12 @@ interface SimilarWarning {
 }
 
 interface LanguageWarning {
-  // ORB-990 - machine-readable code + severity.
   code?: 'language_mismatch';
   severity?: 'warn' | 'block';
   detected: string;
   expected: string;
 }
 
-// ORB-1332 - non-blocking advisory on a status move into in_review / done
-// with no summary comment from the actor. The move always succeeds.
 interface SummaryWarning {
   code: 'missing_transition_summary';
   message: string;
@@ -296,13 +226,6 @@ function withSummaryWarning(
   };
 }
 
-// ORB-1608 / ORB-1642 - non-blocking advisory on a status move into `done`
-// when the ticket's deliveryMode expects a linked commit (implementation /
-// docs) but zero git_activities rows are attached. The move always
-// succeeds. `git_delivery_failing` (ORB-1642) fires instead of
-// `no_commit_linked` when the project has a git connection but it looks
-// unhealthy - a commit may already exist and just hasn't arrived. Omitted
-// entirely when the project has no git connection at all.
 interface DeliveryModeWarning {
   code: 'no_commit_linked' | 'git_delivery_failing';
   message: string;
@@ -362,8 +285,6 @@ function duplicateBlockResult(err: unknown): CallToolResult | null {
     similarWarnings?: SimilarWarning[]; threshold?: number; topSimilarity?: number;
   } = {};
   try { parsed = JSON.parse(err.body) as typeof parsed; } catch { /* non-JSON body */ }
-  // Only OUR duplicate-block 409 carries similarWarnings; a different 409
-  // (none currently on this route) should bubble as a normal error.
   if (!parsed.similarWarnings) return null;
   const candidates = parsed.similarWarnings;
   const lines = candidates.map((w) => `  - [${w.ticketKey ?? w.id.slice(0, 8)}] "${w.title}" (${formatSimilarity(w)})`);
@@ -387,10 +308,6 @@ function formatSimilarity(w: SimilarWarning): string {
   const pct = `${Math.round(w.similarity * 100)}% ${w.matchMode === 'embedding' ? 'AI match' : 'text match'}`;
   return w.statusName ? `${w.statusName}, ${pct}` : pct;
 }
-
-// ---------------------------------------------------------------------------
-// orboto_update_ticket
-// ---------------------------------------------------------------------------
 
 export const updateTicketToolConfig = {
   title: 'Update a ticket',
@@ -422,8 +339,6 @@ export function makeUpdateTicketHandler(client: OrbotoClient) {
     allowLanguageMismatch?: boolean;
   }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
-    // ORB-990 - strict ticket-language enforcement may reject a
-    // title/description patch with a 422; surface a clear block result.
     const patchPath = `/projects/${ticket.projectId}/tickets/${ticket.id}${allowLanguageMismatch ? '?allowLanguageMismatch=true' : ''}`;
     let updated: TicketRow & { languageWarning?: LanguageWarning };
     try {
@@ -449,10 +364,6 @@ export function makeUpdateTicketHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_move_ticket
-// ---------------------------------------------------------------------------
 
 export const moveTicketToolConfig = {
   title: 'Move a ticket between status categories',
@@ -481,10 +392,6 @@ export function makeMoveTicketHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_close_ticket
-// ---------------------------------------------------------------------------
-
 export const closeTicketToolConfig = {
   title: 'Close a ticket',
   description:
@@ -502,9 +409,6 @@ export function makeCloseTicketHandler(client: OrbotoClient) {
   }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
     if (comment) {
-      // Comment first so the close-comment lands in the audit trail
-      // even if the status move 403s. Mirrors the wrapper's `close`
-      // behaviour.
       await client.post(`/tickets/${ticket.id}/comments`, { content: comment });
     }
     const updated = await client.patch<TicketRow & { summaryWarning?: SummaryWarning; deliveryModeWarning?: DeliveryModeWarning }>(
@@ -517,10 +421,6 @@ export function makeCloseTicketHandler(client: OrbotoClient) {
     }, updated.summaryWarning), updated.deliveryModeWarning);
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_delete_ticket
-// ---------------------------------------------------------------------------
 
 export const deleteTicketToolConfig = {
   title: 'Permanently delete a ticket',
@@ -543,10 +443,6 @@ export function makeDeleteTicketHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_comment
-// ---------------------------------------------------------------------------
 
 interface CommentResponse {
   id: string;
@@ -592,10 +488,6 @@ export function makeCommentHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_update_comment  (ORB-1285)
-// ---------------------------------------------------------------------------
-
 export const updateCommentToolConfig = {
   title: 'Edit a ticket comment',
   description:
@@ -624,10 +516,6 @@ export function makeUpdateCommentHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_delete_comment  (ORB-1285)
-// ---------------------------------------------------------------------------
-
 export const deleteCommentToolConfig = {
   title: 'Delete a ticket comment',
   description:
@@ -650,10 +538,6 @@ export function makeDeleteCommentHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_assign / orboto_unassign
-// ---------------------------------------------------------------------------
-
 export const assignToolConfig = {
   title: 'Assign a user to a ticket',
   description:
@@ -675,7 +559,6 @@ export function makeAssignHandler(client: OrbotoClient) {
       await client.post(`/projects/${ticket.projectId}/tickets/${ticket.id}/assignees/${userId}`, {});
     } catch (err) {
       if (err instanceof OrbotoApiError && err.status === 409) {
-        // Already assigned - idempotent success.
         return {
           content: [{ type: 'text', text: `[${ticket.ticketKey}] already assigned to ${assigneeEmail}.` }],
           structuredContent: { ticketKey: ticket.ticketKey, alreadyAssigned: true },
@@ -709,7 +592,6 @@ export function makeUnassignHandler(client: OrbotoClient) {
     try {
       await client.delete(`/projects/${ticket.projectId}/tickets/${ticket.id}/assignees/${userId}`);
     } catch (err) {
-      // 404 = wasn't assigned. Idempotent success.
       if (err instanceof OrbotoApiError && err.status === 404) {
         return {
           content: [{ type: 'text', text: `${assigneeEmail} wasn't assigned to [${ticket.ticketKey}].` }],
@@ -725,18 +607,8 @@ export function makeUnassignHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_label_ticket / orboto_unlabel_ticket - ORB-1043
-// ---------------------------------------------------------------------------
-
 async function resolveLabelId(client: OrbotoClient, projectId: string, name: string): Promise<string> {
   const labels = await client.get<Array<{ id: string; name: string }>>(`/projects/${projectId}/labels`);
-  // ORB-1826 - exact match wins first, then a unique normalised match
-  // (HTML-entity-decoded, trimmed, whitespace-collapsed, casefolded) so
-  // case/whitespace/entity variants of an existing label name resolve
-  // instead of rejecting. Labels have no unique-name constraint, so an
-  // ambiguous normalised match (two labels differing only by case) still
-  // errors rather than silently picking one.
   const { match, ambiguous } = resolveByName(labels, name, (l) => l.name);
   if (ambiguous) {
     const list = ambiguous.map((l) => `"${l.name}" (${l.id})`).join(', ');
@@ -793,10 +665,6 @@ export function makeUnlabelTicketHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_set_milestone
-// ---------------------------------------------------------------------------
-
 export const setMilestoneToolConfig = {
   title: 'Set a ticket\'s milestone',
   description:
@@ -833,10 +701,6 @@ export function makeSetMilestoneHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_add_ticket_dependency / remove / list - ORB-453
-// ---------------------------------------------------------------------------
-
 interface DependencyEdge {
   id: string;
   ticketKey: string | null;
@@ -844,10 +708,6 @@ interface DependencyEdge {
   projectId: string | null;
   statusName: string | null;
   statusCategory: string | null;
-  // ORB-1614 - true when this ticket lives in another project than the one
-  // whose dependencies were requested. When the caller cannot read it,
-  // every field above except `id` and `resolved` comes back null - an
-  // opaque "external dependency" stub, never a leaked title/key/status.
   external?: boolean;
   resolved?: boolean;
 }
@@ -875,7 +735,6 @@ export function makeAddTicketDependencyHandler(client: OrbotoClient) {
         { dependsOnId: dependsOn.id },
       );
     } catch (err) {
-      // 409 = edge already exists - idempotent success.
       if (err instanceof OrbotoApiError && err.status === 409) {
         return {
           content: [{ type: 'text', text: `[${ticket.ticketKey}] already depends on [${dependsOn.ticketKey}].` }],
@@ -918,7 +777,6 @@ export function makeRemoveTicketDependencyHandler(client: OrbotoClient) {
         `/projects/${ticket.projectId}/tickets/${ticket.id}/dependencies/${dependsOn.id}`,
       );
     } catch (err) {
-      // 404 = edge wasn't there. Idempotent success.
       if (err instanceof OrbotoApiError && err.status === 404) {
         return {
           content: [{ type: 'text', text: `[${ticket.ticketKey}] didn't depend on [${dependsOn.ticketKey}].` }],

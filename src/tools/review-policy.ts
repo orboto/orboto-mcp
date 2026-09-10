@@ -1,20 +1,5 @@
 /**
  * ORB-1615 - structural review policy tools.
- *
- *   - orboto_review_fingerprint     - hash exact raw diff text into a
- *                                     canonical fingerprint (+ real size
- *                                     metrics), server-side (one algorithm,
- *                                     not one per client).
- *   - orboto_review_policy_check    - the consult-before-invoking-a-model
- *     call: what risk level does this ticket carry, and (if a fingerprint
- *     is supplied) is there already a valid approval for THIS exact diff.
- *   - orboto_review_approval_record - record an approve/reject decision
- *     against a ticket's diff fingerprint.
- *
- * Rule CONFIGURATION (path pattern / deliveryMode / size -> risk level)
- * stays out of the MCP surface, same call as approval_policies' CRUD in
- * tools/approvals.ts: it's project-settings admin config, not something an
- * autonomous agent tool should expose.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -51,10 +36,6 @@ interface ReviewPolicyDecision {
   latestApproval: ReviewApproval | null;
 }
 
-// ---------------------------------------------------------------------------
-// orboto_review_fingerprint
-// ---------------------------------------------------------------------------
-
 export const reviewFingerprintToolConfig = {
   title: 'Compute a canonical diff fingerprint',
   description:
@@ -77,10 +58,6 @@ export function makeReviewFingerprintHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_review_policy_check
-// ---------------------------------------------------------------------------
 
 export const reviewPolicyCheckToolConfig = {
   title: 'Check a ticket\'s review policy before invoking a reviewer',
@@ -115,10 +92,6 @@ export function makeReviewPolicyCheckHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_review_approval_record
-// ---------------------------------------------------------------------------
 
 export const reviewApprovalRecordToolConfig = {
   title: 'Record a review decision against a diff fingerprint',

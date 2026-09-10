@@ -1,19 +1,5 @@
 /**
  * ORB-564 - `orboto_ai_status`.
- *
- * Pre-flight check for agents: is the workspace's AI provider configured?
- * Wraps `GET /ai/status`. Two flags come back - chat features and
- * embeddings - because Anthropic-only deployments have chat fully
- * wired but cannot produce embeddings, and RAG-style features
- * (`ask-docs`, similar-tickets rerank, partial-overlap detection)
- * need both.
- *
- * Today no MCP tool requires AI directly - every `orboto_*` tool is a
- * thin REST wrapper that does its own thing. The dependency lives on
- * the skill side (`orboto ask-docs`) and on chat-only LLM calls the
- * agent host might make. This tool exists so an agent can plan around
- * the workspace shape before calling those skill shortcuts or before
- * suggesting AI-gated features to the operator.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -22,8 +8,6 @@ import type { OrbotoClient } from '../orboto-client.js';
 interface AiStatusResponse {
   configured: boolean;
   embeddingsConfigured: boolean;
-  // ORB-1264 - whether image attachments are enabled for AI calls. Older
-  // servers omit it; treat absent as false.
   visionEnabled?: boolean;
 }
 

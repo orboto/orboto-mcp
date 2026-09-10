@@ -1,28 +1,5 @@
 /**
  * ORB-244 Phase D - MCP resources.
- *
- * Resources let MCP-aware clients (Claude Desktop, Cursor) read
- * orboto content as static blobs without explicitly invoking a tool.
- * Where tools are RPCs ("do this thing"), resources are URIs ("here
- * is content at this address").
- *
- * Four URI templates exposed:
- *   orboto://ticket/{ticketKey} - rendered Markdown of the ticket
- *   orboto://doc/{docId} - doc body (Markdown)
- *   orboto://project/{projectKey} - project summary
- *   orboto://search/{query} - search results as Markdown
- *
- * No `list` callback for tickets/docs because the candidate set is
- * unbounded (every ticket, every doc) - the URI templates are
- * sufficient. Clients discover content via tools first, then read a
- * specific resource. The required `list: undefined` pattern keeps
- * the SDK happy.
- *
- * Implementation note: each resource handler delegates to the same
- * REST endpoints the tools use; the only difference is response
- * shape (Markdown text vs. structured tool result). Sharing logic
- * with tools/*.ts would couple the two surfaces too tightly - for
- * now the resources are independent thin renderers.
  */
 import { ResourceTemplate, type McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { OrbotoApiError, type OrbotoClient } from './orboto-client.js';
@@ -65,14 +42,6 @@ interface NotificationsPage {
 }
 
 export function registerOrbotoResources(server: McpServer, client: OrbotoClient): void {
-  // -------------------------------------------------------------------------
-  // orboto://rules
-  //
-  // ORB-1177 - the COMPLETE assembled binding rules, cap-independent. The
-  // MCP `instructions` block is budgeted + may be truncated by the client
-  // (ORB-1168); this resource is never truncated, so a client can fetch
-  // the full rule set on demand. Same source orboto_session_start reads.
-  // -------------------------------------------------------------------------
   server.registerResource(
     'rules',
     new ResourceTemplate('orboto://rules', { list: undefined }),
@@ -90,9 +59,6 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     },
   );
 
-  // -------------------------------------------------------------------------
-  // orboto://ticket/{ticketKey}
-  // -------------------------------------------------------------------------
   server.registerResource(
     'ticket',
     new ResourceTemplate('orboto://ticket/{ticketKey}', { list: undefined }),
@@ -122,9 +88,6 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     },
   );
 
-  // -------------------------------------------------------------------------
-  // orboto://doc/{docId}
-  // -------------------------------------------------------------------------
   server.registerResource(
     'doc',
     new ResourceTemplate('orboto://doc/{docId}', { list: undefined }),
@@ -148,9 +111,6 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     },
   );
 
-  // -------------------------------------------------------------------------
-  // orboto://project/{projectKey}
-  // -------------------------------------------------------------------------
   server.registerResource(
     'project',
     new ResourceTemplate('orboto://project/{projectKey}', { list: undefined }),
@@ -176,13 +136,6 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     },
   );
 
-  // -------------------------------------------------------------------------
-  // orboto://search/{query}
-  //
-  // Note: clients URL-encode `query` automatically. Special chars in
-  // a natural-language query are fine; the URI template handles
-  // unescaping.
-  // -------------------------------------------------------------------------
   server.registerResource(
     'search',
     new ResourceTemplate('orboto://search/{query}', { list: undefined }),
@@ -218,15 +171,6 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     },
   );
 
-  // -------------------------------------------------------------------------
-  // orboto://user/me/notifications
-  //
-  // ORB-706 - read the calling user's recent notifications.
-  // Subscribable: every `notification:new` event for this user
-  // fires a `resources/updated` push. Used by agents that want to
-  // react to mentions / agent_message / status-change pings in
-  // real time.
-  // -------------------------------------------------------------------------
   server.registerResource(
     'user-notifications',
     new ResourceTemplate('orboto://user/me/notifications', { list: undefined }),
@@ -262,12 +206,6 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     },
   );
 
-  // -------------------------------------------------------------------------
-  // ORB-855 - LLM-Wiki resources. The index + log are the space's singleton
-  // kind='index'/'log' docs; a page is any doc by id (namespaced under the
-  // space). A `page/` discriminator keeps the page template from colliding
-  // with the static index/log segments.
-  // -------------------------------------------------------------------------
   const layerDoc = async (spaceId: string, kind: 'index' | 'log'): Promise<DocRow | null> => {
     const list = await client.get<Array<DocRow & { kind?: string }>>(`/spaces/${spaceId}/docs`);
     return list.find((d) => d.kind === kind) ?? null;

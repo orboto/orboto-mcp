@@ -1,4 +1,3 @@
-// Shared rendering vocabulary for session-start and work-session bundles.
 export const GIT_HEALTH_REASON_TEXT: Record<string, string> = {
   connection_inactive: 'connection is deactivated',
   app_installation_suspended: 'GitHub App installation is suspended',

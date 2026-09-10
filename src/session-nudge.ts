@@ -1,25 +1,7 @@
 /**
  * ORB-1331 - session-start nudge.
  *
- * The binding operating rules are delivered as prose in the MCP
- * `instructions` block (see server.ts) with a "FIRST ACTION: call
- * orboto_session_start" pointer, but nothing verified compliance. Weaker
- * agents (and clients that truncate the instructions block, ORB-1177)
- * skip `orboto_session_start`, never load the rules, and then work
- * rule-blind for the whole session.
- *
- * This adds SOFT technical enforcement: per MCP session, if the FIRST
- * tool call is not `orboto_session_start`, prepend a one-time reminder
- * text block to that first call's response. It is a reminder, never a
- * refusal - read-only exploration and benign one-shot clients keep
- * working. It fires at most once and never when the first call already
- * IS `orboto_session_start`.
- *
- * Per-session vs. process-local is handled by lifetime, not code: the
- * state object is created once per `buildOrbotoMcpServer` call, which the
- * HTTP transport invokes once per session and the stdio transport once
- * per process. So one flag object == one session (HTTP) / one process
- * (stdio) with no session-lifecycle plumbing.
+ * @see ORB-1177
  */
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
@@ -101,15 +83,6 @@ export const SESSION_START_GATE_MESSAGE =
  * Advance the gate state for one dispatch and report whether this
  * dispatch must be REFUSED (returned an instructive error without running the
  * handler).
- *
- * Semantics when the gate is enabled: every tool call other than
- * `orboto_session_start` is refused until `orboto_session_start` has run once
- * this session. A rule refresh locks the session until its result succeeds
- * (and is itself never gated). When the gate is disabled, nothing is ever
- * refused (returns false) - default behaviour is unchanged.
- *
- * The metrics wrapper records successful completion separately; dispatch
- * alone is not evidence of rule delivery.
  */
 export function shouldGate(state: NudgeState, toolName: string): boolean {
   if (toolName === SESSION_START_TOOL) {

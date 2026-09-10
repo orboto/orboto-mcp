@@ -2,35 +2,15 @@
  * ORB-885 - `orboto_update_project`.
  * ORB-830 - `orboto_create_project` + `orboto_archive_project`.
  *
- * Project-CRUD write surface for the MCP. The read half
- * (`orboto_list_projects`, `orboto_get_project`) shipped in ORB-244
- * Phase B; ORB-885 added `update_project`, ORB-830 closes the gap
- * with create + archive so an agent never has to drop to a raw
- * `POST /projects` to spin up a new project.
- *
- * Status mutation is allowed in `update_project` (unlike
- * `orboto_update_milestone`, which delegates closing to a dedicated
- * tool) because project status is a four-state lifecycle (`draft` →
- * `active` → `archived` / `closed`) with no extra semantics - a
- * single patch field covers it cleanly. `archive_project` is a
- * thin convenience over `update_project({ status: 'archived' })`
- * because "archive this project" is a workflow agents reach for
- * often enough that an explicit verb beats teaching the model the
- * patch shape.
+ * @see ORB-244
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey, type ProjectRow } from './shared.js';
 
-// Mirrors the Zod schema on `PATCH /projects/:id` (see
-// apps/api/src/routes/projects.ts). Kept in sync manually - there's no
-// generator from the API's runtime schema into the MCP package yet.
 const PROJECT_KEY_RE = /^[A-Z0-9]+$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// ORB-993/ORB-994 - the 18 detector-supported workspace/project locales.
-// Mirrors WORKSPACE_LOCALE_CODES in @orboto/shared-schema (kept in sync
-// manually, same as the rest of this tool's schema).
 const LOCALE_CODES = ['en', 'de', 'fr', 'es', 'it', 'nl', 'pt', 'ru', 'pl', 'tr', 'cs', 'da', 'sv', 'no', 'fi', 'ja', 'zh', 'ko'] as const;
 type LocaleCode = (typeof LOCALE_CODES)[number];
 
@@ -89,10 +69,6 @@ export function makeUpdateProjectHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_create_project - ORB-830
-// ---------------------------------------------------------------------------
-
 export const createProjectToolConfig = {
   title: 'Create a new project',
   description:
@@ -140,10 +116,6 @@ export function makeCreateProjectHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_archive_project - ORB-830
-// ---------------------------------------------------------------------------
 
 export const archiveProjectToolConfig = {
   title: 'Archive a project',

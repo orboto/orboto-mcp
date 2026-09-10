@@ -69,8 +69,6 @@ describe('orboto_work_session_start', () => {
     expect(post.method).toBe('POST');
     expect(post.url).toContain('/work-sessions');
     expect(post.body?.ticketId).toBe('t1');
-    // The instance token must be sent unprompted - without it the lease has
-    // no owner to renew against.
     expect(String(post.body?.agentSessionToken)).toMatch(/^mcp-/);
     const text = (res.content[0] as { text: string }).text;
     expect(text).toContain('Started a implementation work session on ACME-42');
@@ -126,7 +124,6 @@ describe('orboto_work_session_start', () => {
     });
     const post = calls[calls.length - 1];
     expect(post.body).toMatchObject({ role: 'review', leaseSeconds: 3600, takeover: true });
-    // A review session attaches without booking time by default.
     expect((res.content[0] as { text: string }).text).toContain('No timer started for this role.');
   });
 });
@@ -381,8 +378,6 @@ describe('ORB-1610 - orboto_work_session_claims_release', () => {
   it('releases everything when claims is omitted, and still sends a body', async () => {
     const calls = stub([{ text: JSON.stringify({ ...SESSION, resourceClaims: [] }) }]);
     const res = await makeWorkSessionClaimsReleaseHandler(client)({ sessionId: 'ws1' });
-    // A DELETE with a genuinely absent body 400s on the API's schema
-    // (ORB-1610 finding) - the handler must always send at least `{}`.
     expect(calls[0].body).toEqual({});
     expect((res.content[0] as { text: string }).text).toContain('Released every claim');
   });

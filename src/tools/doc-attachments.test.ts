@@ -56,7 +56,6 @@ function stubFetch(responses: Array<{ ok?: boolean; status?: number; json?: unkn
 }
 
 const TINY_PNG_BASE64 =
-  // 1x1 red png - smallest valid bytes we can pass through
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAFhAJ/wlseKgAAAABJRU5ErkJggg==';
 
 describe('orboto_upload_doc_attachment', () => {
@@ -71,7 +70,6 @@ describe('orboto_upload_doc_attachment', () => {
       method: 'POST',
       url: `https://orboto.example.com/docs/${DOC_ID}/attachments`,
     });
-    // FormData reaches fetch as a FormData instance.
     expect(calls[0].body).toBeInstanceOf(FormData);
     const fd = calls[0].body as FormData;
     expect(fd.get('file')).toBeTruthy();

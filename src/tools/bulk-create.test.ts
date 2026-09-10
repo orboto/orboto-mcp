@@ -73,9 +73,7 @@ describe('orboto_bulk_create_tickets', () => {
     const text = (result.content[0] as { text: string }).text;
     expect(text.length).toBeLessThan(2000);
     expect(JSON.stringify(result.structuredContent).length).toBeLessThan(2000);
-    // Milestone resolved once, not once per draft.
     expect(calls.filter((c) => c.url.includes('/milestones')).length).toBe(1);
-    // Every create carried the resolved milestone id.
     const creates = calls.filter((c) => c.method === 'POST' && c.url.includes('/tickets'));
     expect(creates).toHaveLength(20);
     expect(creates.every((c) => (c.body as { milestoneId?: string }).milestoneId === 'ms-1')).toBe(true);
@@ -140,9 +138,7 @@ describe('orboto_bulk_add_ticket_dependencies', () => {
     expect(sc.successful).toEqual(['ACME-2->ACME-1', 'ACME-3->ACME-2']);
     expect(sc.failed).toHaveLength(1);
     expect(sc.failed[0].pair).toBe('ACME-404->ACME-1');
-    // Distinct keys resolved once each (ACME-1, ACME-2, ACME-3, ACME-404).
     expect(calls.filter((c) => c.url.includes('/tickets/by-key/')).length).toBe(4);
-    // 409 on the first edge write still counted as successful (idempotent).
     expect(calls.filter((c) => c.method === 'POST' && c.url.includes('/dependencies')).length).toBe(2);
   });
 });

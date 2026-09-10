@@ -1,24 +1,11 @@
 /**
  * ORB-940 - bridge that streams API-side events into MCP
  * `notifications/resources/updated` pushes.
- *
- * One bridge instance per MCP session. On `start()` it opens an SSE
- * stream to `${baseUrl}/sse/mcp-events` with the session's bearer
- * token; every incoming frame is mapped to a resource URI and pushed
- * to the connected MCP client IF the client has subscribed to that
- * URI via the `resources/subscribe` flow.
- *
- * Backpressure: if more than `OVERFLOW_THRESHOLD` events are forwarded
- * since the last `notifications/resources/list_changed`, we emit a
- * single list_changed instead of every individual update and reset
- * the counter. The list_changed tells the client "your view is stale,
- * re-read whichever resource you care about". Same shape the spec
- * uses to recover from any out-of-sync condition.
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { OAuthTokenProviderLike } from './orboto-client.js';
 
-const HEARTBEAT_GRACE_MS = 90_000; // 3× the server's 30s ping
+const HEARTBEAT_GRACE_MS = 90_000;
 const OVERFLOW_THRESHOLD = 100;
 const RECONNECT_DELAY_MS = 2_000;
 
@@ -56,9 +43,6 @@ export interface EventBridgeOpts {
  *  notified. Returns an empty array for events that don't map to any
  *  subscribed resource shape (no-op). */
 export function eventToUris(event: BridgeEvent): string[] {
-  // Ticket-level events. Include the ticket URI (when the payload
-  // carries a ticketKey) AND the project URI so a project-scoped
-  // subscriber learns about activity inside it.
   if (event.type === 'ticket:created' || event.type === 'ticket:updated' || event.type === 'ticket:deleted'
    || event.type === 'ticket:activity'
    || event.type === 'comment:created' || event.type === 'comment:updated' || event.type === 'comment:deleted'
@@ -67,15 +51,7 @@ export function eventToUris(event: BridgeEvent): string[] {
     const uris: string[] = [];
     const key = event.payload?.ticketKey;
     if (key) uris.push(`orboto://ticket/${key}`);
-    // The MCP bridge doesn't know each project's key; the project URI
-    // form uses the projectKey which isn't on the wire. We fall back
-    // to projectId, which the resource handler accepts via
-    // resolveProjectByKey's lookup path.
     if (event.projectId) uris.push(`orboto://project/${event.projectId}`);
-    // ORB-962 - hand-off "wake on close". When a ticket:updated
-    // payload's statusCategory is `done`, emit an additional URI
-    // dedicated to close-events so subscribers don't have to filter
-    // every ticket:updated client-side.
     if (event.type === 'ticket:updated' && key && event.payload?.statusCategory === 'done') {
       uris.push(`orboto://handoff/closed/${key}`);
     }
@@ -86,20 +62,10 @@ export function eventToUris(event: BridgeEvent): string[] {
     return event.projectId ? [`orboto://project/${event.projectId}`] : [];
   }
 
-  // ORB-1616 - dispatcher wake-on-unblock. Project-scoped (not per-ticket
-  // like `handoff/closed`) because a worker pool doesn't know in advance
-  // which ticket will become ready next - it subscribes to the PROJECT's
-  // ready channel and pulls via `orboto_work_next` on push. The
-  // notification carries no payload (the resource-subscription protocol
-  // never does) - `ticket.ready` is the webhook channel that carries the
-  // actual ticket key for external consumers.
   if (event.type === 'ticket:ready') {
     return event.projectId ? [`orboto://ready/${event.projectId}`] : [];
   }
 
-  // ORB-1616 - escalation push: collision / failed checks / review
-  // rejection / missing decision / git failure. Project-scoped, same
-  // reasoning as `ready` above.
   if (event.type === 'agent_escalation:raised') {
     return event.projectId ? [`orboto://escalation/${event.projectId}`] : [];
   }
@@ -112,9 +78,6 @@ export function eventToUris(event: BridgeEvent): string[] {
     return [`orboto://timer`];
   }
 
-  // ORB-964 - agent broadcast. Map to the scope-specific URI so
-  // subscribers can register interest in just the scope they care
-  // about. For workspace scope, scopeId is the empty string.
   if (event.type === 'agent_broadcast:posted') {
     const p = (event as { payload?: { scopeType?: string; scopeId?: string } }).payload;
     if (p?.scopeType) {
@@ -124,24 +87,15 @@ export function eventToUris(event: BridgeEvent): string[] {
     return [];
   }
 
-  // ORB-970 - quorum lifecycle.
   if (event.type === 'agent_quorum:opened' || event.type === 'agent_quorum:approved') {
     const p = (event as { payload?: { topicKey?: string } }).payload;
     return p?.topicKey ? [`orboto://quorum/${p.topicKey}`] : [];
   }
 
-  // ORB-706 - mention real-time push. Every notification row firing
-  // for the calling user surfaces on `orboto://user/me/notifications`.
-  // The API-side SSE bridge already filters notification:new events
-  // to only deliver them to the matching user's session, so this
-  // URI is naturally per-user-scoped.
   if (event.type === 'notification:new') {
     return [`orboto://user/me/notifications`];
   }
 
-  // restore:progress / system-task:* are user-scoped infrastructure
-  // events that don't map to a public resource URI today. The MCP
-  // bridge ignores them - the user gets them via the in-app UI.
   return [];
 }
 
@@ -189,13 +143,8 @@ export class EventBridge {
 
   private async consume(): Promise<void> {
     const fetchFn = this.opts.fetchFn ?? fetch;
-    // Fresh abort controller per attempt so close() during a retry
-    // window doesn't leak the previous signal.
     this.abort = new AbortController();
     const url = `${this.opts.baseUrl.replace(/\/$/, '')}/sse/mcp-events`;
-    // ORB-1470 - resolve the current bearer per connect so a rotated OAuth
-    // access token is picked up on the next reconnect instead of pinning the
-    // stream to the session's creation-time token.
     const bearer = this.opts.tokenProvider
       ? await this.opts.tokenProvider.getAccessToken()
       : (this.opts.apiKey ?? '');
@@ -217,26 +166,18 @@ export class EventBridge {
     let buf = '';
     let lastFrame = Date.now();
     const heartbeat = setInterval(() => {
-      // If the server's ping stops arriving the underlying TCP
-      // connection might be dead silent (Coolify / NAT timeout). Force
-      // a reconnect so we don't sit forever on a zombie stream.
       if (Date.now() - lastFrame > HEARTBEAT_GRACE_MS) {
         try { this.abort.abort(); } catch { /* ignore */ }
       }
     }, 30_000);
 
     try {
-      // Read until the stream ends, the request was aborted, or the
-      // process is shutting down.
       // eslint-disable-next-line no-constant-condition
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         lastFrame = Date.now();
         buf += decoder.decode(value, { stream: true });
-        // SSE frames are split by '\n\n'. We handle both 'data: ...'
-        // and ': ping' (comment / heartbeat) lines; the latter become
-        // a no-op event.
         let idx;
         // eslint-disable-next-line no-cond-assign
         while ((idx = buf.indexOf('\n\n')) !== -1) {

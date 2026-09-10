@@ -1,20 +1,5 @@
 /**
  * ORB-244 Phase C Group 2 - time-tracking tools.
- *
- * Three tools that wrap the existing /time/timer/* + /tickets/:id/time-entries
- * endpoints:
- *   - orboto_timer_start (ticketKey, description?, replace?)
- * - orboto_timer_stop - closes the running timer; the API converts
- *                         elapsed time into a time_entries row using the
- *                         description set at start.
- * - orboto_log_time - direct time-entry POST for after-the-fact
- *                         logging (no running timer involved).
- *
- * Note: the wrapper's `timer-stop "note"` syntax sends a `note` field
- * the API silently ignores - the time entry's description is whatever
- * was set on `start`. To attach a note to a stopped session, post a
- * comment afterwards via `orboto_comment`. The MCP tool only accepts
- * what the API actually accepts.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -41,8 +26,6 @@ interface TimeEntry {
   description: string | null;
   loggedAt: string;
   agentLabel?: string | null;
-  // ORB-1368 - true when the entry was logged via an agent-flagged key or a
-  // bot account. Server-derived; distinct from agentLabel (which instance).
   isAgentWork?: boolean;
 }
 
@@ -52,10 +35,6 @@ interface BulkTimeEntryResult {
   lockedDates: string[];
   totalMinutes: number;
 }
-
-// ---------------------------------------------------------------------------
-// orboto_timer_start
-// ---------------------------------------------------------------------------
 
 export const timerStartToolConfig = {
   title: 'Start a timer on a ticket',
@@ -92,9 +71,6 @@ export function makeTimerStartHandler(client: OrbotoClient) {
         },
       };
     } catch (err) {
-      // 409 = a timer is already running on a different ticket.
-      // Surface the API's hint about `replace` rather than letting
-      // the model guess.
       if (err instanceof OrbotoApiError && err.status === 409) {
         throw new Error(
           'A timer is already running on a different ticket. Pass replace=true to commit its elapsed time and start fresh on this one.',
@@ -104,10 +80,6 @@ export function makeTimerStartHandler(client: OrbotoClient) {
     }
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_timer_stop
-// ---------------------------------------------------------------------------
 
 export const timerStopToolConfig = {
   title: 'Stop the running timer',
@@ -120,10 +92,6 @@ export const timerStopToolConfig = {
 export function makeTimerStopHandler(client: OrbotoClient) {
   return async (): Promise<CallToolResult> => {
     try {
-      // ORB-1603 - the API stop is idempotent now: nothing-to-stop returns
-      // 200 { stopped:false } instead of a 404 (the 404 branch below stays
-      // for older servers), and laneFallback flags that the timer was found
-      // via the single-active-timer fallback after an instance-token mismatch.
       const res = await client.post<{ durationMinutes: number; stopped?: boolean; laneFallback?: boolean }>('/time/timer/stop', {});
       if (res.stopped === false) {
         return {
@@ -149,10 +117,6 @@ export function makeTimerStopHandler(client: OrbotoClient) {
     }
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_log_time
-// ---------------------------------------------------------------------------
 
 export const logTimeToolConfig = {
   title: 'Log a time entry on a ticket',
@@ -213,10 +177,6 @@ export function makeLogTimeHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_list_time_entries  (ORB-1292)
-// ---------------------------------------------------------------------------
-
 export const listTimeEntriesToolConfig = {
   title: 'List a ticket\'s time entries',
   description:
@@ -235,9 +195,6 @@ export function makeListTimeEntriesHandler(client: OrbotoClient) {
       `/tickets/${ticket.id}/time-entries?limit=${limit ?? 25}`,
     );
     const lines = page.items.map((e) => {
-      // ORB-1368 - agentLabel already flags a known agent instance; add a
-      // bare [agent] marker for agent work with no instance label (a bot's
-      // NULL-lane entry).
       const agentMark = e.agentLabel ? ` [${e.agentLabel}]` : (e.isAgentWork ? ' [agent]' : '');
       return `- ${e.durationMinutes} min - ${e.loggedAt}${agentMark}${e.description ? ` - ${e.description}` : ''} (id ${e.id})`;
     });
@@ -250,10 +207,6 @@ export function makeListTimeEntriesHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_edit_time_entry  (ORB-1292)
-// ---------------------------------------------------------------------------
 
 export const editTimeEntryToolConfig = {
   title: 'Edit / correct a time entry',
@@ -290,10 +243,6 @@ export function makeEditTimeEntryHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_delete_time_entry  (ORB-1292)
-// ---------------------------------------------------------------------------
 
 export const deleteTimeEntryToolConfig = {
   title: 'Delete a time entry',

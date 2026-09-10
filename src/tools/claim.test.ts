@@ -93,8 +93,6 @@ describe('orboto_claim', () => {
       { json: { ticketId: 't1' } }, // GET /time/timer - already on same ticket
     ]);
     const res = await makeClaimHandler(client)({ ticketKey: 'ACME-1' });
-    // 4 calls total: /users/me, by-key project, by-key ticket, GET /time/timer.
-    // No POST /assignees, no PATCH status, no POST /timer/start.
     expect(calls).toHaveLength(4);
     expect(calls.some((c) => c.method === 'PATCH')).toBe(false);
     expect(calls.some((c) => c.url.includes('/timer/start'))).toBe(false);

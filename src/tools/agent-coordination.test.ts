@@ -127,8 +127,6 @@ describe('orboto_agent_notify', () => {
     });
     expect((result.content[0] as { text: string }).text).toContain('notified bob@example.com');
     expect(result.structuredContent).toMatchObject({ ok: true });
-    // ORB-1742 - the sender session's ref is stamped automatically (per-
-    // process fallback here, since no MCP sessionId rides along).
     expect((capturedBody[0] as { senderRef?: string }).senderRef).toMatch(/^mcp-/);
   });
 

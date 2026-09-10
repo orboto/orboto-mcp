@@ -1,23 +1,5 @@
 /**
  * ORB-799 - attach files to a ticket.
- *
- * Mirrors `orboto.mjs attach <ticket> <path...> [--alt "text"] [--embed]`.
- *
- * MCP-side, the model doesn't have local FS access, so the bytes come
- * over the wire as a base64 `contentBase64` field - same approach as
- * `orboto_ingest_file`. To keep the surface simple, this tool uploads
- * one file per call; the wrapper's multi-file shorthand is unrolled
- * into N tool calls on the agent side.
- *
- * Two modes, controlled by `embed`:
- *
- *   - embed=false (default): upload only, return the markdown image
- *     line + raw URL. The agent typically uses this to compose a
- *     follow-up `orboto_comment` body.
- *   - embed=true: upload, then PATCH the ticket's description to
- *     append the markdown image at the end. Idempotent only up to
- *     duplicate detection (re-running with the same file *does*
- *     append a fresh line; the API doesn't dedupe).
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -69,11 +51,6 @@ export function makeAttachToTicketHandler(client: OrbotoClient) {
   }): Promise<CallToolResult> => {
     let arrayBuffer: ArrayBuffer;
     try {
-      // Buffer → fresh ArrayBuffer copy. The Blob ctor's BlobPart type
-      // wants `ArrayBufferView<ArrayBuffer>` and Node @types reject a
-      // raw Buffer / Uint8Array because their backing buffer is the
-      // wider `ArrayBufferLike`. Copying the bytes into a fresh
-      // ArrayBuffer satisfies the constraint without losing data.
       const buf = Buffer.from(contentBase64, 'base64');
       arrayBuffer = new ArrayBuffer(buf.byteLength);
       new Uint8Array(arrayBuffer).set(buf);
@@ -101,8 +78,6 @@ export function makeAttachToTicketHandler(client: OrbotoClient) {
 
     let embedded = false;
     if (embed === true) {
-      // Read the current description first - the PATCH replaces, not
-      // appends, so we have to construct the new body.
       const current = await client.get<TicketRow>(
         `/projects/${ticket.projectId}/tickets/${ticket.id}`,
       );

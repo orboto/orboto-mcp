@@ -2,18 +2,7 @@
  * ORB-1692 / ORB-1817 - strict inputs + measured aliases + the teaching
  * error.
  *
- * Table-driven against the REAL tool configs: each alias from the
- * measurement table must resolve to the canonical field, unknown keys
- * must error naming the offender, and the ORB-1684 silent-drop case
- * (create_ticket with parentKey) must never come back.
- *
- * ORB-1817 - a call that still can't be resolved after aliasing now
- * THROWS (from every parse entry point, `.safeParse()` included - see
- * the module doc on `buildStrictInputSchema` for why: the teaching error
- * is thrown from inside a zod "preprocess" effect, which runs before the
- * sync/async branch even exists). That's an intentional behaviour change
- * from plain zod (whose `.safeParse()` never throws) - every test below
- * that used to check `parsed.success === false` now checks the throw.
+ * @see ORB-1684
  */
 import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
@@ -131,7 +120,6 @@ describe('alias guard: canonical-field collisions are never renamed', () => {
   });
 
   it('alias is ignored when the caller also sent the canonical field', () => {
-    // both present: no rename happens, so `body` is an unknown key -> error
     const body = throwsWith(
       schemaFor('orboto_comment', commentToolConfig),
       { ticketKey: 'ORB-1', text: 'real', body: 'stray' },
@@ -154,7 +142,6 @@ describe('ORB-1817: extended alias table', () => {
     { tool: 'orboto_bulk_move_tickets', config: bulkMoveTicketsToolConfig, send: { keys: ['ORB-1', 'ORB-2'], statusCategory: 'done' }, expectKey: 'ticketKeys', expectValue: ['ORB-1', 'ORB-2'] },
     { tool: 'orboto_query', config: queryToolConfig, send: { oql: 'project = ORB', max: 10 }, expectKey: 'limit', expectValue: 10 },
     { tool: 'orboto_query', config: queryToolConfig, send: { oql: 'project = ORB', page: 'c1' }, expectKey: 'cursor', expectValue: 'c1' },
-    // `id` -> the tool's single id-shaped parameter (ticketKey here).
     { tool: 'orboto_get_ticket', config: getTicketToolConfig, send: { id: 'ORB-1' }, expectKey: 'ticketKey', expectValue: 'ORB-1' },
     { tool: 'orboto_get_doc', config: getDocToolConfig, send: { id: 'ORB-D12' }, expectKey: 'docId', expectValue: 'ORB-D12' },
   ];
@@ -171,7 +158,6 @@ describe('ORB-1817: extended alias table', () => {
   }
 
   it('`id` is left alone (and errors) when the tool has more than one id-shaped parameter', () => {
-    // orboto_update_comment has BOTH ticketKey and commentId - ambiguous.
     const body = throwsWith(
       schemaFor('orboto_update_comment', updateCommentToolConfig),
       { id: 'ORB-1', text: 'hi' },

@@ -63,7 +63,6 @@ describe('tools/embedding-status', () => {
     const text = (result.content[0] as { text: string }).text;
     expect(text).toContain('BILLING GATE');
     expect(text).toContain('allowance_exhausted');
-    // Contract guarantee: never vendor prose on any surface.
     expect(text).not.toContain('Key is blocked');
   });
 

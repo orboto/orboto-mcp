@@ -1,14 +1,5 @@
 /**
  * ORB-244 Phase B - `orboto_get_project`.
- *
- * Returns metadata + milestones + labels + members for a project.
- * Accepts the human-readable project key (`ACME`), case-insensitive
- * - the API's `GET /projects/by-key/:key` does the lookup, the rest
- * of the hydration (milestones + labels + members) comes from the
- * `/projects/:id/*` endpoints that take the resolved UUID.
- *
- * Members endpoint returns a nested `{user: {...}, role: {...}}`
- * shape; we flatten here into a card-friendly line.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -45,9 +36,6 @@ export const getProjectToolConfig = {
 export function makeGetProjectHandler(client: OrbotoClient) {
   return async ({ projectKey }: { projectKey: string }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, projectKey);
-    // Parallel fan-out - the API doesn't have a single aggregate route
-    // for milestones+labels+members, and three parallel fetches beat a
-    // chain on the default Node HTTP pool.
     const [milestones, labels, members] = await Promise.all([
       client.get<MilestoneRow[]>(`/projects/${project.id}/milestones`),
       client.get<LabelRow[]>(`/projects/${project.id}/labels`),
@@ -62,7 +50,6 @@ export function makeGetProjectHandler(client: OrbotoClient) {
       ...milestones.map((m) => `  - ${m.milestoneKey ? `${m.milestoneKey} · ` : ''}${m.name} [${m.status}]${m.endDate ? ` due ${m.endDate}` : ''}`),
       '',
       `Labels: ${labels.map((l) => l.name).join(', ') || '(none)'}`,
-      // ORB-1040 - only mention RACI when the project opted in.
       project.raciEnabled ? 'RACI: enabled' : null,
       '',
       `Members (${members.length}):`,
@@ -76,15 +63,11 @@ export function makeGetProjectHandler(client: OrbotoClient) {
       content: [{ type: 'text', text: lines.join('\n') }],
       structuredContent: {
         project: {
-          // ORB-1042 - surface the UUID for the rare APIs that still need it
-          // (most agent surfaces accept the key).
           id: project.id,
           key: project.key,
           name: project.name,
           status: project.status,
           description: project.description,
-          // ORB-1040 - RACI is opt-in; agents must not raise/set RACI here
-          // unless this is true.
           raciEnabled: project.raciEnabled ?? false,
         },
         milestones,

@@ -1,30 +1,10 @@
 /**
  * ORB-915 - doc-export MCP tools (epic ORB-911 Phase 4).
- *
- * - orboto_export_doc_md - GET /docs/:id/export/md   (text/markdown)
- * - orboto_export_doc_pdf - POST /docs/:id/export/pdf (application/pdf)
- *
- * The Markdown export differs from `orboto_get_doc.content` because
- * the server-side renderer strips backlinks / smart-link inflation
- * and emits the raw saved Markdown - useful when the agent wants to
- * pipe the body through another tool without the get-doc envelope.
- *
- * The PDF export returns binary bytes. MCP supports binary resource
- * attachments via the `{ type: 'resource', resource: { uri, blob:
- * <base64>, mimeType } }` content shape; we return the PDF that way.
- *
- * Both endpoints rely on `OrbotoClient.getText` / `postBinary` which
- * landed alongside this phase - JSON-only `get` / `post` would have
- * blown up on the non-JSON response bodies.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { resolveDocId } from './docs.js';
-
-// ---------------------------------------------------------------------------
-// orboto_export_doc_md
-// ---------------------------------------------------------------------------
 
 export const exportDocMdToolConfig = {
   title: 'Export a doc page as Markdown',
@@ -51,10 +31,6 @@ export function makeExportDocMdHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_export_doc_pdf
-// ---------------------------------------------------------------------------
-
 export const exportDocPdfToolConfig = {
   title: 'Export a doc page as PDF',
   description:
@@ -69,8 +45,6 @@ export function makeExportDocPdfHandler(client: OrbotoClient) {
   return async ({ docId }: { docId: string }): Promise<CallToolResult> => {
     docId = await resolveDocId(client, docId);
     const { bytes, contentType } = await client.postBinary(`/docs/${docId}/export/pdf`);
-    // MCP's `resource` content type takes a base64 blob - Buffer →
-    // base64 is the standard Node path.
     const base64 = Buffer.from(bytes).toString('base64');
     return {
       content: [

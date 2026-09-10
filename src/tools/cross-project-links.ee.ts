@@ -2,18 +2,7 @@
 /**
  * ORB-632 / ORB-945 - Cross-Project Linking MCP tools.
  *
- * - orboto_list_cross_project_links - GET /tickets/:id/cross-project-links
- * - orboto_add_cross_project_link - POST /tickets/:id/cross-project-links
- * - orboto_update_cross_project_link - PATCH /tickets/:id/cross-project-links/:linkId
- * - orboto_remove_cross_project_link - DELETE /tickets/:id/cross-project-links/:linkId
- *
- * Business-tier feature (`.ee.*`). The API records the EE soft-warn
- * event on mutating calls; the tool surface here is identical to
- * every other MCP tool and reads the existing license-state via the
- * Authorization-header path.
- *
- * Accepts BOTH a UUID and a ticket-key (`OCP-42`, case-insensitive) on
- * every input - the API resolves either form.
+ * @see OCP-42
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -48,10 +37,6 @@ interface LinkView {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_list_cross_project_links
-// ---------------------------------------------------------------------------
-
 export const listCrossProjectLinksToolConfig = {
   title: 'List cross-project links on a ticket',
   description:
@@ -85,10 +70,6 @@ export function makeListCrossProjectLinksHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_add_cross_project_link
-// ---------------------------------------------------------------------------
-
 export const addCrossProjectLinkToolConfig = {
   title: 'Add a cross-project link between two tickets',
   description:
@@ -120,10 +101,6 @@ export function makeAddCrossProjectLinkHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_update_cross_project_link
-// ---------------------------------------------------------------------------
-
 export const updateCrossProjectLinkToolConfig = {
   title: 'Toggle status-sync on a cross-project link',
   description:
@@ -153,10 +130,6 @@ export function makeUpdateCrossProjectLinkHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_remove_cross_project_link
-// ---------------------------------------------------------------------------
 
 export const removeCrossProjectLinkToolConfig = {
   title: 'Remove a cross-project link',

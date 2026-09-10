@@ -111,8 +111,6 @@ export interface StartChecklist {
 
 export interface StartDependencyEdge {
   ticketKey: string | null;
-  // ORB-1614 - null on an opaque cross-project stub the caller cannot
-  // read (see `external`/`resolved`).
   title: string | null;
   statusName: string | null;
   external?: boolean;

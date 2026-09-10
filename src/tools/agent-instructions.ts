@@ -19,13 +19,9 @@ interface BlockRow {
   sizeWarning?: { chars: number; limit: number; hint: string };
 }
 
-// ORB-1819 - the writing contract, verbatim in every write-tool
-// description so the writing agent sees it at the moment of writing.
 const RULE_WRITING_CONTRACT =
   ' Rule: title = one imperative sentence; body <= 400 chars, Rule / Why / How, no long examples, nothing another block says.';
 
-// ORB-1700 - a LIST answers "what exists"; the body belongs to the
-// follow-up read (blockId input below). First line, hard-capped.
 function excerptOf(body: string): string {
   const firstLine = body.split('\n', 1)[0] ?? '';
   return firstLine.length > 200 ? `${firstLine.slice(0, 199)}\u2026` : firstLine;
@@ -61,7 +57,6 @@ export function makeListAgentInstructionsHandler(client: OrbotoClient) {
   return async (input: { scope?: string; projectId?: string; customerId?: string; blockId?: string } = {}): Promise<CallToolResult> => {
     const res = await client.get<{ blocks: BlockRow[]; assembled: string }>(`/agent-instructions/blocks?${scopeQs(input.scope ?? 'workspace', input.projectId, input.customerId)}`);
 
-    // ORB-1700 - full body for ONE explicitly named block, in one call.
     if (input.blockId) {
       const block = res.blocks.find((b) => b.id === input.blockId);
       if (!block) {
@@ -77,17 +72,12 @@ export function makeListAgentInstructionsHandler(client: OrbotoClient) {
       };
     }
 
-    // ORB-1700 - list = metadata + excerpt. The assembled 24k rule text is
-    // NOT re-shipped here (it rode along on every management call and cost
-    // 238 Mtok over 3 calls); agents load the rules via orboto_session_start.
     const text = res.blocks.length
       ? res.blocks.map(renderBlock).join('\n')
       : 'No rule blocks configured.';
     return {
       content: [{ type: 'text', text }],
       structuredContent: {
-        // Array order = sortOrder; builtinKey only when it is one; the
-        // descriptive TITLE is the excerpt (bodies via blockId).
         blocks: res.blocks.map((b) => ({
           id: b.id,
           title: b.title,

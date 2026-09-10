@@ -1,22 +1,5 @@
 /**
  * ORB-244 Phase C Group 4 - admin-only tools.
- *
- * These three are listed under "write tools" in the ticket because
- * they're privileged surfaces, but two of them (`list_users`,
- * `get_audit_log`) are read-only - the gating is what makes them
- * "writes" from a permission perspective. `trigger_backup` is the
- * only true mutation.
- *
- * Gating: the API enforces super-admin via the `admin:*` permission
- * slugs. A non-admin's request lands a 403 from the API, which
- * surfaces as OrbotoApiError on the MCP side. The tools themselves
- * don't double-check - that would race against the API anyway. We
- * just rewrite 403 into a clear message.
- *
- * Tools:
- * - orboto_list_users - admin user directory with cursor pagination
- * - orboto_get_audit_log - recent admin / mutation events
- * - orboto_trigger_backup - run a configured backup job by name
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -42,7 +25,6 @@ interface AuditEntry {
   entityType: string | null;
   entityId: string | null;
   details: Record<string, unknown>;
-  // ORB-1368 - true when the audited action was performed by an agent.
   isAgentWork?: boolean;
   createdAt: string;
 }
@@ -73,10 +55,6 @@ function rewrite403(action: string): (err: unknown) => never {
     throw err as Error;
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_list_users
-// ---------------------------------------------------------------------------
 
 export const listUsersToolConfig = {
   title: 'List workspace users (admin)',
@@ -130,10 +108,6 @@ export function makeListUsersHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_get_audit_log
-// ---------------------------------------------------------------------------
-
 export const getAuditLogToolConfig = {
   title: 'Read the workspace audit log (admin)',
   description:
@@ -154,7 +128,6 @@ export function makeGetAuditLogHandler(client: OrbotoClient) {
     qs.set('limit', String(limit ?? 50));
     if (entityType) qs.set('entityType', entityType);
     if (actorEmail) {
-      // Resolve actor email → userId via the admin users list.
       const userPage = await client.get<{ items: UserRow[] }>(
         `/admin/users?search=${encodeURIComponent(actorEmail)}&limit=10`,
       ).catch(rewrite403('audit log lookup'));
@@ -171,7 +144,6 @@ export function makeGetAuditLogHandler(client: OrbotoClient) {
       ? 'No matching audit entries.'
       : page.items.map((e) => {
         const who = e.actorName ?? e.actorEmail ?? '(system)';
-        // ORB-1368 - mark agent-performed actions.
         const agentMark = e.isAgentWork ? ' [agent]' : '';
         const what = e.entityType
           ? ` ${e.entityType}${e.entityId ? `:${e.entityId.slice(0, 8)}` : ''}`
@@ -195,10 +167,6 @@ export function makeGetAuditLogHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_trigger_backup
-// ---------------------------------------------------------------------------
 
 export const triggerBackupToolConfig = {
   title: 'Run a configured backup job now (admin)',

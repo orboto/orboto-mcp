@@ -1,44 +1,5 @@
 /**
  * ORB-1697 - the central MCP response budget.
- *
- * WHY THIS EXISTS
- * ---------------
- * An MCP tool result is not paid once. The client re-sends the whole
- * conversation on every subsequent request, so a result costs its size
- * TIMES the number of turns that follow it. The 2026-08-09 transcript
- * audit (6.453 real calls, 32 transcripts - see doc ORB-D20) measured
- * `list_agent_instructions` at 238 Mtok of carry cost from only THREE
- * calls, because 37k characters landed 15 % into a session and rode
- * along for the remaining 85 %.
- *
- * Two facts from that audit shape this module:
- *
- *  1. In Claude Code, only `structuredContent` reaches the model - the
- *     Markdown `content` block the handlers also build is dropped. So
- *     the budget MUST measure and cut the structured payload; cutting
- *     only the text would look like a fix and change nothing. Other
- *     clients do the opposite, so both are measured and both are cut.
- *  2. Per-tool discipline does not hold across 168 registered tools.
- *     The cap is applied once, in `with-metrics.ts`, which every tool
- *     is already registered through.
- *
- * CONTRACT
- * --------
- * Truncation is never silent. An over-budget result comes back with a
- * `__truncation` block naming every cut path, plus a handle, and the
- * omitted remainder stays fetchable via `orboto_response_expand` for
- * as long as the handle lives (in-process, 15 min, 16 payloads).
- *
- * Shrinking is shape-preserving: keys never disappear, arrays stay
- * arrays, and strings stay strings. That matters because 7 tools
- * declare an `outputSchema` the SDK validates the payload against.
- * Adding `__truncation` is safe (no schema uses `.strict()`, and Zod v3
- * accepts unknown keys), and identifier-shaped strings are protected by
- * MIN_STRING_CUT - a uuid (36) or a ticket key is far below it, so
- * `.uuid()` / `.url()` fields are never cut in half.
- *
- * This module never throws. A malformed payload returns unbudgeted
- * rather than failing the tool call.
  */
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -50,21 +11,7 @@ export const DEFAULT_BUDGET_CHARS = 4000;
 /**
  * Per-tool overrides.
  *
- * The default (4k) suits cards and lists: a response that answers
- * "which of these do I open?" does not need more. Two categories
- * legitimately need more and are raised deliberately:
- *
- *  - CONTENT READS. The caller explicitly asked for a document, a
- *    generated report or a primer. Cutting those to 4k would break the
- *    tool's purpose rather than remove waste.
- *
- * `orboto_session_start` used to be the third category at 48.000
- * characters, and ORB-1818 removed that exemption: the digest now
- * answers with a rules INDEX plus a hash instead of the full rule text,
- * so the default answer fits the 4k default like every other tool. The
- * two answers that DO carry the full rules (`forceRules: true`,
- * `rulesOnly: true`) protect them instead of buying size - see
- * PROTECTED_PATHS and PROTECT_TEXT_META below.
+ * @see ORB-1818
  */
 export const TOOL_BUDGET_CHARS: Record<string, number> = {
   orboto_get_project_primer: 16_000,
@@ -76,35 +23,13 @@ export const TOOL_BUDGET_CHARS: Record<string, number> = {
   orboto_customer_report: 16_000,
   orboto_requirements_spec: 16_000,
   orboto_get_attachment: 16_000,
-  // The continuation tool itself: a chunk is served AT the budget, so a
-  // cap equal to the default would truncate the chunk it just sized.
   orboto_response_expand: 8_000,
-  // ORB-1518 - detail mode returns a full endpoint schema (parameters +
-  // request body + responses), which is the content the caller asked
-  // for; 4k would cut most real schemas in half.
   orboto_api_search: 8_000,
-  // ORB-1519 - the proxy envelope IS the content the caller asked for
-  // (an arbitrary endpoint's response); the proxy already caps it, this
-  // budget keeps the MCP-side carry cost bounded on top.
   orboto_api_call: 8_000,
 };
 
 /**
  * Paths the shrinker must never touch, per tool.
- *
- * The shrinker cuts the LARGEST leaf first, which is the right default and
- * exactly wrong for one case: in `session_start` the largest string is the
- * workspace's binding rules. Truncating a mandatory rule to save context is
- * worse than paying for it - an agent that never sees the second half of a
- * rule breaks it silently. Measured on 2026-08-09: a cold
- * `session_start({ ticketKey })` is 47.694 characters, and without this
- * list the budget cut 2.917 characters out of the rules block.
- *
- * A protected path is not exempt from the budget - the shrinker moves on to
- * the next-largest cuttable leaf (for that call: the project primer, which
- * is a digest with its own server-side budget and is safe to cut
- * explicitly). If nothing else can be cut, the response reports
- * `atFloor: true` and stays whole.
  */
 export const PROTECTED_PATHS: Record<string, string[]> = {
   orboto_session_start: ['rules'],
@@ -112,23 +37,6 @@ export const PROTECTED_PATHS: Record<string, string[]> = {
 
 /**
  * ORB-1818 - per-call protection of the TEXT half.
- *
- * PROTECTED_PATHS covers the structured half, which is what Claude Code
- * pays for; a text-only client pays the Markdown block instead, and that
- * half is cut on a line boundary with no notion of protected paths. For
- * an answer whose whole payload IS the binding rules (`session_start`
- * with `forceRules` or `rulesOnly`), cutting either half truncates a
- * mandatory rule - the exact thing the protection above exists to
- * prevent, just for the other client class.
- *
- * A handler marks such a result by setting `result._meta[PROTECT_TEXT_META]
- * = true`. The flag is READ AND REMOVED here, so it never reaches the
- * wire. It protects; it does not exempt: unprotected structured leaves in
- * the same result are still cut normally.
- *
- * This is deliberately not a general "skip the budget" escape hatch -
- * `protect-text-usage.test.ts` fails the build if a file other than the
- * session-start tool sets it.
  */
 export const PROTECT_TEXT_META = 'orboto/protectText';
 
@@ -158,10 +66,6 @@ const MAX_CUT_PASSES = 64;
 export const HANDLE_TTL_MS = 15 * 60 * 1000;
 export const MAX_HANDLES = 16;
 
-// ---------------------------------------------------------------------------
-// Configuration
-// ---------------------------------------------------------------------------
-
 /**
  * `ORBOTO_MCP_RESPONSE_BUDGET=off` disables the cap entirely (escape
  * hatch for a client that genuinely wants everything);
@@ -179,10 +83,6 @@ export function budgetFor(toolName: string, env: NodeJS.ProcessEnv = process.env
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_BUDGET_CHARS;
 }
 
-// ---------------------------------------------------------------------------
-// Measurement - what the client actually pays for
-// ---------------------------------------------------------------------------
-
 function textOf(part: unknown): string | null {
   if (part && typeof part === 'object' && 'text' in part) {
     const t = (part as { text?: unknown }).text;
@@ -193,14 +93,6 @@ function textOf(part: unknown): string | null {
 
 /**
  * The two halves a result is made of, measured separately.
- *
- * A handler returns the SAME data twice: `structuredContent` for
- * schema-aware clients and a Markdown text block for the rest. No known
- * client charges for both - Claude Code stores only the structured JSON
- * in its transcript (verified 2026-08-09), text-only clients see just the
- * text - so summing them would double-count and cut twice as hard as the
- * cost justifies. The budget is therefore enforced on each half, and the
- * reported cost is the larger of the two: what one client actually pays.
  */
 export function measureHalves(result: CallToolResult): { textChars: number; structuredChars: number } {
   let textChars = 0;
@@ -228,10 +120,6 @@ function safeStringify(value: unknown): string {
   }
 }
 
-// ---------------------------------------------------------------------------
-// The in-process payload store behind the truncation handles
-// ---------------------------------------------------------------------------
-
 export interface StoredPayload {
   toolName: string;
   storedAt: number;
@@ -249,7 +137,6 @@ function pruneHandles(now: number): void {
   for (const [key, value] of handles) {
     if (now - value.storedAt > HANDLE_TTL_MS) handles.delete(key);
   }
-  // Map iteration order is insertion order, so the oldest entries go first.
   while (handles.size > MAX_HANDLES) {
     const oldest = handles.keys().next();
     if (oldest.done) break;
@@ -280,14 +167,9 @@ export function resetPayloadStore(): void {
   handles.clear();
 }
 
-// ---------------------------------------------------------------------------
-// Path addressing - `ticketBundle.primer.markdown`, `comments[3].body`
-// ---------------------------------------------------------------------------
-
 export function resolvePath(root: unknown, path: string): unknown {
   if (path === '' || path === '$') return root;
   let current: unknown = root;
-  // Split on `.` and `[i]` in one pass so both forms address the same tree.
   for (const token of path.split(/\.|(?=\[)/)) {
     if (current === null || current === undefined) return undefined;
     const arrayIndex = /^\[(\d+)\]$/.exec(token);
@@ -302,10 +184,6 @@ export function resolvePath(root: unknown, path: string): unknown {
   }
   return current;
 }
-
-// ---------------------------------------------------------------------------
-// The shrinker
-// ---------------------------------------------------------------------------
 
 type CutKind = 'string' | 'array';
 
@@ -333,7 +211,6 @@ function collectCandidates(root: unknown, protectedPaths: string[] = []): Candid
     }
     if (!node || typeof node !== 'object') return;
     for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-      // Never cut the truncation metadata itself - it is the way back.
       if (key === '__truncation') continue;
       const childPath = path ? `${path}.${key}` : key;
       if (isProtected(childPath)) continue;
@@ -371,11 +248,6 @@ export interface OmittedEntry {
   keptItems?: number;
 }
 
-// ORB-1738 - the ADVERTISED zod shape of the marker, consumed centrally in
-// registerWithMetrics: every declared outputSchema is extended with an
-// optional `__truncation` so strict clients (which validate structured
-// content against the advertised JSON schema, additionalProperties:false)
-// accept over-budget responses. Keep in lockstep with TruncationBlock.
 export const TruncationBlockSchema = z.object({
   handle: z.string(),
   budgetChars: z.number(),
@@ -395,17 +267,7 @@ export const TruncationBlockSchema = z.object({
 /**
  * ORB-1805 - what registerWithMetrics actually advertises.
  *
- * `TruncationBlockSchema` above is the exact runtime shape (and stays the
- * validator the tests assert against), but serialising all eight of its
- * fields costs ~620 characters in EVERY tool that declares an
- * outputSchema - 14 tools in the full manifest, 5 in the curated one -
- * for a block a caller only ever reads. The advertised form declares the
- * one field a caller acts on (`handle`) and stays open for the rest, so
- * a strict client still accepts an over-budget payload (ORB-1738, the
- * reason the marker is advertised at all) at a third of the bytes.
- *
- * Strictly more permissive than TruncationBlockSchema, so nothing that
- * validated before can fail now.
+ * @see ORB-1738
  */
 export const TruncationBlockAdvertisedSchema = z.object({ handle: z.string() })
   .passthrough()
@@ -448,9 +310,6 @@ export function applyResponseBudget(
   result: CallToolResult,
   env: NodeJS.ProcessEnv = process.env,
 ): BudgetOutcome {
-  // ORB-1818 - read (and strip) the per-call text protection before
-  // anything else, so the flag never rides the wire even on the
-  // under-budget path.
   const protectText = takeProtectTextFlag(result);
   const originalChars = measureResult(result);
   if (!budgetEnabled(env)) {
@@ -464,8 +323,6 @@ export function applyResponseBudget(
   try {
     return shrink(toolName, result, budget, originalChars, protectText);
   } catch {
-    // A budget must never break a tool call. Report the real size so the
-    // panel still shows the pressure, and hand back the untouched result.
     return { result, responseChars: originalChars, originalChars, truncatedChars: 0 };
   }
 }
@@ -490,16 +347,11 @@ function shrink(
     ? undefined
     : (JSON.parse(safeStringify(result.structuredContent)) as unknown);
 
-  // Reserve room for the truncation block and the text notice so the
-  // final measurement lands under budget, not just near it.
   const RESERVE = 700;
   const target = Math.max(MIN_STRING_KEEP, budget - RESERVE);
 
-  // Each half is capped against the same target - see measureHalves().
   const measure = (): number => (structured === undefined ? 0 : safeStringify(structured).length);
 
-  // The text half: cut on a line boundary so a reader never gets half a
-  // sentence, and record how much was dropped.
   let currentTextLength = fullText.length;
   let textOmitted = 0;
   if (!protectText && fullText.length > target) {
@@ -529,8 +381,6 @@ function shrink(
     }
 
     const items = largest.value as unknown[];
-    // Drop from the tail: list tools order by relevance, so the head is
-    // the part a caller reads first.
     let keptItems = items.length;
     while (keptItems > MIN_ARRAY_KEEP) {
       const trial = items.slice(0, keptItems - 1);
@@ -552,12 +402,7 @@ function shrink(
     : omitted;
   annotatePayload(handle, allOmitted);
 
-
   const atFloor = measure() > target;
-  // ORB-1818 - the floor case gets its OWN notice. Telling an agent its
-  // response was truncated when nothing was cut sends it hunting for a
-  // remainder that does not exist - and that is exactly what a protected
-  // answer (the binding rules) produces every time.
   const notice = allOmitted.length > 0
     ? `[Response truncated to the MCP response budget (${budget} chars) - it would otherwise cost `
       + `${originalChars} chars on EVERY later request in this session. Omitted content is not lost: `
@@ -578,8 +423,6 @@ function shrink(
       ...(atFloor ? { atFloor: true } : {}),
     };
     (structured as Record<string, unknown>).__truncation = block;
-    // The cost model is per-half (see measureHalves), so what was omitted
-    // is the shrinkage of the half that dominates the price.
     const finalChars = Math.max(
       safeStringify(structured).length,
       currentTextLength + notice.length + 2,
@@ -587,15 +430,12 @@ function shrink(
     block.omittedChars = Math.max(0, originalChars - finalChars);
   }
 
-  // Rebuild the content parts: the (possibly shortened) text plus the notice.
   const shortenedText = currentTextLength >= fullText.length
     ? fullText
     : fullText.slice(0, currentTextLength);
   const content: CallToolResult['content'] = fullText.length > 0
     ? [{ type: 'text', text: `${shortenedText}\n\n${notice}` }]
     : [{ type: 'text', text: notice }];
-  // Non-text parts (images, resources) are never cut - they are not the
-  // bloat this budget is about, and slicing their payload would corrupt them.
   const nonText = (result.content ?? []).filter((part) => textOf(part) === null);
 
   const shrunk: CallToolResult = {

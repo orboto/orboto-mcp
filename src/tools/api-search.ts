@@ -2,12 +2,7 @@
  * ORB-1518 - `orboto_api_search`: the discovery half of the Code-Mode
  * escape hatch (epic ORB-1517).
  *
- * Wraps the authenticated `GET /system/api-catalog` routes, which search
- * the live OpenAPI spec server-side. Lets an agent find any REST
- * endpoint + its schema on demand instead of needing a named MCP tool
- * per endpoint - the long tail of the API stays reachable even on a
- * curated (small) tool manifest. Execute the endpoint you found with
- * `orboto_api_call` (ORB-1519).
+ * @see ORB-1519
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';

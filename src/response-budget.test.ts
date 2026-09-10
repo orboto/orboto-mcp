@@ -1,15 +1,5 @@
 /**
  * ORB-1697 - the central response budget.
- *
- * The contract under test, in the order it matters:
- *   1. a result inside its budget is returned byte-identical;
- *   2. an over-budget result is CUT, and the cut is explicit;
- *   3. the cut preserves the payload SHAPE (keys stay, arrays stay
- *      arrays, identifier-shaped strings stay whole) - 7 tools declare an
- *      outputSchema the SDK validates the payload against;
- *   4. nothing is lost: the omitted remainder is fetchable via the handle;
- *   5. text and structured content are budgeted as separate halves, since
- *      no known client charges for both.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -54,11 +44,7 @@ beforeEach(() => {
 describe('budget configuration', () => {
   it('defaults to 4k and honours per-tool overrides', () => {
     expect(budgetFor('orboto_whatever', {})).toBe(DEFAULT_BUDGET_CHARS);
-    // A content read is deliberately higher.
     expect(budgetFor('orboto_get_doc', {})).toBeGreaterThan(DEFAULT_BUDGET_CHARS);
-    // ORB-1818 - session_start lost its 48k exemption: its default answer
-    // carries a rules INDEX plus a hash, not the rule text, so it lives on
-    // the plain default like every other tool.
     expect(budgetFor('orboto_session_start', {})).toBe(DEFAULT_BUDGET_CHARS);
   });
 
@@ -89,7 +75,6 @@ describe('measurement', () => {
     const { textChars, structuredChars } = measureHalves(r);
     expect(textChars).toBe(300);
     expect(structuredChars).toBeGreaterThan(1000);
-    // Not the sum: no known client pays for both halves.
     expect(measureResult(r)).toBe(structuredChars);
   });
 });
@@ -124,8 +109,6 @@ describe('over budget', () => {
     expect(block.omitted).toEqual(
       expect.arrayContaining([expect.objectContaining({ path: 'description', kind: 'string' })]),
     );
-    // The text half carries the notice too, for clients that ignore
-    // structuredContent entirely.
     const text = (out.result.content[0] as { text: string }).text;
     expect(text).toContain('orboto_response_expand');
     expect(text).toContain(out.handle!);
@@ -177,7 +160,6 @@ describe('shape preservation (outputSchema tools must still validate)', () => {
     const sc = out.result.structuredContent as { items: Array<{ key: string }> };
     expect(sc.items.length).toBeLessThan(60);
     expect(sc.items.length).toBeGreaterThan(0);
-    // Head-first: the first row survives, the tail is what goes.
     expect(sc.items[0].key).toBe('ORB-0');
     const entry = (truncationOf(out.result)!.omitted as Array<Record<string, unknown>>)
       .find((e) => e.path === 'items');
@@ -217,8 +199,6 @@ describe('shape preservation (outputSchema tools must still validate)', () => {
 
 describe('the floor case - a payload made only of uncuttable leaves', () => {
   it('reports atFloor instead of looping or mangling identifiers', () => {
-    // 500 short strings: every one is below MIN_STRING_CUT, so there is
-    // nothing safe to cut. The budget must give up loudly, not spin.
     const structured = Object.fromEntries(
       Array.from({ length: 500 }, (_, i) => [`field_${i}`, `v${i}`.padEnd(90, 'x')]),
     );
@@ -226,10 +206,8 @@ describe('the floor case - a payload made only of uncuttable leaves', () => {
     expect(out.originalChars).toBeGreaterThan(budgetFor(TOOL));
     const block = truncationOf(out.result)!;
     expect(block.atFloor).toBe(true);
-    // Every field survived intact - a cut that cannot be made safely is
-    // not made at all.
     const sc = out.result.structuredContent as Record<string, string>;
-    expect(Object.keys(sc)).toHaveLength(501); // 500 fields + __truncation
+    expect(Object.keys(sc)).toHaveLength(501);
     expect(sc.field_0).toBe(structured.field_0);
   });
 });
@@ -309,10 +287,6 @@ describe('the handle store is bounded', () => {
 
 describe('protected paths - a mandatory rule is never cut (ORB-1697)', () => {
   it('cuts the primer, not the rules, on an over-budget session_start', () => {
-    // The real shape: rules are the LARGEST string, so the default
-    // largest-first rule would have cut exactly the wrong thing. Measured
-    // on 2026-08-09 before this guard existed: 2.917 characters gone from
-    // the binding rules of a cold session_start({ ticketKey }).
     const rules = 'R'.repeat(24_000);
     const out = applyResponseBudget('orboto_session_start', result({
       rules,
@@ -343,12 +317,9 @@ describe('protected paths - a mandatory rule is never cut (ORB-1697)', () => {
   it('protects the subtree, not just the exact key', () => {
     const out = applyResponseBudget('orboto_session_start', result({
       rules: 'short rules',
-      // A hypothetical nested shape under a protected root stays protected.
       ticketBundle: { note: 'N'.repeat(80_000) },
     }));
     const sc = out.result.structuredContent as { ticketBundle: { note: string } };
-    // ticketBundle is NOT protected, so this one does get cut - the guard is
-    // path-scoped, not a blanket exemption.
     expect(sc.ticketBundle.note.length).toBeLessThan(80_000);
   });
 });
@@ -371,10 +342,8 @@ describe('per-call text protection (ORB-1818)', () => {
     expect((out.result.structuredContent as { rules: string }).rules).toBe(rules);
     const text = (out.result.content[0] as { text: string }).text;
     expect(text).toContain(rules);
-    // The floor notice must not claim a truncation that did not happen.
     expect(text).not.toContain('Response truncated');
     expect(text).toContain('NOTHING was omitted');
-    // The marker is transport-internal - it never reaches the client.
     expect((out.result as { _meta?: unknown })._meta).toBeUndefined();
   });
 

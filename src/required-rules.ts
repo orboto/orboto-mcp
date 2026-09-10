@@ -77,8 +77,6 @@ export async function loadRequiredRules(client: OrbotoClient, path: string, know
     }, 10_000);
   });
   try {
-    // Race the whole operation: OAuth token/keychain acquisition can stall
-    // before fetch starts and therefore cannot observe fetch's abort signal.
     value = await Promise.race([client.get<unknown>(path, { signal: controller.signal }), timeout]);
   } catch (error) {
     if (error instanceof RequiredRulesError) throw error;

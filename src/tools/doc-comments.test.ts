@@ -74,7 +74,7 @@ describe('orboto_list_doc_comments', () => {
     const res = await makeListDocCommentsHandler(client)({ docId: DOC_ID });
     const text = (res.content[0] as { text: string }).text;
     expect(text.indexOf('Alice')).toBeLessThan(text.indexOf('Bob'));
-    expect(text).toMatch(/\s\s- Bob/); // reply is indented one level
+    expect(text).toMatch(/\s\s- Bob/);
     expect(text).toContain('Agreed.');
     const comments = (res.structuredContent as { comments: Array<{ id: string }> }).comments;
     expect(comments).toHaveLength(2);
@@ -116,7 +116,6 @@ describe('orboto_post_doc_comment', () => {
       url: `https://orboto.example.com/docs/${DOC_ID}/comments`,
       body: { content: 'Looks good to me.' },
     });
-    // No parentCommentId in the body for a root comment.
     expect((calls[0].body as Record<string, unknown>).parentCommentId).toBeUndefined();
   });
 

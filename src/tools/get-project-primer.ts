@@ -1,27 +1,7 @@
 /**
  * ORB-408 (Phase 3 of ORB-406) - `orboto_get_project_primer`.
  *
- * Returns the project's auto-generated AI Context Pack as a single
- * markdown blob, token-budget aware. AI agents call this as their
- * first read per session.
- *
- * What's actually in the primer (ORB-563):
- *   - active milestones, ticket counts, recently-closed milestones
- *   - top docs from the project space
- * - structured project facts (the `primer_facts` table - workspace +
- *     project rows)
- *   - recent activity, when the operator enabled it
- *   - repo briefings (e.g. CLAUDE.md / AGENTS.md) ONLY when the
- *     operator configured `repoFiles` AND the API host has those files
- *     on its local filesystem. Most Coolify / SaaS deployments do
- *     neither - agents must NOT assume CLAUDE.md / AGENTS.md content
- *     is in the primer. If the team relies on CLAUDE.md / AGENTS.md
- *     content cross-deployment, those conventions belong in
- *     `primer_facts` instead.
- *
- * Sections that didn't make the budget come back in
- * `truncatedSections` so the agent can decide whether to bump the
- * budget for a follow-up call.
+ * @see ORB-563
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -56,10 +36,6 @@ export function makeGetProjectPrimerHandler(client: OrbotoClient) {
     if (maxTokens !== undefined) qs.set('max_tokens', String(maxTokens));
     const res = await client.get<PrimerJsonResponse>(`/projects/${project.id}/ai-primer?${qs.toString()}`);
 
-    // ORB-1104 - the trimmed-sections note is now appended in-band by
-    // assembleWithBudget, so res.markdown already carries it (and so do
-    // baked snapshots + the raw markdown route). No manual append here,
-    // otherwise it would double up.
     return {
       content: [
         {

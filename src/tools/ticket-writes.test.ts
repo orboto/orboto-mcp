@@ -78,9 +78,6 @@ describe('orboto_create_ticket', () => {
       projectKey: 'ACME', title: 'Labelled', labels: ['bug', 'ui'],
       assigneeEmails: ['dev@example.com'],
     });
-    // Exactly one POST - the atomic create - carrying labels + assignees
-    // in its body. No follow-up /labels/ or /assignees/ round-trips, so a
-    // bad reference can't leave an orphan ticket the agent retries into a dup.
     const posts = calls.filter((c) => c.method === 'POST');
     expect(posts).toHaveLength(1);
     expect(posts[0].url).toBe('https://orboto.example.com/projects/p1/tickets');
@@ -141,12 +138,8 @@ describe('orboto_create_ticket', () => {
     expect(text).toContain('ACME-13');
     const sc = res.structuredContent as { similarWarnings: Record<string, unknown>[]; createdTicketKey: string };
     expect(sc.similarWarnings).toHaveLength(2);
-    // ORB-1176 - createdTicketKey is the NEW key, never a warning's key.
     expect(sc.createdTicketKey).toBe('ACME-99');
     expect(sc.similarWarnings.map((w) => w.ticketKey)).not.toContain(sc.createdTicketKey);
-    // ORB-1693 - the agent projection is pinned: exactly these fields, no
-    // UUID, no colours, no statusName, similarity at 2dp. A re-grow of the
-    // rich shape is a regression, not an enhancement.
     for (const w of sc.similarWarnings) {
       expect(Object.keys(w).sort()).toEqual(['relation', 'similarity', 'statusCategory', 'ticketKey', 'title']);
     }
@@ -228,13 +221,12 @@ describe('orboto_create_ticket', () => {
       if (m === 'GET') {
         return { ok: true, status: 200, statusText: 'OK', json: async () => PROJ, text: async () => '' } as unknown as Response;
       }
-      createUrl = u; // the POST /tickets call
+      createUrl = u;
       return { ok: false, status: 422, statusText: 'Unprocessable', json: async () => ({}), text: async () => blockBody } as unknown as Response;
     });
     const res = await makeCreateTicketHandler(client)({
       projectKey: 'ACME', title: 'Authentifizierung schlägt fehl bei externen Nutzern',
     });
-    // No override flag → no query param on the create call.
     expect(createUrl).not.toContain('allowLanguageMismatch');
     expect(res.isError).toBe(true);
     const text = (res.content[0] as { text: string }).text;
@@ -262,8 +254,6 @@ describe('orboto_create_ticket', () => {
     expect(createUrl).toContain('allowLanguageMismatch=true');
   });
 
-  // ORB-1471 - hard duplicate-block 409 becomes a clear duplicateBlocked
-  // result that surfaces the candidate list verbatim + the override recipe.
   it('turns a hard duplicate-block 409 into a duplicateBlocked result listing the candidates (ORB-1471)', async () => {
     const blockBody = JSON.stringify({
       error: 'This ticket looks like a duplicate (98% match to an existing ticket).',
@@ -651,10 +641,6 @@ describe('orboto_add_ticket_dependency / remove / list - ORB-453', () => {
     expect(text).toContain('_(none)_');
   });
 
-  // ORB-1614 - a cross-project blocker the caller cannot read comes back
-  // as an opaque stub (title/ticketKey/projectId/status all null). The
-  // rendered text must never print the literal "null" and must not need
-  // any of those fields to say something useful.
   it('list renders an opaque placeholder for an unreadable cross-project stub, never "null"', async () => {
     stub([
       { json: PROJ }, { json: TICKET },

@@ -1,19 +1,5 @@
 /**
  * ORB-1609 - work-session tools.
- *
- * A work session is the transactional record behind "I am working on
- * this ticket": it holds the lease, owns the timer, drives presence,
- * and carries the finish-time evidence (commit + verification). It is
- * the primitive `orboto work start / finish / next` (wave 3) is built
- * on, and it is what makes ownership visible ACROSS accounts - a lease
- * held by another team's bot is a 409 with the holder attached, not an
- * invisible collision discovered at push time.
- *
- * The three roles that are not `implementation` deliberately do NOT
- * reassign the ticket or move its status: a review / preflight /
- * integration session attaches to a ticket without pretending to own
- * its delivery. That is what makes one-ticket-one-commit workable for
- * work that produces no commit of its own.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -57,13 +43,6 @@ function describe(s: WorkSessionRow): string {
   return `  - ${key} [${s.role}] ${who} - lease until ${s.leaseUntil}${s.commitSha ? ` (commit ${s.commitSha.slice(0, 8)})` : ''}`;
 }
 
-// ---------------------------------------------------------------------------
-// orboto_work_start - ORB-1611
-// ---------------------------------------------------------------------------
-
-// Mirrors apps/mcp/src/tools/session-start.ts's local shapes - kept
-// duplicated rather than imported, same choice that file already made for
-// its own bundle types (no shared MCP-side schema layer for these).
 export const workStartToolConfig = {
   title: 'Start a work session and load the full context bundle',
   description:
@@ -85,13 +64,10 @@ export const workStartToolConfig = {
     onConflict: z.enum(['reject', 'queue']).optional()
       .describe('Only matters when `resourceClaims` is set. Default `reject`.'),
   }).shape,
-  // takeover=true cancels another holder; hints describe the worst allowed call.
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeWorkStartHandler(client: OrbotoClient) {
-  // Per-connection rules-hash cache, mirrored from session-start.ts's
-  // makeSessionStartHandler - this closure lives for one MCP connection.
   let lastKnownRulesHash: string | undefined;
 
   return async (
@@ -180,9 +156,6 @@ export function makeWorkStartHandler(client: OrbotoClient) {
         }
       }
 
-      // ORB-1614 - a cross-project blocker/dependent the caller cannot read
-      // comes back with `title: null` - render a fixed placeholder instead
-      // of the literal "null".
       const fmtDeps = (edges: StartDependencyEdge[]) =>
         edges.length === 0 ? '(none)' : edges.map((e) => `- [${e.ticketKey ?? '?'}] ${e.title ?? `External dependency (access restricted)${e.resolved ? ' - resolved' : ' - still open'}`}${e.statusName ? ` - ${e.statusName}` : ''}`).join('\n');
       lines.push('', '## Dependencies');
@@ -262,10 +235,6 @@ export function makeWorkStartHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_work_session_start
-// ---------------------------------------------------------------------------
-
 export const workSessionStartToolConfig = {
   title: 'Start (or renew) a work session on a ticket',
   description:
@@ -287,7 +256,6 @@ export const workSessionStartToolConfig = {
     onConflict: z.enum(['reject', 'queue']).optional()
       .describe('Only matters when `resourceClaims` is set. Default `reject`: a conflicting write claim fails the WHOLE call with the conflicting holder(s) named - if this call would have created a brand-new session, that session is rolled back rather than left holding the lease without its claims. `queue`: the conflicting claim is accepted as `state: "waiting"` instead of failing; it is promoted automatically once the conflict clears (release, finish, or the next orboto_work_sessions read).'),
   }).shape,
-  // The optional takeover can displace someone else's active session.
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
@@ -353,8 +321,6 @@ export function makeWorkSessionStartHandler(client: OrbotoClient) {
       if (err instanceof OrbotoApiError && err.status === 409) {
         const claimConflicts = parseClaimConflicts(err);
         if (claimConflicts && claimConflicts.length > 0) {
-          // ORB-1610 - a resourceClaims conflict, distinct from the lease
-          // conflict below: the body carries `claimConflicts`, not `holder`.
           return {
             content: [{
               type: 'text',
@@ -367,10 +333,6 @@ export function makeWorkSessionStartHandler(client: OrbotoClient) {
             isError: true,
           };
         }
-        // OrbotoApiError carries the raw body string; the 409 payload is the
-        // standard i18n error triple plus `holder`, which is the whole point
-        // of the conflict response - the caller must not need a second call
-        // to learn who has the ticket.
         let holder: LeaseHolder | undefined;
         try {
           holder = (JSON.parse(err.body) as { holder?: LeaseHolder }).holder;
@@ -395,10 +357,6 @@ export function makeWorkSessionStartHandler(client: OrbotoClient) {
     }
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_work_session_finish
-// ---------------------------------------------------------------------------
 
 export const workSessionFinishToolConfig = {
   title: 'Finish a work session (books time, frees the lease)',
@@ -443,10 +401,6 @@ export function makeWorkSessionFinishHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_work_finish - ORB-1612
-// ---------------------------------------------------------------------------
 
 interface FinishWorkResponse {
   session: WorkSessionRow;
@@ -529,10 +483,6 @@ export function makeWorkFinishHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_work_sessions
-// ---------------------------------------------------------------------------
-
 export const workSessionsToolConfig = {
   title: 'List live work sessions (who is working on what)',
   description:
@@ -567,10 +517,6 @@ export function makeWorkSessionsHandler(client: OrbotoClient) {
     return { content: [{ type: 'text', text }], structuredContent: { sessions: rows } };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_work_session_claims_add
-// ---------------------------------------------------------------------------
 
 export const workSessionClaimsAddToolConfig = {
   title: 'Add resource claims to a live work session',
@@ -629,10 +575,6 @@ export function makeWorkSessionClaimsAddHandler(client: OrbotoClient) {
     }
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_work_session_claims_release
-// ---------------------------------------------------------------------------
 
 export const workSessionClaimsReleaseToolConfig = {
   title: 'Release resource claims from a live work session',

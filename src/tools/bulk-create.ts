@@ -1,20 +1,7 @@
 /**
  * ORB-1694 - bulk create + bulk dependency writes.
  *
- * Measured over 32 transcripts: `orboto_create_ticket` ran in 48
- * consecutive-call clusters (longest 49 in a row) and
- * `orboto_add_ticket_dependency` in 13 (longest 27) - the two longest
- * runs in the whole tool corpus, each call paying a full round trip
- * plus a ~1.1k-character response into the calling agent's context.
- * These two tools collapse a milestone-planning session into one call
- * with ONE compact aggregated response.
- *
- * Same family contract as bulk-writes.ts: serial per-item against the
- * existing single-item REST endpoints (per-tenant rate-limit posture),
- * per-item error reporting - one bad item never drops the rest - and a
- * `{successful, failed}` outcome the model can branch on. Duplicate
- * findings are reported COMPACTLY: one line per flagged draft, never
- * the single-tool's full warning block (pairs with ORB-1693).
+ * @see ORB-1693
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -31,10 +18,6 @@ interface SimilarWarning {
 }
 
 interface LanguageWarning { detected: string; expected: string }
-
-// ---------------------------------------------------------------------------
-// orboto_bulk_create_tickets
-// ---------------------------------------------------------------------------
 
 const TicketDraftSchema = z.object({
   title: z.string().min(1).max(255),
@@ -83,8 +66,6 @@ export function makeBulkCreateTicketsHandler(client: OrbotoClient) {
   }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, input.projectKey);
 
-    // Resolve shared + per-draft milestone/parent references ONCE per
-    // distinct value - 20 drafts on one milestone = one lookup.
     const milestoneIds = new Map<string, string>();
     const resolveMilestone = async (ref: string): Promise<string> => {
       const cached = milestoneIds.get(ref);
@@ -174,10 +155,6 @@ export function makeBulkCreateTicketsHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_bulk_add_ticket_dependencies
-// ---------------------------------------------------------------------------
-
 export const bulkAddTicketDependenciesToolConfig = {
   title: 'Add many ticket dependencies in one call',
   description:
@@ -197,7 +174,6 @@ export const bulkAddTicketDependenciesToolConfig = {
 
 export function makeBulkAddTicketDependenciesHandler(client: OrbotoClient) {
   return async (input: { pairs: Array<{ ticketKey: string; dependsOnKey: string }> }): Promise<CallToolResult> => {
-    // Resolve every distinct key once, not once per edge.
     const resolved = new Map<string, TicketRow>();
     const resolve = async (key: string): Promise<TicketRow> => {
       const cached = resolved.get(key);
@@ -220,8 +196,6 @@ export function makeBulkAddTicketDependenciesHandler(client: OrbotoClient) {
             { dependsOnId: dependsOn.id },
           );
         } catch (err) {
-          // 409 = edge already exists - idempotent success, same as the
-          // single-edge tool.
           if (!(err instanceof OrbotoApiError && err.status === 409)) throw err;
         }
         successful.push(label);

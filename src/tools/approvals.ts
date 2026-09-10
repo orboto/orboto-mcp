@@ -31,10 +31,6 @@ function fmt(r: ApprovalRequestSummary): string {
   return `  ${r.id} → "${r.toStatusName}" [${r.status}] ${r.approveCount}/${r.requiredApprovals} approvals (${r.policyName})${r.canApprove ? ' - you can vote' : ''}`;
 }
 
-// ---------------------------------------------------------------------------
-// orboto_list_approvals
-// ---------------------------------------------------------------------------
-
 export const listApprovalsToolConfig = {
   title: 'List a ticket\'s approval / sign-off requests',
   description:
@@ -57,10 +53,6 @@ export function makeListApprovalsHandler(client: OrbotoClient) {
     return { content: [{ type: 'text', text }], structuredContent: { ticketKey: ticket.ticketKey, requests: rows } };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_approval_decide
-// ---------------------------------------------------------------------------
 
 export const approvalDecideToolConfig = {
   title: 'Approve or reject a ticket sign-off request',

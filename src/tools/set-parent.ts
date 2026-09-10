@@ -1,23 +1,7 @@
 /**
  * ORB-799 (gap-cluster 8) - re-parent existing tickets.
  *
- * `orboto_update_ticket` accepts most ticket fields but NOT
- * `parentTicketId` / `parentTicketKey`, mirroring an API choice made
- * during ORB-309: parent assignment was treated as a creation-time
- * decision (set via `orboto_create_ticket`'s `parentTicketKey`) and the
- * patch surface was deliberately narrowed.
- *
- * In practice that left a gap: re-parenting an existing ticket under a
- * new epic (e.g. discovering during cluster-formation that ORB-600
- * belongs under ORB-800 as a sub-ticket) had no MCP-side path and
- * required falling back to the Bash wrapper's raw `patch /projects/...`
- * route - documented in `feedback_mcp_reparent_limitation.md`.
- *
- * Design choice: separate `orboto_set_parent` tool rather than
- * extending `orboto_update_ticket`'s patch shape. Symmetric to
- * `orboto_set_milestone` which exists for the same reason - a
- * dedicated tool with clearer semantics, easier permission gating
- * thinking, and a natural `parentTicketKey: null` path for detaching.
+ * @see ORB-309, ORB-600, ORB-800
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -62,8 +46,6 @@ export function makeSetParentHandler(client: OrbotoClient) {
         { parentTicketId },
       );
     } catch (err) {
-      // Surface the API's own cycle-detection error verbatim if it
-      // catches a deeper cycle we couldn't see from one hop above.
       if (err instanceof OrbotoApiError && err.status === 400) {
         throw new Error(`Re-parent rejected by the API: ${err.body || 'cycle or constraint violation'}.`);
       }

@@ -1,21 +1,5 @@
 /**
  * ORB-244 Phase B - milestone tools, expanded in ORB-799 with CRUD.
- *
- * `orboto_list_milestones` and `orboto_get_milestone` share this file
- * because they're cheap neighbours (same API root, same resolution
- * chain). The `get` tool also pulls the `/progress` endpoint so the
- * model sees ticket-count breakdowns alongside the metadata.
- *
- * ORB-799 added the write half of the surface to close wrapper-parity:
- *
- *   - orboto_create_milestone - mirrors `orboto.mjs create-milestone`.
- *     `startDate`/`endDate` are both optional; a milestone without dates
- *     is a legitimate object (analytics/Gantt/templates treat null dates
- *     as "no dates").
- * - orboto_close_milestone - close + optional archive. Resolves the
- *     milestone by name OR UUID against the includeClosed=true list so
- *     re-closing an already-closed milestone is idempotent.
- * - orboto_update_milestone - patch name / dates / private flag.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -50,10 +34,6 @@ interface MilestoneProgress {
   byStatus: Record<string, number>;
 }
 
-// ---------------------------------------------------------------------------
-// orboto_list_milestones
-// ---------------------------------------------------------------------------
-
 export const listMilestonesToolConfig = {
   title: 'List milestones',
   description: 'List milestones in a project, newest first.',
@@ -79,7 +59,6 @@ export function makeListMilestonesHandler(client: OrbotoClient) {
       structuredContent: {
         project: { key: project.key },
         milestones: milestones.map((m) => ({
-          // ORB-1179 - surface the uuid alongside the milestone key.
           id: m.id,
           milestoneKey: m.milestoneKey ?? null,
           name: m.name,
@@ -92,10 +71,6 @@ export function makeListMilestonesHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_get_milestone
-// ---------------------------------------------------------------------------
 
 export const getMilestoneToolConfig = {
   title: 'Get milestone details',
@@ -113,13 +88,8 @@ export function makeGetMilestoneHandler(client: OrbotoClient) {
     projectKey: string; milestone: string;
   }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, projectKey);
-    // ORB-1068 - resolve key / name / UUID through the shared resolver
-    // instead of an exact-name find, so `ORB-M19` works here too.
     const m = await resolveMilestoneByNameOrId(client, project.id, milestone);
 
-    // Progress comes from a separate endpoint; tolerate 404 gracefully
-    // in case a future API rename drops it so the tool still returns
-    // the metadata half.
     const progress = await client.get<MilestoneProgress>(
       `/projects/${project.id}/milestones/${m.id}/progress`,
     ).catch((err) => {
@@ -164,10 +134,6 @@ export function makeGetMilestoneHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_create_milestone - ORB-799
-// ---------------------------------------------------------------------------
 
 export const createMilestoneToolConfig = {
   title: 'Create a milestone',
@@ -217,10 +183,6 @@ export function makeCreateMilestoneHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_close_milestone - ORB-799
-// ---------------------------------------------------------------------------
-
 /** Resolve a milestone by name OR UUID against the includeClosed list,
  *  so closing an already-completed milestone (re-close), archiving a
  *  completed milestone, and re-pointing a ticket onto any milestone all
@@ -244,7 +206,6 @@ export async function resolveMilestoneByNameOrId(
     }
     return byId;
   }
-  // ORB-1059 - accept the human-readable key (`ORB-M3`), case-insensitive.
   if (MILESTONE_KEY_RE.test(nameOrId)) {
     const byKey = all.find((x) => x.milestoneKey?.toLowerCase() === nameOrId.toLowerCase());
     if (!byKey) {
@@ -252,11 +213,6 @@ export async function resolveMilestoneByNameOrId(
     }
     return byKey;
   }
-  // ORB-1826 - exact (raw) name match wins first; falls back to a unique
-  // normalised match (HTML-entity-decoded, trimmed, whitespace-collapsed,
-  // casefolded) so `"QA &amp; Testing"` resolves against a milestone
-  // literally named `"QA & Testing"`. Ambiguous either way still errors,
-  // listing the candidates.
   const { match, ambiguous } = resolveByName(all, nameOrId, (m) => m.name);
   if (ambiguous) {
     const list = ambiguous.map((m) => `"${m.name}" (${m.id})`).join(', ');
@@ -307,10 +263,6 @@ export function makeCloseMilestoneHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_update_milestone - ORB-799
-// ---------------------------------------------------------------------------
 
 export const updateMilestoneToolConfig = {
   title: 'Update a milestone\'s fields',

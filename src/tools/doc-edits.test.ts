@@ -48,10 +48,6 @@ const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey:
 const DOC_UUID = '33333333-3333-3333-3333-333333333333';
 const REV_UUID = '44444444-4444-4444-4444-444444444444';
 
-// ---------------------------------------------------------------------------
-// orboto_search_docs
-// ---------------------------------------------------------------------------
-
 describe('orboto_search_docs', () => {
   const HIT = {
     id: DOC_UUID,
@@ -104,10 +100,6 @@ describe('orboto_search_docs', () => {
     expect((res.content[0] as { text: string }).text).toContain('No docs matched');
   });
 });
-
-// ---------------------------------------------------------------------------
-// orboto_edit_doc - string-replace
-// ---------------------------------------------------------------------------
 
 describe('orboto_edit_doc', () => {
   it('POSTs edits to /docs/:id/edits (UUID passthrough) and renders the window', async () => {
@@ -179,10 +171,6 @@ describe('orboto_edit_doc', () => {
     ).rejects.toThrow(/403/);
   });
 });
-
-// ---------------------------------------------------------------------------
-// orboto_edit_doc_section - heading-addressed
-// ---------------------------------------------------------------------------
 
 describe('orboto_edit_doc_section', () => {
   it('POSTs sectionOps to /docs/:id/edits', async () => {

@@ -1,20 +1,7 @@
 /**
  * ORB-244 Phase C Group 3 - checklist write tools (ORB-234).
  *
- * Four tools:
- * - orboto_check / orboto_uncheck - toggle a single item's `isCompleted`
- * - orboto_add_check - append a new item to a list (default: first list
- *                       on the ticket)
- * - orboto_new_checklist - create a fresh list with optional triggers-done
- * - orboto_update_check (ORB-235) - text, assignee (a project member) and
- *                       due date of one item; `orboto_add_check` accepts
- *                       the same `assignee` / `dueDate` at create time
- *
- * Item identifier: agents prefer 1-based indexes ("check item 3 on
- * ACME-42") because UUIDs are ergonomic disasters in a chat. The
- * helper resolves either form by reading the ticket's checklists
- * once. UUID input is honoured directly so callers that already have
- * the ID can skip the lookup.
+ * @see ORB-235
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -98,10 +85,6 @@ async function resolveItemId(
   return { itemId: target.id, checklists };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_check / orboto_uncheck
-// ---------------------------------------------------------------------------
-
 function makeToggleHandler(client: OrbotoClient, completed: boolean) {
   return async ({ ticketKey, item }: {
     ticketKey: string; item: number | string;
@@ -153,11 +136,6 @@ export const uncheckToolConfig = {
 export const makeCheckHandler = (client: OrbotoClient) => makeToggleHandler(client, true);
 export const makeUncheckHandler = (client: OrbotoClient) => makeToggleHandler(client, false);
 
-// ---------------------------------------------------------------------------
-// orboto_remove_check (ORB-1095) - agent parity for DELETE
-// /checklist-items/:id. The surfaces could append but not remove.
-// ---------------------------------------------------------------------------
-
 export const removeCheckToolConfig = {
   title: 'Remove a checklist item',
   description:
@@ -178,10 +156,6 @@ export function makeRemoveCheckHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_add_check
-// ---------------------------------------------------------------------------
 
 export const addCheckToolConfig = {
   title: 'Add a checklist item',
@@ -251,10 +225,6 @@ export function makeAddCheckHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_update_check (ORB-235) - text / assignee / due date of one item.
-// ---------------------------------------------------------------------------
-
 export const updateCheckToolConfig = {
   title: 'Update a checklist item',
   description:
@@ -303,10 +273,6 @@ export function makeUpdateCheckHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_new_checklist
-// ---------------------------------------------------------------------------
 
 export const newChecklistToolConfig = {
   title: 'Create a new checklist on a ticket',

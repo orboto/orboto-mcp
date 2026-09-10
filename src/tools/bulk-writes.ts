@@ -1,27 +1,7 @@
 /**
  * ORB-799 - bulk-* writes.
  *
- * The wrapper's `bulk-*` family is one of its most-used clusters, used
- * in every phase-cleanup pass. MCP-side we collapse the wrapper's
- * `--from=- | @file | "ORB-1,ORB-2"` UX into a single typed `ticketKeys:
- * string[]` array - the calling agent already has the list as JSON, so
- * the wrapper's stdin/file-roundtrip is a regression there.
- *
- * Each tool:
- *   - Takes `ticketKeys: string[]` (1..200 keys) + tool-specific params
- *   - Has a `dryRun: boolean` modifier - when true, resolves every key
- *     to verify visibility + permission but does NOT issue the
- *     mutating call. Returns the same outcome shape with a
- *     `dryRun: true` marker so the caller can preview.
- *   - Returns `{ successful: [...], failed: [{ticketKey, error}], skipped: [...] }`
- *     so the model can branch on partial failures instead of parsing
- *     stderr progress lines like the wrapper does.
- *
- * Concurrency: serial per-ticket. Bulk operations land on a tenant DB
- * that other operators may be writing concurrently; spraying parallel
- * PATCHes against the same tickets is the kind of thing tenant rate
- * limits exist to slow down. A 200-ticket bulk-close at ~80ms/ticket
- * is ~16s - acceptable.
+ * @see ORB-1, ORB-2
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -136,10 +116,6 @@ async function resolveBatch(
   return resolved;
 }
 
-// ---------------------------------------------------------------------------
-// orboto_bulk_patch_tickets
-// ---------------------------------------------------------------------------
-
 export const bulkPatchTicketsToolConfig = {
   title: 'Apply the same patch to many tickets',
   description:
@@ -160,9 +136,6 @@ export const bulkPatchTicketsToolConfig = {
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
     dryRun: z.boolean().optional().describe('Resolve every ticket to verify visibility/permission, but skip the actual PATCH.'),
   }).shape,
-  // ORB-1669 - the mutating bulk_* tools are destructive by blast radius:
-  // they overwrite state across N tickets in one call with no undo. The
-  // purely additive ones (bulk_comment, bulk_assign) are not.
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
 };
 
@@ -188,10 +161,6 @@ export function makeBulkPatchTicketsHandler(client: OrbotoClient) {
     return bulkResult(`bulk_patch (${Object.keys(patch).join(',')})`, outcome);
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_bulk_move_tickets
-// ---------------------------------------------------------------------------
 
 export const bulkMoveTicketsToolConfig = {
   title: 'Move many tickets to a status category',
@@ -228,10 +197,6 @@ export function makeBulkMoveTicketsHandler(client: OrbotoClient) {
     return bulkResult(`bulk_move → ${statusCategory}`, outcome);
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_bulk_close_tickets
-// ---------------------------------------------------------------------------
 
 export const bulkCloseTicketsToolConfig = {
   title: 'Close many tickets (optionally with a shared comment)',
@@ -271,10 +236,6 @@ export function makeBulkCloseTicketsHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_bulk_comment_tickets
-// ---------------------------------------------------------------------------
-
 export const bulkCommentTicketsToolConfig = {
   title: 'Post the same comment on many tickets',
   description:
@@ -313,10 +274,6 @@ export function makeBulkCommentTicketsHandler(client: OrbotoClient) {
     return bulkResult('bulk_comment', outcome);
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_bulk_assign_tickets / orboto_bulk_unassign_tickets
-// ---------------------------------------------------------------------------
 
 /** Resolve email → userId once per project. The bulk operation may
  *  touch tickets across multiple projects; we memoize the lookup so we
@@ -365,7 +322,6 @@ export function makeBulkAssignTicketsHandler(client: OrbotoClient) {
           await client.post(`/projects/${t.projectId}/tickets/${t.id}/assignees/${userId}`, {});
         } catch (err) {
           if (err instanceof OrbotoApiError && err.status === 409) {
-            // Already assigned → idempotent success.
             outcome.successful.push(k);
             continue;
           }
@@ -411,7 +367,6 @@ export function makeBulkUnassignTicketsHandler(client: OrbotoClient) {
           await client.delete(`/projects/${t.projectId}/tickets/${t.id}/assignees/${userId}`);
         } catch (err) {
           if (err instanceof OrbotoApiError && err.status === 404) {
-            // Wasn't assigned → idempotent success.
             outcome.successful.push(k);
             continue;
           }

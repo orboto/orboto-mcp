@@ -46,7 +46,7 @@ function stubJson(body: unknown) {
 describe('orboto_create_full_backup (ORB-1301 / async since ORB-1717)', () => {
   it('enqueues, polls the run to success, then downloads the stored ZIP', async () => {
     vi.useFakeTimers();
-    const zip = new Uint8Array([0x50, 0x4b, 0x03, 0x04]); // PK\x03\x04
+    const zip = new Uint8Array([0x50, 0x4b, 0x03, 0x04]);
     const calls: Array<{ url: string; method: string }> = [];
     let polls = 0;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
@@ -58,7 +58,6 @@ describe('orboto_create_full_backup (ORB-1301 / async since ORB-1717)', () => {
       if (u.includes('/admin/backup/runs/run-1/download')) {
         return { ok: true, status: 200, statusText: 'OK', headers: new Headers({ 'content-type': 'application/zip' }), arrayBuffer: async () => zip.buffer.slice(0), text: async () => '' } as unknown as Response;
       }
-      // poll: running twice, then success
       polls += 1;
       return { ok: true, status: 200, statusText: 'OK', headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ status: polls < 3 ? 'running' : 'success', errorMessage: null }), text: async () => '' } as unknown as Response;
     });

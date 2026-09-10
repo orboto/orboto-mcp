@@ -179,7 +179,7 @@ describe('orboto_list_docs_in_space', () => {
   };
 
   it('renders an indented tree text + flat structured list', async () => {
-    stubJSON([{ json: [CHILD, ROOT] /* deliberately unsorted to verify the local sort */ }]);
+    stubJSON([{ json: [CHILD, ROOT] }]);
     const res = await makeListDocsInSpaceHandler(client)({ spaceId: PROJECT_SCOPED_SPACE.id });
     const text = (res.content[0] as { text: string }).text;
     expect(text.indexOf('Architecture')).toBeLessThan(text.indexOf('Queue worker'));
@@ -268,8 +268,6 @@ describe('orboto_create_doc', () => {
 });
 
 describe('orboto_update_doc', () => {
-  // ORB-1084 - write tools accept the human-readable doc key: the key
-  // resolves via /docs/by-key, then the PATCH targets the UUID.
   it('resolves a doc key to the UUID before writing', async () => {
     const calls = stubJSON([
       { json: DOC },                                  // by-key resolve

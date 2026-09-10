@@ -1,18 +1,7 @@
 /**
  * ORB-1409 (epic ORB-1390) - `orboto_requirements_spec`.
  *
- * Generates the requirements specification (Pflichtenheft) as Markdown:
- * numbered functional requirements (FA-1, FA-1.1...) each traceable to its
- * ticket and tagged muss/soll/kann from priority, plus non-functional
- * requirements distilled from primer facts. `outlineVariant` picks the chapter
- * naming/order: `neutral` (default), `industry` (VDI-3694 style), or `software`
- * (IEEE-830 style). Private tickets/milestones are always excluded server-side.
- * Wraps `POST /projects/:id/requirements-spec/generate` with `format: 'markdown'`.
- * Money price mode needs budget:view on top of requirements_spec:generate (the
- * API returns 403 otherwise).
- *
- * The route existed since ORB-1391; ORB-1409 fills in the missing MCP + skill
- * surfaces (the Pflichtenheft feature shipped route + chat only).
+ * @see ORB-1391
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';

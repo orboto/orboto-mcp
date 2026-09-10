@@ -1,15 +1,5 @@
 /**
  * ORB-1309 - `orboto_embedding_status`.
- *
- * Operator diagnostic for the embedding pipeline: provider/model/dims, coverage
- * (embedded vs total, and how many are PENDING - never-embedded / stale - per
- * tickets / comments / docs and overall), the circuit-breaker state, and when
- * the last embedding was written. Wraps GET /admin/ai/embedding-status.
- *
- * `orboto_ai_status` only reports whether embeddings are configured; this is the
- * deeper surface for "why is semantic search / duplicate detection / ask-docs
- * stale" - a tripped breaker, a stuck queue, or a provider that stopped
- * responding. Admin:ai:read gated (403 for non-admin callers).
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -27,11 +17,7 @@ interface EmbeddingStatusResponse {
     overall: { embedded: number; total: number; embeddable: number; pending: number; noContent: number };
   };
   breaker: { tripped: boolean; trippedUntil: string | null; consecutiveFailures: number; lastTrippedReason: string | null };
-  // ORB-1715 - managed-AI billing-gate state (contract OCP-D24); null when
-  // never signalled. `reason` is the OCP-owned closed enum.
   billingGate: { gated: boolean; blockedAt: string | null; reason: string | null; source: 'signal' | 'fallback'; updatedAt: string } | null;
-  // ORB-1719 - managed-AI spend state (microcents; wallet fields may both be
-  // null when the publisher withholds the balance).
   spend: {
     month: string | null;
     allowanceGrantMicrocents: number | null;
@@ -94,14 +80,11 @@ export function makeEmbeddingStatusHandler(client: OrbotoClient) {
       lines.push(
         `Circuit breaker: ${s.breaker.tripped ? `TRIPPED - ${s.breaker.lastTrippedReason ?? 'unknown reason'} (${s.breaker.consecutiveFailures} consecutive failures)` : 'ok'}`,
       );
-      // ORB-1715 - a billing gate is the one cause the customer can fix
-      // themselves; name it instead of letting it read as a provider fault.
       if (s.billingGate?.gated) {
         lines.push(
           `BILLING GATE: managed AI is paused for billing${s.billingGate.reason ? ` (${s.billingGate.reason})` : ''} since ${s.billingGate.blockedAt ?? 'unknown'}. The workspace admin resolves this in their orboto account; queued items embed automatically after the unblock.`,
         );
       }
-      // ORB-1719 - spend visibility so an agent can warn BEFORE the gate.
       if (s.spend?.allowanceGrantMicrocents != null && s.spend.allowanceConsumedMicrocents != null) {
         const eur = (mc: number) => (mc / 1_000_000).toFixed(2);
         lines.push(

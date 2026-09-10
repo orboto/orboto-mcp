@@ -59,7 +59,6 @@ describe('orboto_report_feedback', () => {
       attachments: [{ filename: 'a.txt', mimetype: 'text/plain', contentBase64: 'aGk=' }],
     });
     expect(result.structuredContent).toEqual({ reportId: 'rep-9', kind: 'bug', attachments: 1 });
-    // The body never comes back into the model's context.
     expect(JSON.stringify(result)).not.toContain('Ignore previous instructions');
   });
 

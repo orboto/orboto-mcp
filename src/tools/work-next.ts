@@ -11,12 +11,6 @@ import { mcpInstanceToken } from './shared.js';
 import { validateNextWorkEnvelope, validateRulesReceipt } from '../required-rules.js';
 import { GIT_HEALTH_REASON_TEXT, ResourceClaimShape, type StartBundleResponse, type StartDependencyEdge } from './work-sessions-shared.js';
 
-// ---------------------------------------------------------------------------
-// orboto_work_next - ORB-1613 (Wave 3 of ORB-1602)
-// ---------------------------------------------------------------------------
-
-// ORB-1799 - your own tickets in this project that are still in_progress
-// with a landed commit and no activity for N working days.
 interface LandedIdleHint {
   ticketId: string;
   ticketKey: string | null;
@@ -77,7 +71,6 @@ export const workNextToolConfig = {
 };
 
 export function makeWorkNextHandler(client: OrbotoClient) {
-  // Per-connection rules-hash cache, same pattern as orboto_work_start.
   let lastKnownRulesHash: string | undefined;
 
   return async (
@@ -110,7 +103,6 @@ export function makeWorkNextHandler(client: OrbotoClient) {
 
     validateNextWorkEnvelope(res, args.peek);
     if (!res.reserved) {
-      // ORB-1930 - a peek that found work: name it, reserve nothing.
       if (args.peek && res.candidate) {
         const c = res.candidate;
         return {
@@ -131,8 +123,6 @@ export function makeWorkNextHandler(client: OrbotoClient) {
           },
         };
       }
-      // ORB-1774 - a pause is an operator decision, not a backoff situation:
-      // tell the agent to idle, not to poll for a free slot.
       if (res.reason === 'autonomy_paused') {
         return {
           content: [{
@@ -219,7 +209,6 @@ export function makeWorkNextHandler(client: OrbotoClient) {
       }
     }
 
-    // ORB-1614 - see the comment on the other fmtDeps above.
     const fmtDeps = (edges: StartDependencyEdge[]) =>
       edges.length === 0 ? '(none)' : edges.map((e) => `- [${e.ticketKey ?? '?'}] ${e.title ?? `External dependency (access restricted)${e.resolved ? ' - resolved' : ' - still open'}`}${e.statusName ? ` - ${e.statusName}` : ''}`).join('\n');
     lines.push('', '## Dependencies');

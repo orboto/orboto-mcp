@@ -1,29 +1,5 @@
 /**
  * ORB-799 - docs-AI surface (ask + ingest).
- *
- * Three tools that mirror the wrapper's `ask-docs` / `ingest-url` /
- * `ingest-file` subcommands. Together they're the foundation for any
- * agent that needs to "remember this URL" / "add this PDF to our
- * wiki" workflows.
- *
- * - orboto_ask_docs - RAG Q&A across wiki docs, returns answer +
- *                         citations. Requires both `configured` and
- *                         `embeddingsConfigured` on `/ai/status`
- *                         (RAG retrieval needs an embedding-capable
- *                         provider).
- * - orboto_ingest_url - fetch + extract + create doc from a public
- *                         URL via the Readability-fallback pipeline.
- * - orboto_ingest_file - upload + extract + create doc from a local
- *                         file (PDF / DOCX / Markdown / plain text).
- *                         Uses the multipart-upload route, so the MCP
- *                         tool receives the bytes as a base64 string
- *                         to avoid the model needing local FS access.
- *
- * AI-gated note: the `ai_status` tool exists for pre-flight. We do NOT
- * pre-check inside the handlers - the API returns the same gating
- * error regardless and a pre-check would double the latency of every
- * call. Models are expected to call `orboto_ai_status` once per
- * session if they're unsure of workspace shape.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -61,10 +37,6 @@ interface IngestFileResponse {
   sizeBytes: number;
   markdownChars: number;
 }
-
-// ---------------------------------------------------------------------------
-// orboto_ask_docs
-// ---------------------------------------------------------------------------
 
 export const askDocsToolConfig = {
   title: 'Ask a question against the wiki (RAG)',
@@ -106,10 +78,6 @@ export function makeAskDocsHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_ingest_url
-// ---------------------------------------------------------------------------
 
 export const ingestUrlToolConfig = {
   title: 'Ingest a public URL into a wiki space',
@@ -153,10 +121,6 @@ export function makeIngestUrlHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_ingest_file
-// ---------------------------------------------------------------------------
-
 function mimetypeFor(filename: string): string {
   const lower = filename.toLowerCase();
   if (lower.endsWith('.pdf')) return 'application/pdf';
@@ -184,7 +148,6 @@ export function makeIngestFileHandler(client: OrbotoClient) {
   }): Promise<CallToolResult> => {
     let arrayBuffer: ArrayBuffer;
     try {
-      // See attach.ts for the Buffer → ArrayBuffer copy rationale.
       const buf = Buffer.from(contentBase64, 'base64');
       arrayBuffer = new ArrayBuffer(buf.byteLength);
       new Uint8Array(arrayBuffer).set(buf);

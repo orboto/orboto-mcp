@@ -1,36 +1,13 @@
 /**
  * ORB-1342 (epic ORB-1339) - doc snippet-search + targeted-edit MCP tools.
  *
- * Phase-3 four-way-sync rollout of the two REST primitives shipped in
- * ORB-1340 (GET /docs/search) and ORB-1341 (POST /docs/:id/edits). The
- * whole point of the feature is context efficiency: an agent finds the
- * right passage with one search (snippet + heading anchor, NOT the full
- * doc body) and changes it with one edit that ships only the diff in both
- * directions. Prefer these over orboto_get_doc + orboto_update_doc for
- * small changes to a large doc.
- *
- * Three tools:
- *   - orboto_search_docs       GET  /docs/search
- *   - orboto_edit_doc          POST /docs/:id/edits (string-replace edits)
- *   - orboto_edit_doc_section  POST /docs/:id/edits (heading-addressed ops)
- *
- * The two edit tools hit the same endpoint with a different half of its
- * body, so they share the 409-conflict translation below: a machine-
- * readable conflict (no/ambiguous match, stale revision, heading not
- * found / ambiguous) comes back as a NON-throwing tool result with
- * `isError: true` so the model can self-correct instead of the raw API
- * error bubbling up as an opaque failure.
+ * @see ORB-1340, ORB-1341
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveDocId } from './docs.js';
 import { resolveProjectByKey } from './shared.js';
-
-// ---------------------------------------------------------------------------
-// Shared response shapes (mirror @orboto/shared-schema exactly - off-shape
-// rows 500 the tool because the API's Zod response validator rejects them).
-// ---------------------------------------------------------------------------
 
 interface DocSnippetHit {
   id: string;
@@ -76,10 +53,6 @@ interface DocEditConflict {
   candidates?: string[];
   currentRevisionId?: string | null;
 }
-
-// ---------------------------------------------------------------------------
-// 409 translation - shared by both edit tools.
-// ---------------------------------------------------------------------------
 
 /** Turn a 409 from POST /docs/:id/edits into a clear, non-throwing tool
  *  result the model can act on. Returns null for any non-409 so the caller
@@ -150,10 +123,6 @@ function renderEditResult(res: DocEditsResult): CallToolResult {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_search_docs  (GET /docs/search - ORB-1340)
-// ---------------------------------------------------------------------------
-
 export const searchDocsToolConfig = {
   title: 'Search docs for snippets (context-efficient)',
   description:
@@ -214,10 +183,6 @@ export function makeSearchDocsHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_edit_doc  (POST /docs/:id/edits - string-replace, ORB-1341)
-// ---------------------------------------------------------------------------
-
 export const editDocToolConfig = {
   title: 'Targeted string-replace edit of a doc (context-efficient)',
   description:
@@ -253,10 +218,6 @@ export function makeEditDocHandler(client: OrbotoClient) {
     }
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_edit_doc_section  (POST /docs/:id/edits - section ops, ORB-1341)
-// ---------------------------------------------------------------------------
 
 export const editDocSectionToolConfig = {
   title: 'Edit a doc section by heading path (context-efficient)',

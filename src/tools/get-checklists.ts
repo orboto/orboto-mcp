@@ -1,19 +1,7 @@
 /**
  * ORB-244 Phase B - `orboto_get_checklists`.
  *
- * Dedicated read tool for a ticket's checklists. Two callers want
- * this without paying for the full ticket payload:
- *
- *   1. Models asking "what's still unchecked on ACME-42?" - don't
- *      need description + comments + git activity for that.
- *   2. Phase-C write tools (`orboto_check` / `orboto_uncheck`) - the
- *      user usually wants to confirm the item exists before
- *      toggling it, and this tool is the cheap round-trip.
- *
- * ORB-234 detail exposed here: when a checklist item links to
- * another ticket, `effectiveCompleted` mirrors that ticket's status
- * category. We surface the linked ticket so the model can explain
- * "item is done because [ORB-99] shipped" rather than just "done".
+ * @see ORB-234, ORB-99
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -73,7 +61,6 @@ export function makeGetChecklistsHandler(client: OrbotoClient) {
         const linkSuffix = i.linkedTicketKey
           ? ` ↪ [${i.linkedTicketKey}] ${i.linkedTicketTitle ?? ''} (${i.linkedTicketStatusCategory ?? 'unknown'})`
           : '';
-        // ORB-235 - per-item owner + due date, when set.
         const metaSuffix = `${i.assigneeName ? ` @${i.assigneeName}` : ''}${i.dueDate ? ` (due ${i.dueDate})` : ''}`;
         lines.push(`- [${i.effectiveCompleted ? 'x' : ' '}] ${i.content}${linkSuffix}${metaSuffix}`);
       }

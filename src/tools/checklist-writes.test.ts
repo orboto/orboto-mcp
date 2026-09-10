@@ -210,7 +210,6 @@ describe('orboto_new_checklist', () => {
   });
 });
 
-// ORB-235 - per-item assignee + due date.
 const MEMBERS = [
   { userId: '4b3e2c1d-6f7a-4b8c-9d0e-1f2a3b4c5d6e', user: { email: 'kim@example.test', fullName: 'Kim Novak' } },
   { userId: 'u-ada', user: { email: 'ada@example.test', fullName: 'Ada Byron' } },

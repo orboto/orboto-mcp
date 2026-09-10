@@ -1,15 +1,5 @@
 /**
  * ORB-244 Phase B - `orboto_get_timer`.
- *
- * Returns the caller's active stopwatch (or `null` when none is
- * running). Useful for the model to answer "am I still tracking
- * time on that bug from earlier?" without guessing.
- *
- * API shape: `GET /time/timer` returns `ActiveTimer | null` directly
- * (not wrapped). ActiveTimer carries `ticketTitle` and `projectId`
- * as joined fields but no `ticketKey` - so the ticket identifier is
- * resolved the cheap way: first 8 chars of the UUID when no title
- * is available, just the title otherwise.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -38,7 +28,6 @@ export const getTimerToolConfig = {
 
 export function makeGetTimerHandler(client: OrbotoClient) {
   return async (): Promise<CallToolResult> => {
-    // `/time/timer` returns the timer row directly, or `null`.
     const timer = await client.get<ActiveTimer | null>('/time/timer');
     if (!timer) {
       return {

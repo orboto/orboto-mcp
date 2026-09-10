@@ -53,9 +53,6 @@ describe('orboto_create_milestone', () => {
     const res = await makeCreateMilestoneHandler(client)({
       projectKey: 'ACME', name: 'v2.0',
     });
-    // ORB-1825 - startDate/endDate are nullable().optional() on the API's
-    // create body now; an absent key means the same thing as null, so the
-    // tool no longer forces `?? null` and the wire body simply omits them.
     expect(calls[1]).toMatchObject({
       method: 'POST',
       url: 'https://orboto.example.com/projects/p1/milestones',
@@ -132,7 +129,6 @@ describe('orboto_close_milestone', () => {
     await makeCloseMilestoneHandler(client)({
       projectKey: 'ACME', milestone: '11111111-2222-3333-4444-555555555555',
     });
-    // PATCH URL should hit the UUID, not the first row.
     expect(calls[2].url).toContain('/milestones/11111111-2222-3333-4444-555555555555');
   });
 

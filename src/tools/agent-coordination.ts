@@ -1,26 +1,12 @@
 /**
  * ORB-705 - MCP coordination tools.
  *
- * Three tools layered on the ORB-704 REST surface:
- *   orboto_agent_heartbeat - wraps POST /v1/agent/heartbeat. Returns
- *     the sessionToken the agent persists for next call.
- *   orboto_agent_presence - wraps GET /v1/agent/presence. Returns
- *     active sessions visible to the caller (own only for non-admin,
- *     workspace-wide for super-admin).
- *   orboto_agent_notify - wraps the existing notification surface
- *     to dispatch a directed message to another agent / user.
- *     Routing target is identified by email (works for both bots and
- *     humans). Fire-and-forget; the recipient sees it via the
- *     standard notifications channel (ORB-706 wires the bridge).
+ * @see ORB-704, ORB-706
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { mcpInstanceToken } from './shared.js';
-
-// ---------------------------------------------------------------------------
-// orboto_agent_heartbeat
-// ---------------------------------------------------------------------------
 
 interface HeartbeatResponse {
   sessionToken: string;
@@ -67,10 +53,6 @@ export function makeAgentHeartbeatHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_agent_presence
-// ---------------------------------------------------------------------------
 
 interface PresenceRow {
   userId: string;
@@ -136,10 +118,6 @@ export function makeAgentPresenceHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_agent_notify
-// ---------------------------------------------------------------------------
-
 interface NotifyResponse {
   ok: true;
   messageId: string;
@@ -154,13 +132,8 @@ export const agentNotifyToolConfig = {
     kind: z.enum(['info', 'request', 'complete', 'error']).default('info'),
     subject: z.string().min(1).max(200),
     payload: z.record(z.string(), z.unknown()).optional(),
-    // ORB-1727 - reply chaining: the id of the inbox message being answered.
     threadId: z.string().uuid().optional(),
-    // ORB-1732 - optional project scope: address "the agent working project
-    // X" when the recipient identity runs multiple sessions.
     project: z.string().min(1).max(64).optional().describe('Project key or UUID: scope the message to the recipient session working that project.'),
-    // ORB-1742 - defaults to this MCP session's instance token so a shared
-    // identity never wakes itself with its own outbound mail.
     senderRef: z.string().min(1).max(128).optional().describe('Sender-session ref for self-echo exclusion; defaults to this MCP session.'),
   }).shape,
   outputSchema: z.object({
@@ -169,10 +142,6 @@ export const agentNotifyToolConfig = {
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
-
-// ---------------------------------------------------------------------------
-// orboto_agent_broadcast (ORB-964)
-// ---------------------------------------------------------------------------
 
 export const agentBroadcastToolConfig = {
   title: 'Scoped broadcast to other agents',
@@ -215,13 +184,9 @@ export function makeAgentNotifyHandler(client: OrbotoClient) {
     project?: string;
     senderRef?: string;
   }, extra?: unknown): Promise<CallToolResult> => {
-    // ORB-1742 - stamp the sender session automatically.
     const senderRef = mcpInstanceToken(args.senderRef, extra as { sessionId?: string } | undefined);
     const res = await client.post<NotifyResponse>('/v1/agent/notify', { ...args, senderRef });
     return {
-      // ORB-1727 - the message is durable now: it reaches the recipient's
-      // inbox even when they are offline (delivery via the pending-mail
-      // pointer on their next tool call).
       content: [{ type: 'text', text: `notified ${args.targetEmail} (message ${res.messageId} - delivered live if connected, waits in their inbox otherwise)` }],
       structuredContent: { ok: true, messageId: res.messageId },
     };

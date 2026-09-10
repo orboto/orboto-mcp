@@ -1,16 +1,5 @@
 /**
  * ORB-893 - admin-translation review queue MCP tools.
- *
- * Three thin wrappers around `/admin/tickets/translations*`:
- *
- * - `orboto_admin_translation_list` - paginated list of
- *    auto-translated tickets (pending review by default, or `all`).
- * - `orboto_admin_translation_approve` - stamp the row reviewed.
- * - `orboto_admin_translation_revert` - restore the pre-translation
- *    title + description from the audit comment.
- *
- * All three require `admin:translation_review` (super-admin holds it
- * by default).
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';

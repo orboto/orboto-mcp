@@ -17,7 +17,6 @@ import { VERSION } from './version.js';
 const SRC = dirname(fileURLToPath(import.meta.url));
 const pkg = createRequire(import.meta.url)('../package.json') as { version: string };
 
-// version.ts legitimately holds the '0.0.0' runtime fallback literal.
 const ALLOWED = new Set(['version.ts']);
 
 function walk(dir: string, acc: string[] = []): string[] {
@@ -39,9 +38,6 @@ describe('ORB-1173 - version literal guard', () => {
 
   it('no hardcoded semver string literal in src (use VERSION instead)', () => {
     const offenders: string[] = [];
-    // A quoted X.Y.Z literal - what a drifting hardcoded version looks
-    // like. Comments (// v0.110.1) and ticket refs (ORB-1166) are not
-    // quoted semver, so they don't trip this.
     const semverLiteral = /['"]\d+\.\d+\.\d+['"]/;
     for (const file of walk(SRC)) {
       const text = readFileSync(file, 'utf8');

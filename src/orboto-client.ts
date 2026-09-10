@@ -1,27 +1,6 @@
 /**
  * ORB-244 Phase A - thin HTTP client the MCP server uses to talk to
  * the orboto API.
- *
- * Deliberately speaks HTTPS-REST rather than importing `@orboto/api`'s
- * services directly, for three reasons:
- *   1. One code path covers both delivery variants from the ticket - 
- *      Local-Proxy (`npx @orboto/mcp-cli`, running on the dev's laptop,
- *      pointing at the public orboto URL) AND Self-Hosted-inline
- *      (separate container in docker-compose, pointing at
- *      `http://api:3000`). The only difference is the env var.
- *   2. The API's `requirePermission` / PBAC cascade runs server-side
- *      where it belongs. The MCP server is a pure transport adapter;
- *      it never sees the DB or trust boundary.
- *   3. The `orb_*` API-key flow is already wired into the API's
- *      `authenticate` decorator - reusing it means the existing
- *      `mcp:use` + `api:use` scope checks, rate limits, and audit
- *      logs all light up for free.
- *
- * Every request adds `Authorization: Bearer <apiKey>` (from env) and
- * a `User-Agent: orboto-mcp/<version>` header for the admin UI to
- * distinguish MCP traffic from regular API traffic. Non-2xx responses
- * throw `OrbotoApiError` so tool handlers can translate to MCP's
- * `{isError: true}` shape.
  */
 import { VERSION } from './version.js';
 
@@ -76,10 +55,6 @@ export class OrbotoClient {
     }
     this.apiKey = config.apiKey;
     this.tokenProvider = config.tokenProvider;
-    // User-Agent shape: `orboto-mcp/<version> (claude-desktop)`. The
-    // suffix is optional metadata so the admin's MCP-usage panel
-    // (Phase F) can group calls per client family without needing a
-    // new DB column.
     const ua = config.userAgentSuffix
       ? `orboto-mcp/${VERSION} (${config.userAgentSuffix})`
       : `orboto-mcp/${VERSION}`;
@@ -129,9 +104,6 @@ export class OrbotoClient {
     if (res.status === 401 && this.tokenProvider) {
       res = await doFetch(await this.bearer(true));
     }
-    // ORB-1727 - the api stamps `x-orboto-agent-mail: <count>` on responses
-    // while the caller has unread inbox messages. Capture it centrally so
-    // the tool-response wrapper can nudge without any extra request.
     const mail = res.headers?.get?.('x-orboto-agent-mail');
     this.pendingAgentMail = mail ? Number(mail) || 0 : 0;
     if (!res.ok) {
@@ -271,7 +243,6 @@ export async function preflightMcpSession(client: OrbotoClient): Promise<{
   interface StatusResponse {
     enabled: boolean;
     mcpUseGranted: boolean;
-    // ORB-942 - the caller's own users.mcp_enabled flag.
     userMcpEnabled: boolean;
     userEmail: string;
   }
@@ -290,8 +261,6 @@ export async function preflightMcpSession(client: OrbotoClient): Promise<{
   if (!status.mcpUseGranted) {
     throw new Error(`MCP preflight failed: user ${status.userEmail} lacks the mcp:use permission. Ask an admin to grant it.`);
   }
-  // ORB-942 - per-user opt-out. Distinct message pointing at the toggle so
-  // the user knows this is their own setting, not an admin / permission block.
   if (!status.userMcpEnabled) {
     throw new Error('MCP preflight failed: you have disabled MCP access for your account. Re-enable it in Profile - Connect an AI Client.');
   }

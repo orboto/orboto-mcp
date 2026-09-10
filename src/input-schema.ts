@@ -1,60 +1,7 @@
 /**
  * ORB-1692 - strict tool inputs + the aliases agents actually send.
  *
- * Measured across 32 transcripts: 55.6% of all MCP errors were "Required"
- * validation failures where the agent guessed a plausible-but-wrong
- * parameter name (`body` for `text`, `parentKey` for `parentTicketKey`,
- * ...). Worse, zod strips unknown keys by default, so a wrong key on an
- * otherwise-valid call VANISHED silently - `create_ticket` with
- * `parentKey` created ORB-1684 with no parent and no warning.
- *
- * Fix, applied centrally at registration (with-metrics `reg()`):
- *  1. every tool input becomes `.strict()` - an unknown key errors,
- *     naming the offender;
- *  2. the measured aliases resolve silently to the canonical field via a
- *     GUARDED global rename: `alias -> canonical` fires only when the
- *     canonical field exists in that tool's shape, the alias does not,
- *     and the caller did not also send the canonical - so a tool whose
- *     REAL field is `body` (agent-instruction blocks) is never touched;
- *  3. `orboto_update_ticket` folds flat patch fields into `patch` when no
- *     `patch` was sent - agents routinely write `{ticketKey, description}`.
- *
- * ORB-1817 - "we do not force keys that make no sense - key and query are
- * sensible names" (operator). Extends the alias table with the sensible
- * spellings a caller actually reaches for (`key`, `query`, `projectId`,
- * ...) plus one DYNAMIC alias - `id` resolves to the tool's own single
- * id-shaped parameter (`ticketKey` / `docId` / `milestone` / `commentId`)
- * only when exactly one of those exists in that tool's shape - and adds a
- * teaching error: when a call still can't be resolved, the thrown message
- * is a structured JSON block naming every parameter the tool accepts plus
- * a Levenshtein<=2 guess for each unrecognized key (same distance the mjs
- * wrapper's `suggestFlag` uses for `--flag` typos). The failure is also
- * logged through the same `/admin/mcp/instrument` path a handler error
- * uses - see the module doc on `mcp-instrument.ts` for why that needs a
- * dedicated leaf module instead of importing from with-metrics.ts.
- *
- * SDK mechanics: `registerTool` accepts either a raw shape or a zod
- * schema. A top-level `z.preprocess(...)` has no `.shape`, which would
- * make the SDK advertise an EMPTY input schema in tools/list. Stamping
- * the inner object's `.shape` onto the effects schema keeps the
- * advertisement byte-identical to the strict object (verified: the SDK's
- * `normalizeObjectSchema` only checks `.shape !== undefined`, and its
- * json-schema emitter unwraps effects with pipeStrategy "input").
- *
- * ORB-1817 - the preprocess callback is also where the teaching error is
- * thrown (verified against @modelcontextprotocol/sdk 1.29's zod-compat +
- * server/mcp.js): a `preprocess` effect calls `effect.transform(data,
- * checkCtx)` BEFORE the inner schema ever parses, and unlike `refine` /
- * `transform`, a synchronous throw from inside it is NOT caught by zod -
- * it propagates out of `ZodEffects._parse`, out of the SDK's
- * `safeParseAsync` (converted to a rejected promise, since that's an
- * `async function`), and lands in the SDK's own `CallToolRequestSchema`
- * handler's outer try/catch, which for a plain (non-McpError) `Error`
- * returns `{isError: true, content: [{type: 'text', text: error.message}]}`
- * with NO extra wrapping. That is what lets us hand back exactly our
- * structured JSON with nothing else attached - `.superRefine()` cannot do
- * this (it never even runs once the base object parse has already failed,
- * which is the common case: a missing-required or unrecognized-key input).
+ * @see ORB-1684, ORB-1817
  */
 import { z } from 'zod';
 import type { OrbotoClient } from './orboto-client.js';
@@ -75,16 +22,12 @@ export const GLOBAL_INPUT_ALIASES: Record<string, string> = {
   milestoneKey: 'milestone',
   ticket: 'ticketKey',
   project: 'projectKey',
-  // ORB-1817 - measured 2026-09-03: both cost one retry in the same
-  // session. "key" and "query" are what a reasonable caller types.
   key: 'ticketKey',
   query: 'oql',
   projectId: 'projectKey',
   milestoneId: 'milestone',
   comment: 'text',
   message: 'text',
-  // Bulk tools all take `ticketKeys` (plural) - singular-sounding `keys`
-  // is the natural typo/guess.
   keys: 'ticketKeys',
   max: 'limit',
   page: 'cursor',
@@ -120,7 +63,6 @@ function applyAliases(toolName: string, shape: z.ZodRawShape, value: unknown): u
     }
   }
 
-  // ORB-1817 - `id` -> the tool's single id-shaped parameter.
   if ('id' in out && !('id' in shape)) {
     const candidates = ID_LIKE_CANONICALS.filter((c) => c in shape && !(c in out));
     if (candidates.length === 1) {
@@ -130,9 +72,6 @@ function applyAliases(toolName: string, shape: z.ZodRawShape, value: unknown): u
     }
   }
 
-  // update_ticket: flat fields become an implicit patch. Only when the
-  // caller sent no patch at all - a partial patch plus flat extras stays
-  // an error (ambiguous intent must not be guessed).
   if (toolName === 'orboto_update_ticket' && !('patch' in out)) {
     const patch: Record<string, unknown> = {};
     const rest: Record<string, unknown> = {};
@@ -150,11 +89,6 @@ function applyAliases(toolName: string, shape: z.ZodRawShape, value: unknown): u
 
   return out;
 }
-
-// ---------------------------------------------------------------------------
-// ORB-1817 - teaching error: structured `expected` block + closest-name
-// guess, built when the strict + alias-resolved value STILL doesn't parse.
-// ---------------------------------------------------------------------------
 
 /** Levenshtein-1/2 match, same algorithm skills/orboto/scripts/orboto.mjs
  *  uses for `--flag` typos (`suggestFlag` / `levenshtein`) - keep them in
@@ -274,12 +208,7 @@ function buildTeachingError(
  * validates against. Returns a schema whose `.shape` is stamped so
  * tools/list advertisement stays identical to the plain object form.
  *
- * `client` + `clientHint` are optional (tests construct schemas without
- * them) - when present, a validation failure that survives aliasing is
- * logged through the SAME `/admin/mcp/instrument` path a handler error
- * uses (ORB-1817 Part C), because the SDK validates input BEFORE
- * with-metrics.ts's handler wrapper ever runs - this preprocess step is
- * the only place that ever sees the failure.
+ * @see ORB-1817
  */
 export function buildStrictInputSchema(
   toolName: string,
@@ -305,12 +234,8 @@ export function buildStrictInputSchema(
         clientHint,
       });
     }
-    // See the module doc: thrown here (inside a "preprocess" effect, not
-    // a refinement/transform), this is NOT caught by zod - it becomes the
-    // exact isError text the caller sees.
     throw new Error(message);
   }, inner);
-  // SDK contract (see module doc): .shape must exist for advertisement.
   (effects as unknown as { shape: z.ZodRawShape }).shape = inner.shape;
   return effects;
 }

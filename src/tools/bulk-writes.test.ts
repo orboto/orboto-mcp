@@ -54,8 +54,6 @@ function ticket(n: number) {
   };
 }
 
-// Resolution responses for keys ACME-1, ACME-2 (project lookup is shared
-// - but the client re-fetches each time. We supply one per key.)
 function resolveOK(n: number) {
   return [
     { json: PROJ },
@@ -171,7 +169,6 @@ describe('orboto_bulk_close_tickets', () => {
     const patchCall = calls.find((c) => c.method === 'PATCH');
     expect(commentCall).toBeDefined();
     expect(patchCall?.body).toEqual({ status: 'DONE' });
-    // Comment must be BEFORE the patch.
     expect(calls.indexOf(commentCall!)).toBeLessThan(calls.indexOf(patchCall!));
   });
 
@@ -217,7 +214,6 @@ describe('orboto_bulk_assign_tickets', () => {
       ticketKeys: ['ACME-1', 'ACME-2'],
       assigneeEmail: 'who@orboto.io',
     });
-    // Members fetched exactly once thanks to the per-project cache.
     expect(calls.filter((c) => c.url.includes('/members'))).toHaveLength(1);
     expect(res.structuredContent).toMatchObject({
       successful: ['ACME-1', 'ACME-2'],
@@ -260,7 +256,6 @@ describe('orboto_bulk_unassign_tickets', () => {
   });
 });
 
-// ORB-2054 - a query selects the targets instead of a key list.
 describe('query-driven bulk targets', () => {
   it('resolves the query through POST /query (paged) and then patches each match', async () => {
     const calls = stub([

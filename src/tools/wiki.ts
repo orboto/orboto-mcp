@@ -15,8 +15,6 @@ function text(t: string, structured?: Record<string, unknown>): CallToolResult {
   return { content: [{ type: 'text', text: t }], ...(structured ? { structuredContent: structured } : {}) };
 }
 
-// --- orboto_wiki_ingest_url ------------------------------------------------
-
 export const wikiIngestUrlToolConfig = {
   title: 'Ingest a URL into an LLM-Wiki space',
   description:
@@ -36,8 +34,6 @@ export function makeWikiIngestUrlHandler(client: OrbotoClient) {
     return text(`Ingested source "${res.title}" (docId: ${res.docId}). If the space is LLM-Wiki-enabled the curation worker is now processing it.`, { docId: res.docId, title: res.title });
   };
 }
-
-// --- orboto_wiki_ask -------------------------------------------------------
 
 export const wikiAskToolConfig = {
   title: 'Ask a question over the wiki (RAG with citations)',
@@ -61,8 +57,6 @@ export function makeWikiAskHandler(client: OrbotoClient) {
   };
 }
 
-// --- orboto_wiki_lint ------------------------------------------------------
-
 export const wikiLintToolConfig = {
   title: 'Run the LLM-Wiki lint pass on a space',
   description:
@@ -81,8 +75,6 @@ export function makeWikiLintHandler(client: OrbotoClient) {
     return text(`Lint complete: ${res.issues.length} open issue(s), ${res.resolved} auto-resolved.\n${lines.join('\n')}`, { issues: res.issues, detected: res.detected, resolved: res.resolved });
   };
 }
-
-// --- orboto_wiki_plan_update / apply_plan ----------------------------------
 
 export const wikiPlanUpdateToolConfig = {
   title: 'Plan a wiki edit (dry-run, no writes)',
@@ -122,8 +114,6 @@ export function makeWikiApplyPlanHandler(client: OrbotoClient) {
   };
 }
 
-// --- orboto_wiki_record (convenience: plan + apply) ------------------------
-
 export const wikiRecordToolConfig = {
   title: 'Record a wiki update in one step (plan + apply)',
   description:
@@ -145,8 +135,6 @@ export function makeWikiRecordHandler(client: OrbotoClient) {
   };
 }
 
-// --- orboto_wiki_append_section -------------------------------------------
-
 export const wikiAppendSectionToolConfig = {
   title: 'Append a section to a wiki page (idempotent)',
   description:
@@ -164,8 +152,6 @@ export function makeWikiAppendSectionHandler(client: OrbotoClient) {
     return text(res.appended ? 'Section appended.' : 'No change - an identical section is already present.', { appended: res.appended });
   };
 }
-
-// --- orboto_wiki_save_answer -----------------------------------------------
 
 export const wikiSaveAnswerToolConfig = {
   title: 'Save a Q&A answer as a wiki page',
@@ -187,8 +173,6 @@ export function makeWikiSaveAnswerHandler(client: OrbotoClient) {
     return text(res.created ? `Saved as a new wiki page (docId: ${res.docId}).` : `Updated the existing wiki page (docId: ${res.docId}).`, { docId: res.docId, created: res.created });
   };
 }
-
-// --- orboto_wiki_flag_stale ------------------------------------------------
 
 export const wikiFlagStaleToolConfig = {
   title: 'Flag (or unflag) a wiki page as possibly outdated',

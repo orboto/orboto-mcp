@@ -11,8 +11,6 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { agentTicketListRow, type TicketRow } from './shared.js';
 
-// ORB-1699 - rows come from the enriched list pipeline; use the shared
-// TicketRow so the shared row builder types cleanly.
 type MyTicketRow = TicketRow;
 
 export const myTicketsToolConfig = {
@@ -30,10 +28,6 @@ export const myTicketsToolConfig = {
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
-// The API route's `statuses` param is the uppercase LEGACY status
-// enum (TODO/IN_PROGRESS/IN_REVIEW/DONE/WONT_FIX). The MCP tool
-// accepts the lower-case category enum the rest of the surface uses;
-// map here.
 const CATEGORY_TO_LEGACY: Record<string, string> = {
   todo: 'TODO',
   in_progress: 'IN_PROGRESS',
@@ -53,8 +47,6 @@ export function makeMyTicketsHandler(client: OrbotoClient) {
     if (input.statusCategory) {
       qs.set('statuses', CATEGORY_TO_LEGACY[input.statusCategory]);
     } else {
-      // Default: exclude done + wont_fix so "what am I working on?"
-      // returns open work rather than a lifetime history.
       qs.set('statuses', 'TODO,IN_PROGRESS,IN_REVIEW');
     }
 
@@ -75,7 +67,6 @@ export function makeMyTicketsHandler(client: OrbotoClient) {
       structuredContent: {
         count: page.items.length,
         hasMore: !!page.nextCursor,
-        // ORB-1699 - shared lean row; verbose restores uuid/labels/minutes.
         tickets: page.items.map((t) => agentTicketListRow(t, input.verbose ?? false)),
       },
     };

@@ -32,8 +32,6 @@ export function makeAnalyticsHandler(client: OrbotoClient) {
 
     let milestoneId: string | undefined;
     if (input.milestone && (input.report === 'burndown' || input.report === 'earned-value' || input.report === 'forecast' || input.report === 'collaboration')) {
-      // ORB-1696 - shared resolver: key (ORB-M3), name or UUID, ambiguous
-      // name -> explicit error. Matches create_ticket/set_milestone/OQL.
       const m = await resolveMilestoneByNameOrId(client, project.id, input.milestone);
       milestoneId = m.id;
     }

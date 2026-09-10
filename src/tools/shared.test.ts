@@ -102,7 +102,6 @@ describe('ticketLine', () => {
     expect(line).toBe('[ACME-2] Docs update (To Do)');
   });
 
-  // ORB-1605 - flags the stalled-ingestion signal in the one-line summary.
   it('appends the waiting-on-ingestion marker when waitingForGitIngestion is true', () => {
     const line = ticketLine({
       id: 't1', projectId: 'p1', milestoneId: null,
@@ -130,9 +129,6 @@ describe('ticketLine', () => {
   });
 });
 
-// ORB-1826 - production MCP error log showed `Milestone "QA &amp; Testing"
-// not found` for a milestone literally named "QA & Testing": some upstream
-// surface handed the agent an HTML-escaped name. "Normalise, never reject."
 describe('normalizeName', () => {
   it('decodes the five XML-safe named entities', () => {
     expect(normalizeName('QA &amp; Testing')).toBe('qa & testing');

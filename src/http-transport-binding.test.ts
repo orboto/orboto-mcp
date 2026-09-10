@@ -110,12 +110,10 @@ describe('ORB-1576 - session binding', () => {
     const base = await start();
     const sid = await initSession(base, 'orb_alice');
 
-    // Same user, rotated token -> adopted (200).
     const rotated = await post(base, NON_INIT, { authorization: 'Bearer orb_alice_rot', 'mcp-session-id': sid });
     expect(rotated.status).toBe(200);
     await rotated.text();
 
-    // Different user with a VALID token -> 401, holder not adopted.
     const hijack = await post(base, NON_INIT, { authorization: 'Bearer orb_mallory', 'mcp-session-id': sid });
     expect(hijack.status).toBe(401);
     await hijack.text();
@@ -154,11 +152,10 @@ describe('ORB-1576 - request body cap', () => {
       status = res.status;
       await res.text();
     } catch {
-      errored = true; // connection reset mid-write is an acceptable outcome too
+      errored = true;
     }
     expect(errored || status === 400).toBe(true);
   });
 });
 
-// vitest fake-timer hygiene for the bridge internals
 void vi;

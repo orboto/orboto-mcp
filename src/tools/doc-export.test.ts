@@ -1,15 +1,5 @@
 /**
  * ORB-915 - doc-export tool tests.
- *
- * Markdown export: stub fetch returning a string + content-type
- * text/markdown. Verify the tool returns the Markdown verbatim.
- *
- * PDF export: stub fetch returning a Uint8Array body. Verify the
- * tool wraps it as an MCP resource attachment with base64 blob.
- *
- * 503 from a deployment with no PDF engine: verify the
- * OrbotoApiError bubbles up so the model can tell the user what's
- * wrong.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
@@ -91,7 +81,6 @@ describe('orboto_export_doc_md', () => {
 
 describe('orboto_export_doc_pdf', () => {
   it('POSTs /docs/:id/export/pdf and wraps the bytes as a base64 MCP resource', async () => {
-    // Pretend the renderer returned a minimal 8-byte PDF header.
     const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]);
     const calls = stubBinary(pdfBytes);
     const res = await makeExportDocPdfHandler(client)({ docId: DOC_ID });
@@ -103,7 +92,6 @@ describe('orboto_export_doc_pdf', () => {
     expect(first.type).toBe('resource');
     expect(first.resource.uri).toBe(`orboto://doc/${DOC_ID}/export.pdf`);
     expect(first.resource.mimeType).toBe('application/pdf');
-    // The blob is the base64 of the bytes - decode it back and compare.
     const decoded = Buffer.from(first.resource.blob, 'base64');
     expect(Array.from(decoded)).toEqual(Array.from(pdfBytes));
     expect(res.structuredContent).toMatchObject({

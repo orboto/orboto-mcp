@@ -81,9 +81,6 @@ describe('orboto_critical_path (ORB-1028)', () => {
     expect(sc.deadlineRisks[0]).toMatchObject({ ticketKey: 'ACME-1', shortfallDays: 2 });
   });
 
-  // ORB-1614 - a 1-hop cross-project neighbour is marked external:true by
-  // the API; the tool should flag it in both the text (so "OVB-55" isn't
-  // mistaken for a typo of this project's key) and the structured output.
   it('flags a cross-project neighbour with [external] in text and structured output', async () => {
     const calls = stub([
       { json: PROJ },

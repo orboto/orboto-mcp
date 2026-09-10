@@ -56,8 +56,6 @@ describe('tools/query', () => {
       }),
     );
     expect(result.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('ORB-1') });
-    // ORB-1699 - the default row is the shared lean projection: no uuid,
-    // no labels, no minutes; assignee NAMES (fullName || email).
     expect(result.structuredContent).toMatchObject({
       count: 1,
       nextCursor: null,
@@ -104,10 +102,6 @@ describe('tools/query', () => {
   });
 });
 
-// ORB-1699 - the ONE row builder, asserted from one place: the lean shape
-// omits uuid/timestamps/minutes; verbose restores them. list_tickets,
-// my_tickets and query all consume agentTicketListRow, so this single
-// test pins the row for all three.
 import { agentTicketListRow } from './shared.js';
 
 describe('agentTicketListRow (ORB-1699)', () => {
@@ -122,8 +116,6 @@ describe('agentTicketListRow (ORB-1699)', () => {
 
   it('lean row: decision fields only, defaults omitted', () => {
     const row = agentTicketListRow(FULL as never);
-    // priority 'high' and dueDate present -> included; type stays only
-    // when it deviates from 'task'; status NAME is verbose-only.
     expect(Object.keys(row).sort()).toEqual(['assigneeNames', 'dueDate', 'key', 'priority', 'statusCategory', 'title']);
     expect(row.assigneeNames).toEqual(['Ada']);
   });

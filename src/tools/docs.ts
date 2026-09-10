@@ -1,24 +1,7 @@
 /**
  * ORB-244 Phase B - doc tools.
  *
- * `orboto_list_doc_spaces` and `orboto_get_doc` share this file for the
- * same reason the milestone tools do - cheap neighbours on the same
- * API root. Docs carry a human-readable key (`ORB-D12` / `DOC-5`,
- * ORB-1004) and spaces carry one too (`ORB-S1` / `SPACE-5`, ORB-1015);
- * both resolve by key or UUID.
- *
- * ORB-912 (epic ORB-911) added the write-path neighbours so an
- * MCP-aware client can do the full space lifecycle without falling
- * back to REST: create / update / delete spaces, list docs in a
- * space, and (in follow-up phases) write / move / attach / export /
- * roll back individual doc pages.
- *
- * Schema alignment: field names match `@orboto/shared-schema`
- * exactly - `content` not `body` on docs, `excerpt` not `snippet` on
- * hits, backlinks carry `{type, id, label, sourceDocId,
- * sourceDocTitle, sourceSpaceId}`. Getting those wrong 500s the tool
- * because the API's Zod response validator rejects off-shape rows
- * before they leave the server.
+ * @see ORB-1004, ORB-1015, ORB-912, ORB-911
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -29,11 +12,10 @@ interface DocSpaceRow {
   id: string;
   name: string;
   slug: string;
-  // ORB-1015 - human-readable, typeable space key (`ORB-S1` / `SPACE-5`).
   key: string | null;
   description: string | null;
   icon: string | null;
-  type: string; // 'global' | 'project' per DocSpaceTypeEnum
+  type: string;
   projectId: string | null;
   isPublic: boolean;
   visibility?: string | null;
@@ -46,7 +28,6 @@ interface DocRow {
   title: string;
   content: string;
   slug: string;
-  // ORB-1004 - human-readable, typeable doc key (`ORB-D12` / `DOC-5`).
   docKey: string | null;
   visibility: string;
   icon: string | null;
@@ -63,10 +44,6 @@ interface DocBacklinkRow {
   sourceSpaceId: string;
 }
 
-// ---------------------------------------------------------------------------
-// orboto_list_doc_spaces
-// ---------------------------------------------------------------------------
-
 export const listDocSpacesToolConfig = {
   title: 'List doc spaces',
   description:
@@ -81,20 +58,12 @@ export function makeListDocSpacesHandler(client: OrbotoClient) {
     const text = spaces.length === 0
       ? 'No doc spaces visible to this user.'
       : spaces.map((s) => {
-        // `type` is the authoritative scope indicator; `projectId` is
-        // populated when type === 'project'. We use the type flag so
-        // the text rendering doesn't depend on an extra API join.
         const scope = s.type === 'project' ? 'project-scoped' : 'workspace-wide';
-        // ORB-1161 - show key AND uuid. Doc tools accept the key directly,
-        // but surface the uuid too for any tool that still needs it.
         return `- ${s.name} (${scope}) - key: ${s.key ?? '(none)'}  id: ${s.id}`;
       }).join('\n');
     return {
       content: [{ type: 'text', text }],
       structuredContent: {
-        // ORB-1700 - metadata only; description/slug/visibility belong to
-        // the follow-up space read. id stays: every doc tool accepts it,
-        // and pre-key spaces have no key to address by.
         spaces: spaces.map((s) => ({
           id: s.id,
           key: s.key ?? null,
@@ -106,15 +75,8 @@ export function makeListDocSpacesHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_get_doc
-// ---------------------------------------------------------------------------
-
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// ORB-1084 - every docId-taking tool accepts the human-readable doc
-// key (ORB-D12 / DOC-5) as well; writes were UUID-only while no tool
-// exposed the full UUID, so agents could read but never write.
 export async function resolveDocId(client: OrbotoClient, docIdOrKey: string): Promise<string> {
   if (UUID_RE.test(docIdOrKey)) return docIdOrKey;
   const doc = await client.get<{ id: string }>(`/docs/by-key/${encodeURIComponent(docIdOrKey)}`);
@@ -133,8 +95,6 @@ export const getDocToolConfig = {
 
 export function makeGetDocHandler(client: OrbotoClient) {
   return async ({ docId }: { docId: string }): Promise<CallToolResult> => {
-    // ORB-1004 - accept a doc key too; resolve via the by-key route, then
-    // use the resolved UUID for the backlinks fetch.
     const doc = UUID_RE.test(docId)
       ? await client.get<DocRow>(`/docs/${docId}`)
       : await client.get<DocRow>(`/docs/by-key/${encodeURIComponent(docId)}`);
@@ -150,10 +110,6 @@ export function makeGetDocHandler(client: OrbotoClient) {
     if (backlinks.length > 0) {
       lines.push('', `## Backlinks (${backlinks.length})`);
       for (const b of backlinks) {
-        // sourceDocTitle is the doc that links *to* this one; the
-        // `type` + `id` pair identifies the target - same row, target
-        // side. For most backlinks the target is this doc, so we
-        // surface the source.
         lines.push(`- ${b.sourceDocTitle}`);
       }
     }
@@ -184,10 +140,6 @@ export function makeGetDocHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_create_doc_space  (ORB-912)
-// ---------------------------------------------------------------------------
-
 export const createDocSpaceToolConfig = {
   title: 'Create a doc space',
   description:
@@ -211,8 +163,6 @@ export function makeCreateDocSpaceHandler(client: OrbotoClient) {
   }): Promise<CallToolResult> => {
     const body: Record<string, unknown> = { name: input.name, type: input.type };
     if (input.type === 'project') {
-      // Prefer the key (agent-facing surfaces speak keys); fall back to a raw
-      // UUID for back-compat.
       let projectId = input.projectId;
       if (!projectId && input.projectKey) {
         projectId = (await resolveProjectByKey(client, input.projectKey)).id;
@@ -241,10 +191,6 @@ export function makeCreateDocSpaceHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_update_doc_space  (ORB-912)
-// ---------------------------------------------------------------------------
 
 export const updateDocSpaceToolConfig = {
   title: 'Update a doc space',
@@ -276,7 +222,6 @@ export function makeUpdateDocSpaceHandler(client: OrbotoClient) {
     if (input.icon !== undefined) body.icon = input.icon;
     if (input.isPublic !== undefined) body.isPublic = input.isPublic;
     if (input.slug !== undefined) body.slug = input.slug;
-    // ORB-1080 - visibility settings (manage-gated server-side).
     if (input.visibility !== undefined) body.visibility = input.visibility;
     if (input.guestsVisible !== undefined) body.guestsVisible = input.guestsVisible;
     if (input.memberIds !== undefined) body.memberIds = input.memberIds;
@@ -300,10 +245,6 @@ export function makeUpdateDocSpaceHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_delete_doc_space  (ORB-912)
-// ---------------------------------------------------------------------------
-
 export const deleteDocSpaceToolConfig = {
   title: 'Delete a doc space',
   description:
@@ -324,10 +265,6 @@ export function makeDeleteDocSpaceHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_list_docs_in_space  (ORB-912)
-// ---------------------------------------------------------------------------
-
 export const listDocsInSpaceToolConfig = {
   title: 'List docs inside a space',
   description:
@@ -347,9 +284,6 @@ export function makeListDocsInSpaceHandler(client: OrbotoClient) {
         structuredContent: { docs: [] },
       };
     }
-    // Index by parent so we can render a simple indented tree. The
-    // tree-walk runs in JS - the API hands us the flat list because
-    // sort-order is per-parent and traversal is the caller's concern.
     const byParent = new Map<string | null, DocRow[]>();
     for (const r of rows) {
       const key = r.parentDocId ?? null;
@@ -366,7 +300,6 @@ export function makeListDocsInSpaceHandler(client: OrbotoClient) {
       for (const c of children) {
         const indent = '  '.repeat(depth);
         const iconPart = c.icon ? `${c.icon} ` : '';
-        // ORB-1004 - show the typeable key (falls back to UUID).
         lines.push(`${indent}- ${iconPart}${c.title}  (${c.docKey ?? c.id})`);
         walk(c.id, depth + 1);
       }
@@ -390,10 +323,6 @@ export function makeListDocsInSpaceHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_create_doc  (ORB-913)
-// ---------------------------------------------------------------------------
 
 export const createDocToolConfig = {
   title: 'Create a doc page',
@@ -436,10 +365,6 @@ export function makeCreateDocHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_update_doc  (ORB-913)
-// ---------------------------------------------------------------------------
 
 export const updateDocToolConfig = {
   title: 'Update a doc page',
@@ -487,10 +412,6 @@ export function makeUpdateDocHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_delete_doc  (ORB-913)
-// ---------------------------------------------------------------------------
-
 export const deleteDocToolConfig = {
   title: 'Delete a doc page',
   description:
@@ -511,10 +432,6 @@ export function makeDeleteDocHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_move_doc  (ORB-913)
-// ---------------------------------------------------------------------------
 
 export const moveDocToolConfig = {
   title: 'Move a doc page (reparent / reorder / cross-space)',
@@ -554,10 +471,6 @@ export function makeMoveDocHandler(client: OrbotoClient) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// orboto_duplicate_doc_space  (ORB-918)
-// ---------------------------------------------------------------------------
-
 export const duplicateDocSpaceToolConfig = {
   title: 'Duplicate a doc space (clone the space + every doc inside it)',
   description:
@@ -587,10 +500,6 @@ export function makeDuplicateDocSpaceHandler(client: OrbotoClient) {
     };
   };
 }
-
-// ---------------------------------------------------------------------------
-// orboto_resolve_doc_smart_links  (ORB-918)
-// ---------------------------------------------------------------------------
 
 interface SmartLinkResolution {
   type: 'doc' | 'ticket' | 'milestone' | 'project' | 'commit';

@@ -1,17 +1,5 @@
 /**
  * ORB-831 / ORB-887 - `orboto_check_similar`.
- *
- * Dry-run sibling of `orboto_create_ticket`: takes a proposed title +
- * description and returns the tickets that would land in
- * `similarWarnings` if the create were to happen now. Intended as the
- * cautious agent's pre-create probe - call this first when the task
- * scope feels close to existing work, decide whether to follow up on
- * the existing ticket instead, then either commit (`orboto_create_ticket`)
- * or pivot.
- *
- * Wraps the existing `GET /projects/:id/tickets/similar` route so the
- * matching pipeline (tsvector + optional embedding rerank) is shared
- * with both the UI new-ticket form and the POST-create safety-net.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -28,7 +16,6 @@ interface SimilarCandidate {
   statusCategory: string | null;
   similarity: number;
   matchMode: 'tsvector' | 'embedding';
-  // ORB-1604 - parent/sibling/epic candidates are related context, not dups.
   relation?: 'parent' | 'sibling' | 'epic' | null;
 }
 
@@ -67,7 +54,6 @@ export function makeCheckSimilarHandler(client: OrbotoClient) {
       limit: String(limit ?? 5),
     });
     if (description) qs.set('description', description);
-    // ORB-1604 - hierarchy-aware classification inputs.
     if (parentTicketKey) {
       const parent = await resolveTicketByKey(client, parentTicketKey);
       qs.set('parentTicketId', parent.id);
@@ -77,9 +63,6 @@ export function makeCheckSimilarHandler(client: OrbotoClient) {
       `/projects/${project.id}/tickets/similar?${qs.toString()}`,
     );
 
-    // ORB-1604 - only relation-free candidates are duplicate signals; the
-    // parent, siblings and epics are related context (they drove the 70%
-    // --allow-duplicate override rate in the field).
     const realDuplicates = result.candidates.filter((c) => !c.relation);
     const related = result.candidates.filter((c) => c.relation);
     const recommendation = realDuplicates.length === 0
@@ -107,7 +90,6 @@ export function makeCheckSimilarHandler(client: OrbotoClient) {
     return {
       content: [{ type: 'text', text }],
       structuredContent: {
-        // ORB-1693 - same agent projection as create_ticket's warnings.
         similar: trimSimilarEntries(result.candidates),
         mode: result.mode,
         recommendation,

@@ -2,17 +2,7 @@
  * ORB-1910 - `orboto_report_feedback`: file a bug report / feedback / feature
  * request with the operator from inside the workspace (epic ORB-1907).
  *
- * Thin wrapper over the tenant relay (`POST /feedback`, ORB-1908): the
- * instance validates the closed schema, normalises the text and forwards
- * the report to the control plane with its own credential - this tool never
- * talks to the control plane and never learns the reporter's identity. It
- * checks `GET /feedback/availability` first so a self-hosted instance gets a
- * plain refusal naming the public issue tracker instead of a 503.
- *
- * The result carries the report id ONLY. The body is never echoed back into
- * the model's context: a report may quote hostile text (a bug reproduction
- * with an injected instruction), and re-reading it would be the one way this
- * tool could turn data into an instruction.
+ * @see ORB-1908
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -22,8 +12,6 @@ const PUBLIC_TRACKER = 'https://github.com/orboto/orboto-cli/issues';
 
 export const reportFeedbackToolConfig = {
   title: 'Send feedback or a bug report to the operator',
-  // ORB-1805 - kept short: every client pays for this text at connect;
-  // orboto_help serves the full contract (caps, attachment policy, privacy).
   description:
     'File a bug report, feedback or feature request with the orboto operator from inside this workspace. Relayed without your identity; up to 3 png/jpeg/txt attachments (2 MB each, base64). Refused on self-hosted instances without an operator link. Answers with the report id only.',
   inputSchema: z.object({
@@ -42,8 +30,6 @@ export const reportFeedbackToolConfig = {
       contentBase64: z.string().min(1),
     })).max(3).optional(),
   }).shape,
-  // A write that creates one report on the operator side; nothing is
-  // removed or overwritten, and sending twice files two reports.
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 

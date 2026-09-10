@@ -67,7 +67,7 @@ describe('orboto_api_call', () => {
       },
     }]);
     const res = await makeApiCallHandler(client)({ method: 'POST', path: '/projects/p1/milestones', body: {} });
-    expect(res.isError).toBeUndefined(); // the tool call succeeded; the API said no
+    expect(res.isError).toBeUndefined();
     const text = (res.content[0] as { text: string }).text;
     expect(text).toContain('HTTP 403');
     expect(text).toMatch(/missing permission/i);
@@ -82,7 +82,6 @@ describe('orboto_api_call', () => {
       path: '/docs/abc/append-section',
       body: '{"content":"# heading"}',
     });
-    // The proxy must receive real JSON, not a double-encoded string.
     expect((calls[0].body as { body: unknown }).body).toEqual({ content: '# heading' });
   });
 

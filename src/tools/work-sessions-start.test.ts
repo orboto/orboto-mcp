@@ -94,8 +94,6 @@ describe('orboto_work_start', () => {
     expect(post.method).toBe('POST');
     expect(post.url).toContain('/work-sessions/start');
     expect(post.body?.ticketId).toBe('t1');
-    // The instance token must be sent unprompted, same contract as
-    // orboto_work_session_start.
     expect(String(post.body?.agentSessionToken)).toMatch(/^mcp-/);
 
     const text = (res.content[0] as { text: string }).text;
