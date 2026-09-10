@@ -334,11 +334,12 @@
     "params": [
       "assigneeEmail",
       "dryRun",
+      "projectKey",
+      "query",
       "ticketKeys"
     ],
     "required": [
-      "assigneeEmail",
-      "ticketKeys"
+      "assigneeEmail"
     ],
     "enums": {}
   },
@@ -346,23 +347,24 @@
     "params": [
       "comment",
       "dryRun",
+      "projectKey",
+      "query",
       "ticketKeys"
     ],
-    "required": [
-      "ticketKeys"
-    ],
+    "required": [],
     "enums": {}
   },
   "orboto_bulk_comment_tickets": {
     "params": [
       "dryRun",
       "isInternal",
+      "projectKey",
+      "query",
       "text",
       "ticketKeys"
     ],
     "required": [
-      "text",
-      "ticketKeys"
+      "text"
     ],
     "enums": {}
   },
@@ -415,12 +417,13 @@
   "orboto_bulk_move_tickets": {
     "params": [
       "dryRun",
+      "projectKey",
+      "query",
       "statusCategory",
       "ticketKeys"
     ],
     "required": [
-      "statusCategory",
-      "ticketKeys"
+      "statusCategory"
     ],
     "enums": {
       "statusCategory": [
@@ -444,11 +447,12 @@
       "patch.startDate",
       "patch.title",
       "patch.type",
+      "projectKey",
+      "query",
       "ticketKeys"
     ],
     "required": [
-      "patch",
-      "ticketKeys"
+      "patch"
     ],
     "enums": {
       "patch.priority": [
@@ -470,11 +474,12 @@
     "params": [
       "assigneeEmail",
       "dryRun",
+      "projectKey",
+      "query",
       "ticketKeys"
     ],
     "required": [
-      "assigneeEmail",
-      "ticketKeys"
+      "assigneeEmail"
     ],
     "enums": {}
   },

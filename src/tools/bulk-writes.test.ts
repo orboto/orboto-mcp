@@ -259,3 +259,40 @@ describe('orboto_bulk_unassign_tickets', () => {
     });
   });
 });
+
+// ORB-2054 - a query selects the targets instead of a key list.
+describe('query-driven bulk targets', () => {
+  it('resolves the query through POST /query (paged) and then patches each match', async () => {
+    const calls = stub([
+      { json: { items: [ticket(1)], nextCursor: 'c2' } },
+      { json: { items: [ticket(2)], nextCursor: null } },
+      ...resolveOK(1),
+      ...resolveOK(2),
+      { json: ticket(1) },
+      { json: ticket(2) },
+    ]);
+    const res = await makeBulkPatchTicketsHandler(client)({
+      query: 'status = todo AND labels = "triage"',
+      projectKey: 'ACME',
+      patch: { priority: 'high' },
+    });
+    const queryCalls = calls.filter((c) => c.url.endsWith('/query'));
+    expect(queryCalls).toHaveLength(2);
+    expect(queryCalls[0].body).toMatchObject({ oql: 'project = ACME AND (status = todo AND labels = "triage")', limit: 100 });
+    expect(queryCalls[1].body).toMatchObject({ cursor: 'c2' });
+    expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(2);
+    expect(res.structuredContent).toMatchObject({ successful: ['ACME-1', 'ACME-2'], failed: [] });
+  });
+
+  it('refuses both or neither source, an empty match, and more than the per-call cap', async () => {
+    await expect(makeBulkMoveTicketsHandler(client)({ ticketKeys: ['ACME-1'], query: 'x', statusCategory: 'done' }))
+      .rejects.toThrow(/exactly one/);
+    await expect(makeBulkMoveTicketsHandler(client)({ statusCategory: 'done' })).rejects.toThrow(/exactly one/);
+    stub([{ json: { items: [], nextCursor: null } }]);
+    await expect(makeBulkCloseTicketsHandler(client)({ query: 'status = todo' })).rejects.toThrow(/matched no tickets/);
+    stub([{ json: { items: Array.from({ length: 100 }, (_, i) => ticket(i + 1)), nextCursor: 'c2' } },
+      { json: { items: Array.from({ length: 100 }, (_, i) => ticket(i + 101)), nextCursor: 'c3' } },
+      { json: { items: [ticket(201)], nextCursor: null } }]);
+    await expect(makeBulkCommentTicketsHandler(client)({ query: 'status = todo', text: 'hi' })).rejects.toThrow(/more than 200/);
+  });
+});
