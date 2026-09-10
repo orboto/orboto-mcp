@@ -29,6 +29,9 @@ interface ChecklistItemRow {
   linkedTicketKey: string | null;
   linkedTicketTitle: string | null;
   linkedTicketStatusCategory: string | null;
+  assignedTo?: string | null;
+  assigneeName?: string | null;
+  dueDate?: string | null;
   sortOrder: number;
 }
 interface ChecklistRow {
@@ -70,7 +73,9 @@ export function makeGetChecklistsHandler(client: OrbotoClient) {
         const linkSuffix = i.linkedTicketKey
           ? ` ↪ [${i.linkedTicketKey}] ${i.linkedTicketTitle ?? ''} (${i.linkedTicketStatusCategory ?? 'unknown'})`
           : '';
-        lines.push(`- [${i.effectiveCompleted ? 'x' : ' '}] ${i.content}${linkSuffix}`);
+        // ORB-235 - per-item owner + due date, when set.
+        const metaSuffix = `${i.assigneeName ? ` @${i.assigneeName}` : ''}${i.dueDate ? ` (due ${i.dueDate})` : ''}`;
+        lines.push(`- [${i.effectiveCompleted ? 'x' : ' '}] ${i.content}${linkSuffix}${metaSuffix}`);
       }
       lines.push('');
     }
@@ -88,6 +93,9 @@ export function makeGetChecklistsHandler(client: OrbotoClient) {
             id: i.id,
             content: i.content,
             done: i.effectiveCompleted,
+            assignedTo: i.assignedTo ?? null,
+            assigneeName: i.assigneeName ?? null,
+            dueDate: i.dueDate ?? null,
             linkedTicket: i.linkedTicketKey ? {
               key: i.linkedTicketKey,
               title: i.linkedTicketTitle,

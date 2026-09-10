@@ -6,6 +6,9 @@
  * - orboto_add_check - append a new item to a list (default: first list
  *                       on the ticket)
  * - orboto_new_checklist - create a fresh list with optional triggers-done
+ * - orboto_update_check (ORB-235) - text, assignee (a project member) and
+ *                       due date of one item; `orboto_add_check` accepts
+ *                       the same `assignee` / `dueDate` at create time
  *
  * Item identifier: agents prefer 1-based indexes ("check item 3 on
  * ACME-42") because UUIDs are ergonomic disasters in a chat. The
@@ -25,7 +28,35 @@ interface ChecklistItem {
   effectiveCompleted: boolean;
   linkedTicketId: string | null;
   linkedTicketKey: string | null;
+  assignedTo?: string | null;
+  assigneeName?: string | null;
+  dueDate?: string | null;
   sortOrder: number;
+}
+
+interface MemberRow { userId: string; user: { email: string; fullName: string } }
+
+const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * ORB-235 - resolve an assignee reference (user UUID, email, or full name)
+ * to a member of the ticket's project. Names the members on a miss so the
+ * agent can pick instead of guessing.
+ */
+async function resolveMemberId(client: OrbotoClient, projectId: string, ref: string): Promise<string> {
+  const members = await client.get<MemberRow[]>(`/projects/${projectId}/members`);
+  if (UUID_RE.test(ref) && members.some((m) => m.userId === ref)) return ref;
+  const needle = ref.trim().toLowerCase();
+  const hit = members.find((m) => m.user.email.toLowerCase() === needle || m.user.fullName.toLowerCase() === needle);
+  if (!hit) {
+    throw new Error(`"${ref}" is not a member of this project. Members: ${members.map((m) => `${m.user.fullName} <${m.user.email}>`).join(', ') || '(none)'}`);
+  }
+  return hit.userId;
+}
+
+function assertIsoDay(value: string): string {
+  if (!ISO_DAY_RE.test(value)) throw new Error(`dueDate must be YYYY-MM-DD, got "${value}".`);
+  return value;
 }
 
 interface Checklist {
@@ -155,19 +186,21 @@ export function makeRemoveCheckHandler(client: OrbotoClient) {
 export const addCheckToolConfig = {
   title: 'Add a checklist item',
   description:
-    'Append an item to a checklist on a ticket. By default appends to the FIRST checklist on the ticket; pass `listTitle` to target a specific one. Pass `linkedTicketKey` to make the item track another ticket\'s status (the new item\'s `effectiveCompleted` mirrors that ticket\'s done-status from then on).',
+    'Append an item to a checklist on a ticket. By default appends to the FIRST checklist on the ticket; pass `listTitle` to target a specific one. Pass `linkedTicketKey` to make the item track another ticket\'s status (the new item\'s `effectiveCompleted` mirrors that ticket\'s done-status from then on). `assignee` (a project member: email, full name or user id) and `dueDate` (YYYY-MM-DD) give the item its own owner and deadline - the assignee is notified, reminded the day before, and sees the item in their upcoming deadlines.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     content: z.string().min(1).max(2000),
     listTitle: z.string().optional().describe('Target checklist title. Default: first checklist on the ticket.'),
     linkedTicketKey: z.string().optional().describe('Make this item track another ticket\'s done-status (e.g. "ACME-99").'),
+    assignee: z.string().optional().describe('Project member to own this item - email, full name or user id.'),
+    dueDate: z.string().optional().describe('Due date of this item, YYYY-MM-DD.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeAddCheckHandler(client: OrbotoClient) {
-  return async ({ ticketKey, content, listTitle, linkedTicketKey }: {
-    ticketKey: string; content: string; listTitle?: string; linkedTicketKey?: string;
+  return async ({ ticketKey, content, listTitle, linkedTicketKey, assignee, dueDate }: {
+    ticketKey: string; content: string; listTitle?: string; linkedTicketKey?: string; assignee?: string; dueDate?: string;
   }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
     const checklists = await client.get<Checklist[]>(`/tickets/${ticket.id}/checklists`);
@@ -193,6 +226,8 @@ export function makeAddCheckHandler(client: OrbotoClient) {
       const linked = await resolveTicketByKey(client, linkedTicketKey);
       body.linkedTicketId = linked.id;
     }
+    if (assignee) body.assignedTo = await resolveMemberId(client, ticket.projectId, assignee);
+    if (dueDate) body.dueDate = assertIsoDay(dueDate);
 
     const item = await client.post<ChecklistItem>(
       `/tickets/${ticket.id}/checklists/${target.id}/items`, body,
@@ -201,7 +236,7 @@ export function makeAddCheckHandler(client: OrbotoClient) {
     return {
       content: [{
         type: 'text',
-        text: `Added to "${target.title}" on [${ticket.ticketKey}]: ${content}${linkedTicketKey ? ` ↪ [${linkedTicketKey}]` : ''}`,
+        text: `Added to "${target.title}" on [${ticket.ticketKey}]: ${content}${linkedTicketKey ? ` ↪ [${linkedTicketKey}]` : ''}${assignee ? ` @${assignee}` : ''}${dueDate ? ` due ${dueDate}` : ''}`,
       }],
       structuredContent: {
         ticketKey: ticket.ticketKey,
@@ -209,6 +244,61 @@ export function makeAddCheckHandler(client: OrbotoClient) {
         itemId: item.id,
         content: item.content,
         linkedTicketKey: linkedTicketKey ?? null,
+        assignedTo: (body.assignedTo as string | undefined) ?? null,
+        dueDate: (body.dueDate as string | undefined) ?? null,
+      },
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// orboto_update_check (ORB-235) - text / assignee / due date of one item.
+// ---------------------------------------------------------------------------
+
+export const updateCheckToolConfig = {
+  title: 'Update a checklist item',
+  description:
+    'Change a checklist item\'s text, assignee or due date. `item` is a 1-based index (global across all checklists on the ticket, top to bottom) or the item\'s UUID - same as orboto_check. `assignee` is a project member (email, full name or user id) or `null` to unassign; `dueDate` is YYYY-MM-DD or `null` to clear. A new assignee is notified; a new due date gets its own day-before reminder.',
+  inputSchema: z.object({
+    ticketKey: z.string().min(3),
+    item: z.union([
+      z.number().int().min(1).describe('1-based index, global across all checklists on this ticket'),
+      z.string().describe('Item UUID - for callers that already have it'),
+    ]),
+    content: z.string().min(1).max(2000).optional().describe('New item text.'),
+    assignee: z.string().nullable().optional().describe('Project member (email, full name or user id); null unassigns.'),
+    dueDate: z.string().nullable().optional().describe('YYYY-MM-DD; null clears the due date.'),
+  }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+};
+
+export function makeUpdateCheckHandler(client: OrbotoClient) {
+  return async ({ ticketKey, item, content, assignee, dueDate }: {
+    ticketKey: string; item: number | string; content?: string; assignee?: string | null; dueDate?: string | null;
+  }): Promise<CallToolResult> => {
+    const ticket = await resolveTicketByKey(client, ticketKey);
+    const { itemId, checklists } = await resolveItemId(client, ticket.id, item);
+    const before = checklists.flatMap((c) => c.items).find((i) => i.id === itemId);
+    const body: Record<string, unknown> = {};
+    if (content !== undefined) body.content = content;
+    if (assignee !== undefined) body.assignedTo = assignee === null ? null : await resolveMemberId(client, ticket.projectId, assignee);
+    if (dueDate !== undefined) body.dueDate = dueDate === null ? null : assertIsoDay(dueDate);
+    if (Object.keys(body).length === 0) throw new Error('Nothing to update - pass content, assignee and/or dueDate.');
+    const res = await client.patch<{ item: ChecklistItem }>(`/checklist-items/${itemId}`, body);
+    const after = res.item;
+    const parts = [
+      after.assigneeName ? `@${after.assigneeName}` : (assignee === null ? 'unassigned' : null),
+      after.dueDate ? `due ${after.dueDate}` : (dueDate === null ? 'no due date' : null),
+    ].filter(Boolean);
+    return {
+      content: [{ type: 'text', text: `Updated on [${ticket.ticketKey}]: ${after.content ?? before?.content ?? '(item)'}${parts.length ? ` (${parts.join(', ')})` : ''}` }],
+      structuredContent: {
+        ticketKey: ticket.ticketKey,
+        itemId,
+        content: after.content ?? null,
+        assignedTo: after.assignedTo ?? null,
+        assigneeName: after.assigneeName ?? null,
+        dueDate: after.dueDate ?? null,
       },
     };
   };
