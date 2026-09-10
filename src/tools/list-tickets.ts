@@ -21,7 +21,7 @@ interface TicketPage {
 export const listTicketsToolConfig = {
   title: 'List tickets',
   description:
-    'List tickets in a project, optionally filtered by status category, milestone name, or assignee email. Returns up to 50 tickets per call.',
+    'List tickets in a project, optionally filtered by status category, milestone name, or assignee email. Set unscheduled=true for the product backlog (everything not planned into a milestone yet). Returns up to 50 tickets per call.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
     statusCategory: z
@@ -32,6 +32,10 @@ export const listTicketsToolConfig = {
       .string()
       .optional()
       .describe('Key (ORB-M3), name, or UUID. Omit for all, backlog included.'),
+    unscheduled: z
+      .boolean()
+      .optional()
+      .describe('true = only the backlog: tickets with no milestone. Cannot be combined with `milestone`.'),
     assigneeEmail: z
       .string()
       .optional()
@@ -51,6 +55,7 @@ export function makeListTicketsHandler(client: OrbotoClient) {
     projectKey: string;
     statusCategory?: 'todo' | 'in_progress' | 'in_review' | 'done' | 'wont_fix';
     milestone?: string;
+    unscheduled?: boolean;
     assigneeEmail?: string;
     parentTicketKey?: string;
     limit?: number;
@@ -61,6 +66,13 @@ export function makeListTicketsHandler(client: OrbotoClient) {
     const qs = new URLSearchParams();
     qs.set('limit', String(input.limit ?? 25));
     if (input.statusCategory) qs.set('statusCategory', input.statusCategory);
+    // ORB-14 - the backlog. Mutually exclusive with `milestone` on the API
+    // (one asks for a milestone, the other for the absence of any); say so
+    // here instead of letting the caller decode a 400.
+    if (input.unscheduled && input.milestone) {
+      throw new Error('Pass either `milestone` or `unscheduled: true`, not both.');
+    }
+    if (input.unscheduled) qs.set('unscheduled', 'true');
     // Milestone + assignee need a UUID on the API; resolve them here
     // from the project payload instead of forcing the caller to paste
     // a UUID.

@@ -81,6 +81,24 @@ describe('orboto_list_tickets', () => {
     expect(calls[1]).toContain('limit=10');
   });
 
+  // ORB-14 - the backlog flag.
+  it('passes unscheduled=true for the backlog', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: { items: [], nextCursor: null } },
+    ]);
+    await makeListTicketsHandler(client)({ projectKey: 'ACME', unscheduled: true, statusCategory: 'todo' });
+    expect(calls[1]).toContain('unscheduled=true');
+    expect(calls[1]).toContain('statusCategory=todo');
+  });
+
+  it('refuses unscheduled together with milestone', async () => {
+    stub([{ json: PROJ }]);
+    await expect(
+      makeListTicketsHandler(client)({ projectKey: 'ACME', unscheduled: true, milestone: 'ACME-M1' }),
+    ).rejects.toThrow(/not both/);
+  });
+
   // ORB-1696 - the shared resolver contract: key, name, OR UUID; an
   // ambiguous name errors listing candidates. One test per form.
   it('resolves milestone KEY (ORB-1696)', async () => {
