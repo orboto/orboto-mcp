@@ -116,6 +116,25 @@ describe('orboto_log_time', () => {
   });
 });
 
+describe('orboto_log_time with dates (ORB-2056)', () => {
+  it('books through POST /time-entries/bulk with a template and reports the total', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: { entries: [{ id: 'e1', ticketId: 't1', userId: 'u1', durationMinutes: 120, description: 'sprint', loggedAt: '2026-06-01T07:00:00.000Z' }, { id: 'e2', ticketId: 't1', userId: 'u1', durationMinutes: 120, description: 'sprint', loggedAt: '2026-06-02T07:00:00.000Z' }], warnings: [{ kind: 'non_working_day', date: '2026-06-06', message: 'x' }], lockedDates: [], dryRun: false, totalMinutes: 240 } },
+    ]);
+    const out = await makeLogTimeHandler(client)({
+      ticketKey: 'ACME-1', durationMinutes: 120, description: 'sprint', dates: ['2026-06-01', '2026-06-02'], time: '09:00', loggedAt: '2026-01-01T00:00:00Z',
+    });
+    expect(calls[2].method).toBe('POST');
+    expect(calls[2].url).toContain('/time-entries/bulk');
+    expect(calls[2].body).toEqual({ template: { ticketId: 't1', durationMinutes: 120, description: 'sprint', time: '09:00' }, dates: ['2026-06-01', '2026-06-02'] });
+    expect((out.structuredContent as { totalMinutes: number }).totalMinutes).toBe(240);
+    expect((out.content[0] as { text: string }).text).toContain('2 day(s)');
+    expect((out.content[0] as { text: string }).text).toContain('capacity warning');
+  });
+});
+
 describe('orboto_list_time_entries / edit / delete (ORB-1292)', () => {
   it('list GETs the ticket time entries and returns them structured', async () => {
     const calls = stub([

@@ -46,6 +46,13 @@ interface TimeEntry {
   isAgentWork?: boolean;
 }
 
+interface BulkTimeEntryResult {
+  entries: TimeEntry[];
+  warnings: Array<{ kind: string; date: string; message: string }>;
+  lockedDates: string[];
+  totalMinutes: number;
+}
+
 // ---------------------------------------------------------------------------
 // orboto_timer_start
 // ---------------------------------------------------------------------------
@@ -150,21 +157,42 @@ export function makeTimerStopHandler(client: OrbotoClient) {
 export const logTimeToolConfig = {
   title: 'Log a time entry on a ticket',
   description:
-    'Direct time-entry POST - for "I just spent 90 minutes on this last Tuesday but forgot to start a timer". `loggedAt` defaults to now; pass an ISO datetime to back-date.',
+    'Direct time-entry POST - for "I just spent 90 minutes on this last Tuesday but forgot to start a timer". `loggedAt` defaults to now; pass an ISO datetime to back-date. Pass `dates` (YYYY-MM-DD list) to book the same entry on several days in one call (ORB-2056): all-or-nothing, a day inside an approved timesheet refuses the set and names the day, capacity warnings come back advisory.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     durationMinutes: z.number().int().positive().describe('Minutes, > 0.'),
     description: z.string().optional(),
-    loggedAt: z.string().datetime().optional().describe('ISO 8601. Default: now.'),
+    loggedAt: z.string().datetime().optional().describe('ISO 8601. Default: now. Ignored when `dates` is set.'),
+    dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(200).optional().describe('Book this entry on each of these days (YYYY-MM-DD).'),
+    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional().describe('Wall-clock start for `dates`, workspace timezone. Default 09:00.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeLogTimeHandler(client: OrbotoClient) {
-  return async ({ ticketKey, durationMinutes, description, loggedAt }: {
-    ticketKey: string; durationMinutes: number; description?: string; loggedAt?: string;
+  return async ({ ticketKey, durationMinutes, description, loggedAt, dates, time }: {
+    ticketKey: string; durationMinutes: number; description?: string; loggedAt?: string; dates?: string[]; time?: string;
   }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
+    if (dates && dates.length > 0) {
+      const template: Record<string, unknown> = { ticketId: ticket.id, durationMinutes };
+      if (description !== undefined) template.description = description;
+      if (time) template.time = time;
+      const booked = await client.post<BulkTimeEntryResult>('/time-entries/bulk', { template, dates });
+      const warn = booked.warnings.length ? ` - ${booked.warnings.length} capacity warning(s): ${booked.warnings.map((w) => `${w.date} ${w.kind}`).join(', ')}` : '';
+      return {
+        content: [{
+          type: 'text',
+          text: `Logged ${durationMinutes} min on [${ticket.ticketKey}] on ${booked.entries.length} day(s) (${booked.totalMinutes} min total)${warn}`,
+        }],
+        structuredContent: {
+          ticketKey: ticket.ticketKey,
+          entries: booked.entries.map((e) => ({ entryId: e.id, loggedAt: e.loggedAt, durationMinutes: e.durationMinutes })),
+          totalMinutes: booked.totalMinutes,
+          warnings: booked.warnings,
+        },
+      };
+    }
     const body: Record<string, unknown> = { durationMinutes };
     if (description !== undefined) body.description = description;
     if (loggedAt) body.loggedAt = loggedAt;
