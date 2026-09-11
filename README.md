@@ -11,6 +11,8 @@ There are two ways to authenticate the stdio proxy:
 - **OAuth login (recommended for people).** Omit `ORBOTO_API_KEY`. On first use the proxy opens your browser to the orboto login (which is your SSO login when SSO is configured), you approve once, and it keeps a short-lived, self-refreshing session cached on disk. Nothing to paste, nothing long-lived.
 - **API key (service accounts / CI).** Set `ORBOTO_API_KEY` to an `orb_…` key from **Profile → API keys → Generate**. Best for headless machines with no browser.
 
+The proxy reads `ORBOTO_API_URL` (the workspace URL including `/api`) and `ORBOTO_API_KEY`. The orboto CLI uses different names for the same two values (`ORBOTO_BASE_URL`, `ORBOTO_TOKEN`); a box that only sets the CLI's variables leaves the proxy without a URL, which it reports as a missing `ORBOTO_API_URL` at start.
+
 ### Claude Desktop - OAuth login (no token)
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%/Claude/claude_desktop_config.json` (Windows):
