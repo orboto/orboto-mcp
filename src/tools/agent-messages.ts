@@ -28,7 +28,7 @@ interface AgentMessage {
 export const agentMessagesToolConfig = {
   title: 'Fetch / acknowledge your agent inbox',
   description:
-    'Your store-and-forward inbox: messages other agents sent you plus broadcasts to your scopes (payload.broadcast names the scope). Default = unread, marked delivered on fetch; ackIds marks read. Reply via orboto_agent_notify with threadId = the message id.',
+    'Your store-and-forward inbox: messages other agents sent you, broadcasts to your scopes (payload.broadcast names the scope) and ticket_ready wake-ups (subject ticket-ready:<KEY>, payload.type ticket_ready with ticketKey, reason assigned | labeled | unblocked: the ticket is yours to claim; claim or answer, then ack). Default = unread, marked delivered on fetch; ackIds marks read. Reply via orboto_agent_notify with threadId = the message id.',
   inputSchema: z.object({
     all: z.boolean().default(false).describe('true = include already-read messages'),
     limit: z.number().int().min(1).max(200).default(50),
