@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { makeAgentMessageWorkHandler } from './agent-message-work.js';
 import { mcpInstanceToken } from './shared.js';
 
 interface AgentMessage {
@@ -26,17 +27,21 @@ interface AgentMessage {
 }
 
 export const agentMessagesToolConfig = {
-  title: 'Fetch / acknowledge your agent inbox',
-  description:
-    'Your store-and-forward inbox: messages other agents sent you, broadcasts to your scopes (payload.broadcast names the scope) and ticket_ready wake-ups (subject ticket-ready:<KEY>, payload.type ticket_ready with ticketKey, reason assigned | labeled | unblocked: the ticket is yours to claim; claim or answer, then ack). Default = unread, marked delivered on fetch; ackIds marks read. Reply via orboto_agent_notify with threadId = the message id.',
+  title: 'Agent inbox and message work',
+  description: 'Read your inbox or use messageWork for independent work ownership, steps and recovery. Claim before execution. Only the owner may ACK with ackIds and ackEvidence; ACK never completes work. Reply with orboto_agent_notify and threadId.',
   inputSchema: z.object({
-    all: z.boolean().default(false).describe('true = include already-read messages'),
+    messageWork: z.object({ messageId: z.string().uuid().optional(), mutation: z.record(z.unknown()).optional(),
+      cursor: z.string().optional(), limit: z.number().int().min(1).max(100).optional(), openOnly: z.boolean().optional() }).optional()
+      .describe('List/inspect work or mutate it. Discover the mutation schema with api_search.'),
+    all: z.boolean().default(false),
     limit: z.number().int().min(1).max(200).default(50),
-    project: z.string().min(1).max(64).optional().describe('Project key or UUID: scoped messages for this project plus unscoped ones. Ack only messages that are yours.'),
-    includeOwnSends: z.boolean().default(false).describe('true = also list messages this session sent (hidden by default so a shared identity never wakes itself).'),
-    ackIds: z.array(z.string().uuid()).max(200).optional().describe('Message ids to mark as read'),
+    project: z.string().min(1).max(64).optional().describe('Project key/UUID; includes unscoped mail.'),
+    includeOwnSends: z.boolean().default(false),
+    ackEvidence: z.string().trim().min(1).max(4000).optional().describe('Explicit owner handling evidence.'),
+    ackIds: z.array(z.string().uuid()).max(200).optional().describe('Owner ACK IDs.'),
   }).shape,
   outputSchema: z.object({
+    work: z.record(z.unknown()).optional(),
     messages: z.array(z.object({
       id: z.string(),
       fromUserId: z.string(),
@@ -50,14 +55,19 @@ export const agentMessagesToolConfig = {
     })),
     acked: z.number().int(),
   }).shape,
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
 };
 
 export function makeAgentMessagesHandler(client: OrbotoClient) {
-  return async (args: { all?: boolean; limit?: number; project?: string; includeOwnSends?: boolean; ackIds?: string[] }, extra?: unknown): Promise<CallToolResult> => {
+  return async (args: { all?: boolean; limit?: number; project?: string; includeOwnSends?: boolean; ackIds?: string[]; ackEvidence?: string; messageWork?: Parameters<ReturnType<typeof makeAgentMessageWorkHandler>>[0] }, extra?: unknown): Promise<CallToolResult> => {
+    if (args.messageWork) {
+      if (args.ackIds?.length) throw new Error('Use a separate explicit ACK call.');
+      const result = await makeAgentMessageWorkHandler(client)(args.messageWork, extra as { sessionId?: string } | undefined);
+      return { content: result.content, structuredContent: { messages: [], acked: 0, work: result.structuredContent } };
+    }
     let acked = 0;
     if (args.ackIds && args.ackIds.length > 0) {
-      const res = await client.post<{ acked: number }>('/v1/agent/messages/ack', { ids: args.ackIds });
+      const res = await client.post<{ acked: number }>('/v1/agent/messages/ack', { ids: args.ackIds, evidence: args.ackEvidence, instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
       acked = res.acked;
     }
     const q = new URLSearchParams();
