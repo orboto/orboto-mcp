@@ -382,3 +382,18 @@ describe('ORB-1610 - orboto_work_session_claims_release', () => {
     expect((res.content[0] as { text: string }).text).toContain('Released every claim');
   });
 });
+
+
+describe('review evidence binding', () => {
+  it('forwards the explicit implementation reference and verdict through both finish surfaces', async () => {
+    const verification = { reviewOfSessionId: '11111111-1111-4111-8111-111111111111', reviewVerdict: 'rework', tests: false };
+    const calls = stub([
+      { json: { session: { ...SESSION, status: 'finished' }, durationMinutes: 0, changed: true } },
+      { json: { session: { ...SESSION, status: 'finished' }, durationMinutes: 0, changed: true } },
+    ]);
+    await makeWorkSessionFinishHandler(client)({ sessionId: SESSION.id, verification });
+    await makeWorkFinishHandler(client)({ sessionId: SESSION.id, verification });
+    expect(calls).toHaveLength(2);
+    for (const call of calls) expect(call.body?.verification).toEqual(verification);
+  });
+});

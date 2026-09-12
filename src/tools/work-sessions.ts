@@ -368,6 +368,8 @@ export const workSessionFinishToolConfig = {
       .describe('`finished` (default) = the work completed. `cancelled` = abandoned attempt; time is still booked, history stays honest.'),
     commitSha: z.string().optional().describe('The commit this session produced, when it produced one.'),
     verification: z.object({
+      reviewOfSessionId: z.string().uuid().optional().describe('Exact independent implementation work session this review examined.'),
+      reviewVerdict: z.enum(['approved', 'rework']).optional().describe('Explicit review outcome, paired with reviewOfSessionId; never inferred from later ticket status.'),
       build: z.boolean().optional(),
       tests: z.boolean().optional(),
       lint: z.boolean().optional(),
@@ -422,6 +424,8 @@ export const workFinishToolConfig = {
       .describe('`finished` (default) drives the ticket transition below. `cancelled` = abandoned attempt; time is still booked, the ticket is left untouched.'),
     commitSha: z.string().optional().describe('The commit this session produced. Recorded as an attestation immediately, verified asynchronously once git ingestion catches up - never blocks this call.'),
     verification: z.object({
+      reviewOfSessionId: z.string().uuid().optional().describe('Exact independent implementation work session this review examined.'),
+      reviewVerdict: z.enum(['approved', 'rework']).optional().describe('Explicit review outcome, paired with reviewOfSessionId; never inferred from later ticket status.'),
       build: z.boolean().optional(),
       tests: z.boolean().optional(),
       lint: z.boolean().optional(),
