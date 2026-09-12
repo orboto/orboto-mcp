@@ -4,6 +4,7 @@
  * @see ORB-704, ORB-706
  */
 import { z } from 'zod';
+import { AgentInventoryEntrySchema, type AgentInventoryEntry } from './agent-presence-schema.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { mcpInstanceToken } from './shared.js';
@@ -54,49 +55,22 @@ export function makeAgentHeartbeatHandler(client: OrbotoClient) {
   };
 }
 
-interface PresenceRow {
-  userId: string;
-  userEmail: string;
-  userFullName: string | null;
-  sessionId: string;
-  status: string;
-  workingOnTicket: { id: string; key: string | null; title: string; projectKey: string | null } | null;
-  capabilities: string[];
-  clientInfo: { name?: string; version?: string; host?: string; user_agent?: string };
-  lastSeenAt: string;
-  createdAt: string;
-}
+type PresenceRow = AgentInventoryEntry;
 
 export const agentPresenceToolConfig = {
   title: 'Workspace agent presence',
   description:
-    'Returns currently-active agent sessions in the workspace. Active = heartbeat within the last 90 s. Super-admins see every agent; regular users see only their own sessions (useful for "is my dispatcher daemon alive?" checks). Each row exposes `userId`, `userEmail`, the agent runtime (`clientInfo.name`), declared `capabilities`, current `status`, and the ticket the agent is working on if any. Use this to plan multi-agent work - e.g. before dispatching a sub-task, look up which other agents are active and what they\'re working on so you don\'t step on a parallel run.',
+    'Returns all active orboto agent instances, including lane workers/reviewers, inbox and MCP connections and registered runners. Session freshness is 90 seconds; lanes retain their 300-second heartbeat grace. Unexpired work leases keep their owning instance visible. Ticket metadata and claims retain ordinary ticket visibility. Rows include authoritative isBot, owner, lane and stable sessionId; separate instances of one account remain separate. Callers with admin:system:read see every agent; other users see only their own sessions (useful for "is my dispatcher daemon alive?" checks). Each row exposes `userId`, `userEmail`, the agent runtime (`clientInfo.name`), declared `capabilities`, current `status`, and the ticket the agent is working on if any. Use this to plan multi-agent work - e.g. before dispatching a sub-task, look up which other agents are active and what they\'re working on so you don\'t step on a parallel run.',
   inputSchema: z.object({}).shape,
   outputSchema: z.object({
-    sessions: z.array(z.object({
-      userId: z.string().uuid(),
-      userEmail: z.string(),
-      userFullName: z.string().nullable(),
-      sessionId: z.string().uuid(),
-      status: z.string(),
-      workingOnTicket: z.object({
-        id: z.string().uuid(),
-        key: z.string().nullable(),
-        title: z.string(),
-        projectKey: z.string().nullable(),
-      }).nullable(),
-      capabilities: z.array(z.string()),
-      clientInfo: z.record(z.string(), z.string()),
-      lastSeenAt: z.string(),
-      createdAt: z.string(),
-    })),
+    sessions: z.array(AgentInventoryEntrySchema),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeAgentPresenceHandler(client: OrbotoClient) {
   return async (): Promise<CallToolResult> => {
-    const sessions = await client.get<PresenceRow[]>('/v1/agent/presence');
+    const sessions = await client.get<PresenceRow[]>('/v1/agent/inventory');
     const lines: string[] = [];
     if (sessions.length === 0) {
       lines.push('No active agent sessions in the workspace.');
@@ -108,7 +82,7 @@ export function makeAgentPresenceHandler(client: OrbotoClient) {
         const work = s.workingOnTicket
           ? ` · working on [${s.workingOnTicket.projectKey ?? '?'}] ${s.workingOnTicket.key ?? s.workingOnTicket.id} (${s.workingOnTicket.title})`
           : '';
-        lines.push(`- ${name} (${runtime}) - ${s.status}${work}`);
+        lines.push(`- ${name} <${s.userEmail}> (${runtime}, instance ${s.sessionId}) - ${s.status}${work}; owner: ${s.owner?.name ?? s.owner?.email ?? (s.isBot ? 'unassigned' : 'self')}${s.lane ? `; lane: ${s.lane.name}` : ''}`);
       }
     }
     return {

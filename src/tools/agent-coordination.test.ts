@@ -51,16 +51,16 @@ describe('orboto_agent_heartbeat', () => {
 });
 
 describe('orboto_agent_presence', () => {
-  it('GETs /v1/agent/presence and renders one line per session', async () => {
+  it('GETs /v1/agent/inventory and renders one line per session', async () => {
     stub([{
       json: [
         {
           userId: '00000000-0000-0000-0000-000000000001',
           userEmail: 'alice@x.test',
-          userFullName: 'Alice',
+          userFullName: 'Alice', isBot: false, owner: null, autonomyPaused: false, lane: null, workSessions: [],
           sessionId: '00000000-0000-0000-0000-000000000010',
           status: 'working',
-          workingOnTicket: { id: 't1', key: 'ORB-42', title: 'Test', projectKey: 'ORB' },
+          workingOnTicket: { id: '00000000-0000-0000-0000-000000000020', key: 'ORB-42', title: 'Test', projectKey: 'ORB' },
           capabilities: ['writes-tickets'],
           clientInfo: { name: 'claude-code' },
           lastSeenAt: new Date().toISOString(),
@@ -69,7 +69,8 @@ describe('orboto_agent_presence', () => {
         {
           userId: '00000000-0000-0000-0000-000000000002',
           userEmail: 'bot@x.test',
-          userFullName: null,
+          userFullName: null, isBot: true, owner: { id: '00000000-0000-0000-0000-000000000001', name: 'Alice', email: 'alice@x.test' },
+          autonomyPaused: false, lane: null, workSessions: [],
           sessionId: '00000000-0000-0000-0000-000000000011',
           status: 'idle',
           workingOnTicket: null,
@@ -84,8 +85,9 @@ describe('orboto_agent_presence', () => {
     const result = await handler();
     const text = (result.content[0] as { text: string }).text;
     expect(text).toContain('2 active session(s)');
-    expect(text).toContain('Alice (claude-code) - working · working on [ORB] ORB-42');
-    expect(text).toContain('bot@x.test (dispatcher-daemon) - idle');
+    expect(text).toContain('Alice <alice@x.test> (claude-code, instance 00000000-0000-0000-0000-000000000010) - working · working on [ORB] ORB-42');
+    expect(text).toContain('bot@x.test <bot@x.test> (dispatcher-daemon, instance 00000000-0000-0000-0000-000000000011) - idle; owner: Alice');
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe('https://orboto.example.com/v1/agent/inventory');
     expect((result.structuredContent as { sessions: unknown[] }).sessions).toHaveLength(2);
   });
 
