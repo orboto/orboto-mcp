@@ -129,6 +129,7 @@ import {
 import { getTimerToolConfig, makeGetTimerHandler } from './tools/get-timer.js';
 import { getChecklistsToolConfig, makeGetChecklistsHandler } from './tools/get-checklists.js';
 import { listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler } from './tools/list-git-app-installations.js';
+import { gitRotateTokenToolConfig, makeGitRotateTokenHandler } from './tools/git-rotate-token.js';
 import {
   createTicketToolConfig, makeCreateTicketHandler,
   updateTicketToolConfig, makeUpdateTicketHandler,
@@ -472,6 +473,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_personal_fact_delete', personalFactDeleteToolConfig, makePersonalFactDeleteHandler(client));
   reg('orboto_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
   reg('orboto_list_git_app_installations', listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler(client));
+  reg('orboto_git_rotate_token', gitRotateTokenToolConfig, makeGitRotateTokenHandler(client));
 
   reg('orboto_create_ticket', createTicketToolConfig, makeCreateTicketHandler(client));
   reg('orboto_update_ticket', updateTicketToolConfig, makeUpdateTicketHandler(client));
