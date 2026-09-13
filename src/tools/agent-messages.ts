@@ -28,17 +28,15 @@ interface AgentMessage {
 
 export const agentMessagesToolConfig = {
   title: 'Agent inbox and message work',
-  description: 'Read your inbox or use messageWork for independent work ownership, steps and recovery. Claim before execution. Only the owner may ACK with ackIds and ackEvidence; ACK never completes work. Reply with orboto_agent_notify and threadId.',
+  description: 'Your inbox. messageWork carries durable work ownership - claim before executing. ackIds is a plain read receipt: no claim needed, finishes nothing. Reply via orboto_agent_notify with threadId.',
   inputSchema: z.object({
-    messageWork: z.object({ messageId: z.string().uuid().optional(), mutation: z.record(z.unknown()).optional(),
-      cursor: z.string().optional(), limit: z.number().int().min(1).max(100).optional(), openOnly: z.boolean().optional() }).optional()
-      .describe('List/inspect work or mutate it. Discover the mutation schema with api_search.'),
+    messageWork: z.record(z.unknown()).optional()
+      .describe('Work envelope {messageId, mutation, cursor, limit, openOnly}; schema: orboto_api_search.'),
     all: z.boolean().default(false),
     limit: z.number().int().min(1).max(200).default(50),
     project: z.string().min(1).max(64).optional().describe('Project key/UUID; includes unscoped mail.'),
     includeOwnSends: z.boolean().default(false),
-    ackEvidence: z.string().trim().min(1).max(4000).optional().describe('Explicit owner handling evidence.'),
-    ackIds: z.array(z.string().uuid()).max(200).optional().describe('Owner ACK IDs.'),
+    ackIds: z.array(z.string().uuid()).max(200).optional().describe('Message ids to mark read.'),
   }).shape,
   outputSchema: z.object({
     work: z.record(z.unknown()).optional(),
@@ -59,7 +57,7 @@ export const agentMessagesToolConfig = {
 };
 
 export function makeAgentMessagesHandler(client: OrbotoClient) {
-  return async (args: { all?: boolean; limit?: number; project?: string; includeOwnSends?: boolean; ackIds?: string[]; ackEvidence?: string; messageWork?: Parameters<ReturnType<typeof makeAgentMessageWorkHandler>>[0] }, extra?: unknown): Promise<CallToolResult> => {
+  return async (args: { all?: boolean; limit?: number; project?: string; includeOwnSends?: boolean; ackIds?: string[]; messageWork?: Parameters<ReturnType<typeof makeAgentMessageWorkHandler>>[0] }, extra?: unknown): Promise<CallToolResult> => {
     if (args.messageWork) {
       if (args.ackIds?.length) throw new Error('Use a separate explicit ACK call.');
       const result = await makeAgentMessageWorkHandler(client)(args.messageWork, extra as { sessionId?: string } | undefined);
@@ -67,7 +65,7 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
     }
     let acked = 0;
     if (args.ackIds && args.ackIds.length > 0) {
-      const res = await client.post<{ acked: number }>('/v1/agent/messages/ack', { ids: args.ackIds, evidence: args.ackEvidence, instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
+      const res = await client.post<{ acked: number }>('/v1/agent/messages/ack', { ids: args.ackIds, instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
       acked = res.acked;
     }
     const q = new URLSearchParams();
