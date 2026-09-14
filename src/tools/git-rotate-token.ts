@@ -29,13 +29,13 @@ interface RotateResponse {
 export const gitRotateTokenToolConfig = {
   title: 'Rotate a git connection\'s access token',
   description:
-    'Replace the access token (or, for an ssh-poll connection, the private key) a project\'s git connection authenticates with. The provider is probed with the NEW credential before anything is stored: on success it is re-sealed and the connection\'s health resets to ok without a new connection id; on failure the call returns 422 and the old credential stays in place. Pass reinstallWebhook to also reinstall the provider hook on the configured public URL. Use this when git health reports tokenState "unauthorized" / reason "token_rejected". A connection that mints its own tokens (GitHub App installation or GitLab OAuth) has no stored credential and returns 422 - re-run its install flow instead.',
+    'Replace a git connection\'s access token (ssh: private key). The provider is probed with the new credential first; on success it is re-sealed under the same connection id, on failure 422 and the old one stays. reinstallWebhook also reinstalls the hook. App / OAuth connections answer 422.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key, e.g. ORB.'),
-    connectionId: z.string().uuid().describe('Git connection id, from GET /projects/:projectId/git-connections or git health.'),
-    accessToken: z.string().min(1).optional().describe('The new access token. Required for every provider except ssh.'),
-    privateKey: z.string().min(1).optional().describe('The new SSH private key. Only for an ssh-poll connection.'),
-    reinstallWebhook: z.boolean().optional().describe('Also delete the provider hook and install a fresh one on the configured public URL (ORB-2110).'),
+    connectionId: z.string().uuid().describe('Git connection id.'),
+    accessToken: z.string().min(1).optional().describe('New access token (every provider but ssh).'),
+    privateKey: z.string().min(1).optional().describe('New SSH private key (ssh only).'),
+    reinstallWebhook: z.boolean().optional().describe('Also reinstall the provider hook.'),
   }).shape,
   outputSchema: z.object({
     connectionId: z.string(),

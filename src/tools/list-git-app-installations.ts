@@ -25,17 +25,8 @@ interface InstallationRow {
 export const listGitAppInstallationsToolConfig = {
   title: 'List GitHub App installations',
   description:
-    'Return every GitHub App installation orboto knows about (across all projects). Requires super-admin on the API side. Each row carries the org/user the App is installed on, when it was installed, and whether it is currently suspended.',
+    'Every GitHub App installation orboto knows about, across projects (super-admin): the org/user, install time and whether it is suspended.',
   inputSchema: z.object({}).shape,
-  outputSchema: z.object({
-    installations: z.array(z.object({
-      provider: z.string(),
-      accountLogin: z.string(),
-      accountType: z.string(),
-      installedAt: z.string(),
-      suspended: z.boolean(),
-    })),
-  }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
