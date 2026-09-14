@@ -47,14 +47,14 @@ function describe(s: WorkSessionRow): string {
 export const workStartToolConfig = {
   title: 'Start a work session and load the full context bundle',
   description:
-    'Claim a ticket lease and return rules (or their unchanged hash), project primer, enriched ticket, checklists, dependencies, git health and live sessions. Exactly one active lease per ticket and role across the workspace. Resource claims are atomic with the lease; conflicts name the holder and leave no partial session. Prefer this for pickup; use orboto_work_session_start for renewal when context is already loaded. Spec-tagged bots may use role=spec to prepare the build order. Worker bots need a ready specification, or override=true with a reason; enabled epics cannot be overridden.',
+    'Claim a ticket lease with its rules and work context. Includes the primer, enriched ticket, checklists, dependencies, git health and live sessions. Exactly one active lease per ticket and role across the workspace. Resource claims are atomic with the lease; conflicts name the holder and leave no partial session. Prefer this for pickup; use orboto_work_session_start for renewal when context is already loaded. Spec-tagged bots may use role=spec to prepare the build order. Worker bots need a ready specification, or override=true with a reason; enabled epics cannot be overridden.',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key like "ACME-42".'),
     role: z.enum(['implementation', 'review', 'preflight', 'integration', 'spec']).optional()
-      .describe('Default `implementation`. Use `review` for a review pass, `preflight` for a pre-work check, `integration` for merge/release work - those attach without reassigning the ticket.'),
+      .describe('Default implementation; other roles attach without reassignment. Spec prepares build orders; bots need the spec tag.'),
     leaseSeconds: z.number().int().min(60).max(86_400).optional()
       .describe('How long the lease should hold without renewal. Default 900 (15 min).'),
-    override: z.boolean().optional().describe("Override spec readiness with a required reason; epics remain blocked."),
+    override: z.boolean().optional().describe("Bypass the spec gate; reason required. Never epics."),
     reason: z.string().trim().min(1).max(2000).optional(),
     takeover: z.boolean().optional()
       .describe('Displace the current holder of this (ticket, role) lease. Their session is cancelled and their tracked time booked.'),
@@ -247,14 +247,14 @@ export function makeWorkStartHandler(client: OrbotoClient) {
 export const workSessionStartToolConfig = {
   title: 'Start (or renew) a work session on a ticket',
   description:
-    'Take the work lease on a ticket in a given role and start its timer. This is the coordination primitive: exactly ONE active session per (ticket, role) exists workspace-wide, so a second agent attempting the same role gets a conflict naming the current holder instead of silently colliding. Re-calling with the same agent instance renews your own lease and is a no-op otherwise - safe to call defensively. Roles other than `implementation` (review / preflight / integration) attach to the ticket WITHOUT reassigning it or moving its status, so a reviewing agent no longer has to fake a claim. The lease expires on its own (default 15 min, renewed automatically by your subsequent calls), so a crashed agent never wedges a ticket. Pass `takeover: true` only when you have decided to displace the current holder - their session is closed and their time booked, and the takeover is visible in history.',
+    'Take the work lease on a ticket in a given role and start its timer. This is the coordination primitive: exactly ONE active session per (ticket, role) exists workspace-wide, so a second agent attempting the same role gets a conflict naming the current holder instead of silently colliding. Re-calling with the same agent instance renews your own lease and is a no-op otherwise - safe to call defensively. Roles other than `implementation` (review / preflight / integration / spec) attach to the ticket WITHOUT reassigning it or moving its status, so a reviewing agent no longer has to fake a claim. The lease expires on its own (default 15 min, renewed automatically by your subsequent calls), so a crashed agent never wedges a ticket. Pass `takeover: true` only when you have decided to displace the current holder - their session is closed and their time booked, and the takeover is visible in history.',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key like "ACME-42".'),
     role: z.enum(['implementation', 'review', 'preflight', 'integration', 'spec']).optional()
-      .describe('Default `implementation`. Use `review` for a review pass, `preflight` for a pre-work check, `integration` for merge/release work - those attach without reassigning the ticket.'),
+      .describe('Default implementation; other roles attach without reassignment. Spec prepares build orders; bots need the spec tag.'),
     leaseSeconds: z.number().int().min(60).max(86_400).optional()
       .describe('How long the lease should hold without renewal. Default 900 (15 min).'),
-    override: z.boolean().optional().describe("Override spec readiness with a required reason; epics remain blocked."),
+    override: z.boolean().optional().describe("Bypass the spec gate; reason required. Never epics."),
     reason: z.string().trim().min(1).max(2000).optional(),
     takeover: z.boolean().optional()
       .describe('Displace the current holder of this (ticket, role) lease. Their session is cancelled and their tracked time booked.'),

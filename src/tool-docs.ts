@@ -17,7 +17,7 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_create_full_backup:
     'Start a full-workspace backup job (all projects, users, config, attachments); returns the job id to poll via orboto_list_backups.',
   orboto_get_ticket:
-    'Fetch one ticket by key (ORB-42) or UUID: full detail incl. description, status, assignees, checklists, dependencies and comments.',
+    'Fetch one ticket by key or UUID with description, status, assignees, checklists and comments.',
   orboto_requirements_spec:
     'Generate a structured requirements spec for a project or milestone from its tickets (scope, actors, functional + non-functional requirements).',
   orboto_update_doc_space:
