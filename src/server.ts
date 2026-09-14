@@ -39,6 +39,7 @@ import { agentMessageWorkToolConfig, makeAgentMessageWorkHandler } from './tools
 import { agentMessagesToolConfig, makeAgentMessagesHandler } from './tools/agent-messages.js';
 import { listProjectsToolConfig, makeListProjectsHandler } from './tools/list-projects.js';
 import { getProjectToolConfig, makeGetProjectHandler } from './tools/get-project.js';
+import { projectReadinessToolConfig, makeProjectReadinessHandler } from './tools/project-readiness.js';
 import { getProjectPrimerToolConfig, makeGetProjectPrimerHandler } from './tools/get-project-primer.js';
 import { listTicketsToolConfig, makeListTicketsHandler } from './tools/list-tickets.js';
 import { criticalPathToolConfig, makeCriticalPathHandler } from './tools/critical-path.js';
@@ -564,6 +565,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_attach_to_ticket', attachToTicketToolConfig, makeAttachToTicketHandler(client));
   reg('orboto_set_parent', setParentToolConfig, makeSetParentHandler(client));
   reg('orboto_update_project', updateProjectToolConfig, makeUpdateProjectHandler(client));
+  reg('orboto_project_readiness', projectReadinessToolConfig, makeProjectReadinessHandler(client));
   reg('orboto_create_project', createProjectToolConfig, makeCreateProjectHandler(client));
   reg('orboto_archive_project', archiveProjectToolConfig, makeArchiveProjectHandler(client));
   reg('orboto_check_similar', checkSimilarToolConfig, makeCheckSimilarHandler(client));

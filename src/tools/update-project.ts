@@ -1,3 +1,4 @@
+import { ProjectReadinessSchema, type ProjectReadiness } from './project-readiness-schema.js';
 import { ProjectSpecSettingsSchema, type ProjectSpecSettings } from './spec-schemas.js';
 /**
  * ORB-885 - `orboto_update_project`.
@@ -20,19 +21,19 @@ export const updateProjectToolConfig = {
   description:
     'Patch a project (`name`, `description`, `key`, `status`, `branchTemplate`, `customerId`, `language`). At least one field must be set. Use `status: "archived"` or `"closed"` to take a project out of active rotation. Renaming the `key` also rewrites every ticket\'s `PROJ-N` reference - handle with care. `language` sets the project\'s expected ticket language (one of the 18 supported locales); pass null to inherit the workspace language.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Current project key (e.g. "ACME"). Case-insensitive.'),
+    projectKey: z.string().min(1).describe('Current project key.'),
     patch: z.object({
       spec: ProjectSpecSettingsSchema.optional(),
       name: z.string().min(1).max(255).optional(),
-      description: z.string().nullable().optional().describe('Pass null to clear the description.'),
+      description: z.string().nullable().optional().describe('Null clears.'),
       key: z.string().min(2).max(10).regex(PROJECT_KEY_RE).optional()
-        .describe('New project key. A-Z0-9 only, 2-10 chars. Rewrites every ticket reference.'),
+        .describe('New key; rewrites ticket references.'),
       status: z.enum(['draft', 'active', 'archived', 'closed']).optional(),
       branchTemplate: z.string().max(100).nullable().optional(),
       customerId: z.string().regex(UUID_RE).nullable().optional()
-        .describe('UUID of a customer record, or null to detach.'),
+        .describe('Customer UUID; null detaches.'),
       language: z.enum(LOCALE_CODES).nullable().optional()
-        .describe('Project content language (ORB-994). Wins over the workspace language for this project. null = inherit workspace.'),
+        .describe('Content language; null inherits workspace.'),
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -75,17 +76,16 @@ export function makeUpdateProjectHandler(client: OrbotoClient) {
 
 export const createProjectToolConfig = {
   title: 'Create a new project',
-  description:
-    'Create a new project in the workspace. `name` is required; `key` is optional and the API auto-derives one from the name when omitted (uppercase initials). Returns the new project\'s id + key + status (`active` by default). Caller must have `admin:project:create` or be a super-admin. Note: a new project is auto-provisioned with a general doc space (slug `<key>-general`, system-generated, for the AI primer + notes) - don\'t create a separate doc space for its docs, reuse that one (orboto_list_doc_spaces).',
+  description: 'Create a project with an optional key (auto-derived if omitted). Requires project:create or super-admin. Returns identity, status and the measured readiness checklist with fix actions. Reuse its auto-created doc space via orboto_list_doc_spaces.',
   inputSchema: z.object({
-    name: z.string().min(1).max(255).describe('Display name for the project.'),
+    name: z.string().min(1).max(255).describe('Project name.'),
     key: z.string().min(2).max(10).regex(PROJECT_KEY_RE).optional()
-      .describe('Optional explicit key (e.g. "ACME"). A-Z0-9 only, 2-10 chars. Auto-derived from name when omitted.'),
-    description: z.string().nullable().optional().describe('Optional free-text description.'),
+      .describe('Key; auto-derived if omitted.'),
+    description: z.string().nullable().optional().describe('Description.'),
     customerId: z.string().regex(UUID_RE).nullable().optional()
-      .describe('Optional UUID of a customer record to attach the project to.'),
+      .describe('Customer UUID.'),
     language: z.enum(LOCALE_CODES).nullable().optional()
-      .describe('Optional project content language (ORB-994), one of the 18 supported locales. Omit/null = inherit the workspace language.'),
+      .describe('Content language; null/omitted inherits workspace.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -103,13 +103,16 @@ export function makeCreateProjectHandler(client: OrbotoClient) {
     if (description !== undefined) body.description = description;
     if (customerId !== undefined) body.customerId = customerId;
     if (language !== undefined) body.language = language;
-    const created = await client.post<ProjectRow>('/projects', body);
+    const created = await client.post<ProjectRow & { readiness?: ProjectReadiness }>('/projects', body);
+    const parsed = ProjectReadinessSchema.safeParse(created.readiness);
+    const readiness = parsed.success ? parsed.data : undefined;
     return {
       content: [{
         type: 'text',
-        text: `Created project ${created.key} - ${created.name} (status: ${created.status}).`,
+        text: `Created project ${created.key} - ${created.name} (status: ${created.status}).${readiness ? ` Setup: ${readiness.ready ? 'ready' : 'incomplete; inspect readiness items and fix actions'}.` : ''}`,
       }],
       structuredContent: {
+        readiness,
         id: created.id,
         key: created.key,
         name: created.name,

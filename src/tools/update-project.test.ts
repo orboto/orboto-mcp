@@ -102,10 +102,20 @@ describe('orboto_update_project', () => {
   });
 });
 
+const readiness = { projectId: '11111111-2222-4333-8444-555555555555', projectKey: 'ACME', language: 'en', ready: false, ticketScope: 'visible', items: [] };
+
 describe('orboto_create_project', () => {
+  it.each([undefined, null, {}])('retains successful creation when readiness is absent or unsupported: %s', async unsupported => {
+    const calls = stub([{ json: { readiness: unsupported, id: 'older', key: 'OLD', name: 'Older API', status: 'active' } }]);
+    const result = await makeCreateProjectHandler(client)({ name: 'Older API' });
+    expect(result.structuredContent).toMatchObject({ id: 'older', key: 'OLD' });
+    expect(result.structuredContent?.readiness).toBeUndefined();
+    expect(result.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('Created project OLD') });
+    expect(calls).toHaveLength(1);
+  });
   it('POSTs name + key when both supplied', async () => {
     const calls = stub([
-      { json: { id: 'new1', key: 'ACME', name: 'Acme', description: null, status: 'active' } },
+      { json: { readiness, id: 'new1', key: 'ACME', name: 'Acme', description: null, status: 'active' } },
     ]);
     const res = await makeCreateProjectHandler(client)({ name: 'Acme', key: 'ACME' });
     expect(calls[0]).toMatchObject({
@@ -113,12 +123,12 @@ describe('orboto_create_project', () => {
       url: 'https://orboto.example.com/projects',
       body: { name: 'Acme', key: 'ACME' },
     });
-    expect(res.structuredContent).toMatchObject({ key: 'ACME', name: 'Acme', status: 'active' });
+    expect(res.structuredContent).toMatchObject({ key: 'ACME', name: 'Acme', status: 'active', readiness });
   });
 
   it('omits optional fields when not supplied so the API auto-derives the key', async () => {
     const calls = stub([
-      { json: { id: 'new2', key: 'NN', name: 'No Name', description: null, status: 'active' } },
+      { json: { readiness, id: 'new2', key: 'NN', name: 'No Name', description: null, status: 'active' } },
     ]);
     await makeCreateProjectHandler(client)({ name: 'No Name' });
     expect(calls[0].body).toEqual({ name: 'No Name' });
@@ -126,7 +136,7 @@ describe('orboto_create_project', () => {
 
   it('passes description + customerId through verbatim', async () => {
     const calls = stub([
-      { json: { id: 'new3', key: 'CUS', name: 'Custom', description: 'hello', status: 'active' } },
+      { json: { readiness, id: 'new3', key: 'CUS', name: 'Custom', description: 'hello', status: 'active' } },
     ]);
     await makeCreateProjectHandler(client)({
       name: 'Custom', description: 'hello', customerId: '11111111-2222-3333-4444-555555555555',
