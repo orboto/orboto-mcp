@@ -1,3 +1,4 @@
+import { specReleaseInfo } from './shared.js';
 import { TicketSpecStateSchema, isAlreadyAssigned, type TicketSpecState } from './spec-schemas.js';
 /**
  * ORB-244 Phase C Group 1 - ticket mutation tools.
@@ -65,6 +66,7 @@ function ticketStructured(t: TicketRow) {
     type: t.type,
     priority: t.priority,
     specState: t.specState ?? 'none',
+    ...specReleaseInfo(t),
     deliveryMode: t.deliveryMode ?? 'implementation',
     dueDate: t.dueDate,
     isPrivate: t.isPrivate,

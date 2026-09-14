@@ -4,7 +4,7 @@ import { resolveTicketByKey } from './shared.js';
 
 export const specCheckToolConfig = {
   title: 'Check build order',
-  description: 'Validate a build order. Reports missing headings, criteria and open questions, and returns the template. Release permission is checked separately.',
+  description: 'Validate a build order. Returns issues, template, human authorId and releaseBy policy. Release permission is checked separately.',
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   inputSchema: z.object({ ticketKey: z.string().min(1) }),
 };

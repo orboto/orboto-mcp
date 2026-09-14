@@ -1,3 +1,5 @@
+import { specReleaseInfo, type TicketRow } from './shared.js';
+import { makeWorkSessionsHandler } from './work-sessions.js';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -66,4 +68,20 @@ describe('spec readiness tool contracts', () => {
     expect(specGateFailure('{"errorKey":"errors.work_sessions.lease_held"}')).toBeUndefined();
     expect(JSON.stringify(specGateFailure('{"errorKey":"errors.tickets.epic_not_claimable"}'))).toContain('child stories');
   });
+});
+
+
+it('preserves release provenance without exposing the internal fingerprint', () => {
+  const ticket = { specReleasedBy: 'author', specReleasedByFullName: 'Alice', specReleasedAt: '2026-09-14T10:00:00Z', specReleasePolicy: 'author', specReleaseRole: 'author', specReleaseFingerprint: 'internal-proof' } as unknown as TicketRow;
+  expect(specReleaseInfo(ticket)).toEqual({ specReleasedBy: 'author', specReleasedByFullName: 'Alice', specReleasedAt: '2026-09-14T10:00:00Z', specReleasePolicy: 'author', specReleaseRole: 'author' });
+});
+
+it('describes waiting tasks as parked sessions and preserves the question reference', async () => {
+  const client = new OrbotoClient({ baseUrl: 'https://orboto.example.test', apiKey: 'test' });
+  const row = { id: 'session', ticketId: 'ticket', ticketKey: 'ORB-2100', role: 'spec', status: 'finished', waitingForAnswers: true, taskId: 'task', waitingCommentId: 'question', leaseUntil: 'past' };
+  vi.spyOn(client, 'get').mockResolvedValue([row]);
+  const result = await makeWorkSessionsHandler(client)({});
+  expect(result.structuredContent).toEqual({ sessions: [row] });
+  expect(JSON.stringify(result.content)).toContain('waiting for answers; session finished; task task; question question');
+  expect(JSON.stringify(result.content)).not.toContain('lease until');
 });

@@ -19,6 +19,9 @@ export interface ResourceClaim {
 }
 
 export interface WorkSessionRow {
+  waitingForAnswers?: boolean;
+  taskId?: string | null;
+  waitingCommentId?: string | null;
   id: string;
   ticketId: string;
   role: string;

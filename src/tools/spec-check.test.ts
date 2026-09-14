@@ -6,7 +6,7 @@ afterEach(() => { vi.restoreAllMocks(); });
 describe('spec check', () => {
   it('returns the authoritative diagnostics and template without writes', async () => {
     const client = new OrbotoClient({ baseUrl: 'https://orboto.example.test', apiKey: 'test' });
-    const report = { check: { valid: false, criteriaCount: 0, openQuestionCount: 2, missingHeadings: ['Goal'] }, template: 'template' };
+    const report = { authorId: 'human-author', releaseBy: 'author', check: { valid: false, criteriaCount: 0, openQuestionCount: 2, missingHeadings: ['Goal'] }, template: 'template' };
     const get = vi.spyOn(client, 'get').mockResolvedValueOnce({ id: 'p', key: 'ORB' }).mockResolvedValueOnce({ id: 't', projectId: 'p' }).mockResolvedValueOnce(report);
     const post = vi.spyOn(client, 'post'); const patch = vi.spyOn(client, 'patch');
     expect(await makeSpecCheckHandler(client)({ ticketKey: 'ORB-2099' })).toMatchObject({ structuredContent: report });

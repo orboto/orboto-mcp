@@ -41,6 +41,7 @@ function describeClaimConflicts(conflicts: ClaimConflict[]): string {
 function describe(s: WorkSessionRow): string {
   const key = s.ticketKey ?? s.ticketId.slice(0, 8);
   const who = s.userFullName ?? s.userEmail ?? 'unknown';
+  if (s.waitingForAnswers) return `  - ${key} [${s.role}] ${who} - waiting for answers; session ${s.status}; task ${s.taskId}; question ${s.waitingCommentId}`;
   return `  - ${key} [${s.role}] ${who} - lease until ${s.leaseUntil}${s.commitSha ? ` (commit ${s.commitSha.slice(0, 8)})` : ''}`;
 }
 
@@ -507,7 +508,7 @@ export function makeWorkFinishHandler(client: OrbotoClient) {
 export const workSessionsToolConfig = {
   title: 'List live work sessions (who is working on what)',
   description:
-    'The coordination view: every live work lease you can see, or the sessions on one ticket. Call this BEFORE picking up work in a fleet - a ticket with a live `implementation` lease is already being worked, and starting on it anyway is how two agents produce conflicting commits. Unlike agent presence (which reports who is online), this reports who OWNS what, across accounts.',
+    'Visible work leases and specification tasks waiting for ticket replies. Check before picking up work. An active implementation lease owns the ticket; a finished session with waitingForAnswers is parked, not a live lease. Includes task and question ids across accounts.',
   inputSchema: z.object({
     ticketKey: z.string().optional().describe('Scope to one ticket. Omit to list every live session you can see.'),
     scope: z.enum(['mine', 'all']).optional().describe('`mine` = only my own sessions. Default `all`. Ignored when ticketKey is set.'),

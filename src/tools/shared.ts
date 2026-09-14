@@ -36,6 +36,11 @@ export async function resolveProjectByKey(
 }
 
 export interface TicketRow {
+  specReleasedBy?: string | null;
+  specReleasedByFullName?: string | null;
+  specReleasedAt?: string | null;
+  specReleasePolicy?: 'agent' | 'author' | null;
+  specReleaseRole?: 'spec' | 'author' | 'admin' | null;
   specState?: import("./spec-schemas.js").TicketSpecState;
   id: string;
   projectId: string;
@@ -89,6 +94,7 @@ export function agentTicketListRow(t: TicketRow, verbose = false): Record<string
       status: t.statusName ?? t.status,
       statusCategory: t.statusCategory ?? null,
       specState: t.specState ?? 'none',
+      ...specReleaseInfo(t),
       priority: t.priority,
       type: t.type,
       dueDate: t.dueDate ?? null,
@@ -105,6 +111,7 @@ export function agentTicketListRow(t: TicketRow, verbose = false): Record<string
   const assigneeNames = (t.assignees ?? []).map((a) => a.fullName || a.email);
   return {
     key: t.ticketKey,
+    ...specReleaseInfo(t),
     title: t.title,
     statusCategory: t.statusCategory ?? null,
     ...(t.specState && t.specState !== 'none' ? { specState: t.specState } : {}),
@@ -262,4 +269,9 @@ export function resolveByName<T>(
   if (normMatches.length === 1) return { match: normMatches[0], ambiguous: null };
   if (normMatches.length > 1) return { match: null, ambiguous: normMatches };
   return { match: null, ambiguous: null };
+}
+
+export function specReleaseInfo(t: TicketRow): Record<string, unknown> {
+  if (t.specReleasedBy === undefined) return {};
+  return { specReleasedBy: t.specReleasedBy, specReleasedByFullName: t.specReleasedByFullName ?? null, specReleasedAt: t.specReleasedAt ?? null, specReleasePolicy: t.specReleasePolicy ?? null, specReleaseRole: t.specReleaseRole ?? null };
 }

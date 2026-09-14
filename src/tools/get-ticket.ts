@@ -1,3 +1,4 @@
+import { specReleaseInfo } from './shared.js';
 /**
  * ORB-244 Phase B - `orboto_get_ticket`.
  *
@@ -149,6 +150,7 @@ export function makeGetTicketHandler(client: OrbotoClient) {
         priority: full.priority,
         type: full.type,
         specState: full.specState ?? 'none',
+        ...specReleaseInfo(full),
         deliveryMode: full.deliveryMode ?? 'implementation',
         dueDate: full.dueDate,
         startDate: full.startDate,
