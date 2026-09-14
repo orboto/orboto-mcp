@@ -1,3 +1,4 @@
+import { specGateFailure } from './spec-schemas.js';
 /**
  * ORB-1609 - work-session tools.
  */
@@ -46,13 +47,15 @@ function describe(s: WorkSessionRow): string {
 export const workStartToolConfig = {
   title: 'Start a work session and load the full context bundle',
   description:
-    'ORB-1611 - the one-call ticket pickup. Acquires the (ticket, role) work lease with the exact same guarantees as orboto_work_session_start (exactly ONE active session per ticket+role workspace-wide, a conflict names the holder, resourceClaims apply atomically with the lease), AND in the SAME response returns the rules-hash ack (same semantics as orboto_session_start), the project primer, the ticket enriched with its description/status/priority, its checklists, its dependencies, that project\'s git connection health, and any other live sessions already on the ticket. This replaces the 8-15 separate calls (orboto_session_start, orboto_get_project_primer, orboto_get_ticket, orboto_get_checklists, orboto_list_ticket_dependencies, ...) a normal ticket pickup used to cost. Prefer this over orboto_work_session_start for picking up a ticket; use the plain tool only when you deliberately do not want the bundle (e.g. a mid-task lease renewal where you already have fresh context). A conflict never leaves a partial session behind - same rollback-on-conflict guarantee as orboto_work_session_start.',
+    'Claim a ticket lease and return rules (or their unchanged hash), project primer, enriched ticket, checklists, dependencies, git health and live sessions. Exactly one active lease per ticket and role across the workspace. Resource claims are atomic with the lease; conflicts name the holder and leave no partial session. Prefer this for pickup; use orboto_work_session_start for renewal when context is already loaded. Spec-tagged bots may use role=spec to prepare the build order. Worker bots need a ready specification, or override=true with a reason; enabled epics cannot be overridden.',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key like "ACME-42".'),
-    role: z.enum(['implementation', 'review', 'preflight', 'integration']).optional()
+    role: z.enum(['implementation', 'review', 'preflight', 'integration', 'spec']).optional()
       .describe('Default `implementation`. Use `review` for a review pass, `preflight` for a pre-work check, `integration` for merge/release work - those attach without reassigning the ticket.'),
     leaseSeconds: z.number().int().min(60).max(86_400).optional()
       .describe('How long the lease should hold without renewal. Default 900 (15 min).'),
+    override: z.boolean().optional().describe("Override spec readiness with a required reason; epics remain blocked."),
+    reason: z.string().trim().min(1).max(2000).optional(),
     takeover: z.boolean().optional()
       .describe('Displace the current holder of this (ticket, role) lease. Their session is cancelled and their tracked time booked.'),
     startTimer: z.boolean().optional()
@@ -75,6 +78,8 @@ export function makeWorkStartHandler(client: OrbotoClient) {
       ticketKey: string;
       role?: string;
       leaseSeconds?: number;
+      override?: boolean;
+      reason?: string;
       takeover?: boolean;
       startTimer?: boolean;
       agentSessionToken?: string;
@@ -98,6 +103,8 @@ export function makeWorkStartHandler(client: OrbotoClient) {
           ticketId,
           ...(args.role ? { role: args.role } : {}),
           ...(args.leaseSeconds ? { leaseSeconds: args.leaseSeconds } : {}),
+          ...(args.override !== undefined ? { override: args.override } : {}),
+          ...(args.reason ? { reason: args.reason } : {}),
           ...(args.takeover ? { takeover: true } : {}),
           ...(args.startTimer !== undefined ? { startTimer: args.startTimer } : {}),
           ...(args.resourceClaims && args.resourceClaims.length > 0 ? { resourceClaims: args.resourceClaims } : {}),
@@ -196,6 +203,8 @@ export function makeWorkStartHandler(client: OrbotoClient) {
       };
     } catch (err) {
       if (err instanceof OrbotoApiError && err.status === 409) {
+        const specFailure = specGateFailure(err.body);
+        if (specFailure) return specFailure;
         const claimConflicts = parseClaimConflicts(err);
         if (claimConflicts && claimConflicts.length > 0) {
           return {
@@ -241,10 +250,12 @@ export const workSessionStartToolConfig = {
     'Take the work lease on a ticket in a given role and start its timer. This is the coordination primitive: exactly ONE active session per (ticket, role) exists workspace-wide, so a second agent attempting the same role gets a conflict naming the current holder instead of silently colliding. Re-calling with the same agent instance renews your own lease and is a no-op otherwise - safe to call defensively. Roles other than `implementation` (review / preflight / integration) attach to the ticket WITHOUT reassigning it or moving its status, so a reviewing agent no longer has to fake a claim. The lease expires on its own (default 15 min, renewed automatically by your subsequent calls), so a crashed agent never wedges a ticket. Pass `takeover: true` only when you have decided to displace the current holder - their session is closed and their time booked, and the takeover is visible in history.',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key like "ACME-42".'),
-    role: z.enum(['implementation', 'review', 'preflight', 'integration']).optional()
+    role: z.enum(['implementation', 'review', 'preflight', 'integration', 'spec']).optional()
       .describe('Default `implementation`. Use `review` for a review pass, `preflight` for a pre-work check, `integration` for merge/release work - those attach without reassigning the ticket.'),
     leaseSeconds: z.number().int().min(60).max(86_400).optional()
       .describe('How long the lease should hold without renewal. Default 900 (15 min).'),
+    override: z.boolean().optional().describe("Override spec readiness with a required reason; epics remain blocked."),
+    reason: z.string().trim().min(1).max(2000).optional(),
     takeover: z.boolean().optional()
       .describe('Displace the current holder of this (ticket, role) lease. Their session is cancelled and their tracked time booked.'),
     startTimer: z.boolean().optional()
@@ -252,9 +263,9 @@ export const workSessionStartToolConfig = {
     agentSessionToken: z.string().optional()
       .describe('Stable per-agent-instance token. Omit to use this MCP connection\'s own instance id.'),
     resourceClaims: z.array(z.object(ResourceClaimShape)).max(50).optional()
-      .describe('ORB-1610 - resource claims to acquire alongside the lease. `kind: "path"` takes a glob relative to the repo root (`src/**`, `apps/api/src/routes/tickets.ts`); `kind: "named"` takes an opaque exclusive-resource id (`unity-editor:main`, `git-push:orboto#develop`), compared by exact string equality. `mode: "write"` conflicts with any OVERLAPPING active write claim workspace-wide (across tickets and accounts) - editor refresh clobbering uncommitted changes and concurrent pushes staging each other\'s files are exactly what this prevents. `mode: "read"` never conflicts with anything, including another read.'),
+      .describe('Atomic resource claims: path values are repo-relative globs, named values are exact ids. Overlapping writes conflict across the workspace; reads never conflict.'),
     onConflict: z.enum(['reject', 'queue']).optional()
-      .describe('Only matters when `resourceClaims` is set. Default `reject`: a conflicting write claim fails the WHOLE call with the conflicting holder(s) named - if this call would have created a brand-new session, that session is rolled back rather than left holding the lease without its claims. `queue`: the conflicting claim is accepted as `state: "waiting"` instead of failing; it is promoted automatically once the conflict clears (release, finish, or the next orboto_work_sessions read).'),
+      .describe('reject rolls back a new session on claim conflict; queue keeps it with waiting claims, promoted when conflicts clear.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
@@ -265,6 +276,8 @@ export function makeWorkSessionStartHandler(client: OrbotoClient) {
       ticketKey: string;
       role?: string;
       leaseSeconds?: number;
+      override?: boolean;
+      reason?: string;
       takeover?: boolean;
       startTimer?: boolean;
       agentSessionToken?: string;
@@ -287,6 +300,8 @@ export function makeWorkSessionStartHandler(client: OrbotoClient) {
           ticketId: ticket.id,
           ...(args.role ? { role: args.role } : {}),
           ...(args.leaseSeconds ? { leaseSeconds: args.leaseSeconds } : {}),
+          ...(args.override !== undefined ? { override: args.override } : {}),
+          ...(args.reason ? { reason: args.reason } : {}),
           ...(args.takeover ? { takeover: true } : {}),
           ...(args.startTimer !== undefined ? { startTimer: args.startTimer } : {}),
           ...(args.resourceClaims && args.resourceClaims.length > 0 ? { resourceClaims: args.resourceClaims } : {}),
@@ -319,6 +334,8 @@ export function makeWorkSessionStartHandler(client: OrbotoClient) {
       };
     } catch (err) {
       if (err instanceof OrbotoApiError && err.status === 409) {
+        const specFailure = specGateFailure(err.body);
+        if (specFailure) return specFailure;
         const claimConflicts = parseClaimConflicts(err);
         if (claimConflicts && claimConflicts.length > 0) {
           return {

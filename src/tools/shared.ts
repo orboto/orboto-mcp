@@ -11,6 +11,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 
 export interface ProjectRow {
+  spec?: import("./spec-schemas.js").ProjectSpecSettings;
   id: string;
   key: string;
   name: string;
@@ -35,6 +36,7 @@ export async function resolveProjectByKey(
 }
 
 export interface TicketRow {
+  specState?: import("./spec-schemas.js").TicketSpecState;
   id: string;
   projectId: string;
   milestoneId: string | null;
@@ -86,6 +88,7 @@ export function agentTicketListRow(t: TicketRow, verbose = false): Record<string
       title: t.title,
       status: t.statusName ?? t.status,
       statusCategory: t.statusCategory ?? null,
+      specState: t.specState ?? 'none',
       priority: t.priority,
       type: t.type,
       dueDate: t.dueDate ?? null,
@@ -104,6 +107,7 @@ export function agentTicketListRow(t: TicketRow, verbose = false): Record<string
     key: t.ticketKey,
     title: t.title,
     statusCategory: t.statusCategory ?? null,
+    ...(t.specState && t.specState !== 'none' ? { specState: t.specState } : {}),
     ...(t.priority && t.priority !== 'normal' ? { priority: t.priority } : {}),
     ...(t.type && t.type !== 'task' ? { type: t.type } : {}),
     ...(t.dueDate ? { dueDate: t.dueDate } : {}),

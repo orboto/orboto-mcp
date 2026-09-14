@@ -82,7 +82,7 @@ describe('orboto_claim', () => {
     });
   });
 
-  it('idempotent: skip assign POST + status PATCH when already-in-progress + already-assigned', async () => {
+  it('idempotent re-claim rechecks assignment readiness without changing status', async () => {
     const calls = stub([
       { json: ME },
       { json: PROJ },
@@ -90,10 +90,11 @@ describe('orboto_claim', () => {
         ...TICKET_TODO, status: 'IN_PROGRESS', statusName: 'In Progress', statusCategory: 'in_progress',
         assignees: [{ id: 'me1', email: 'agent-e@orboto.io', fullName: 'Agent E' }],
       } },
+      { json: {} },
       { json: { ticketId: 't1' } }, // GET /time/timer - already on same ticket
     ]);
     const res = await makeClaimHandler(client)({ ticketKey: 'ACME-1' });
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(5);
     expect(calls.some((c) => c.method === 'PATCH')).toBe(false);
     expect(calls.some((c) => c.url.includes('/timer/start'))).toBe(false);
     expect(res.structuredContent).toMatchObject({
@@ -102,7 +103,7 @@ describe('orboto_claim', () => {
     });
   });
 
-  it('sole=true removes every other assignee before adding self', async () => {
+  it('sole=true verifies self assignment before removing other assignees', async () => {
     const calls = stub([
       { json: ME },
       { json: PROJ },
@@ -119,8 +120,9 @@ describe('orboto_claim', () => {
     ]);
     await makeClaimHandler(client)({ ticketKey: 'ACME-1', sole: true });
     expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(2);
-    expect(calls[3].url).toContain('/assignees/other1');
-    expect(calls[4].url).toContain('/assignees/other2');
+    expect(calls[3].url).toContain('/assignees/me1');
+    expect(calls[4].url).toContain('/assignees/other1');
+    expect(calls[5].url).toContain('/assignees/other2');
   });
 
   it('refuses to claim a done ticket without force=true', async () => {

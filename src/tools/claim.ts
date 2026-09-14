@@ -3,6 +3,7 @@
  *
  * @see ORB-179, ORB-181
  */
+import { specGateFailure, isAlreadyAssigned } from './spec-schemas.js';
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
@@ -23,8 +24,8 @@ interface ActiveTimer {
   startedAt: string;
 }
 
-interface TicketWithAssignees extends TicketRow {
-  assignees?: Array<{ id: string; email: string; fullName: string }>;
+interface TicketWithAssignees extends Omit<TicketRow, 'assignees'> {
+  assignees?: Array<{ id?: string; userId?: string; email: string; fullName: string }>;
 }
 
 const CATEGORY_TO_LEGACY = {
@@ -38,26 +39,27 @@ const CATEGORY_TO_LEGACY = {
 export const claimToolConfig = {
   title: 'Claim a ticket (assign self + in_progress + timer)',
   description:
-    'Composite of `assign self → move to in_progress → start timer` - the canonical "I am picking this up now" move. Idempotent: re-claiming an already-claimed in_progress ticket is a no-op. Set `sole=true` to remove every other assignee first (destructive take-over). Set `force=true` to allow re-claiming a `done` ticket (otherwise refuses, to prevent accidental reopens). Set `noTimer=true` to skip the timer start (e.g. when you only want ownership, not time tracking). If a different ticket has an active timer, it is stopped first (its elapsed time commits a time entry under the previous ticket). '
-    + '`agentSessionToken` is a stable per-agent-instance token: on a bot/service account it scopes the timer to YOUR instance - concurrent per-instance timers and NO auto-stop, so you own both start and stop. Omit it on human accounts, which keep the single-timer behaviour.',
+    'Assign yourself, move to in_progress and start a timer. Repeated claims recheck the specification gate. Worker bots need ready, or override=true with a reason; enabled epics are blocked. sole removes other assignees after the gate passes. force permits reopening done tickets. noTimer skips time tracking. On human accounts a different active timer is stopped first and its elapsed time booked to that ticket. Bot timers are per instance and never auto-stop each other: agentSessionToken defaults to this MCP connection; own both start and stop.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    sole: z.boolean().optional().describe('Take-over: remove every other assignee first.'),
-    force: z.boolean().optional().describe('Allow re-claiming a `done` ticket.'),
-    noTimer: z.boolean().optional().describe('Skip the timer start.'),
-    agentSessionToken: z.string().optional().describe('Per-agent-instance token; scopes the timer on bot accounts.'),
+    override: z.boolean().optional().describe("Spec override; reason required."),
+    reason: z.string().trim().min(1).max(2000).optional(),
+    sole: z.boolean().optional().describe('Remove other assignees after gate.'),
+    force: z.boolean().optional().describe('Reopen done.'),
+    noTimer: z.boolean().optional().describe('No timer.'),
+    agentSessionToken: z.string().optional().describe('Instance token for bot timers.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeClaimHandler(client: OrbotoClient) {
-  return async ({ ticketKey, sole, force, noTimer, agentSessionToken }: {
-    ticketKey: string; sole?: boolean; force?: boolean; noTimer?: boolean; agentSessionToken?: string;
+  return async ({ ticketKey, sole, force, override, reason, noTimer, agentSessionToken }: {
+    ticketKey: string; override?: boolean; reason?: string; sole?: boolean; force?: boolean; noTimer?: boolean; agentSessionToken?: string;
   }, extra?: { sessionId?: string }): Promise<CallToolResult> => {
     const me = await client.get<UserRow>('/users/me');
     const current = await resolveTicketByKey(client, ticketKey) as TicketWithAssignees;
     const currentAssignees = current.assignees ?? [];
-    const alreadyAssigned = currentAssignees.some((a) => a.id === me.id);
+    const alreadyAssigned = currentAssignees.some((a) => (a.userId ?? a.id) === me.id);
     const currentCategory = current.statusCategory;
 
     if (currentCategory === 'done' && !force) {
@@ -66,24 +68,25 @@ export function makeClaimHandler(client: OrbotoClient) {
       );
     }
 
+    try {
+      await client.post(`/projects/${current.projectId}/tickets/${current.id}/assignees/${me.id}`, { override, reason });
+    } catch (error) {
+      const gate = error instanceof OrbotoApiError && error.status === 409 ? specGateFailure(error.body) : undefined;
+      if (gate) return gate;
+      if (!(error instanceof OrbotoApiError) || error.status !== 409 || !isAlreadyAssigned(error.body)) throw error;
+    }
+
     if (sole) {
       for (const a of currentAssignees) {
-        if (a.id === me.id) continue;
+        if ((a.userId ?? a.id) === me.id) continue;
         try {
-          await client.delete(`/projects/${current.projectId}/tickets/${current.id}/assignees/${a.id}`);
+          await client.delete(`/projects/${current.projectId}/tickets/${current.id}/assignees/${a.userId ?? a.id}`);
         } catch (err) {
           if (!(err instanceof OrbotoApiError) || err.status !== 404) throw err;
         }
       }
     }
 
-    if (!alreadyAssigned) {
-      try {
-        await client.post(`/projects/${current.projectId}/tickets/${current.id}/assignees/${me.id}`, {});
-      } catch (err) {
-        if (!(err instanceof OrbotoApiError) || err.status !== 409) throw err;
-      }
-    }
 
     let finalTicket: TicketWithAssignees = current;
     if (currentCategory !== 'in_progress') {

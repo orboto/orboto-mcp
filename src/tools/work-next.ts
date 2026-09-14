@@ -52,7 +52,7 @@ export const workNextToolConfig = {
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME") or UUID.'),
     agentTag: z.string().min(1).max(64).optional()
       .describe('ORB-1772 - preferred-not-exclusive routing tag: tickets labeled `agent:<tag>` rank first for a matching caller, foreign `agent:*` tags rank last but stay eligible. Lowercased server-side. Set it to this worker\'s routing tag (often the model or fleet lane name).'),
-    role: z.enum(['implementation', 'review', 'preflight', 'integration']).optional()
+    role: z.enum(['implementation', 'review', 'preflight', 'integration', 'spec']).optional()
       .describe('Default `implementation`. The dispatcher only reserves a ticket whose (ticket, role) lease is free for THIS role.'),
     leaseSeconds: z.number().int().min(60).max(86_400).optional()
       .describe('How long the lease should hold without renewal. Default 900 (15 min).'),

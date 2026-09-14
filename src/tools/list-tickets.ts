@@ -1,3 +1,4 @@
+import { TicketSpecStateSchema, type TicketSpecState } from './spec-schemas.js';
 /**
  * ORB-244 Phase B - `orboto_list_tickets`.
  *
@@ -24,6 +25,7 @@ export const listTicketsToolConfig = {
     'List tickets in a project, optionally filtered by status category, milestone name, or assignee email. Set unscheduled=true for the product backlog (everything not planned into a milestone yet). Returns up to 50 tickets per call.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
+    specState: TicketSpecStateSchema.optional(),
     statusCategory: z
       .enum(['todo', 'in_progress', 'in_review', 'done', 'wont_fix'])
       .optional()
@@ -53,6 +55,7 @@ export const listTicketsToolConfig = {
 export function makeListTicketsHandler(client: OrbotoClient) {
   return async (input: {
     projectKey: string;
+    specState?: TicketSpecState;
     statusCategory?: 'todo' | 'in_progress' | 'in_review' | 'done' | 'wont_fix';
     milestone?: string;
     unscheduled?: boolean;
@@ -65,6 +68,7 @@ export function makeListTicketsHandler(client: OrbotoClient) {
 
     const qs = new URLSearchParams();
     qs.set('limit', String(input.limit ?? 25));
+    if (input.specState) qs.set('specState', input.specState);
     if (input.statusCategory) qs.set('statusCategory', input.statusCategory);
     if (input.unscheduled && input.milestone) {
       throw new Error('Pass either `milestone` or `unscheduled: true`, not both.');

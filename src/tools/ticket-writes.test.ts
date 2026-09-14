@@ -38,7 +38,7 @@ function stub(responses: Array<{
       status: r.status ?? 200,
       statusText: 'OK',
       json: async () => ('json' in r ? r.json : {}),
-      text: async () => '',
+      text: async () => r.json === undefined ? '' : JSON.stringify(r.json),
     } as unknown as Response;
   });
   return calls;
@@ -491,15 +491,14 @@ describe('orboto_assign / orboto_unassign', () => {
     expect(calls[3].url).toContain('/assignees/u1');
   });
 
-  it('assign treats 409 as idempotent already-assigned', async () => {
+  it('assign tolerates legacy already-assigned responses', async () => {
     stub([
       { json: PROJ },
       { json: TICKET },
       { json: MEMBERS },
       { ok: false, status: 409, json: { error: 'already assigned' } },
     ]);
-    const res = await makeAssignHandler(client)({ ticketKey: 'ACME-1', assigneeEmail: 'ada@acme' });
-    expect((res.content[0] as { text: string }).text).toContain('already assigned');
+    expect(await makeAssignHandler(client)({ ticketKey: 'ACME-1', assigneeEmail: 'ada@acme' })).toMatchObject({ structuredContent: { assignedEmail: 'ada@acme' } });
   });
 
   it('unassign treats 404 as idempotent already-unassigned', async () => {

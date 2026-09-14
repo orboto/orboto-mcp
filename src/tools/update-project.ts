@@ -1,3 +1,4 @@
+import { ProjectSpecSettingsSchema, type ProjectSpecSettings } from './spec-schemas.js';
 /**
  * ORB-885 - `orboto_update_project`.
  * ORB-830 - `orboto_create_project` + `orboto_archive_project`.
@@ -21,6 +22,7 @@ export const updateProjectToolConfig = {
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Current project key (e.g. "ACME"). Case-insensitive.'),
     patch: z.object({
+      spec: ProjectSpecSettingsSchema.optional(),
       name: z.string().min(1).max(255).optional(),
       description: z.string().nullable().optional().describe('Pass null to clear the description.'),
       key: z.string().min(2).max(10).regex(PROJECT_KEY_RE).optional()
@@ -40,6 +42,7 @@ export function makeUpdateProjectHandler(client: OrbotoClient) {
   return async ({ projectKey, patch }: {
     projectKey: string;
     patch: {
+      spec?: ProjectSpecSettings;
       name?: string;
       description?: string | null;
       key?: string;
@@ -64,6 +67,7 @@ export function makeUpdateProjectHandler(client: OrbotoClient) {
         description: updated.description,
         status: updated.status,
         language: updated.language ?? null,
+        spec: updated.spec,
       },
     };
   };

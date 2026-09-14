@@ -96,6 +96,29 @@ describe('orboto_work_next', () => {
     await expect(makeWorkNextHandler(client)({ projectKey: 'ACME', peek: true })).rejects.toMatchObject({ reason: 'invalid_response' });
   });
 
+  it('preserves the spec bundle, queued ownership and landed work across pause and reservation', async () => {
+    const landedIdle = [{ ticketId: 'old', ticketKey: 'ACME-7', title: 'Already implemented', idleWorkingDays: 3, lastActivityAt: '2026-09-10', commitCount: 2 }];
+    const reserved = {
+      ...RESERVED, session: { ...SESSION, role: 'spec', activeTimerId: null },
+      ticket: { ...RESERVED.ticket, type: 'story', specState: 'in_spec' },
+      queued: [{ claim: { kind: 'path', value: 'src/**', mode: 'write' }, position: 2 }],
+      checklists: [{ title: 'Build order', triggersDone: true, progress: { done: 1, total: 2 }, items: [{ content: 'Reviewed requirement', effectiveCompleted: true, linkedTicketKey: 'ACME-8', linkedTicketStatusCategory: 'done' }, { content: 'Open question', effectiveCompleted: false }] }],
+      dependencies: { blockedBy: [{ ticketKey: 'ACME-9', title: 'Design', statusName: 'Done' }], blocks: [{ resolved: false }] },
+      gitHealth: [{ name: 'Repository', provider: 'forgejo', healthy: false, reason: 'missing_token' }],
+      siblingSessions: [{ ...SESSION, role: 'review', userEmail: 'reviewer@example.test' }],
+    };
+    const calls = stub([{ json: { reserved: null, reason: 'autonomy_paused', retryAfterSeconds: null, earliestFreeAt: null, candidatesConsidered: 0, landedIdle } }, { json: { reserved, reason: null, retryAfterSeconds: null, earliestFreeAt: null, candidatesConsidered: 1, landedIdle } }]);
+    const handler = makeWorkNextHandler(client);
+    const paused = await handler({ projectKey: 'ACME', role: 'spec' });
+    expect(JSON.stringify(paused.content)).toContain('PAUSED');
+    expect(paused.structuredContent).toMatchObject({ landedIdle, retryAfterSeconds: null });
+    const result = await handler({ projectKey: 'ACME', role: 'spec' });
+    expect(calls[1].body?.role).toBe('spec');
+    expect(result.structuredContent).toMatchObject({ reserved: { ticket: { specState: 'in_spec' }, queued: reserved.queued }, landedIdle });
+    const text = JSON.stringify(result.content);
+    for (const content of ['Build order', 'Open question', 'Repository', 'reviewer@example.test', 'Already implemented', 'position 2', 'No timer started']) expect(text).toContain(content);
+  });
+
   it('reserves the winning candidate and renders the full bundle, sending projectKey straight through', async () => {
     const calls = stub([{ json: { reserved: RESERVED, reason: null, retryAfterSeconds: null, earliestFreeAt: null, candidatesConsidered: 3, landedIdle: [] } }]);
     const res = await makeWorkNextHandler(client)({ projectKey: 'ACME' });

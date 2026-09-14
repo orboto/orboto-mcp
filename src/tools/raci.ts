@@ -94,16 +94,18 @@ export const setRaciToolConfig = {
     ticketKey: z.string().min(3).describe('Ticket key (e.g. "ORB-42").'),
     userEmail: z.string().email().describe('Email of a project member.'),
     role: z.enum(ROLES).describe('R, A, C, or I.'),
+    override: z.boolean().optional(),
+    reason: z.string().trim().min(1).max(2000).optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeSetRaciHandler(client: OrbotoClient) {
-  return async ({ ticketKey, userEmail, role }: { ticketKey: string; userEmail: string; role: Role }): Promise<CallToolResult> => {
+  return async ({ ticketKey, userEmail, role, override, reason }: { ticketKey: string; userEmail: string; role: Role; override?: boolean; reason?: string }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
     const userId = await resolveMemberId(client, ticket.projectId, userEmail);
     try {
-      await client.put(`/projects/${ticket.projectId}/tickets/${ticket.id}/raci/${userId}`, { role });
+      await client.put(`/projects/${ticket.projectId}/tickets/${ticket.id}/raci/${userId}`, { role, override, reason });
     } catch (err) {
       if (err instanceof OrbotoApiError && err.status === 409) {
         let msg = err.body;

@@ -148,6 +148,7 @@ export function makeGetTicketHandler(client: OrbotoClient) {
           : null,
         priority: full.priority,
         type: full.type,
+        specState: full.specState ?? 'none',
         deliveryMode: full.deliveryMode ?? 'implementation',
         dueDate: full.dueDate,
         startDate: full.startDate,

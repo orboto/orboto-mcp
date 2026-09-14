@@ -1,3 +1,4 @@
+import { TicketSpecStateSchema, isAlreadyAssigned, type TicketSpecState } from './spec-schemas.js';
 /**
  * ORB-244 Phase C Group 1 - ticket mutation tools.
  *
@@ -63,6 +64,7 @@ function ticketStructured(t: TicketRow) {
     statusCategory: t.statusCategory ?? null,
     type: t.type,
     priority: t.priority,
+    specState: t.specState ?? 'none',
     deliveryMode: t.deliveryMode ?? 'implementation',
     dueDate: t.dueDate,
     isPrivate: t.isPrivate,
@@ -78,14 +80,17 @@ export const createTicketToolConfig = {
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
     title: z.string().min(1).max(255),
     description: z.string().optional(),
-    type: z.enum(['task', 'bug', 'story', 'epic']).optional().describe('Default: task.'),
-    priority: z.enum(['blocker', 'high', 'normal', 'low', 'trivial']).optional().describe('Default: normal.'),
-    deliveryMode: z.enum(['implementation', 'docs', 'review', 'admin', 'epic']).optional().describe('Default: epic when type=epic, else implementation.'),
+    type: z.enum(['task', 'bug', 'story', 'epic']).optional(),
+    priority: z.enum(['blocker', 'high', 'normal', 'low', 'trivial']).optional(),
+    override: z.boolean().optional(),
+    reason: z.string().trim().min(1).max(2000).optional(),
+    specState: TicketSpecStateSchema.optional(),
+    deliveryMode: z.enum(['implementation', 'docs', 'review', 'admin', 'epic']).optional(),
     milestone: z.string().optional().describe('Key ("ORB-M3"), name, or UUID.'),
     assigneeEmails: z.array(z.string().email()).optional().describe('Project-member emails.'),
-    labels: z.array(z.string()).optional().describe('Existing label names.'),
+    labels: z.array(z.string()).optional(),
     parentTicketKey: z.string().optional().describe('Parent key - makes this a sub-ticket.'),
-    dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD.'),
+    dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     isPrivate: z.boolean().optional(),
     allowLanguageMismatch: z.boolean().optional().describe('Override the language block.'),
     allowDuplicate: z.boolean().optional().describe('Override the duplicate block.'),
@@ -99,6 +104,9 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
     projectKey: string; title: string; description?: string;
     type?: 'task' | 'bug' | 'story' | 'epic';
     priority?: 'blocker' | 'high' | 'normal' | 'low' | 'trivial';
+    override?: boolean;
+    reason?: string;
+    specState?: TicketSpecState;
     deliveryMode?: 'implementation' | 'docs' | 'review' | 'admin' | 'epic';
     milestone?: string; assigneeEmails?: string[]; labels?: string[];
     parentTicketKey?: string; dueDate?: string; isPrivate?: boolean;
@@ -113,6 +121,9 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
       type: input.type ?? 'task',
       priority: input.priority ?? 'normal',
       isPrivate: input.isPrivate ?? false,
+      ...(input.override !== undefined ? { override: input.override } : {}),
+      ...(input.reason ? { reason: input.reason } : {}),
+      ...(input.specState ? { specState: input.specState } : {}),
       ...(input.deliveryMode ? { deliveryMode: input.deliveryMode } : {}),
     };
     if (input.allowDuplicate && input.duplicateJustification) body.duplicateJustification = input.duplicateJustification;
@@ -312,22 +323,23 @@ function formatSimilarity(w: SimilarWarning): string {
 export const updateTicketToolConfig = {
   title: 'Update a ticket',
   description:
-    'Patch one or more fields on a ticket. Patchable: title, description, customerSummary, type, priority, deliveryMode, dueDate, startDate, isPrivate, estimatedTimeMinutes. `customerSummary` is the customer-facing text shown in the customer project report instead of the internal description; null or empty falls back to an AI distillation or the title. `deliveryMode` is the role-aware commit policy (ORB-1608) - see `orboto_create_ticket` for the mode semantics. Use `orboto_move_ticket` for status, `orboto_set_milestone` for milestone, and `orboto_assign` / `orboto_unassign` for members.',
+    'Patch one or more fields on a ticket. Patchable: title, description, customerSummary, type, priority, specState, deliveryMode, dueDate, startDate, isPrivate, estimatedTimeMinutes. `customerSummary` is the customer-facing text shown in the customer project report instead of the internal description; null or empty falls back to an AI distillation or the title. `deliveryMode` is the role-aware commit policy (ORB-1608) - see `orboto_create_ticket` for the mode semantics. Use `orboto_move_ticket` for status, `orboto_set_milestone` for milestone, and `orboto_assign` / `orboto_unassign` for members.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     patch: z.object({
       title: z.string().min(1).max(255).optional(),
       description: z.string().optional(),
-      customerSummary: z.string().max(2000).nullable().optional().describe('Customer-facing report text; null falls back to AI/title.'),
+      customerSummary: z.string().max(2000).nullable().optional().describe('Report text; null uses AI/title.'),
       type: z.enum(['task', 'bug', 'story', 'epic']).optional(),
       priority: z.enum(['blocker', 'high', 'normal', 'low', 'trivial']).optional(),
-      deliveryMode: z.enum(['implementation', 'docs', 'review', 'admin', 'epic']).optional().describe('Commit policy; see orboto_create_ticket.'),
+      specState: TicketSpecStateSchema.optional(),
+      deliveryMode: z.enum(['implementation', 'docs', 'review', 'admin', 'epic']).optional(),
       dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
       startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
       isPrivate: z.boolean().optional(),
       estimatedTimeMinutes: z.number().int().nonnegative().optional(),
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
-    allowLanguageMismatch: z.boolean().optional().describe('Override the language block; only after a call was blocked.'),
+    allowLanguageMismatch: z.boolean().optional().describe('Retry a language block.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -545,27 +557,21 @@ export const assignToolConfig = {
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     assigneeEmail: z.string().email(),
+    override: z.boolean().optional(),
+    reason: z.string().trim().min(1).max(2000).optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeAssignHandler(client: OrbotoClient) {
-  return async ({ ticketKey, assigneeEmail }: {
-    ticketKey: string; assigneeEmail: string;
+  return async ({ ticketKey, assigneeEmail, override, reason }: {
+    ticketKey: string; assigneeEmail: string; override?: boolean; reason?: string;
   }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
     const userId = await resolveAssigneeId(client, ticket.projectId, assigneeEmail);
-    try {
-      await client.post(`/projects/${ticket.projectId}/tickets/${ticket.id}/assignees/${userId}`, {});
-    } catch (err) {
-      if (err instanceof OrbotoApiError && err.status === 409) {
-        return {
-          content: [{ type: 'text', text: `[${ticket.ticketKey}] already assigned to ${assigneeEmail}.` }],
-          structuredContent: { ticketKey: ticket.ticketKey, alreadyAssigned: true },
-        };
-      }
-      throw err;
-    }
+    await client.post(`/projects/${ticket.projectId}/tickets/${ticket.id}/assignees/${userId}`, { override, reason }).catch((error) => {
+      if (!(error instanceof OrbotoApiError) || error.status !== 409 || !isAlreadyAssigned(error.body)) throw error;
+    });
     return {
       content: [{ type: 'text', text: `Assigned ${assigneeEmail} to [${ticket.ticketKey}].` }],
       structuredContent: { ticketKey: ticket.ticketKey, assignedEmail: assigneeEmail },
