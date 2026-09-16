@@ -13,6 +13,7 @@ import { resolveToolset, type Toolset } from './toolset.js';
 import { OrbotoClient, preflightMcpSession } from './orboto-client.js';
 import type { OAuthTokenProviderLike } from './orboto-client.js';
 import { EventBridge } from './event-bridge.js';
+import { mcpInstanceToken } from './tools/shared.js';
 
 /**
  * ORB-1353 - persisted-session store. The transport calls these to survive an
@@ -272,12 +273,13 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
 
   const store = sessionStore ?? createApiSessionStore(baseUrl);
 
-  async function buildSessionCore(tokenHolder: SessionTokenHolder, userAgentSuffix: string | undefined, toolset?: Toolset) {
+  async function buildSessionCore(tokenHolder: SessionTokenHolder, userAgentSuffix: string | undefined, toolset?: Toolset, sessionId?: string) {
     const tokenProvider = holderTokenProvider(tokenHolder);
     const sessionClient = new OrbotoClient({ baseUrl, tokenProvider, userAgentSuffix });
     const subscriptions = new Set<string>();
     const mcp = await buildOrbotoMcpServer({ baseUrl, tokenProvider, userAgentSuffix, subscriptions, toolset });
-    const bridge = new EventBridge({ baseUrl, tokenProvider, mcp, subscriptions });
+    const bridge = new EventBridge({ baseUrl, tokenProvider, mcp, subscriptions,
+      ...(sessionId ? { instanceToken: mcpInstanceToken(undefined, { sessionId }) } : {}) });
     return { sessionClient, subscriptions, mcp, bridge };
   }
 
@@ -300,7 +302,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
     userEmail: string,
     toolset?: Toolset,
   ): Promise<McpSession> {
-    const { sessionClient, mcp, bridge } = await buildSessionCore(tokenHolder, userAgentSuffix, toolset);
+    const { sessionClient, mcp, bridge } = await buildSessionCore(tokenHolder, userAgentSuffix, toolset, chosenSessionId);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
     transport.onclose = () => { sessions.delete(chosenSessionId); bridge.close(); };
     await mcp.connect(transport);
@@ -509,6 +511,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
           sessions.set(sid, {
             transport, mcp, client: sessionClient, bridge, tokenHolder, userEmail: ownerEmail, lastTouchAt: Date.now(),
           });
+          bridge.setInstanceToken(mcpInstanceToken(undefined, { sessionId: sid }));
           bridge.start();
           void store
             .register(token, { sessionId: sid, clientInfo, userAgent })

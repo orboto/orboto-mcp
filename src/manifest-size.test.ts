@@ -27,12 +27,14 @@ afterEach(() => { vi.restoreAllMocks(); });
  * edits - a description essay creeping back in is exactly what these
  * must catch, so the headroom is deliberately tighter than the old
  * 20 %. Shrink-only: raising either number is a conscious decision to
- * grow every session's connect cost.
+ * grow every session's connect cost. ORB-2132 raised the full ceiling by
+ * 2,000 chars because the agent_presence output schema now carries kind,
+ * actsAs, projects and connections (measured full = 165,759 chars).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
 const CURATED_MAX_CHARS = 37_500;
-const FULL_MAX_CHARS = 165_000;
+const FULL_MAX_CHARS = 167_000;
 
 /**
  * ORB-1805 - the estimator the ticket measured the failure with

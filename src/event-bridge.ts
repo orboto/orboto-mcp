@@ -30,6 +30,8 @@ export interface EventBridgeOpts {
    *  the stream with the fresh token instead of the one pinned at session
    *  creation. When set, it takes precedence over `apiKey`. */
   tokenProvider?: OAuthTokenProviderLike;
+  /** ORB-2132 - the instance token the session's tool calls send, so the SSE presence joins the tool session's row. */
+  instanceToken?: string;
   mcp: McpServer;
   subscriptions: Set<string>;
   /** Optional fetch override for tests. */
@@ -112,6 +114,11 @@ export class EventBridge {
     this.log = opts.log ?? ((msg) => { try { process.stderr.write(`[orboto-mcp-bridge] ${msg}\n`); } catch { /* ignore */ } });
   }
 
+  /** ORB-2132 - pin the instance token once the transport session id is known; applies to the next (re)connect. */
+  setInstanceToken(token: string): void {
+    this.opts = { ...this.opts, instanceToken: token };
+  }
+
   /** Open the SSE stream and start forwarding. Resolves immediately;
    *  the actual forwarding happens on the returned background loop. */
   start(): void {
@@ -153,6 +160,7 @@ export class EventBridge {
       headers: {
         Authorization: `Bearer ${bearer}`,
         Accept: 'text/event-stream',
+        ...(this.opts.instanceToken ? { 'x-orboto-agent-session': this.opts.instanceToken } : {}),
       },
       signal: this.abort.signal,
     });

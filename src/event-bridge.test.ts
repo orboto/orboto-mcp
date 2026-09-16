@@ -167,3 +167,40 @@ describe('EventBridge.dispatch', () => {
     expect(mcp.sendResourceUpdated).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('ORB-2132 - the bridge identifies its tool session', () => {
+  async function connectOnce(opts: { instanceToken?: string; pin?: string }) {
+    const fetchFn = vi.fn().mockResolvedValue(mockSseResponse([]));
+    const bridge = new EventBridge({
+      baseUrl: 'https://orboto.example.com',
+      apiKey: 'orb_x',
+      ...(opts.instanceToken ? { instanceToken: opts.instanceToken } : {}),
+      mcp: mockMcp(),
+      subscriptions: new Set(),
+      fetchFn: fetchFn as unknown as typeof fetch,
+      log: () => { /* silence */ },
+    });
+    if (opts.pin) bridge.setInstanceToken(opts.pin);
+    bridge.start();
+    await new Promise((r) => setTimeout(r, 30));
+    bridge.close();
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchFn.mock.calls[0] as [string, { headers: Record<string, string> }];
+    expect(url).toBe('https://orboto.example.com/sse/mcp-events');
+    return init.headers;
+  }
+
+  it('sends x-orboto-agent-session with the instance token given at construction', async () => {
+    expect(await connectOnce({ instanceToken: 'mcp-session-1' })).toMatchObject({
+      Authorization: 'Bearer orb_x', 'x-orboto-agent-session': 'mcp-session-1',
+    });
+  });
+
+  it('sends the token pinned after construction, once the transport session id is known', async () => {
+    expect((await connectOnce({ pin: 'mcp-session-2' }))['x-orboto-agent-session']).toBe('mcp-session-2');
+  });
+
+  it('omits the header when no instance token is known', async () => {
+    expect(await connectOnce({})).not.toHaveProperty('x-orboto-agent-session');
+  });
+});

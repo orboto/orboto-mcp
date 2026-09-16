@@ -57,7 +57,7 @@ describe('orboto_agent_presence', () => {
         {
           userId: '00000000-0000-0000-0000-000000000001',
           userEmail: 'alice@x.test',
-          userFullName: 'Alice', isBot: false, owner: null, autonomyPaused: false, lane: null, workSessions: [],
+          userFullName: 'Alice', kind: 'human', isBot: false, actsAs: null, owner: null, autonomyPaused: false, lane: null, projects: [], connections: [], workSessions: [],
           sessionId: '00000000-0000-0000-0000-000000000010',
           status: 'working',
           workingOnTicket: { id: '00000000-0000-0000-0000-000000000020', key: 'ORB-42', title: 'Test', projectKey: 'ORB' },
@@ -69,8 +69,8 @@ describe('orboto_agent_presence', () => {
         {
           userId: '00000000-0000-0000-0000-000000000002',
           userEmail: 'bot@x.test',
-          userFullName: null, isBot: true, owner: { id: '00000000-0000-0000-0000-000000000001', name: 'Alice', email: 'alice@x.test' },
-          autonomyPaused: false, lane: null, workSessions: [],
+          userFullName: null, kind: 'agent', isBot: true, actsAs: null, owner: { id: '00000000-0000-0000-0000-000000000001', name: 'Alice', email: 'alice@x.test' },
+          autonomyPaused: false, lane: null, projects: [{ id: '00000000-0000-0000-0000-000000000030', key: 'ORB', name: 'orboto' }], connections: [{ type: 'api_key', label: 'dispatcher' }], workSessions: [],
           sessionId: '00000000-0000-0000-0000-000000000011',
           status: 'idle',
           workingOnTicket: null,

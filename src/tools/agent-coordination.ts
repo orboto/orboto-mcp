@@ -60,7 +60,7 @@ type PresenceRow = AgentInventoryEntry;
 export const agentPresenceToolConfig = {
   title: 'Workspace agent presence',
   description:
-    'Returns all active orboto agent instances, including lane workers/reviewers, inbox and MCP connections and registered runners. Session freshness is 90 seconds; lanes retain their 300-second heartbeat grace. Unexpired work leases keep their owning instance visible. Ticket metadata and claims retain ordinary ticket visibility. Rows include authoritative isBot, owner, lane and stable sessionId; separate instances of one account remain separate. Callers with admin:system:read see every agent; other users see only their own sessions (useful for "is my dispatcher daemon alive?" checks). Each row exposes `userId`, `userEmail`, the agent runtime (`clientInfo.name`), declared `capabilities`, current `status`, and the ticket the agent is working on if any. Use this to plan multi-agent work - e.g. before dispatching a sub-task, look up which other agents are active and what they\'re working on so you don\'t step on a parallel run.',
+    'Returns all active orboto agent instances, including lane workers/reviewers, inbox and MCP connections and registered runners. Session freshness is 90 seconds; lanes retain their 300-second heartbeat grace. Unexpired work leases keep their owning instance visible. Ticket metadata and claims retain ordinary ticket visibility. Rows include `kind` (agent or human, classified by the credential: agent API key, OAuth grant, lane, external token or bot account; `isBot` is its alias), `actsAs` (the human account an AI client acts under), `projects` (memberships plus lane projects), `connections` (type + label per credential or attachment, `live_events` for the MCP event bridge), owner, lane and stable sessionId; separate instances of one account remain separate. Callers with admin:system:read see every agent; other users see only their own sessions (useful for "is my dispatcher daemon alive?" checks). Each row exposes `userId`, `userEmail`, the agent runtime (`clientInfo.name`), declared `capabilities`, current `status`, and the ticket the agent is working on if any. Use this to plan multi-agent work - e.g. before dispatching a sub-task, look up which other agents are active and what they\'re working on so you don\'t step on a parallel run.',
   inputSchema: z.object({}).shape,
   outputSchema: z.object({
     sessions: z.array(AgentInventoryEntrySchema),
@@ -82,7 +82,7 @@ export function makeAgentPresenceHandler(client: OrbotoClient) {
         const work = s.workingOnTicket
           ? ` · working on [${s.workingOnTicket.projectKey ?? '?'}] ${s.workingOnTicket.key ?? s.workingOnTicket.id} (${s.workingOnTicket.title})`
           : '';
-        lines.push(`- ${name} <${s.userEmail}> (${runtime}, instance ${s.sessionId}) - ${s.status}${work}; owner: ${s.owner?.name ?? s.owner?.email ?? (s.isBot ? 'unassigned' : 'self')}${s.lane ? `; lane: ${s.lane.name}` : ''}`);
+        lines.push(`- ${name} <${s.userEmail}> (${runtime}, instance ${s.sessionId}) - ${s.status}${work}; owner: ${s.owner?.name ?? s.owner?.email ?? (s.actsAs ? `acts as ${s.actsAs.name ?? s.actsAs.email}` : s.kind === 'agent' ? 'unassigned' : 'self')}${s.lane ? `; lane: ${s.lane.name}` : ''}${s.projects.length ? `; projects: ${s.projects.map((p) => p.key).join(', ')}` : ''}${s.connections.length ? `; connections: ${s.connections.map((c) => c.type).join(', ')}` : ''}`);
       }
     }
     return {
