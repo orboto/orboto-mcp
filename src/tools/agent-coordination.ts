@@ -4,7 +4,7 @@
  * @see ORB-704, ORB-706
  */
 import { z } from 'zod';
-import { AgentInventoryEntrySchema, type AgentInventoryEntry } from './agent-presence-schema.js';
+import { AgentInventoryEntrySchema, AgentInventoryKindSchema, type AgentInventoryEntry } from './agent-presence-schema.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { mcpInstanceToken } from './shared.js';
@@ -60,20 +60,30 @@ type PresenceRow = AgentInventoryEntry;
 export const agentPresenceToolConfig = {
   title: 'Workspace agent presence',
   description:
-    'Returns all active orboto agent instances, including lane workers/reviewers, inbox and MCP connections and registered runners. Session freshness is 90 seconds; lanes retain their 300-second heartbeat grace. Unexpired work leases keep their owning instance visible. Ticket metadata and claims retain ordinary ticket visibility. Rows include `kind` (agent or human, classified by the credential: agent API key, OAuth grant, lane, external token or bot account; `isBot` is its alias), `actsAs` (the human account an AI client acts under), `projects` (memberships plus lane projects), `connections` (type + label per credential or attachment, `live_events` for the MCP event bridge), owner, lane and stable sessionId; separate instances of one account remain separate. Callers with admin:system:read see every agent; other users see only their own sessions (useful for "is my dispatcher daemon alive?" checks). Each row exposes `userId`, `userEmail`, the agent runtime (`clientInfo.name`), declared `capabilities`, current `status`, and the ticket the agent is working on if any. Use this to plan multi-agent work - e.g. before dispatching a sub-task, look up which other agents are active and what they\'re working on so you don\'t step on a parallel run.',
-  inputSchema: z.object({}).shape,
+    'Returns all active orboto agent instances, including lane workers/reviewers, inbox and MCP connections and registered runners. Session freshness is 90 seconds; lanes retain their 300-second heartbeat grace. Unexpired work leases keep their owning instance visible. Ticket metadata and claims retain ordinary ticket visibility. Rows include `kind` (agent or human, classified by the credential: agent API key, OAuth grant, lane, external token or bot account; `isBot` is its alias), `actsAs` (the human account an AI client acts under), `projects` (memberships plus lane projects), `connections` (type + label per credential or attachment, `live_events` for the MCP event bridge), owner, lane and stable sessionId; separate instances of one account remain separate. Callers with admin:system:read see every agent; other users see only their own sessions (useful for "is my dispatcher daemon alive?" checks). Each row exposes `userId`, `userEmail`, the agent runtime (`clientInfo.name`), declared `capabilities`, current `status`, and the ticket the agent is working on if any. Use this to plan multi-agent work - e.g. before dispatching a sub-task, look up which other agents are active and what they\'re working on so you don\'t step on a parallel run. Filters `projectKey` (rows whose `projects` contain the key) and `kind` (agent | human) narrow the list client-side, the same way `orboto agents --project KEY --bots|--humans` does.',
+  inputSchema: z.object({
+    projectKey: z.string().min(1).max(64).optional().describe('Keep only rows whose projects contain this project key (case-insensitive).'),
+    kind: AgentInventoryKindSchema.optional().describe('Keep only rows classified as agent or human by their credential.'),
+  }).shape,
   outputSchema: z.object({
     sessions: z.array(AgentInventoryEntrySchema),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
+/** Client-side view filter (ORB-2135); the inventory route stays unfiltered and the chat mirror applies the same rule. */
+export function filterPresenceRows<T extends Pick<AgentInventoryEntry, 'kind' | 'projects'>>(rows: T[], args: { projectKey?: string; kind?: 'agent' | 'human' }): T[] {
+  const key = args.projectKey?.trim().toUpperCase();
+  return rows.filter((row) => (!args.kind || row.kind === args.kind) && (!key || row.projects.some((p) => p.key.toUpperCase() === key)));
+}
+
 export function makeAgentPresenceHandler(client: OrbotoClient) {
-  return async (): Promise<CallToolResult> => {
-    const sessions = await client.get<PresenceRow[]>('/v1/agent/inventory');
+  return async (args: { projectKey?: string; kind?: 'agent' | 'human' } = {}): Promise<CallToolResult> => {
+    const all = await client.get<PresenceRow[]>('/v1/agent/inventory');
+    const sessions = filterPresenceRows(all, args);
     const lines: string[] = [];
     if (sessions.length === 0) {
-      lines.push('No active agent sessions in the workspace.');
+      lines.push(all.length === 0 ? 'No active agent sessions in the workspace.' : `No active agent sessions match the filter (${all.length} active in the workspace).`);
     } else {
       lines.push(`${sessions.length} active session(s):`);
       for (const s of sessions) {

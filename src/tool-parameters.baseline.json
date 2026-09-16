@@ -166,9 +166,17 @@
     }
   },
   "orboto_agent_presence": {
-    "params": [],
+    "params": [
+      "kind",
+      "projectKey"
+    ],
     "required": [],
-    "enums": {}
+    "enums": {
+      "kind": [
+        "agent",
+        "human"
+      ]
+    }
   },
   "orboto_ai_status": {
     "params": [],

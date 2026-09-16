@@ -97,6 +97,42 @@ describe('orboto_agent_presence', () => {
     const result = await handler();
     expect((result.content[0] as { text: string }).text).toBe('No active agent sessions in the workspace.');
   });
+
+  const presenceRows = () => [
+    { userId: '00000000-0000-0000-0000-000000000001', userEmail: 'alice@x.test', userFullName: 'Alice', kind: 'human', isBot: false, actsAs: null, owner: null, autonomyPaused: false, lane: null, projects: [{ id: '00000000-0000-0000-0000-000000000030', key: 'ORB', name: 'orboto' }], connections: [{ type: 'api_key', label: 'laptop' }], workSessions: [], sessionId: '00000000-0000-0000-0000-000000000010', status: 'working', workingOnTicket: null, capabilities: [], clientInfo: { name: 'claude-code' }, lastSeenAt: new Date().toISOString(), createdAt: new Date().toISOString() },
+    { userId: '00000000-0000-0000-0000-000000000002', userEmail: 'worker@x.test', userFullName: null, kind: 'agent', isBot: true, actsAs: null, owner: { id: '00000000-0000-0000-0000-000000000001', name: 'Alice', email: 'alice@x.test' }, autonomyPaused: false, lane: { id: '00000000-0000-0000-0000-000000000040', name: 'worker-1', role: 'implementation', paused: false }, projects: [{ id: '00000000-0000-0000-0000-000000000031', key: 'ACME', name: 'Acme' }, { id: '00000000-0000-0000-0000-000000000030', key: 'ORB', name: 'orboto' }], connections: [{ type: 'lane', label: 'worker-1' }, { type: 'live_events', label: 'MCP live events' }], workSessions: [], sessionId: '00000000-0000-0000-0000-000000000011', status: 'idle', workingOnTicket: null, capabilities: [], clientInfo: { name: 'pi' }, lastSeenAt: new Date().toISOString(), createdAt: new Date().toISOString() },
+    { userId: '00000000-0000-0000-0000-000000000001', userEmail: 'alice@x.test', userFullName: 'Alice', kind: 'agent', isBot: true, actsAs: { id: '00000000-0000-0000-0000-000000000001', name: 'Alice', email: 'alice@x.test' }, owner: null, autonomyPaused: false, lane: null, projects: [], connections: [{ type: 'oauth', label: 'claude.ai' }], workSessions: [], sessionId: '00000000-0000-0000-0000-000000000012', status: 'idle', workingOnTicket: null, capabilities: [], clientInfo: {}, lastSeenAt: new Date().toISOString(), createdAt: new Date().toISOString() },
+  ];
+
+  it('filters by projectKey (case-insensitive, projects only) and kind on the client side (ORB-2135)', async () => {
+    const handler = makeAgentPresenceHandler(client);
+    const ids = async (args: { projectKey?: string; kind?: 'agent' | 'human' }) => {
+      stub([{ json: presenceRows() }]);
+      const result = await handler(args);
+      expect(vi.mocked(fetch).mock.calls.at(-1)?.[0]).toBe('https://orboto.example.com/v1/agent/inventory');
+      return (result.structuredContent as { sessions: Array<{ sessionId: string }> }).sessions.map((s) => s.sessionId.slice(-2));
+    };
+    expect(await ids({})).toEqual(['10', '11', '12']);
+    expect(await ids({ kind: 'agent' })).toEqual(['11', '12']);
+    expect(await ids({ kind: 'human' })).toEqual(['10']);
+    expect(await ids({ projectKey: 'acme' })).toEqual(['11']);
+    expect(await ids({ projectKey: 'ORB', kind: 'human' })).toEqual(['10']);
+    expect(await ids({ projectKey: 'NONE' })).toEqual([]);
+  });
+
+  it('says when a filter matched nothing but the workspace is not empty', async () => {
+    stub([{ json: presenceRows() }]);
+    const result = await makeAgentPresenceHandler(client)({ projectKey: 'NONE' });
+    expect((result.content[0] as { text: string }).text).toBe('No active agent sessions match the filter (3 active in the workspace).');
+  });
+
+  it('renders acts-as, lane, projects and connection types on each line', async () => {
+    stub([{ json: presenceRows() }]);
+    const text = ((await makeAgentPresenceHandler(client)({ kind: 'agent' })).content[0] as { text: string }).text;
+    expect(text).toContain('2 active session(s)');
+    expect(text).toContain('owner: Alice; lane: worker-1; projects: ACME, ORB; connections: lane, live_events');
+    expect(text).toContain('owner: acts as Alice; connections: oauth');
+  });
 });
 
 describe('orboto_agent_notify', () => {
