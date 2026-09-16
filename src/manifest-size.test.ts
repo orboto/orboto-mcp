@@ -30,11 +30,15 @@ afterEach(() => { vi.restoreAllMocks(); });
  * grow every session's connect cost. ORB-2132 raised the full ceiling by
  * 2,000 chars because the agent_presence output schema now carries kind,
  * actsAs, projects and connections (measured full = 165,759 chars).
+ * ORB-2136 raised all three: session_start and agent_heartbeat carry the
+ * session scope schema, agent_notify the toSessionRef, and orboto_messages
+ * renders sender and receiver identities in its output schema (measured
+ * curated = 38,640, full = 168,029 chars, minimal = 3,140 tokens).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
-const CURATED_MAX_CHARS = 37_500;
-const FULL_MAX_CHARS = 167_000;
+const CURATED_MAX_CHARS = 39_000;
+const FULL_MAX_CHARS = 169_000;
 
 /**
  * ORB-1805 - the estimator the ticket measured the failure with
@@ -52,13 +56,13 @@ const estTokens = (chars: number) => Math.round(chars / CHARS_PER_TOKEN);
  * left for the conversation. 3,000 was the ticket's number; 3,100 since
  * ORB-1669 added the annotations block to every tool (+688 chars).
  */
-const MINIMAL_MAX_TOKENS = 3_100;
+const MINIMAL_MAX_TOKENS = 3_200;
 
 /**
  * The curated tier is ratcheted on its TOOL SCHEMAS (the instructions
  * block has its own budget, enforced in instructions-budget.test.ts).
  */
-const CURATED_SCHEMA_MAX_TOKENS = 10_450;
+const CURATED_SCHEMA_MAX_TOKENS = 10_800;
 
 interface Measurement { count: number; chars: number; instructionsChars: number }
 

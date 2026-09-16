@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AgentSessionScopeSchema } from './agent-session-scope.js';
 const WorkSessionResourceClaimSchema = z.object({
   kind: z.enum(['path', 'named']), value: z.string().min(1).max(500), mode: z.enum(['read', 'write']),
   state: z.enum(['granted', 'waiting']).optional(), requestedAt: z.string().optional(),
@@ -31,6 +32,10 @@ export const AgentInventoryEntrySchema = z.object({
   })),
   capabilities: z.array(z.string()),
   clientInfo: z.record(z.string(), z.string()),
+  /** ORB-2136 - the scope the session declared; null when it declared none. */
+  scope: AgentSessionScopeSchema.nullable(),
+  /** ORB-2136 - unread inbox messages this session would list. */
+  unreadMessages: z.number().int(),
   lastSeenAt: z.string(),
   createdAt: z.string(),
 });

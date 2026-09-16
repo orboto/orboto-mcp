@@ -13,9 +13,17 @@ import type { OrbotoClient } from '../orboto-client.js';
 import { makeAgentMessageWorkHandler } from './agent-message-work.js';
 import { mcpInstanceToken } from './shared.js';
 
+interface Party { userId: string; email: string; sessionId: string | null; role: string | null; label: string }
+const PartySchema = z.object({ userId: z.string(), email: z.string(), sessionId: z.string().nullable(), role: z.string().nullable(), label: z.string() });
+
 interface AgentMessage {
   id: string;
   fromUserId: string;
+  toUserId: string;
+  fromSessionId: string | null;
+  toSessionId: string | null;
+  from: Party;
+  to: Party;
   kind: string;
   subject: string;
   payload: Record<string, unknown> | null;
@@ -28,7 +36,7 @@ interface AgentMessage {
 
 export const agentMessagesToolConfig = {
   title: 'Agent inbox and message work',
-  description: 'Your inbox. messageWork carries durable work ownership - claim before executing. ackIds is a plain read receipt: no claim needed, finishes nothing. Reply via orboto_agent_notify with threadId.',
+  description: 'Your inbox as THIS session sees it: mail to this session, account mail inside your declared scope, broadcasts; sibling-session mail and own sends stay out, all:true shows the whole account (ORB-2136). messageWork carries durable work ownership - claim before executing. ackIds is a plain read receipt: no claim needed, finishes nothing. Reply via orboto_agent_notify with threadId (toSessionRef = from.sessionId reaches that instance).',
   inputSchema: z.object({
     messageWork: z.record(z.unknown()).optional()
       .describe('Work envelope {messageId, mutation, cursor, limit, openOnly}; schema: orboto_api_search.'),
@@ -40,9 +48,12 @@ export const agentMessagesToolConfig = {
   }).shape,
   outputSchema: z.object({
     work: z.record(z.unknown()).optional(),
+    sessionId: z.string().nullable().optional(),
     messages: z.array(z.object({
       id: z.string(),
       fromUserId: z.string(),
+      from: PartySchema,
+      to: PartySchema,
       kind: z.string(),
       subject: z.string(),
       payload: z.record(z.string(), z.unknown()).nullable(),
@@ -72,21 +83,22 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
     if (args.all) q.set('all', 'true');
     if (args.limit) q.set('limit', String(args.limit));
     if (args.project) q.set('project', args.project);
-    if (!args.includeOwnSends) {
-      q.set('excludeRef', mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined));
-    }
-    const { messages } = await client.get<{ messages: AgentMessage[] }>(`/v1/agent/messages${q.toString() ? `?${q.toString()}` : ''}`);
+    const instanceToken = mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined);
+    if (!args.includeOwnSends) q.set('excludeRef', instanceToken);
+    const { messages, sessionId } = await client.get<{ messages: AgentMessage[]; sessionId?: string | null }>(`/v1/agent/messages${q.toString() ? `?${q.toString()}` : ''}`, { instanceToken });
     const lines = messages.length === 0
       ? [acked > 0 ? `Acknowledged ${acked} message(s). Inbox empty.` : 'Inbox empty.']
-      : messages.map((m) => `[${m.kind}]${m.projectKey ? ` [${m.projectKey}]` : ''} ${m.subject} (from ${m.fromUserId}, ${m.createdAt}, id ${m.id}${m.threadId ? `, thread ${m.threadId}` : ''})${m.payload ? ` payload: ${JSON.stringify(m.payload)}` : ''}`);
+      : messages.map((m) => `[${m.kind}]${m.projectKey ? ` [${m.projectKey}]` : ''} ${m.subject} (from ${m.from?.label ?? m.fromUserId} to ${m.to?.label ?? m.toUserId}, ${m.createdAt}, id ${m.id}${m.threadId ? `, thread ${m.threadId}` : ''})${m.payload ? ` payload: ${JSON.stringify(m.payload)}` : ''}`);
     if (messages.length > 0) {
-      lines.push(`Acknowledge with ackIds once handled; reply via orboto_agent_notify with threadId.`);
+      lines.push(`Acknowledge with ackIds once handled; reply via orboto_agent_notify with threadId (toSessionRef = the sender's instance short id reaches that session only).`);
     }
+    if (sessionId) lines.push(`This session: ${sessionId.slice(0, 8)} (ref ${instanceToken}).`);
     return {
       content: [{ type: 'text', text: lines.join('\n') }],
       structuredContent: {
+        sessionId: sessionId ?? null,
         messages: messages.map((m) => ({
-          id: m.id, fromUserId: m.fromUserId, kind: m.kind, subject: m.subject,
+          id: m.id, fromUserId: m.fromUserId, from: m.from, to: m.to, kind: m.kind, subject: m.subject,
           payload: m.payload, threadId: m.threadId, projectKey: m.projectKey ?? null,
           createdAt: m.createdAt, readAt: m.readAt,
         })),

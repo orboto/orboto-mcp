@@ -592,3 +592,49 @@ describe('ORB-1818 - rules index instead of the full rule text', () => {
     expect((res.content[0] as { text: string }).text).toContain(RULES_TEXT);
   });
 });
+
+describe('ORB-2136 - session scope and ref', () => {
+  it('registers the scope on this MCP session via heartbeat with the session header and reports the session ref', async () => {
+    const seen: Array<{ path: string; headers: Record<string, string>; body: unknown }> = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const u = new URL(url.toString());
+      const path = u.pathname + u.search;
+      seen.push({ path, headers: (init?.headers ?? {}) as Record<string, string>, body: init?.body ? JSON.parse(init.body as string) : undefined });
+      const map: Record<string, unknown> = {
+        '/v1/agent/heartbeat': { sessionToken: 'mcp-abc123', sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: { role: 'integrator', projectKeys: ['ORB'] } },
+        '/users/me/assigned-tickets': { items: [] },
+        '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
+        '/agent-instructions': { instructions: 'rules here', rulesHash: 'fixture' },
+        '/time/timer': {},
+        '/v1/agent/messages': { sessionId: 'cbb52195-0000-4000-8000-000000000000', messages: [{ id: 'm1', fromUserId: 'u1', from: { label: 'spec@orboto.io (spec, s1)' }, kind: 'request', subject: 'ticket-ready:ORB-1', createdAt: 'now' }] },
+      };
+      const key = Object.keys(map).find((k) => path.startsWith(k));
+      return { ok: true, status: 200, statusText: 'OK', json: async () => (key ? map[key] : {}), text: async () => '' } as unknown as Response;
+    });
+    const res = await makeSessionStartHandler(client)({ scope: { role: 'integrator', projectKeys: ['orb'] } }, { sessionId: 'abc123' });
+    const beat = seen.find((c) => c.path === '/v1/agent/heartbeat');
+    expect(beat?.headers['x-orboto-agent-session']).toBe('mcp-abc123');
+    expect(beat?.body).toEqual({ scope: { role: 'integrator', projectKeys: ['orb'] } });
+    expect(seen.find((c) => c.path.startsWith('/v1/agent/messages'))?.headers['x-orboto-agent-session']).toBe('mcp-abc123');
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('ref mcp-abc123, instance cbb52195. role integrator; projects ORB');
+    expect(text).toContain('toSessionRef: "cbb52195"');
+    expect(text).toContain('from spec@orboto.io (spec, s1)');
+    expect(res.structuredContent).toMatchObject({ session: { ref: 'mcp-abc123', id: 'cbb52195-0000-4000-8000-000000000000', scope: { role: 'integrator', projectKeys: ['ORB'] } } });
+  });
+
+  it('without a scope the heartbeat body stays empty and the digest says no scope is declared', async () => {
+    const seen: Array<{ path: string; body: unknown }> = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const u = new URL(url.toString());
+      seen.push({ path: u.pathname, body: init?.body ? JSON.parse(init.body as string) : undefined });
+      const body = u.pathname === '/v1/agent/heartbeat'
+        ? { sessionToken: 'x', sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: null }
+        : u.pathname === '/agent-instructions' ? { instructions: 'rules here', rulesHash: 'fixture' } : {};
+      return { ok: true, status: 200, statusText: 'OK', json: async () => body, text: async () => '' } as unknown as Response;
+    });
+    const res = await makeSessionStartHandler(client)({}, { sessionId: 'abc123' });
+    expect(seen.find((c) => c.path === '/v1/agent/heartbeat')?.body).toEqual({});
+    expect((res.content[0] as { text: string }).text).toContain('no scope declared');
+  });
+});

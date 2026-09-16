@@ -204,3 +204,53 @@ describe('orboto_messages (ORB-1742 self-echo exclusion)', () => {
     expect(urls[1]).not.toContain('excludeRef');
   });
 });
+
+describe('ORB-2136 - session addressing', () => {
+  it('agent_notify forwards toSessionRef and sends this MCP session as x-orboto-agent-session', async () => {
+    const seen: Array<{ body: Record<string, unknown>; headers: Record<string, string> }> = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      seen.push({ body: JSON.parse((init?.body as string) ?? '{}'), headers: (init?.headers ?? {}) as Record<string, string> });
+      return { ok: true, status: 200, statusText: 'OK', json: async () => ({ ok: true, messageId: '00000000-0000-4000-8000-000000000000', toSessionId: 'cbb52195-0000-4000-8000-000000000000' }), text: async () => '' } as unknown as Response;
+    });
+    const result = await makeAgentNotifyHandler(client)({ targetEmail: 'bob@example.com', subject: 'hi', toSessionRef: 'cbb52195' }, { sessionId: 'abc123' });
+    expect(seen[0].body).toMatchObject({ toSessionRef: 'cbb52195', senderRef: 'mcp-abc123' });
+    expect(seen[0].headers['x-orboto-agent-session']).toBe('mcp-abc123');
+    expect((result.content[0] as { text: string }).text).toContain('bob@example.com session cbb52195');
+    expect(result.structuredContent).toMatchObject({ toSessionId: 'cbb52195-0000-4000-8000-000000000000' });
+  });
+
+  it('orboto_messages identifies this session on the fetch and renders sender and receiver identities', async () => {
+    const seen: Array<{ url: string; headers: Record<string, string> }> = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      seen.push({ url: String(url), headers: (init?.headers ?? {}) as Record<string, string> });
+      return {
+        ok: true, status: 200, statusText: 'OK',
+        json: async () => ({ sessionId: 'cbb52195-0000-4000-8000-000000000000', messages: [{
+          id: 'm1', fromUserId: 'u1', toUserId: 'u2', fromSessionId: 's1', toSessionId: 's2',
+          from: { userId: 'u1', email: 'spec@orboto.io', sessionId: 's1', role: 'spec', label: 'spec@orboto.io (spec, s1)' },
+          to: { userId: 'u2', email: 'claude@orboto.io', sessionId: 's2', role: 'integrator', label: 'claude@orboto.io (integrator, s2)' },
+          kind: 'request', subject: 'ticket-ready:ORB-1', payload: null, threadId: null, projectKey: 'ORB', createdAt: 'now', deliveredAt: null, readAt: null,
+        }] }),
+        text: async () => '',
+      } as unknown as Response;
+    });
+    const result = await makeAgentMessagesHandler(client)({}, { sessionId: 'abc123' });
+    expect(seen[0].headers['x-orboto-agent-session']).toBe('mcp-abc123');
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain('from spec@orboto.io (spec, s1) to claude@orboto.io (integrator, s2)');
+    expect(text).toContain('This session: cbb52195 (ref mcp-abc123)');
+    expect(result.structuredContent).toMatchObject({ sessionId: 'cbb52195-0000-4000-8000-000000000000', messages: [{ from: { role: 'spec' }, to: { sessionId: 's2' } }] });
+  });
+
+  it('agent_heartbeat carries the scope and the session header', async () => {
+    const seen: Array<{ body: Record<string, unknown>; headers: Record<string, string> }> = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      seen.push({ body: JSON.parse((init?.body as string) ?? '{}'), headers: (init?.headers ?? {}) as Record<string, string> });
+      return { ok: true, status: 200, statusText: 'OK', json: async () => ({ sessionToken: 'mcp-abc123', sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: { role: 'integrator', projectKeys: ['ORB'] } }), text: async () => '' } as unknown as Response;
+    });
+    const result = await makeAgentHeartbeatHandler(client)({ scope: { role: 'integrator', projectKeys: ['orb'] } }, { sessionId: 'abc123' });
+    expect(seen[0].body).toMatchObject({ scope: { role: 'integrator', projectKeys: ['orb'] } });
+    expect(seen[0].headers['x-orboto-agent-session']).toBe('mcp-abc123');
+    expect(result.structuredContent).toMatchObject({ scope: { role: 'integrator', projectKeys: ['ORB'] } });
+  });
+});

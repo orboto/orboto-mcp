@@ -11,7 +11,8 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { resolveTicketByKey, type TicketRow , applyAgentProfile } from './shared.js';
+import { resolveTicketByKey, type TicketRow , applyAgentProfile, mcpInstanceToken } from './shared.js';
+import { AgentSessionScopeSchema, type AgentSessionScope } from './agent-session-scope.js';
 import { PROTECT_TEXT_META, storePayload } from '../response-budget.js';
 import { loadRequiredRules } from '../required-rules.js';
 import { GIT_HEALTH_REASON_TEXT } from './git-health-reasons.js';
@@ -19,8 +20,8 @@ import { GIT_HEALTH_REASON_TEXT } from './git-health-reasons.js';
 export const sessionStartToolConfig = {
   title: 'Load the rules you must follow + re-orient',
   description:
-    'THE canonical way to LOAD the binding workspace rules you must follow as an agent. Run it as your FIRST action in a session and immediately AFTER any context compaction. Returns a one-line-per-rule INDEX of the binding working-rules plus their hash (or a compact "unchanged" ack on a repeat call within the same connection) - read the index, then call this tool again with `rulesOnly: true` to read the full text of the rules whenever you do not already hold that exact hash, and expand before acting on any rule whose title touches what you are about to do. Also returns your in-progress tickets - each flagged LANDED, IDLE when it has a linked commit but has not moved for days, i.e. finished work you never handed to review - your running timer, and a warning if a project\'s git connection looks unhealthy (commit ingestion may be stalled). Pass `ticketKey` to also get a one-shot bundle for that ticket: project primer, the full ticket with dependencies + checklists, that project\'s git health, and any other agent sessions currently on it - replacing several separate calls. (Do NOT use orboto_list_agent_instructions to read the rules - that tool MANAGES/edits rule blocks for admins; this one is what you read to know how to work.) Read-only; no side effects. '
-    + '**Parameters.** `rulesOnly: true` returns ONLY the complete rules text (nothing else) and is never truncated - the cheapest way to read the rules the index listed. `projectId` adds that project\'s rules on top of the workspace + personal ones. `ticketKey` ("ACME-42") bundles that ticket\'s primer, full detail, dependencies, checklists, git health and other active agent sessions into the same response. `forceRules: true` returns the full rules text inline with the rest of the digest even when this connection already delivered them - use it whenever the rules are NOT in your context right now: after a compaction, a /clear, or a fresh agent taking over an existing connection. `agentKind` (coding, orchestrator, reviewer, runner) and `modelTier` (frontier, standard, small) are your self-declared classification; rule blocks and per-tier rule text are targeted by them.',
+    'THE canonical way to LOAD the binding workspace rules you must follow as an agent. Run it as your FIRST action in a session and immediately AFTER any context compaction. Returns a one-line-per-rule INDEX of the binding working-rules plus their hash (or a compact "unchanged" ack on a repeat call within the same connection) - read the index, then call this tool again with `rulesOnly: true` to read the full text of the rules whenever you do not already hold that exact hash, and expand before acting on any rule whose title touches what you are about to do. Also returns your in-progress tickets - each flagged LANDED, IDLE when it has a linked commit but has not moved for days, i.e. finished work you never handed to review - your running timer, and a warning if a project\'s git connection looks unhealthy (commit ingestion may be stalled). Pass `ticketKey` to also get a one-shot bundle for that ticket: project primer, the full ticket with dependencies + checklists, that project\'s git health, and any other agent sessions currently on it - replacing several separate calls. (Do NOT use orboto_list_agent_instructions to read the rules - that tool MANAGES/edits rule blocks for admins; this one is what you read to know how to work.) Registers this session (a heartbeat on its instance row) and is otherwise read-only. '
+    + '**Parameters.** `rulesOnly: true` returns ONLY the complete rules text (nothing else) and is never truncated - the cheapest way to read the rules the index listed. `projectId` adds that project\'s rules on top of the workspace + personal ones. `ticketKey` ("ACME-42") bundles that ticket\'s primer, full detail, dependencies, checklists, git health and other active agent sessions into the same response. `forceRules: true` returns the full rules text inline with the rest of the digest even when this connection already delivered them - use it whenever the rules are NOT in your context right now: after a compaction, a /clear, or a fresh agent taking over an existing connection. `agentKind` (coding, orchestrator, reviewer, runner) and `modelTier` (frontier, standard, small) are your self-declared classification; rule blocks and per-tier rule text are targeted by them. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility; the returned session.ref is what peers pass as toSessionRef (ORB-2136).',
   inputSchema: z.object({
     projectId: z.string().uuid().optional().describe('Also load this project\'s rules.'),
     ticketKey: z.string().min(3).optional().describe('Ticket key ("ACME-42") - bundles that ticket\'s full context.'),
@@ -28,9 +29,12 @@ export const sessionStartToolConfig = {
     rulesOnly: z.boolean().optional().describe('Return ONLY the complete rules text.'),
     agentKind: z.string().min(1).max(32).optional().describe('coding | orchestrator | reviewer | runner.'),
     modelTier: z.string().min(1).max(32).optional().describe('frontier | standard | small.'),
+    scope: AgentSessionScopeSchema.optional(),
   }).shape,
-  annotations: { readOnlyHint: true, idempotentHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
+
+interface SessionRegistration { sessionId: string; scope: AgentSessionScope | null }
 
 interface Me { email?: string; fullName?: string; locale?: string; workspaceLocale?: string }
 interface Ticket {
@@ -207,7 +211,11 @@ async function buildTicketBundle(
 export function makeSessionStartHandler(client: OrbotoClient) {
   let lastKnownRulesHash: string | undefined;
 
-  return async (input: { projectId?: string; ticketKey?: string; forceRules?: boolean; rulesOnly?: boolean; agentKind?: string; modelTier?: string } = {}): Promise<CallToolResult> => {
+  return async (
+    input: { projectId?: string; ticketKey?: string; forceRules?: boolean; rulesOnly?: boolean; agentKind?: string; modelTier?: string; scope?: AgentSessionScope | null } = {},
+    extra?: unknown,
+  ): Promise<CallToolResult> => {
+    const instanceToken = mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined);
     const rulesParams = new URLSearchParams();
     if (input.projectId) rulesParams.set('projectId', input.projectId);
     applyAgentProfile(rulesParams, { agentKind: input.agentKind, modelTier: input.modelTier });
@@ -241,16 +249,19 @@ export function makeSessionStartHandler(client: OrbotoClient) {
       };
     }
 
+    const registration = await client.post<SessionRegistration>('/v1/agent/heartbeat', input.scope !== undefined ? { scope: input.scope } : {}, { instanceToken })
+      .then((r) => (r && typeof r.sessionId === 'string' ? { sessionId: r.sessionId, scope: r.scope ?? null } : null))
+      .catch(() => null);
     const [me, rules, assigned, timer, inboxRaw] = await Promise.all([
       client.get<Me>('/users/me').catch(() => null),
       loadRequiredRules(client, rulesPath, rulesParams.get('knownRulesHash') ?? undefined),
       client.get<{ items?: Ticket[] } | Ticket[]>('/users/me/assigned-tickets?statuses=IN_PROGRESS,IN_REVIEW&limit=20').catch(() => ({ items: [] })),
       client.get<Timer>('/time/timer').catch(() => null),
-      client.get<{ messages?: Array<{ id: string; fromUserId: string; kind: string; subject: string; createdAt: string }> }>('/v1/agent/messages?limit=10')
+      client.get<{ messages?: Array<{ id: string; fromUserId: string; from?: { label?: string }; kind: string; subject: string; createdAt: string }> }>('/v1/agent/messages?limit=10', { instanceToken })
         .then((r) => (Array.isArray(r?.messages) ? r.messages : []))
         .catch(() => []),
     ]);
-    const pendingMessages = inboxRaw.map((m) => ({ id: m.id, fromUserId: m.fromUserId, kind: m.kind, subject: m.subject, createdAt: m.createdAt }));
+    const pendingMessages = inboxRaw.map((m) => ({ id: m.id, fromUserId: m.fromUserId, from: m.from?.label ?? m.fromUserId, kind: m.kind, subject: m.subject, createdAt: m.createdAt }));
     const tickets: Ticket[] = Array.isArray(assigned) ? assigned : (assigned?.items ?? []);
 
     const projectIds = [...new Set(tickets.map((t) => t.projectId).filter((id): id is string => !!id))].slice(0, MAX_GIT_HEALTH_PROJECTS);
@@ -334,9 +345,14 @@ export function makeSessionStartHandler(client: OrbotoClient) {
     }
     lines.push('', '## Timer');
     lines.push(timer?.ticketId ? `Running on ${timer.ticketKey ?? timer.ticketId} since ${timer.startedAt ?? 'earlier'}.` : 'No timer running.');
+    lines.push('', '## This session');
+    const scopeText = registration?.scope
+      ? [registration.scope.role ? `role ${registration.scope.role}` : null, registration.scope.projectKeys?.length ? `projects ${registration.scope.projectKeys.join(', ')}` : null, registration.scope.ticketKeys?.length ? `tickets ${registration.scope.ticketKeys.join(', ')}` : null].filter(Boolean).join('; ')
+      : 'no scope declared - this session lists every account-addressed message; pass scope: { projectKeys, role } to narrow it';
+    lines.push(`ref ${instanceToken}${registration ? `, instance ${registration.sessionId.slice(0, 8)}` : ''}. ${scopeText}. Peers reach exactly this session with orboto_agent_notify { toSessionRef: "${registration ? registration.sessionId.slice(0, 8) : instanceToken}" }.`);
     if (pendingMessages.length > 0) {
       lines.push('', '## Agent messages - unread');
-      for (const m of pendingMessages) lines.push(`- [${m.kind}] ${m.subject} (from ${m.fromUserId}, ${m.createdAt}, id ${m.id})`);
+      for (const m of pendingMessages) lines.push(`- [${m.kind}] ${m.subject} (from ${m.from}, ${m.createdAt}, id ${m.id})`);
       lines.push('Handle them, then acknowledge via orboto_messages { ackIds: [...] }; reply via orboto_agent_notify with threadId.');
     }
     if (bundle) lines.push(...bundle.lines);
@@ -361,6 +377,7 @@ export function makeSessionStartHandler(client: OrbotoClient) {
         })),
         ...(elsewhereCount > 0 ? { inProgressElsewhereCount: elsewhereCount } : {}),
         timer: timer?.ticketId ? { ticketKey: timer.ticketKey ?? null, startedAt: timer.startedAt ?? null } : null,
+        session: { ref: instanceToken, id: registration?.sessionId ?? null, scope: registration?.scope ?? null },
         gitHealth: {
           unhealthy: gitHealthWithConnections
             .map((p) => ({ projectId: p.projectId, connections: p.connections.filter((c) => !c.healthy) }))

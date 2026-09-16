@@ -8,18 +8,21 @@ import { AgentInventoryEntrySchema, AgentInventoryKindSchema, type AgentInventor
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { mcpInstanceToken } from './shared.js';
+import { AgentSessionScopeSchema, type AgentSessionScope } from './agent-session-scope.js';
 
 interface HeartbeatResponse {
   sessionToken: string;
   sessionId: string;
+  scope: AgentSessionScope | null;
 }
 
 export const agentHeartbeatToolConfig = {
   title: 'Agent heartbeat (Multi-Agent Coordination)',
   description:
-    'Register or refresh this agent\'s presence with status detail. A live connection already counts as online (an open MCP event stream, `orboto messages --follow`, the agent WebSocket) - the heartbeat adds status: idle (default) | working (+workingOnTicketId) | blocked, capabilities (free-form strings for operator filters) and clientInfo.name (the runtime), and is the only presence path for turn-based clients without a standing connection. Rows older than 90 s count as offline; persist the returned sessionToken and send it on later heartbeats.',
+    'Register or refresh this agent\'s presence with status detail. A live connection already counts as online (an open MCP event stream, `orboto messages --follow`, the agent WebSocket) - the heartbeat adds status: idle (default) | working (+workingOnTicketId) | blocked, capabilities (free-form strings for operator filters) and clientInfo.name (the runtime), and is the only presence path for turn-based clients without a standing connection. Rows older than 90 s count as offline; persist the returned sessionToken and send it on later heartbeats. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility (ORB-2136); an empty object clears it.',
   inputSchema: z.object({
     sessionToken: z.string().nullable().optional(),
+    scope: AgentSessionScopeSchema.optional(),
     status: z.enum(['idle', 'working', 'blocked']).optional(),
     workingOnTicketId: z.string().uuid().nullable().optional(),
     capabilities: z.array(z.string()).optional(),
@@ -33,6 +36,7 @@ export const agentHeartbeatToolConfig = {
   outputSchema: z.object({
     sessionToken: z.string(),
     sessionId: z.string().uuid(),
+    scope: AgentSessionScopeSchema.nullable(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -41,16 +45,19 @@ export function makeAgentHeartbeatHandler(client: OrbotoClient) {
   return async (
     args: {
       sessionToken?: string | null;
+      scope?: AgentSessionScope | null;
       status?: 'idle' | 'working' | 'blocked';
       workingOnTicketId?: string | null;
       capabilities?: string[];
       clientInfo?: { name?: string; version?: string; host?: string; user_agent?: string };
     },
+    extra?: unknown,
   ): Promise<CallToolResult> => {
-    const res = await client.post<HeartbeatResponse>('/v1/agent/heartbeat', args);
+    const res = await client.post<HeartbeatResponse>('/v1/agent/heartbeat', args, { instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
+    const scope = res.scope ? ` scope=${JSON.stringify(res.scope)}` : '';
     return {
-      content: [{ type: 'text', text: `heartbeat ack - sessionToken=${res.sessionToken.slice(0, 8)}…` }],
-      structuredContent: { sessionToken: res.sessionToken, sessionId: res.sessionId },
+      content: [{ type: 'text', text: `heartbeat ack - sessionToken=${res.sessionToken.slice(0, 8)}… session ${res.sessionId.slice(0, 8)}${scope}` }],
+      structuredContent: { sessionToken: res.sessionToken, sessionId: res.sessionId, scope: res.scope ?? null },
     };
   };
 }
@@ -105,12 +112,13 @@ export function makeAgentPresenceHandler(client: OrbotoClient) {
 interface NotifyResponse {
   ok: true;
   messageId: string;
+  toSessionId: string | null;
 }
 
 export const agentNotifyToolConfig = {
   title: 'Notify another agent / user',
   description:
-    'Send a fire-and-forget message to a user (bot or human) by email; it lands in their inbox (orboto_messages) and, for humans, in-app. kind: info | request (answer expected) | complete (sub-task done) | error. payload: free-form JSON; threadId links a reply to the message it answers.',
+    'Send a fire-and-forget message to a user (bot or human) by email; it lands in their inbox (orboto_messages) and, for humans, in-app. kind: info | request (answer expected) | complete (sub-task done) | error. payload: free-form JSON; threadId links a reply to the message it answers. toSessionRef (instance short id, session ref or id) reaches ONE session of the account; project scopes an account message to sessions declared on it (ORB-2136).',
   inputSchema: z.object({
     targetEmail: z.string().email(),
     kind: z.enum(['info', 'request', 'complete', 'error']).default('info'),
@@ -119,10 +127,12 @@ export const agentNotifyToolConfig = {
     threadId: z.string().uuid().optional(),
     project: z.string().min(1).max(64).optional().describe('Project key or UUID: scope the message to the recipient session working that project.'),
     senderRef: z.string().min(1).max(128).optional().describe('Sender-session ref for self-echo exclusion; defaults to this MCP session.'),
+    toSessionRef: z.string().min(1).max(200).optional(),
   }).shape,
   outputSchema: z.object({
     ok: z.literal(true),
     messageId: z.string().uuid(),
+    toSessionId: z.string().uuid().nullable(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -167,12 +177,14 @@ export function makeAgentNotifyHandler(client: OrbotoClient) {
     threadId?: string;
     project?: string;
     senderRef?: string;
+    toSessionRef?: string;
   }, extra?: unknown): Promise<CallToolResult> => {
     const senderRef = mcpInstanceToken(args.senderRef, extra as { sessionId?: string } | undefined);
-    const res = await client.post<NotifyResponse>('/v1/agent/notify', { ...args, senderRef });
+    const res = await client.post<NotifyResponse>('/v1/agent/notify', { ...args, senderRef }, { instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
+    const target = res.toSessionId ? `${args.targetEmail} session ${res.toSessionId.slice(0, 8)}` : args.targetEmail;
     return {
-      content: [{ type: 'text', text: `notified ${args.targetEmail} (message ${res.messageId} - delivered live if connected, waits in their inbox otherwise)` }],
-      structuredContent: { ok: true, messageId: res.messageId },
+      content: [{ type: 'text', text: `notified ${target} (message ${res.messageId} - delivered live if connected, waits in their inbox otherwise)` }],
+      structuredContent: { ok: true, messageId: res.messageId, toSessionId: res.toSessionId ?? null },
     };
   };
 }

@@ -119,11 +119,11 @@ export class OrbotoClient {
     return (await res.json()) as T;
   }
 
-  /** POST a JSON body. */
-  async post<T>(path: string, body: unknown): Promise<T> {
+  /** POST a JSON body. `instanceToken` sends `x-orboto-agent-session` so the api attributes the call to this MCP session (ORB-2136). */
+  async post<T>(path: string, body: unknown, options: { instanceToken?: string } = {}): Promise<T> {
     const res = await this.authedFetch(this.fullUrl(path), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(options.instanceToken ? { 'x-orboto-agent-session': options.instanceToken } : {}) },
       body: JSON.stringify(body),
     });
     if (res.status === 204) return undefined as T;

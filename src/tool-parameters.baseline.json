@@ -129,12 +129,24 @@
       "clientInfo.name",
       "clientInfo.user_agent",
       "clientInfo.version",
+      "scope",
+      "scope.projectKeys",
+      "scope.role",
+      "scope.ticketKeys",
       "sessionToken",
       "status",
       "workingOnTicketId"
     ],
     "required": [],
     "enums": {
+      "scope.role": [
+        "coordinator",
+        "integrator",
+        "lead",
+        "review",
+        "spec",
+        "worker"
+      ],
       "status": [
         "blocked",
         "idle",
@@ -150,7 +162,8 @@
       "senderRef",
       "subject",
       "targetEmail",
-      "threadId"
+      "threadId",
+      "toSessionRef"
     ],
     "required": [
       "subject",
@@ -1892,10 +1905,23 @@
       "forceRules",
       "modelTier",
       "projectId",
+      "scope",
+      "scope.projectKeys",
+      "scope.role",
+      "scope.ticketKeys",
       "ticketKey"
     ],
     "required": [],
-    "enums": {}
+    "enums": {
+      "scope.role": [
+        "coordinator",
+        "integrator",
+        "lead",
+        "review",
+        "spec",
+        "worker"
+      ]
+    }
   },
   "orboto_set_milestone": {
     "params": [
