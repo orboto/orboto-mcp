@@ -143,4 +143,20 @@ describe('preflightMcpSession', () => {
     const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
     await expect(preflightMcpSession(client)).rejects.toBeInstanceOf(OrbotoApiError);
   });
+
+  it('ORB-2151: a client built with an instance token names the session on every request; an explicit token wins', async () => {
+    const seen: Array<Record<string, string>> = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      seen.push((init?.headers ?? {}) as Record<string, string>);
+      return { ok: true, status: 200, statusText: 'OK', json: async () => ({}), text: async () => '' } as unknown as Response;
+    });
+    const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test', instanceToken: 'mcp-proc' });
+    await client.get('/users/me');
+    await client.post('/projects/p/tickets', { title: 't' });
+    await client.post('/v1/agent/heartbeat', {}, { instanceToken: 'mcp-explicit' });
+    expect(seen.map((h) => h['x-orboto-agent-session'])).toEqual(['mcp-proc', 'mcp-proc', 'mcp-explicit']);
+    const plain = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
+    await plain.get('/users/me');
+    expect(seen[3]['x-orboto-agent-session']).toBeUndefined();
+  });
 });

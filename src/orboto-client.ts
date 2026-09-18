@@ -27,6 +27,8 @@ export interface OrbotoClientConfig {
   /** Optional user-agent suffix so admins can tell `claude-desktop`
    *  traffic apart from `cursor`. */
   userAgentSuffix?: string;
+  /** ORB-2151 - sent as `x-orboto-agent-session` on every request that names no token of its own, so the api knows which session acted. */
+  instanceToken?: string;
 }
 
 export class OrbotoApiError extends Error {
@@ -47,6 +49,7 @@ export class OrbotoClient {
   private readonly baseHeaders: Record<string, string>;
   private readonly apiKey?: string;
   private readonly tokenProvider?: OAuthTokenProviderLike;
+  private readonly instanceToken?: string;
 
   constructor(config: OrbotoClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, '');
@@ -55,6 +58,7 @@ export class OrbotoClient {
     }
     this.apiKey = config.apiKey;
     this.tokenProvider = config.tokenProvider;
+    this.instanceToken = config.instanceToken;
     const ua = config.userAgentSuffix
       ? `orboto-mcp/${VERSION} (${config.userAgentSuffix})`
       : `orboto-mcp/${VERSION}`;
@@ -94,6 +98,7 @@ export class OrbotoClient {
     const doFetch = async (token: string): Promise<Response> => {
       const headers: Record<string, string> = {
         ...this.baseHeaders,
+        ...(this.instanceToken ? { 'x-orboto-agent-session': this.instanceToken } : {}),
         ...(accept ? { Accept: accept } : {}),
         ...(init.headers ?? {}),
         Authorization: `Bearer ${token}`,

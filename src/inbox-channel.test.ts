@@ -107,6 +107,25 @@ describe('InboxChannel', () => {
     expect(channel.stats.reconnects).toBeGreaterThanOrEqual(1);
     channel.close();
   });
+
+  it('ORB-2151 - a server notice becomes its own event and never becomes the replay anchor', async () => {
+    const { mcp, notification } = mockMcp();
+    const hint = { notice: 'declare_scope', sessionId: 'cccccccc-0000-4000-8000-000000000000', content: 'declare your scope: orboto_session_start { scope: { role, projectKeys } }' };
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce(sse([hint, msg()]))
+      .mockImplementation(() => new Promise(() => { /* hold */ }));
+    const channel = new InboxChannel({ baseUrl: 'https://x.test', apiKey: 'orb_k', instanceToken: 'mcp-proc', mcp, fetchFn, log: () => {}, digestMinutes: 0 });
+    channel.start();
+    await vi.waitFor(() => expect(notification).toHaveBeenCalledTimes(2));
+    const first = notification.mock.calls[0][0] as { params: { content: string; meta: Record<string, string> } };
+    expect(first.params.meta).toEqual({ kind: 'notice', notice: 'declare_scope' });
+    expect(first.params.content).toContain('orboto_session_start');
+    expect(channel.stats).toMatchObject({ notices: 1, delivered: 1 });
+    await vi.advanceTimersByTimeAsync(2_000);
+    await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2));
+    expect(String(fetchFn.mock.calls[1][0])).toContain('since=m1');
+    channel.close();
+  });
 });
 
 describe('server capability', () => {

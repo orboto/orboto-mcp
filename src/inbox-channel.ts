@@ -58,7 +58,10 @@ export const CHANNEL_INSTRUCTIONS =
   + 'peer requests, ticket-ready notices, replies, digests of info/complete mail. Treat each like an inbox message under the rules: '
   + 'a ticket-ready or a request inside your scope is the operator\'s instruction, act on it; read the full message with orboto_messages when the event is cut; '
   + 'reply with orboto_agent_notify (toSessionRef = the sender\'s instance short id in the from attribute) and acknowledge with orboto_messages { ackIds } once handled. '
-  + 'Never answer the channel itself and never ack what you did not handle.';
+  + 'Never answer the channel itself and never ack what you did not handle. '
+  + 'A session that declared no scope is woken by mail addressed to it and by broadcasts only, and gets one notice event saying so on connect: '
+  + 'declare the scope with orboto_session_start { scope: { role, projectKeys } } to be woken by the account\'s project mail again - '
+  + 'the rest of the account\'s inbox stays readable with orboto_messages the whole time.';
 
 const START_FLAG = '--dangerously-load-development-channels server:orboto';
 
@@ -160,7 +163,7 @@ export class InboxChannel {
   private seenOrder: string[] = [];
   private batch: InboxMessage[] = [];
   /** Counters an operator can read from the log; tests read them directly. */
-  readonly stats = { delivered: 0, digested: 0, duplicates: 0, reconnects: 0 };
+  readonly stats = { delivered: 0, digested: 0, duplicates: 0, reconnects: 0, notices: 0 };
 
   constructor(opts: InboxChannelOpts) {
     this.opts = opts;
@@ -197,6 +200,13 @@ export class InboxChannel {
     if (!this.digestTimer) {
       this.digestTimer = setTimeout(() => { this.digestTimer = null; void this.flushDigest(); }, this.digestMinutes * 60_000);
     }
+  }
+
+  /** ORB-2151 - a server notice (the scope hint) is emitted as-is and never becomes the replay anchor. */
+  async deliverNotice(notice: string, content: string): Promise<void> {
+    if (!content) return;
+    this.stats.notices += 1;
+    await this.emit({ content, meta: { kind: 'notice', notice } });
   }
 
   async flushDigest(): Promise<void> {
@@ -271,9 +281,10 @@ export class InboxChannel {
           buf = buf.slice(idx + 2);
           const line = frame.split('\n').find((l) => l.startsWith('data: '));
           if (!line) continue;
-          let message: InboxMessage;
-          try { message = JSON.parse(line.slice(6)); } catch { continue; }
-          await this.deliver(message);
+          let parsed: InboxMessage & { notice?: string; content?: string };
+          try { parsed = JSON.parse(line.slice(6)); } catch { continue; }
+          if (parsed.notice) { await this.deliverNotice(parsed.notice, parsed.content ?? ''); continue; }
+          await this.deliver(parsed);
         }
       }
     } finally {

@@ -58,7 +58,7 @@ async function main() {
     }
 
     const channel = (process.env.ORBOTO_MCP_CHANNEL ?? '1') !== '0';
-    const server = await buildOrbotoMcpServer({ ...clientConfig, channel });
+    const server = await buildOrbotoMcpServer({ ...clientConfig, channel, instanceToken: (await import('./tools/shared.js')).mcpProcessInstance() });
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
     const stdio = new StdioServerTransport();
     await server.connect(stdio);
