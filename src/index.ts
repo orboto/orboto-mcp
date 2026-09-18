@@ -68,9 +68,16 @@ async function main() {
       const instanceToken = mcpProcessInstance();
       const inbox = new InboxChannel({ ...clientConfig, instanceToken, mcp: server, digestMinutes: digestMinutesFromEnv(process.env.ORBOTO_MCP_CHANNEL_DIGEST_MINUTES) });
       inbox.start();
-      preflightClient.post('/v1/agent/heartbeat', { clientInfo: { channel: 'claude-code' } }, { instanceToken })
-        .catch((err) => { console.error(`[orboto-mcp] channel heartbeat failed: ${(err as Error).message}`); });
-      stdio.onclose = () => { inbox.close(); };
+      const { readClaudeContext } = await import('./claude-context.js');
+      const beat = () => {
+        const context = readClaudeContext(process.cwd());
+        preflightClient.post('/v1/agent/heartbeat', { clientInfo: { channel: 'claude-code', ...(context ?? {}) } }, { instanceToken })
+          .catch((err) => { console.error(`[orboto-mcp] channel heartbeat failed: ${(err as Error).message}`); });
+      };
+      beat();
+      const beats = setInterval(beat, 60_000);
+      beats.unref?.();
+      stdio.onclose = () => { clearInterval(beats); inbox.close(); };
     }
     return;
   }

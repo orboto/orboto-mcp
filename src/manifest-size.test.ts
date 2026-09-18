@@ -38,11 +38,15 @@ afterEach(() => { vi.restoreAllMocks(); });
  * the `dismiss` envelope and the per-message `dismissed` record, which is
  * the surface that stops foreign mail from waking every session of a
  * shared account (measured curated = 39,461 chars / 10,961 tokens).
+ * ORB-2149 raised the full ceiling to 171,200: `orboto_agent_wakes` puts
+ * the wake ledger and the delivery precision per session and per sender
+ * in the full toolset (measured full = 170,030 chars); the curated tier
+ * reaches it through the escape hatch and is unchanged.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
 const CURATED_MAX_CHARS = 39_700;
-const FULL_MAX_CHARS = 169_000;
+const FULL_MAX_CHARS = 171_200;
 
 /**
  * ORB-1805 - the estimator the ticket measured the failure with

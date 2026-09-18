@@ -36,6 +36,12 @@ export const AgentInventoryEntrySchema = z.object({
   scope: AgentSessionScopeSchema.nullable(),
   /** ORB-2136 - unread inbox messages this session would list. */
   unreadMessages: z.number().int(),
+  /** ORB-2149 - the last 24 hours of wakes: how many, how precise, what the wrong ones cost. */
+  wakes: z.object({
+    count: z.number().int(),
+    precision: z.number().nullable(),
+    wrongWakeContextTokens: z.number().int(),
+  }),
   lastSeenAt: z.string(),
   createdAt: z.string(),
 });

@@ -38,6 +38,7 @@ import {
 } from './tools/agent-coordination.js';
 import { agentMessageWorkToolConfig, makeAgentMessageWorkHandler } from './tools/agent-message-work.js';
 import { agentMessagesToolConfig, makeAgentMessagesHandler } from './tools/agent-messages.js';
+import { agentWakesToolConfig, makeAgentWakesHandler } from './tools/agent-wakes.js';
 import { listProjectsToolConfig, makeListProjectsHandler } from './tools/list-projects.js';
 import { getProjectToolConfig, makeGetProjectHandler } from './tools/get-project.js';
 import { projectReadinessToolConfig, makeProjectReadinessHandler } from './tools/project-readiness.js';
@@ -416,6 +417,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_agent_notify', agentNotifyToolConfig, makeAgentNotifyHandler(client));
   reg('orboto_message_work', agentMessageWorkToolConfig, makeAgentMessageWorkHandler(client));
   reg('orboto_messages', agentMessagesToolConfig, makeAgentMessagesHandler(client));
+  reg('orboto_agent_wakes', agentWakesToolConfig, makeAgentWakesHandler(client));
   reg('orboto_agent_broadcast', agentBroadcastToolConfig, makeAgentBroadcastHandler(client));
   reg('orboto_list_projects', listProjectsToolConfig, makeListProjectsHandler(client));
   reg('orboto_get_project', getProjectToolConfig, makeGetProjectHandler(client));
