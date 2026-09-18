@@ -9,7 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';
 import { makeSessionStartHandler } from './session-start.js';
-import { CHANNEL_START_COMMANDS } from '../inbox-channel.js';
+import { CHANNEL_START_COMMANDS, CHANNEL_START_COMMANDS_WITHOUT_CLI } from '../inbox-channel.js';
 import { readFileSync } from 'node:fs';
 import { makeResponseExpandHandler } from './response-expand.js';
 import { applyResponseBudget, budgetFor, DEFAULT_BUDGET_CHARS } from '../response-budget.js';
@@ -640,7 +640,7 @@ describe('ORB-2136 - session scope and ref', () => {
     expect((res.content[0] as { text: string }).text).toContain('no scope declared');
   });
 
-  it('ORB-2146: a stdio proxy with the channel on hands over the exact start commands; other servers stay silent', async () => {
+  it('ORB-2148: a stdio proxy with the channel on hands over the exact start commands; other servers stay silent', async () => {
     const fixture = {
       '/users/me/assigned-tickets': { items: [] },
       '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
@@ -651,8 +651,10 @@ describe('ORB-2136 - session scope and ref', () => {
     const on = ((await makeSessionStartHandler(client, { channel: true })()).content[0] as { text: string }).text;
     expect(on).toContain('## Wake channel');
     for (const cmd of Object.values(CHANNEL_START_COMMANDS)) expect(on).toContain(`\`${cmd}\``);
-    expect(on).toContain('--continue');
-    expect(on).toContain('--resume <session id>');
+    for (const cmd of Object.values(CHANNEL_START_COMMANDS_WITHOUT_CLI)) expect(on).toContain(`\`${cmd}\``);
+    expect(on).toContain('orboto claude --continue');
+    expect(on).toContain('orboto claude --resume <session id>');
+    expect(on).toContain('orboto mcp install');
     expect(on).toContain('local development');
     stubByPath(fixture);
     const off = ((await makeSessionStartHandler(client)()).content[0] as { text: string }).text;
@@ -660,8 +662,10 @@ describe('ORB-2136 - session scope and ref', () => {
     expect(off).not.toContain('--dangerously-load-development-channels');
   });
 
-  it('ORB-2146: docs/mcp-setup.md carries the same three commands', () => {
+  it('ORB-2148: docs/mcp-setup.md carries both command forms', () => {
     const docs = readFileSync(new URL('../../../../docs/mcp-setup.md', import.meta.url), 'utf8');
     for (const cmd of Object.values(CHANNEL_START_COMMANDS)) expect(docs).toContain(cmd);
+    for (const cmd of Object.values(CHANNEL_START_COMMANDS_WITHOUT_CLI)) expect(docs).toContain(cmd);
+    expect(docs).toContain('orboto mcp install');
   });
 });

@@ -62,8 +62,15 @@ export const CHANNEL_INSTRUCTIONS =
 
 const START_FLAG = '--dangerously-load-development-channels server:orboto';
 
-/** ORB-2146 - the commands an agent hands its operator verbatim; docs/mcp-setup.md carries the same three lines. */
+/** ORB-2148 - the commands an agent hands its operator verbatim; docs/mcp-setup.md carries the same lines. */
 export const CHANNEL_START_COMMANDS = {
+  fresh: 'orboto claude',
+  continueLatest: 'orboto claude --continue',
+  resumeById: 'orboto claude --resume <session id>',
+} as const;
+
+/** The raw Claude Code form, for a machine without the orboto CLI. */
+export const CHANNEL_START_COMMANDS_WITHOUT_CLI = {
   fresh: `claude ${START_FLAG}`,
   continueLatest: `claude ${START_FLAG} --continue`,
   resumeById: `claude ${START_FLAG} --resume <session id>`,
@@ -78,6 +85,8 @@ export function channelStartLines(): string[] {
     `- new session: \`${CHANNEL_START_COMMANDS.fresh}\``,
     `- continue the most recent conversation here: \`${CHANNEL_START_COMMANDS.continueLatest}\``,
     `- resume a specific conversation: \`${CHANNEL_START_COMMANDS.resumeById}\` (without an id Claude Code opens a picker)`,
+    'The entry `orboto claude` needs comes from `orboto mcp install`; without the orboto CLI the same starts read '
+      + `\`${CHANNEL_START_COMMANDS_WITHOUT_CLI.fresh}\`, \`${CHANNEL_START_COMMANDS_WITHOUT_CLI.continueLatest}\` and \`${CHANNEL_START_COMMANDS_WITHOUT_CLI.resumeById}\`.`,
     'A probe that produces no channel event means this session was not started that way: give the operator these commands verbatim, do not paraphrase them.',
   ];
 }

@@ -6,7 +6,25 @@ Model Context Protocol server for [orboto](https://orboto.io) - a self-hosted ti
 
 ## Quickstart
 
-There are two ways to authenticate the stdio proxy:
+The shortest path is the [orboto CLI](https://www.npmjs.com/package/orboto):
+
+```bash
+npm i -g orboto
+orboto login
+orboto mcp install            # writes the "orboto" server entry into ./.mcp.json
+orboto mcp install --scope user   # or into the Claude Code user config
+```
+
+The entry it writes runs `orboto mcp serve`, which installs and starts
+`@orboto/mcp` at **the version of the instance it connects to**, so the tool
+schemas always match that API. The proxy versions are cached under
+`~/.orboto/mcp/<version>/`, the entry carries no credential, and
+`orboto mcp status` prints the instance version, the cached proxies and the
+entry of the current directory. In Claude Code, `orboto claude` then starts a
+session with the wake channel loaded.
+
+Everything below configures the proxy by hand, for clients the CLI does not
+write. There are two ways to authenticate the stdio proxy:
 
 - **OAuth login (recommended for people).** Omit `ORBOTO_API_KEY`. On first use the proxy opens your browser to the orboto login (which is your SSO login when SSO is configured), you approve once, and it keeps a short-lived, self-refreshing session cached on disk. Nothing to paste, nothing long-lived.
 - **API key (service accounts / CI).** Set `ORBOTO_API_KEY` to an `orb_…` key from **Profile → API keys → Generate**. Best for headless machines with no browser.
