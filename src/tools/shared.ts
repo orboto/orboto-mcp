@@ -74,6 +74,36 @@ export interface TicketRow {
   gitActivityCount?: number;
   checklistProgress?: { done: number; total: number };
   waitingForGitIngestion?: boolean;
+  blockedByOpenCount?: number;
+  blockedByOpen?: TicketDependencySummary[];
+  blocksOpenCount?: number;
+  blocksOpen?: TicketDependencySummary[];
+}
+
+/** ORB-2169 - one open dependency edge as the enriched ticket row carries it;
+ *  an unreadable cross-project edge arrives with null key and title. */
+export interface TicketDependencySummary {
+  ticketKey: string | null;
+  title: string | null;
+  statusName?: string | null;
+  external?: boolean;
+}
+
+/** ORB-2169 - the "Blocked by" / "Blocks" lines of a ticket decision card. */
+export function formatDependencySummary(
+  label: string,
+  count: number | undefined,
+  edges: TicketDependencySummary[] | undefined,
+): string | null {
+  const total = count ?? 0;
+  if (total === 0) return null;
+  const shown = (edges ?? []).map((e) => (
+    e.ticketKey
+      ? `[${e.ticketKey}] ${e.title ?? ''}${e.statusName ? ` (${e.statusName})` : ''}`.trim()
+      : 'External dependency (access restricted)'
+  ));
+  const more = total > shown.length ? `, +${total - shown.length} more` : '';
+  return `${label}: ${total} open - ${shown.join(', ')}${more}`;
 }
 
 /**

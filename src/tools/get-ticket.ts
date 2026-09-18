@@ -7,7 +7,7 @@ import { specReleaseInfo } from './shared.js';
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
-import { resolveTicketByKey, type TicketRow } from './shared.js';
+import { formatDependencySummary, resolveTicketByKey, type TicketDependencySummary, type TicketRow } from './shared.js';
 
 interface TicketSummaryRow {
   id: string;
@@ -78,7 +78,7 @@ const COMMENT_PAGE_SIZE = 50;
 export const getTicketToolConfig = {
   title: 'Get ticket details',
   description:
-    'Return a ticket\'s decision card: description, status, priority, milestone, assignees, labels, dates, estimate/logged time, checklist progress, parent + sub-ticket count - plus COUNTS for everything omitted (commentCount, gitActivityCount, attachmentCount, childCount). Full blocks are opt-in via `include` (ORB-1698): pass e.g. include: ["comments"] to get the comment bodies, ["git","attachments","children","raci","checklistItems"] likewise. Input is the ticket key like "ACME-42".',
+    'Return a ticket\'s decision card: description, status, priority, milestone, assignees, labels, dates, estimate/logged time, checklist progress, parent + sub-ticket count, the OPEN dependency edges in both directions ("Blocked by" / "Blocks", keys + statuses - the full graph stays on orboto_list_ticket_dependencies) - plus COUNTS for everything omitted (commentCount, gitActivityCount, attachmentCount, childCount). Full blocks are opt-in via `include` (ORB-1698): pass e.g. include: ["comments"] to get the comment bodies, ["git","attachments","children","raci","checklistItems"] likewise. Input is the ticket key like "ACME-42".',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key like "ACME-42".'),
     include: z.array(z.enum(['comments', 'git', 'attachments', 'children', 'raci', 'checklistItems']))
@@ -166,6 +166,14 @@ export function makeGetTicketHandler(client: OrbotoClient) {
           statusCategory: parent.statusCategory ?? null,
         } : null,
         childCount: children.length,
+        blockedBy: {
+          openCount: full.blockedByOpenCount ?? 0,
+          tickets: (full.blockedByOpen ?? []).map(dependencyEdge),
+        },
+        blocks: {
+          openCount: full.blocksOpenCount ?? 0,
+          tickets: (full.blocksOpen ?? []).map(dependencyEdge),
+        },
         ...(inc.has('children') ? {
           children: children.map((c) => ({
             key: c.ticketKey,
@@ -242,6 +250,15 @@ function swallow404<T>(fallback: T): (err: unknown) => T {
   };
 }
 
+function dependencyEdge(e: TicketDependencySummary): Record<string, unknown> {
+  return {
+    key: e.ticketKey,
+    title: e.title,
+    status: e.statusName ?? null,
+    ...(e.external ? { external: true } : {}),
+  };
+}
+
 function formatTicket(
   ticket: TicketRow,
   inc: Set<IncludeBlock>,
@@ -284,6 +301,8 @@ function formatTicket(
     ticket.labels && ticket.labels.length > 0
       ? `Labels: ${ticket.labels.map((l) => l.name).join(', ')}`
       : null,
+    formatDependencySummary('Blocked by', ticket.blockedByOpenCount, ticket.blockedByOpen),
+    formatDependencySummary('Blocks', ticket.blocksOpenCount, ticket.blocksOpen),
   ].filter((s): s is string => s !== null);
 
   if (inc.has('children') && children.length > 0) {

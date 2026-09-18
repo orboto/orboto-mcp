@@ -215,6 +215,59 @@ describe('orboto_get_ticket', () => {
     expect(text).toContain('Checklists: 1/2 done');
   });
 
+  it('ORB-2169: the card shows the open dependency edges in both directions', async () => {
+    stub([
+      { json: PROJ },
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-5', title: 'Bug', status: 'TODO', statusName: 'To Do', type: 'bug', priority: 'normal', gitActivityCount: 0, parentTicketId: null } },
+      { json: {
+        id: 't1', projectId: 'p1', ticketKey: 'ACME-5', title: 'Bug', status: 'TODO', statusName: 'To Do',
+        statusCategory: 'todo', type: 'bug', priority: 'normal', commentCount: 0, gitActivityCount: 0,
+        blockedByOpenCount: 2,
+        blockedByOpen: [
+          { ticketKey: 'ACME-2', title: 'Schema first', statusName: 'In Progress', external: false },
+          { ticketKey: null, title: null, statusName: null, external: true },
+        ],
+        blocksOpenCount: 1,
+        blocksOpen: [{ ticketKey: 'ACME-9', title: 'Rollout', statusName: 'To Do', external: false }],
+      } },
+      NO_CHILDREN,
+      { json: [] },
+    ]);
+    const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-5' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Blocked by: 2 open - [ACME-2] Schema first (In Progress), External dependency (access restricted)');
+    expect(text).toContain('Blocks: 1 open - [ACME-9] Rollout (To Do)');
+    const sc = res.structuredContent as Record<string, unknown>;
+    expect(sc.blockedBy).toEqual({
+      openCount: 2,
+      tickets: [
+        { key: 'ACME-2', title: 'Schema first', status: 'In Progress' },
+        { key: null, title: null, status: null, external: true },
+      ],
+    });
+    expect(sc.blocks).toEqual({
+      openCount: 1,
+      tickets: [{ key: 'ACME-9', title: 'Rollout', status: 'To Do' }],
+    });
+  });
+
+  it('ORB-2169: a ticket with no dependency edge prints no blocker line', async () => {
+    stub([
+      { json: PROJ },
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-5', title: 'Bug', status: 'TODO', statusName: 'To Do', type: 'bug', priority: 'normal', gitActivityCount: 0, parentTicketId: null } },
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-5', title: 'Bug', status: 'TODO', statusName: 'To Do', statusCategory: 'todo', type: 'bug', priority: 'normal', commentCount: 0, gitActivityCount: 0, blockedByOpenCount: 0, blockedByOpen: [], blocksOpenCount: 0, blocksOpen: [] } },
+      NO_CHILDREN,
+      { json: [] },
+    ]);
+    const res = await makeGetTicketHandler(client)({ ticketKey: 'ACME-5' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).not.toContain('Blocked by');
+    expect(text).not.toContain('Blocks');
+    const sc = res.structuredContent as Record<string, unknown>;
+    expect(sc.blockedBy).toEqual({ openCount: 0, tickets: [] });
+    expect(sc.blocks).toEqual({ openCount: 0, tickets: [] });
+  });
+
   it('ORB-1698: the default response for a 30+-comment ticket stays under the 4k budget', async () => {
     stub([
       { json: PROJ },
