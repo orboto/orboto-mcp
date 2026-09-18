@@ -1109,9 +1109,7 @@
     "params": [
       "tool"
     ],
-    "required": [
-      "tool"
-    ],
+    "required": [],
     "enums": {}
   },
   "orboto_ingest_file": {

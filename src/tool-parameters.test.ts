@@ -1,5 +1,10 @@
 /**
  * ORB-1805 - the schema diet must never cost a PARAMETER.
+ *
+ * ORB-2157 - one reviewed baseline edit: `orboto_help.tool` is no longer
+ * required, because the tool now also answers `topic` ("connect" returns the
+ * setup script). The parameter itself is untouched and still the only way to
+ * ask for a tool's guidance; a call with neither says which topics exist.
  */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
