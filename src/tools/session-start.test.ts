@@ -662,8 +662,8 @@ describe('ORB-2136 - session scope and ref', () => {
     expect(off).not.toContain('--dangerously-load-development-channels');
   });
 
-  it('ORB-2148: docs/mcp-setup.md carries both command forms', () => {
-    const docs = readFileSync(new URL('../../../../docs/mcp-setup.md', import.meta.url), 'utf8');
+  it('ORB-2148: docs/claude-code.md carries both command forms', () => {
+    const docs = readFileSync(new URL('../../../../docs/claude-code.md', import.meta.url), 'utf8');
     for (const cmd of Object.values(CHANNEL_START_COMMANDS)) expect(docs).toContain(cmd);
     for (const cmd of Object.values(CHANNEL_START_COMMANDS_WITHOUT_CLI)) expect(docs).toContain(cmd);
     expect(docs).toContain('orboto mcp install');

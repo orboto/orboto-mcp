@@ -66,7 +66,7 @@ export const CHANNEL_INSTRUCTIONS =
 
 const START_FLAG = '--dangerously-load-development-channels server:orboto';
 
-/** ORB-2148 - the commands an agent hands its operator verbatim; docs/mcp-setup.md carries the same lines. */
+/** ORB-2148 - the commands an agent hands its operator verbatim; docs/claude-code.md carries the same lines. */
 export const CHANNEL_START_COMMANDS = {
   fresh: 'orboto claude',
   continueLatest: 'orboto claude --continue',
