@@ -11,6 +11,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { mcpInstanceToken } from './shared.js';
 
 interface ProxyEnvelope {
   status: number;
@@ -47,7 +48,7 @@ export function makeApiCallHandler(client: OrbotoClient) {
     path: string;
     query?: Record<string, string | number | boolean | string[]>;
     body?: unknown;
-  }): Promise<CallToolResult> => {
+  }, extra?: unknown): Promise<CallToolResult> => {
     let body = input.body;
     if (typeof body === 'string') {
       try { body = JSON.parse(body); } catch { /* pass through */ }
@@ -57,7 +58,7 @@ export function makeApiCallHandler(client: OrbotoClient) {
       path: input.path,
       ...(input.query ? { query: input.query } : {}),
       ...(body !== undefined ? { body } : {}),
-    });
+    }, { instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
 
     const bodyText = envelope.encoding === 'json'
       ? JSON.stringify(envelope.body, null, 1)

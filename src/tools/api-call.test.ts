@@ -108,4 +108,16 @@ describe('orboto_api_call', () => {
     const res = await makeApiCallHandler(client)({ method: 'GET', path: '/export' });
     expect((res.content[0] as { text: string }).text).toContain('truncated by the proxy cap');
   });
+
+  it('ORB-2144: the proxy request carries this MCP session as x-orboto-agent-session', async () => {
+    const seen: Array<Record<string, string>> = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      seen.push((init?.headers ?? {}) as Record<string, string>);
+      return { ok: true, status: 200, statusText: 'OK', json: async () => ({ status: 200, contentType: 'application/json', body: { sessionId: 's' }, encoding: 'json', truncated: false, matchedRoute: '/v1/agent/heartbeat' }), text: async () => '' } as unknown as Response;
+    });
+    await makeApiCallHandler(client)({ method: 'POST', path: '/v1/agent/heartbeat', body: { scope: { role: 'spec' } } }, { sessionId: 'abc123' });
+    expect(seen[0]['x-orboto-agent-session']).toBe('mcp-abc123');
+    await makeApiCallHandler(client)({ method: 'GET', path: '/v1/agent/messages' });
+    expect(seen[1]['x-orboto-agent-session']).toMatch(/^mcp-/);
+  });
 });
