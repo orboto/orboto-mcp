@@ -36,11 +36,16 @@ export const AgentInventoryEntrySchema = z.object({
   scope: AgentSessionScopeSchema.nullable(),
   /** ORB-2136 - unread inbox messages this session would list. */
   unreadMessages: z.number().int(),
-  /** ORB-2149 - the last 24 hours of wakes: how many, how precise, what the wrong ones cost. */
+  /**
+   * ORB-2149 - the last 24 hours of wakes: how many deliveries, how precise,
+   * what the wrong ones cost. ORB-2170 - `backlogSeen` is the `nudge` count
+   * over the same window, a backlog sighting rather than a wake.
+   */
   wakes: z.object({
     count: z.number().int(),
     precision: z.number().nullable(),
     wrongWakeContextTokens: z.number().int(),
+    backlogSeen: z.number().int(),
   }),
   lastSeenAt: z.string(),
   createdAt: z.string(),

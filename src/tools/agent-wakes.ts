@@ -28,6 +28,7 @@ interface StatsEntry {
   wakes: number;
   handled: number;
   notMine: number;
+  backlogSeen: number;
   precision: number | null;
   medianLatencyMs: number | null;
   wrongWakeContextTokens: number;
@@ -37,7 +38,7 @@ interface StatsEntry {
 export const agentWakesToolConfig = {
   title: 'Wake ledger',
   description:
-    'Who woke this account\'s sessions, which visibility rule delivered the message (addressed | scope_project | scope_ticket | broadcast | unscoped_session | account_view), what the woken session did with it (handled | not_mine | obsolete | duplicate | expired | pending) and what the wake cost in context tokens. `stats: true` returns delivery precision per woken session and per sender over `hours` (operator read, needs admin:agents:read); without it the ledger rows of your own account, newest first. Use it to prove a misrouting sender instead of describing it in prose.',
+    'Who woke this account\'s sessions, which visibility rule delivered the message (addressed | scope_project | scope_ticket | broadcast | unscoped_session | account_view), what the woken session did with it (handled | not_mine | obsolete | duplicate | expired | pending) and what the wake cost in context tokens. `stats: true` returns delivery precision per woken session and per sender over `hours` (operator read, needs admin:agents:read); `wakes`, `precision` and the median latency count deliveries (`channel` | `follow` | `poll`) only, `backlogSeen` is the separate count of `nudge` rows - a backlog sighting, not a wake. Without `stats` it returns the ledger rows of your own account, newest first. Use it to prove a misrouting sender instead of describing it in prose.',
   inputSchema: z.object({
     stats: z.boolean().default(false).describe('Precision per session and per sender instead of rows.'),
     hours: z.number().int().min(1).max(720).optional().describe('Stats window, default 24.'),
@@ -53,7 +54,8 @@ export const agentWakesToolConfig = {
 function statsLine(e: StatsEntry): string {
   const precision = e.precision === null ? 'unjudged' : `${Math.round(e.precision * 100)}%`;
   const tokens = e.wrongWakeContextTokens > 0 ? `, wrong wakes cost ${e.wrongWakeContextTokens} tokens` : '';
-  return `- ${e.label}: ${e.wakes} wakes, precision ${precision}, median ${e.medianLatencyMs ?? '?'} ms, top rule ${e.topRule ?? '-'}${tokens}`;
+  const backlog = e.backlogSeen > 0 ? `, ${e.backlogSeen} backlog seen` : '';
+  return `- ${e.label}: ${e.wakes} wakes, precision ${precision}, median ${e.medianLatencyMs ?? '?'} ms, top rule ${e.topRule ?? '-'}${tokens}${backlog}`;
 }
 
 export function makeAgentWakesHandler(client: OrbotoClient) {
