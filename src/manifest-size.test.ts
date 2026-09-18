@@ -42,10 +42,16 @@ afterEach(() => { vi.restoreAllMocks(); });
  * the wake ledger and the delivery precision per session and per sender
  * in the full toolset (measured full = 170,030 chars); the curated tier
  * reaches it through the escape hatch and is unchanged.
+ * ORB-2162 raised the curated ceiling to 39,900 and the curated token
+ * ceiling to 11,100: `orboto_create_ticket` gained `dryRun`, the pre-flight
+ * that returns the language, type, label and duplicate verdicts before the
+ * write instead of after it (measured curated = 39,679 chars / 11,022
+ * tokens, from 39,461 / 10,961 - one boolean parameter, no new tool). The
+ * verdicts themselves ride the response, not the manifest.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
-const CURATED_MAX_CHARS = 39_700;
+const CURATED_MAX_CHARS = 39_900;
 const FULL_MAX_CHARS = 171_200;
 
 /**
@@ -70,7 +76,7 @@ const MINIMAL_MAX_TOKENS = 3_200;
  * The curated tier is ratcheted on its TOOL SCHEMAS (the instructions
  * block has its own budget, enforced in instructions-budget.test.ts).
  */
-const CURATED_SCHEMA_MAX_TOKENS = 11_000;
+const CURATED_SCHEMA_MAX_TOKENS = 11_100;
 
 interface Measurement { count: number; chars: number; instructionsChars: number }
 

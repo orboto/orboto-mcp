@@ -302,6 +302,39 @@ describe('orboto_create_ticket', () => {
     expect(createUrl).toContain('allowDuplicate=true');
     expect(createBody.duplicateJustification).toBe('Different provider - Stripe vs PayPal.');
   });
+
+  it('dryRun hits the pre-flight route, creates nothing and reports every verdict (ORB-2162)', async () => {
+    const calls = stub([
+      { json: PROJ },
+      {
+        json: {
+          ok: false,
+          severity: 'block',
+          blockedBy: ['labels'],
+          verdicts: {
+            language: { severity: 'ok', code: null, detected: null, expected: 'en', enforced: false, message: 'Language matches the workspace default (en).' },
+            type: { severity: 'ok', value: 'bug', allowed: ['epic', 'story', 'task', 'bug'], message: 'Type "bug" is valid.' },
+            labels: { severity: 'block', requested: ['ghost'], resolved: [], unknown: ['ghost'], ambiguous: [], available: ['infra'], message: 'Label "ghost" does not exist on this project. Create it first, then reference it by name.' },
+            duplicates: { severity: 'warn', threshold: 0, topSimilarity: 0.41, mode: 'tsvector', message: 'Possible duplicates - review the candidates before creating (top match 41%).', candidates: [{ id: 'x1', ticketKey: 'ACME-3', title: 'Timer reads null', statusName: 'To Do', statusColor: null, statusCategory: 'todo', similarity: 0.41, matchMode: 'tsvector' }] },
+          },
+        },
+      },
+    ]);
+    const res = await makeCreateTicketHandler(client)({
+      projectKey: 'ACME', title: 'Timer reads null after a claim', type: 'bug', labels: ['ghost'], dryRun: true,
+    });
+    expect(calls[1].method).toBe('POST');
+    expect(calls[1].url).toBe('https://orboto.example.com/projects/p1/tickets/preflight');
+    expect(calls[1].body).toMatchObject({ title: 'Timer reads null after a claim', type: 'bug', labelNames: ['ghost'] });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Pre-flight BLOCKED for ACME (labels)');
+    expect(text).toContain('does not exist on this project');
+    expect(text).toContain('ACME-3');
+    expect(res.isError).toBeUndefined();
+    const structured = res.structuredContent as { preflight: { ok: boolean; blockedBy: string[] } };
+    expect(structured.preflight.ok).toBe(false);
+    expect(structured.preflight.blockedBy).toEqual(['labels']);
+  });
 });
 
 describe('orboto_update_ticket', () => {

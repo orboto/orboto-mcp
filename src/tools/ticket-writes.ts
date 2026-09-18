@@ -77,6 +77,7 @@ export const createTicketToolConfig = {
   title: 'Create a ticket',
   description:
     'Create a new ticket in the given project. Creating more than ~3 tickets? Use `orboto_bulk_create_tickets` instead - one call, one compact response. Returns the new ticket\'s key (e.g. "ACME-42") so callers can chain follow-ups. **Read the new key from `structuredContent.createdTicketKey` (ORB-1176) - never from `similarWarnings[].ticketKey`, which are OTHER, possibly-duplicate tickets.** The caller must have `ticket:create` on the project. **Duplicate-detection safety-net (ORB-831):** if `similarWarnings` appears in the response with one or more entries, the ticket WAS created but you should review whether to close it as a duplicate of the listed ticket(s) instead. The warnings are advisory - never blocking - but each entry is a ticket the system thinks the new one overlaps with. Prefer `orboto_check_similar` BEFORE creating when you want a dry-run. **Deferred check under load (ORB-1437):** if `duplicateCheckDeferred: true` appears, the project was under a create burst so the duplicate-check was run in the background instead of inline - `similarWarnings` is then empty because it did NOT run synchronously, which is NOT the same as "no duplicates found". A strong match, if any, is posted as an advisory comment on the new ticket a moment later; check the ticket comments before treating it as new work. **Duplicate-check recall (ORB-1121):** when you search/check-similar first, results rank by term co-occurrence - a long, solution-framed title with rare terms can return 0 hits even when a short, symptom-framed dup sharing one distinctive token exists. Probe with a single distinctive STABLE token (file/component/error-string fragment), keep queries SHORT, and search the SYMPTOM not your fix; a 0-result long query is not "no dup". **Language-mismatch warning (ORB-890):** if `languageWarning` appears, the ticket was written in a language different from the workspace default. Consider rewriting in the expected language so search + duplicate-detection stay consistent. Non-blocking. **Before a mass-create (ORB-989):** call `orboto_whoami` first - its `workspaceLocale` field is the language you should write every ticket in. If the same `languageWarning` repeats, stop and clarify the intended language rather than pushing through the whole batch. **Strict mode (ORB-990):** if the workspace enforces ticket language, a mismatch is rejected (the tool returns a `blocked` result, not a created ticket) - rewrite in the workspace language, or set `allowLanguageMismatch: true` only when the language is genuinely intentional. **Hard duplicate-block (ORB-1471):** some workspaces REFUSE a create whose top similarity match is at/above a configured threshold - the tool returns a `duplicateBlocked` result (NOT a created ticket) listing the matching tickets. Extend or comment on one of those instead. If you have confirmed none of them cover this work, retry with `allowDuplicate: true` AND a `duplicateJustification` explaining why - the justification is persisted as a comment on the new ticket. '
+    + '**Pre-flight (ORB-2162):** `dryRun: true` runs the same language, type, label and duplicate checks the write runs and returns their verdicts WITHOUT creating anything - `structuredContent.preflight` carries `ok`, `severity`, `blockedBy` and one verdict per check, each with the exact message the real create would answer with. Use it when a create would otherwise cost a round trip to fix the payload afterwards; re-send the same arguments without `dryRun` once the verdicts are clean. '
     + '**Parameter notes.** `deliveryMode` (ORB-1608) is the role-aware commit policy that replaced the blanket one-commit-per-ticket rule: implementation/docs expect exactly one linked commit (closing without one is a non-blocking warning); review/admin/epic never expect one - reviews are read-only, admin work carries external evidence, epics derive completion from their children; unset defaults to "epic" when type=epic, else "implementation". `milestone` takes a key ("ORB-M3"), a name, or a UUID and is looked up in the project including closed milestones - unknown or ambiguous is an error, so pass the key/UUID when a name repeats. `labels` and `assigneeEmails` attach ATOMICALLY inside the create (ORB-1416): an unknown label or non-member email rolls the whole create back with a 400, leaving no orphan ticket - there is no separate attach call to retry.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
@@ -97,6 +98,7 @@ export const createTicketToolConfig = {
     allowLanguageMismatch: z.boolean().optional().describe('Override the language block.'),
     allowDuplicate: z.boolean().optional().describe('Override the duplicate block.'),
     duplicateJustification: z.string().optional().describe('Why this is not a duplicate.'),
+    dryRun: z.boolean().optional().describe('Pre-flight only: return the verdicts, create nothing.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -114,8 +116,23 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
     parentTicketKey?: string; dueDate?: string; isPrivate?: boolean;
     allowLanguageMismatch?: boolean;
     allowDuplicate?: boolean; duplicateJustification?: string;
+    dryRun?: boolean;
   }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, input.projectKey);
+
+    if (input.dryRun) {
+      const parentTicketId = input.parentTicketKey
+        ? (await resolveTicketByKey(client, input.parentTicketKey)).id
+        : undefined;
+      const preflight = await client.post<TicketPreflight>(`/projects/${project.id}/tickets/preflight`, {
+        title: input.title,
+        description: input.description ?? null,
+        ...(input.type ? { type: input.type } : {}),
+        ...(input.labels && input.labels.length > 0 ? { labelNames: input.labels } : {}),
+        ...(parentTicketId ? { parentTicketId } : {}),
+      });
+      return preflightResult(preflight, input.projectKey);
+    }
 
     const body: Record<string, unknown> = {
       title: input.title,
@@ -209,6 +226,61 @@ interface SimilarWarning {
   statusCategory: string | null;
   similarity: number;
   matchMode: 'tsvector' | 'embedding';
+}
+
+interface PreflightVerdict {
+  severity: 'ok' | 'warn' | 'block';
+  message: string;
+}
+
+interface TicketPreflight {
+  ok: boolean;
+  severity: 'ok' | 'warn' | 'block';
+  blockedBy: string[];
+  verdicts: {
+    language: PreflightVerdict & { code: string | null; detected: string | null; expected: string; enforced: boolean };
+    type: PreflightVerdict & { value: string | null; allowed: string[] };
+    labels: PreflightVerdict & { unknown: string[]; ambiguous: Array<{ name: string; matches: string[] }>; resolved: string[]; available: string[] };
+    duplicates: PreflightVerdict & { threshold: number; topSimilarity: number; candidates: SimilarWarning[] };
+  };
+}
+
+/**
+ * ORB-2162 - render the dry run: one line per verdict plus the next step.
+ * Never an error result - a blocking verdict is the answer the caller asked
+ * for, not a failed call.
+ */
+function preflightResult(preflight: TicketPreflight, projectKey: string): CallToolResult {
+  const icon = { ok: '✓', warn: '⚠', block: '⛔' } as const;
+  const lines = [
+    preflight.ok
+      ? `✓ Pre-flight clean for ${projectKey} - re-send the same arguments without dryRun to create the ticket.`
+      : `⛔ Pre-flight BLOCKED for ${projectKey} (${preflight.blockedBy.join(', ')}) - nothing was created. Fix the payload and run the pre-flight again.`,
+    `  ${icon[preflight.verdicts.language.severity]} language: ${preflight.verdicts.language.message}`,
+    `  ${icon[preflight.verdicts.type.severity]} type: ${preflight.verdicts.type.message}`,
+    `  ${icon[preflight.verdicts.labels.severity]} labels: ${preflight.verdicts.labels.message}`,
+    `  ${icon[preflight.verdicts.duplicates.severity]} duplicates: ${preflight.verdicts.duplicates.message}`,
+  ];
+  for (const c of preflight.verdicts.duplicates.candidates) {
+    lines.push(`      - [${c.ticketKey ?? c.id.slice(0, 8)}] "${c.title}" (${formatSimilarity(c)})`);
+  }
+  return {
+    content: [{ type: 'text', text: lines.join('\n') }],
+    structuredContent: {
+      preflight: {
+        ok: preflight.ok,
+        severity: preflight.severity,
+        blockedBy: preflight.blockedBy,
+        verdicts: {
+          ...preflight.verdicts,
+          duplicates: {
+            ...preflight.verdicts.duplicates,
+            candidates: trimSimilarEntries(preflight.verdicts.duplicates.candidates),
+          },
+        },
+      },
+    },
+  };
 }
 
 interface LanguageWarning {
