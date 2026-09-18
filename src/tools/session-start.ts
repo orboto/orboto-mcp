@@ -16,6 +16,7 @@ import { AgentSessionScopeSchema, type AgentSessionScope } from './agent-session
 import { PROTECT_TEXT_META, storePayload } from '../response-budget.js';
 import { loadRequiredRules } from '../required-rules.js';
 import { GIT_HEALTH_REASON_TEXT } from './git-health-reasons.js';
+import { channelStartLines } from '../inbox-channel.js';
 
 export const sessionStartToolConfig = {
   title: 'Load the rules you must follow + re-orient',
@@ -208,7 +209,7 @@ async function buildTicketBundle(
   };
 }
 
-export function makeSessionStartHandler(client: OrbotoClient) {
+export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: boolean } = {}) {
   let lastKnownRulesHash: string | undefined;
 
   return async (
@@ -350,6 +351,7 @@ export function makeSessionStartHandler(client: OrbotoClient) {
       ? [registration.scope.role ? `role ${registration.scope.role}` : null, registration.scope.projectKeys?.length ? `projects ${registration.scope.projectKeys.join(', ')}` : null, registration.scope.ticketKeys?.length ? `tickets ${registration.scope.ticketKeys.join(', ')}` : null].filter(Boolean).join('; ')
       : 'no scope declared - this session lists every account-addressed message; pass scope: { projectKeys, role } to narrow it';
     lines.push(`ref ${instanceToken}${registration ? `, instance ${registration.sessionId.slice(0, 8)}` : ''}. ${scopeText}. Peers reach exactly this session with orboto_agent_notify { toSessionRef: "${registration ? registration.sessionId.slice(0, 8) : instanceToken}" }.`);
+    if (opts.channel) lines.push('', ...channelStartLines());
     if (pendingMessages.length > 0) {
       lines.push('', '## Agent messages - unread');
       for (const m of pendingMessages) lines.push(`- [${m.kind}] ${m.subject} (from ${m.from}, ${m.createdAt}, id ${m.id})`);

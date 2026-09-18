@@ -401,7 +401,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_draft_customer_reply', draftCustomerReplyToolConfig, makeDraftCustomerReplyHandler(client));
   reg('orboto_embedding_status', embeddingStatusToolConfig, makeEmbeddingStatusHandler(client));
   reg('orboto_ai_usage', aiUsageToolConfig, makeAiUsageHandler(client));
-  reg('orboto_session_start', sessionStartToolConfig, makeSessionStartHandler(client));
+  reg('orboto_session_start', sessionStartToolConfig, makeSessionStartHandler(client, { channel: opts.channel }));
   reg('orboto_response_expand', responseExpandToolConfig, makeResponseExpandHandler());
   reg('orboto_help', helpToolConfig, makeHelpHandler());
   reg('orboto_api_search', apiSearchToolConfig, makeApiSearchHandler(client));

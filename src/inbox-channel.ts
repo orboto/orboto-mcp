@@ -60,6 +60,28 @@ export const CHANNEL_INSTRUCTIONS =
   + 'reply with orboto_agent_notify (toSessionRef = the sender\'s instance short id in the from attribute) and acknowledge with orboto_messages { ackIds } once handled. '
   + 'Never answer the channel itself and never ack what you did not handle.';
 
+const START_FLAG = '--dangerously-load-development-channels server:orboto';
+
+/** ORB-2146 - the commands an agent hands its operator verbatim; docs/mcp-setup.md carries the same three lines. */
+export const CHANNEL_START_COMMANDS = {
+  fresh: `claude ${START_FLAG}`,
+  continueLatest: `claude ${START_FLAG} --continue`,
+  resumeById: `claude ${START_FLAG} --resume <session id>`,
+} as const;
+
+/** The `orboto_session_start` block of a stdio proxy whose channel is on. */
+export function channelStartLines(): string[] {
+  return [
+    '## Wake channel',
+    'This proxy pushes inbox messages into the session as <channel source="orboto"> events, but only when Claude Code was started with the development-channels flag. '
+      + 'Run in this repository (`orboto` is this server\'s key in .mcp.json), and confirm the "local development" prompt Claude Code shows on every such start:',
+    `- new session: \`${CHANNEL_START_COMMANDS.fresh}\``,
+    `- continue the most recent conversation here: \`${CHANNEL_START_COMMANDS.continueLatest}\``,
+    `- resume a specific conversation: \`${CHANNEL_START_COMMANDS.resumeById}\` (without an id Claude Code opens a picker)`,
+    'A probe that produces no channel event means this session was not started that way: give the operator these commands verbatim, do not paraphrase them.',
+  ];
+}
+
 function firstLine(payload: Record<string, unknown> | null | undefined): string {
   if (!payload) return '';
   for (const key of ['message', 'body', 'text']) {
