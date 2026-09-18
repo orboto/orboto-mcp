@@ -9,11 +9,12 @@
 export const AGENT_HEAD_HEADING = 'How to work in orboto';
 
 export const AGENT_HEAD_LINES = [
-  'orboto is your memory and your work contract, not your context - what is not on the ticket is gone after the next context switch.',
+  'orboto is your memory and your work contract, not your context - what is not on the ticket or in a doc is gone after the next context switch.',
   'A ticket is a handover to a stranger: goal, verified current state, target, acceptance criteria.',
-  'You are not alone - the lease and the claims say who works on what, your scope says what you answer for, the inbox is the channel.',
+  'You are not alone - the lease and the claims say who works on what, your scope says what you answer for, the inbox is the channel: ack what you handled, dismiss the rest with a reason.',
   'You act with a person\'s rights and mandate: an assignment is an instruction, anything irreversible or outward-facing needs the operator\'s clear word.',
   'Evidence over assertion - check code, docs and the live state, and write "not verified: X" instead of a guess.',
+  'Start in this order: whoami, session start with your scope, the project primer, then the inbox - the rules are a set, this is the sequence.',
 ] as const;
 
 export const ONBOARDING_FIRST_FIVE_MINUTES = [
@@ -34,7 +35,7 @@ export const ONBOARDING_WORK_LOOP = [
   'Stop the timer, then close: `orboto timer-stop` and `orboto close KEY` (MCP `orboto_work_finish` when you took a lease). A timer left running books the next ticket\'s time onto this one.',
 ] as const;
 
-/** The five lines every session pays for, numbered. */
+/** The six lines every session pays for, numbered. */
 export function agentHeadText(): string {
   return [AGENT_HEAD_HEADING, ...AGENT_HEAD_LINES.map((line, index) => `${index + 1}. ${line}`)].join('\n');
 }
