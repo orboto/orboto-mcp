@@ -165,7 +165,7 @@ describe('orboto_agent_notify', () => {
     });
     expect((result.content[0] as { text: string }).text).toContain('notified bob@example.com');
     expect(result.structuredContent).toMatchObject({ ok: true });
-    expect((capturedBody[0] as { senderRef?: string }).senderRef).toMatch(/^mcp-/);
+    expect((capturedBody[0] as { senderRef?: string }).senderRef).toMatch(/^agent-/);
   });
 
   it('ORB-1742: senderRef prefers the per-connection MCP session id, and an explicit ref wins outright', async () => {

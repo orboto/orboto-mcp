@@ -185,3 +185,12 @@ describe('resolveByName', () => {
     expect(ambiguous?.map((r) => r.id).sort()).toEqual(['m1', 'm3']);
   });
 });
+
+describe('ORB-2171 - the stdio proxy shares the checkout token with the CLI and the skill wrapper', () => {
+  it('ORBOTO_AGENT_SESSION wins; otherwise agent-<sha256(hostname:cwd)[:12]>', async () => {
+    const { checkoutInstanceToken } = await import('./shared.js');
+    expect(checkoutInstanceToken({ ORBOTO_AGENT_SESSION: '  lane-7  ' }, 'host', '/repo')).toBe('lane-7');
+    expect(checkoutInstanceToken({}, 'build-host', '/srv/checkout')).toBe('agent-e0b18afc9cec');
+    expect(checkoutInstanceToken({}, 'build-host', '/srv/other')).not.toBe('agent-e0b18afc9cec');
+  });
+});

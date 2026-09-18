@@ -118,6 +118,6 @@ describe('orboto_api_call', () => {
     await makeApiCallHandler(client)({ method: 'POST', path: '/v1/agent/heartbeat', body: { scope: { role: 'spec' } } }, { sessionId: 'abc123' });
     expect(seen[0]['x-orboto-agent-session']).toBe('mcp-abc123');
     await makeApiCallHandler(client)({ method: 'GET', path: '/v1/agent/messages' });
-    expect(seen[1]['x-orboto-agent-session']).toMatch(/^mcp-/);
+    expect(seen[1]['x-orboto-agent-session']).toMatch(/^agent-/);
   });
 });

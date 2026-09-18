@@ -94,7 +94,7 @@ describe('orboto_work_start', () => {
     expect(post.method).toBe('POST');
     expect(post.url).toContain('/work-sessions/start');
     expect(post.body?.ticketId).toBe('t1');
-    expect(String(post.body?.agentSessionToken)).toMatch(/^mcp-/);
+    expect(String(post.body?.agentSessionToken)).toMatch(/^agent-/);
 
     const text = (res.content[0] as { text: string }).text;
     expect(text).toContain('Started a implementation work session on ACME-42');

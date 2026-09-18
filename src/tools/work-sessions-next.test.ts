@@ -127,7 +127,7 @@ describe('orboto_work_next', () => {
     expect(calls[0].method).toBe('POST');
     expect(calls[0].url).toContain('/work-sessions/next');
     expect(calls[0].body?.projectKey).toBe('ACME');
-    expect(String(calls[0].body?.agentSessionToken)).toMatch(/^mcp-/);
+    expect(String(calls[0].body?.agentSessionToken)).toMatch(/^agent-/);
 
     const text = (res.content[0] as { text: string }).text;
     expect(text).toContain('Reserved ACME-42');

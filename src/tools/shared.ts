@@ -165,9 +165,16 @@ export function ticketLine(t: TicketRow): string {
   return parts.join(' ');
 }
 
-import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
+import { hostname } from 'node:os';
 
-const MCP_PROCESS_INSTANCE = `mcp-${randomUUID()}`;
+/** ORB-2171 - the checkout's token, derived exactly like the CLI and the skill wrapper derive theirs; `ORBOTO_AGENT_SESSION` wins. */
+export function checkoutInstanceToken(env: NodeJS.ProcessEnv = process.env, host: string = hostname(), cwd: string = process.cwd()): string {
+  const explicit = (env.ORBOTO_AGENT_SESSION ?? '').trim();
+  return explicit || `agent-${createHash('sha256').update(`${host}:${cwd}`).digest('hex').slice(0, 12)}`;
+}
+
+const MCP_PROCESS_INSTANCE = checkoutInstanceToken();
 
 /** Precedence: explicit caller-supplied token > per-connection MCP session id
  *  (distinct per client even on a shared HTTP server) > per-process id (stdio). */
