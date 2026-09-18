@@ -33,6 +33,8 @@ interface DocRow {
   icon: string | null;
   sortOrder: number;
   updatedAt: string;
+  /** ORB-2154 - whether the doc is semantically searchable yet. */
+  embedding?: { state: string; updatedAt: string | null } | null;
 }
 interface DocBacklinkRow {
   /** `ticket` | `milestone` | `doc` per DocLinkTargetEnum. */
@@ -86,7 +88,7 @@ export async function resolveDocId(client: OrbotoClient, docIdOrKey: string): Pr
 export const getDocToolConfig = {
   title: 'Get a doc by id or key',
   description:
-    'Return the doc content (Markdown) plus backlinks (other docs that reference this doc, or tickets/milestones the doc is linked from). Accepts either the doc UUID or its human-readable key (e.g. ORB-D12 / DOC-5).',
+    'Return the doc content (Markdown) plus backlinks (other docs that reference this doc, or tickets/milestones the doc is linked from). Accepts either the doc UUID or its human-readable key (e.g. ORB-D12 / DOC-5). A UUID read also reports `embedding.state` - embedded | pending | stale | not_embeddable - so a caller waits for semantic search instead of guessing (ORB-2154).',
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable key (ORB-D12 / DOC-5). Discover via orboto_list_doc_spaces or orboto_search.'),
   }).shape,
@@ -102,7 +104,7 @@ export function makeGetDocHandler(client: OrbotoClient) {
 
     const lines = [
       `# ${doc.icon ? `${doc.icon} ` : ''}${doc.title}`,
-      `${doc.docKey ? `Key: ${doc.docKey}  ·  ` : ''}ID: ${doc.id}  ·  Visibility: ${doc.visibility}  ·  Updated: ${doc.updatedAt}`,
+      `${doc.docKey ? `Key: ${doc.docKey}  ·  ` : ''}ID: ${doc.id}  ·  Visibility: ${doc.visibility}  ·  Updated: ${doc.updatedAt}${doc.embedding ? `  ·  Embedding: ${doc.embedding.state}` : ''}`,
       '',
       doc.content || '_(empty)_',
     ];
@@ -128,6 +130,7 @@ export function makeGetDocHandler(client: OrbotoClient) {
           parentDocId: doc.parentDocId,
           spaceId: doc.spaceId,
           slug: doc.slug,
+          embedding: doc.embedding ?? null,
         },
         backlinks: backlinks.map((b) => ({
           sourceDocId: b.sourceDocId,
