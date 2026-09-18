@@ -74,6 +74,7 @@ export interface TicketRow {
   gitActivityCount?: number;
   checklistProgress?: { done: number; total: number };
   waitingForGitIngestion?: boolean;
+  webUrl?: string;
   blockedByOpenCount?: number;
   blockedByOpen?: TicketDependencySummary[];
   blocksOpenCount?: number;

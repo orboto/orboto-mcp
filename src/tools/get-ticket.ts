@@ -166,6 +166,7 @@ export function makeGetTicketHandler(client: OrbotoClient) {
           statusCategory: parent.statusCategory ?? null,
         } : null,
         childCount: children.length,
+        webUrl: full.webUrl ?? null,
         blockedBy: {
           openCount: full.blockedByOpenCount ?? 0,
           tickets: (full.blockedByOpen ?? []).map(dependencyEdge),
@@ -301,6 +302,7 @@ function formatTicket(
     ticket.labels && ticket.labels.length > 0
       ? `Labels: ${ticket.labels.map((l) => l.name).join(', ')}`
       : null,
+    ticket.webUrl ? `Link: ${ticket.webUrl}` : null,
     formatDependencySummary('Blocked by', ticket.blockedByOpenCount, ticket.blockedByOpen),
     formatDependencySummary('Blocks', ticket.blocksOpenCount, ticket.blocksOpen),
   ].filter((s): s is string => s !== null);
