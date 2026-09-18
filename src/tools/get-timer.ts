@@ -16,12 +16,14 @@ interface ActiveTimer {
   description: string | null;
   ticketTitle?: string;
   projectId?: string;
+  /** ORB-2137 - the row was matched by the single-active-timer fallback because this instance's lane was empty. */
+  laneFallback?: boolean;
 }
 
 export const getTimerToolConfig = {
   title: 'Get current timer',
   description:
-    'Return the caller\'s currently-running stopwatch (or null if no timer is active).',
+    'Return the caller\'s currently-running stopwatch (or null if no timer is active). The lane is resolved from this session\'s instance token, so a timer started by `orboto_claim` / `orboto_timer_start` in the same checkout reads back (ORB-2137); `laneFallback: true` means the timer was matched as the account\'s only running one because this instance\'s lane was empty - another instance started it.',
   inputSchema: z.object({}).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -49,6 +51,7 @@ export function makeGetTimerHandler(client: OrbotoClient) {
       `Elapsed: ${minutes} min (${totalSeconds}s total)`,
       `Started: ${timer.startedAt}`,
       isPaused ? `Paused: ${timer.pausedAt}` : null,
+      timer.laneFallback ? 'Matched via the single-active-timer fallback - another instance started it.' : null,
       timer.description ? `Note: ${timer.description}` : null,
     ].filter((l): l is string => l !== null).join('\n');
 
@@ -65,6 +68,7 @@ export function makeGetTimerHandler(client: OrbotoClient) {
           accumulatedSeconds: timer.accumulatedSeconds,
           totalSeconds,
           paused: isPaused,
+          laneFallback: timer.laneFallback === true,
         },
       },
     };
