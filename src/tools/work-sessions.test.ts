@@ -147,6 +147,38 @@ describe('orboto_work_session_finish', () => {
     expect(res.isError).toBeUndefined();
     expect((res.content[0] as { text: string }).text).toContain('Idempotent finish');
   });
+
+  it('ORB-2173 - reports the minutes a status transition already booked instead of zero', async () => {
+    stub([{
+      json: {
+        session: { ...SESSION, status: 'active', activeTimerId: null },
+        durationMinutes: 106,
+        timeEntryId: 'te1',
+        bookedBy: 'transition',
+        changed: true,
+      },
+    }]);
+    const res = await makeWorkSessionFinishHandler(client)({ sessionId: 'ws1' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Booked 106 min (by the status transition)');
+    expect((res.structuredContent as { bookedBy: string }).bookedBy).toBe('transition');
+  });
+
+  it('ORB-2173 - an idempotent re-finish still reports the already-booked minutes and source', async () => {
+    stub([{
+      json: {
+        session: { ...SESSION, status: 'finished' },
+        durationMinutes: 42,
+        timeEntryId: 'te2',
+        bookedBy: 'lane_stop',
+        changed: false,
+      },
+    }]);
+    const res = await makeWorkSessionFinishHandler(client)({ sessionId: 'ws1' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('42 min already booked (by an earlier timer stop)');
+    expect(text).toContain('Idempotent finish');
+  });
 });
 
 describe('ORB-1612 - orboto_work_finish', () => {
@@ -215,6 +247,26 @@ describe('ORB-1612 - orboto_work_finish', () => {
     const text = (res.content[0] as { text: string }).text;
     expect(text).toContain('Idempotent finish');
     expect(text).toContain('No completion note posted');
+  });
+
+  it('ORB-2173 - reports the minutes a status transition already booked instead of zero', async () => {
+    stub([
+      {
+        json: {
+          session: { ...SESSION, status: 'active', activeTimerId: null },
+          durationMinutes: 106,
+          timeEntryId: 'te1',
+          bookedBy: 'transition',
+          changed: true,
+          ticketTransitioned: false,
+          ticketStatusCategory: 'in_review',
+          noteCommented: true,
+        },
+      },
+    ]);
+    const res = await makeWorkFinishHandler(client)({ sessionId: 'ws1' });
+    expect((res.content[0] as { text: string }).text).toContain('Booked 106 min (by the status transition)');
+    expect((res.structuredContent as { bookedBy: string }).bookedBy).toBe('transition');
   });
 
   it('surfaces a deliveryModeWarning without failing the call', async () => {

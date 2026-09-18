@@ -19,6 +19,17 @@ import {
   type WorkSessionRow,
 } from './work-sessions-shared.js';
 
+/** ORB-2173 - the phrase for a `bookedBy` value other than `finish` (the
+ *  ordinary "this call stopped it" path, which stays silent). */
+function describeBookedBy(bookedBy: string | null | undefined): string | null {
+  switch (bookedBy) {
+    case 'transition': return 'by the status transition';
+    case 'lane_stop': return 'by an earlier timer stop';
+    case 'expiry': return 'by the lease expiring';
+    default: return null;
+  }
+}
+
 function parseClaimConflicts(err: OrbotoApiError): ClaimConflict[] | undefined {
   try {
     return (JSON.parse(err.body) as { claimConflicts?: ClaimConflict[] }).claimConflicts;
@@ -404,7 +415,13 @@ export function makeWorkSessionFinishHandler(client: OrbotoClient) {
     commitSha?: string;
     verification?: Record<string, unknown>;
   }): Promise<CallToolResult> => {
-    const res = await client.post<{ session: WorkSessionRow; durationMinutes: number; changed: boolean }>(
+    const res = await client.post<{
+      session: WorkSessionRow;
+      durationMinutes: number;
+      timeEntryId: string | null;
+      bookedBy: string | null;
+      changed: boolean;
+    }>(
       `/work-sessions/${args.sessionId}/finish`,
       {
         ...(args.outcome ? { outcome: args.outcome } : {}),
@@ -412,12 +429,21 @@ export function makeWorkSessionFinishHandler(client: OrbotoClient) {
         ...(args.verification ? { verification: args.verification } : {}),
       },
     );
+    const bookedByPhrase = describeBookedBy(res.bookedBy);
     const text = res.changed
-      ? `Session ${args.sessionId} ${res.session.status}. Booked ${res.durationMinutes} min; the ${res.session.role} lease on ${res.session.ticketKey ?? res.session.ticketId} is free.`
-      : `Session ${args.sessionId} was already ${res.session.status} - nothing to book. (Idempotent finish.)`;
+      ? `Session ${args.sessionId} ${res.session.status}. Booked ${res.durationMinutes} min${bookedByPhrase ? ` (${bookedByPhrase})` : ''}; the ${res.session.role} lease on ${res.session.ticketKey ?? res.session.ticketId} is free.`
+      : res.durationMinutes > 0
+        ? `Session ${args.sessionId} was already ${res.session.status} - ${res.durationMinutes} min already booked${bookedByPhrase ? ` (${bookedByPhrase})` : ''}. (Idempotent finish.)`
+        : `Session ${args.sessionId} was already ${res.session.status} - nothing to book. (Idempotent finish.)`;
     return {
       content: [{ type: 'text', text }],
-      structuredContent: { session: res.session, durationMinutes: res.durationMinutes, changed: res.changed },
+      structuredContent: {
+        session: res.session,
+        durationMinutes: res.durationMinutes,
+        timeEntryId: res.timeEntryId,
+        bookedBy: res.bookedBy,
+        changed: res.changed,
+      },
     };
   };
 }
@@ -425,6 +451,8 @@ export function makeWorkSessionFinishHandler(client: OrbotoClient) {
 interface FinishWorkResponse {
   session: WorkSessionRow;
   durationMinutes: number;
+  timeEntryId: string | null;
+  bookedBy: string | null;
   changed: boolean;
   ticketTransitioned: boolean;
   ticketStatusCategory: string | null;
@@ -475,10 +503,13 @@ export function makeWorkFinishHandler(client: OrbotoClient) {
         ...(args.note ? { note: args.note } : {}),
       },
     );
+    const bookedByPhrase = describeBookedBy(res.bookedBy);
     const lines = [
       res.changed
-        ? `Session ${args.sessionId} ${res.session.status}. Booked ${res.durationMinutes} min; the ${res.session.role} lease on ${res.session.ticketKey ?? res.session.ticketId} is free.`
-        : `Session ${args.sessionId} was already ${res.session.status} - nothing to book. (Idempotent finish.)`,
+        ? `Session ${args.sessionId} ${res.session.status}. Booked ${res.durationMinutes} min${bookedByPhrase ? ` (${bookedByPhrase})` : ''}; the ${res.session.role} lease on ${res.session.ticketKey ?? res.session.ticketId} is free.`
+        : res.durationMinutes > 0
+          ? `Session ${args.sessionId} was already ${res.session.status} - ${res.durationMinutes} min already booked${bookedByPhrase ? ` (${bookedByPhrase})` : ''}. (Idempotent finish.)`
+          : `Session ${args.sessionId} was already ${res.session.status} - nothing to book. (Idempotent finish.)`,
     ];
     if (res.session.commitSha) {
       lines.push(`Commit ${res.session.commitSha}${res.session.commitVerified ? ' (verified by git ingestion)' : ' (attested - pending git verification)'}.`);
@@ -495,6 +526,8 @@ export function makeWorkFinishHandler(client: OrbotoClient) {
       structuredContent: {
         session: res.session,
         durationMinutes: res.durationMinutes,
+        timeEntryId: res.timeEntryId,
+        bookedBy: res.bookedBy,
         changed: res.changed,
         ticketTransitioned: res.ticketTransitioned,
         ticketStatusCategory: res.ticketStatusCategory,
