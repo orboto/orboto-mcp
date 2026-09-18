@@ -36,6 +36,7 @@ interface IngestFileResponse {
   kind: string;
   sizeBytes: number;
   markdownChars: number;
+  attachmentId?: string;
 }
 
 export const askDocsToolConfig = {
@@ -132,7 +133,7 @@ function mimetypeFor(filename: string): string {
 export const ingestFileToolConfig = {
   title: 'Ingest a local file into a wiki space (multipart upload)',
   description:
-    'Upload a file (PDF / DOCX / Markdown / plain text) into `spaceId` via multipart. The model passes the bytes as a base64 `contentBase64` field (so this works without local FS access on the agent side). Use `filename` to give the doc a meaningful title - the backend sniffs the mimetype but also uses the filename for display. Optional `parentDocId` nests under an existing doc.',
+    'Upload a file (PDF / DOCX / Markdown / plain text) into `spaceId` via multipart. The model passes the bytes as a base64 `contentBase64` field (so this works without local FS access on the agent side). Use `filename` to give the doc a meaningful title - the backend sniffs the mimetype but also uses the filename for display. Optional `parentDocId` nests under an existing doc. The uploaded file is ALSO attached to the doc it produces (ORB-2167): the response names `attachmentId`, `orboto_list_doc_attachments` lists it and `orboto_get_attachment` downloads the original bytes, so the extracted text and its source stay together.',
   inputSchema: z.object({
     spaceId: z.string().uuid(),
     filename: z.string().min(1).describe('Display filename, e.g. "ADR-12-secrets-rotation.pdf".'),
@@ -174,6 +175,7 @@ export function makeIngestFileHandler(client: OrbotoClient) {
       `  slug: ${res.slug}`,
       `  format: ${res.kind}`,
       `  uploaded ${Math.round(res.sizeBytes / 1024)} KB → ${res.markdownChars} chars of markdown`,
+      `  source attached: ${res.attachmentId ?? '(none)'}`,
     ];
     return {
       content: [{ type: 'text', text: lines.join('\n') }],
@@ -184,6 +186,7 @@ export function makeIngestFileHandler(client: OrbotoClient) {
         kind: res.kind,
         sizeBytes: res.sizeBytes,
         markdownChars: res.markdownChars,
+        attachmentId: res.attachmentId ?? null,
       },
     };
   };
