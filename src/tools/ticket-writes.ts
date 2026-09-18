@@ -463,12 +463,25 @@ interface CommentResponse {
   content: string;
   isInternal: boolean;
   createdAt: string;
+  mentions?: Array<{ userId: string; fullName: string | null; email: string }>;
+  unresolvedMentions?: Array<{ token: string; reference: string; reason: string }>;
+}
+
+/** ORB-2168 - the "who did this reach" line of a comment write. */
+function mentionLine(created: CommentResponse): string | null {
+  const resolved = created.mentions ?? [];
+  const unresolved = created.unresolvedMentions ?? [];
+  if (resolved.length === 0 && unresolved.length === 0) return null;
+  const parts: string[] = [];
+  if (resolved.length > 0) parts.push(`notified ${resolved.map((m) => m.fullName ?? m.email).join(', ')}`);
+  if (unresolved.length > 0) parts.push(`UNRESOLVED ${unresolved.map((m) => `${m.token} (${m.reason})`).join(', ')}`);
+  return `Mentions: ${parts.join(' · ')}`;
 }
 
 export const commentToolConfig = {
   title: 'Post a comment',
   description:
-    'Post Markdown. isInternal=true hides it from guests. Attachment drafts are claimed atomically with the comment; never use public ticket uploads for private comments.',
+    'Post Markdown. isInternal=true hides it from guests. Attachment drafts are claimed atomically with the comment; never use public ticket uploads for private comments. Mention a person with the markup `@[Full Name](user:<uuid>)` - the UUIDs come from `orboto_list_users`. The response reports `mentions` (tokens that resolved to a user, who is then notified) and `unresolvedMentions` (tokens that named nobody); a mention is never silently dropped.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     text: z.string().min(1),
@@ -487,16 +500,22 @@ export function makeCommentHandler(client: OrbotoClient) {
       `/tickets/${ticket.id}/comments`,
       { content: text, isInternal: isInternal ?? false, ...(attachmentDraftIds ? { attachmentDraftIds } : {}) },
     );
+    const mentions = mentionLine(created);
     return {
       content: [{
         type: 'text',
-        text: `Posted comment on [${ticket.ticketKey}]${created.isInternal ? ' (internal)' : ''}.`,
+        text: [
+          `Posted comment on [${ticket.ticketKey}]${created.isInternal ? ' (internal)' : ''}.`,
+          ...(mentions ? [mentions] : []),
+        ].join('\n'),
       }],
       structuredContent: {
         ticketKey: ticket.ticketKey,
         commentId: created.id,
         isInternal: created.isInternal,
         createdAt: created.createdAt,
+        mentions: created.mentions ?? [],
+        unresolvedMentions: created.unresolvedMentions ?? [],
       },
     };
   };

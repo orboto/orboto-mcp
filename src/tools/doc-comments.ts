@@ -19,6 +19,8 @@ interface DocCommentRow {
   userName?: string | null;
   userAvatarUrl?: string | null;
   resolvedByName?: string | null;
+  mentions?: Array<{ userId: string; fullName: string | null; email: string }>;
+  unresolvedMentions?: Array<{ token: string; reference: string; reason: string }>;
 }
 
 interface CommentPage {
@@ -111,7 +113,7 @@ export function makeListDocCommentsHandler(client: OrbotoClient) {
 export const postDocCommentToolConfig = {
   title: 'Post a comment on a doc page (or reply to one)',
   description:
-    'Add a comment to a doc page. Pass `parentCommentId` to reply (the API flattens reply chains past one level so a reply-of-reply lands as a sibling of the original reply). Optional `anchor` (`{text, before, after}`) attaches the comment to a specific highlight in the body - the frontend uses the surrounding context to re-locate the anchor even after the doc has been edited. Mentions in the content body (`@username`) fire notifications automatically.',
+    'Add a comment to a doc page. Pass `parentCommentId` to reply (the API flattens reply chains past one level so a reply-of-reply lands as a sibling of the original reply). Optional `anchor` (`{text, before, after}`) attaches the comment to a specific highlight in the body - the frontend uses the surrounding context to re-locate the anchor even after the doc has been edited. Mention a person with the markup `@[Full Name](user:<uuid>)` - the UUIDs come from `orboto_list_users`. The response reports `mentions` (tokens that resolved to a user, who is then notified) and `unresolvedMentions` (tokens that named nobody); a mention is never silently dropped.',
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     content: z.string().min(1).max(4000),
@@ -135,10 +137,18 @@ export function makePostDocCommentHandler(client: OrbotoClient) {
     if (parentCommentId) body.parentCommentId = parentCommentId;
     if (anchor) body.anchor = anchor;
     const row = await client.post<DocCommentRow>(`/docs/${docId}/comments`, body);
+    const resolved = row.mentions ?? [];
+    const unresolved = row.unresolvedMentions ?? [];
+    const mentionParts: string[] = [];
+    if (resolved.length > 0) mentionParts.push(`notified ${resolved.map((m) => m.fullName ?? m.email).join(', ')}`);
+    if (unresolved.length > 0) mentionParts.push(`UNRESOLVED ${unresolved.map((m) => `${m.token} (${m.reason})`).join(', ')}`);
     return {
       content: [{
         type: 'text',
-        text: `Posted comment ${row.id} on doc ${docId}${row.parentCommentId ? ` (reply to ${row.parentCommentId})` : ''}.`,
+        text: [
+          `Posted comment ${row.id} on doc ${docId}${row.parentCommentId ? ` (reply to ${row.parentCommentId})` : ''}.`,
+          ...(mentionParts.length > 0 ? [`Mentions: ${mentionParts.join(' · ')}`] : []),
+        ].join('\n'),
       }],
       structuredContent: {
         id: row.id,
@@ -147,6 +157,8 @@ export function makePostDocCommentHandler(client: OrbotoClient) {
         content: row.content,
         anchor: row.anchor,
         createdAt: row.createdAt,
+        mentions: resolved,
+        unresolvedMentions: unresolved,
       },
     };
   };
