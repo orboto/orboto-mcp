@@ -17,6 +17,7 @@ import { PROTECT_TEXT_META, storePayload } from '../response-budget.js';
 import { loadRequiredRules } from '../required-rules.js';
 import { GIT_HEALTH_REASON_TEXT } from './git-health-reasons.js';
 import { channelStartLines } from '../inbox-channel.js';
+import { agentHeadText } from '../agent-head.js';
 
 export const sessionStartToolConfig = {
   title: 'Load the rules you must follow + re-orient',
@@ -294,7 +295,7 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
       : tickets;
     const elsewhereCount = tickets.length - scopedTickets.length;
 
-    const lines: string[] = ['# orboto session start'];
+    const lines: string[] = [agentHeadText(), '', '# orboto session start'];
     if (me) lines.push(`You are ${me.fullName ?? me.email}${me.email ? ` (${me.email})` : ''}.`);
     if (me?.workspaceLocale || me?.locale) lines.push(`Write tickets / comments / docs in: ${me.workspaceLocale ?? me.locale}.`);
     const rulesText = rules.instructions ?? '';
