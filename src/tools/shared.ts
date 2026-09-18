@@ -175,6 +175,11 @@ export function mcpInstanceToken(explicit?: string, extra?: { sessionId?: string
   return explicit ?? (extra?.sessionId ? `mcp-${extra.sessionId}` : MCP_PROCESS_INSTANCE);
 }
 
+/** ORB-2140 - the stdio process's own instance token, the one the inbox channel follows the stream with. */
+export function mcpProcessInstance(): string {
+  return MCP_PROCESS_INSTANCE;
+}
+
 /** ORB-1753 - the caller's self-declared agent profile from the process
  *  environment (stdio servers / runners). The api-key standing profile
  *  (ORB-1751) already covers keys server-side; these env vars let a

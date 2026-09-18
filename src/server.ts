@@ -15,6 +15,7 @@ import { draftCustomerReplyToolConfig, makeDraftCustomerReplyHandler } from './t
 import { embeddingStatusToolConfig, makeEmbeddingStatusHandler } from './tools/embedding-status.js';
 import { aiUsageToolConfig, makeAiUsageHandler } from './tools/ai-usage.js';
 import { sessionStartToolConfig, makeSessionStartHandler } from './tools/session-start.js';
+import { CHANNEL_CAPABILITY, CHANNEL_INSTRUCTIONS } from './inbox-channel.js';
 import { loadRequiredRules } from './required-rules.js';
 import { responseExpandToolConfig, makeResponseExpandHandler } from './tools/response-expand.js';
 import { helpToolConfig, makeHelpHandler } from './tools/help.js';
@@ -268,6 +269,8 @@ export interface BuildServerOptions extends OrbotoClientConfig {
   /** Optional - passed through to McpServer metadata. Clients
    *  sometimes surface this in their UI. */
   clientDescription?: string;
+  /** ORB-2140 - declare the Claude Code channel capability (stdio only); the inbox channel then pushes messages as `notifications/claude/channel`. */
+  channel?: boolean;
   /** ORB-1520 - which manifest to register. `curated` (default) is the
    *  measured high-frequency set + the api_search/api_call escape
    *  hatch; `full` registers every named tool. Entry points resolve
@@ -358,21 +361,25 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
     workingRules = 'Workspace rules are unavailable. Built-in hints are not a substitute. Call orboto_session_start with forceRules and retry after connectivity or authentication recovers.';
   }
 
+  const channelHint = opts.channel ? [CHANNEL_INSTRUCTIONS] : [];
   const server = new McpServer(
     { name: 'orboto', version: VERSION },
     {
       capabilities: {
         resources: { subscribe: true, listChanged: true },
+        ...(opts.channel ? { experimental: { [CHANNEL_CAPABILITY]: {} } } : {}),
       },
       instructions: toolset === 'minimal'
         ? [
           staticMcpHints(toolset),
           'FIRST ACTION: call `orboto_session_start` - it returns the binding workspace rules plus your in-progress work. Re-run it after any context compaction. Non-negotiables: claim or create a ticket before touching code, one commit per ticket with the ticket key in the subject, push after each commit, never mark work done that is not done.',
+          ...channelHint,
         ].join('\n\n')
         : assembleInstructions(
           [
             staticMcpHints(toolset),
             'FIRST ACTION this session: call the `orboto_session_start` tool - it returns the complete, authoritative binding rules you must follow (plus your in-progress work). Re-run it after any context compaction. If the rules below look cut off, `orboto_session_start` and the `orboto://rules` resource always have the full set. (Do NOT use `orboto_list_agent_instructions` to read the rules - that manages rule blocks for admins.) Core non-negotiables: ticket-first (claim or create a ticket before touching code), one commit per ticket with the ticket key in the subject line, push after each commit, and never mark work done that is not actually done.',
+            ...channelHint,
           ].join('\n\n'),
           workingRules,
         ),

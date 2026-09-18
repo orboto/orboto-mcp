@@ -57,10 +57,21 @@ async function main() {
       process.exit(1);
     }
 
-    const server = await buildOrbotoMcpServer(clientConfig);
+    const channel = (process.env.ORBOTO_MCP_CHANNEL ?? '1') !== '0';
+    const server = await buildOrbotoMcpServer({ ...clientConfig, channel });
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
     const stdio = new StdioServerTransport();
     await server.connect(stdio);
+    if (channel) {
+      const { InboxChannel, digestMinutesFromEnv } = await import('./inbox-channel.js');
+      const { mcpProcessInstance } = await import('./tools/shared.js');
+      const instanceToken = mcpProcessInstance();
+      const inbox = new InboxChannel({ ...clientConfig, instanceToken, mcp: server, digestMinutes: digestMinutesFromEnv(process.env.ORBOTO_MCP_CHANNEL_DIGEST_MINUTES) });
+      inbox.start();
+      preflightClient.post('/v1/agent/heartbeat', { clientInfo: { channel: 'claude-code' } }, { instanceToken })
+        .catch((err) => { console.error(`[orboto-mcp] channel heartbeat failed: ${(err as Error).message}`); });
+      stdio.onclose = () => { inbox.close(); };
+    }
     return;
   }
 

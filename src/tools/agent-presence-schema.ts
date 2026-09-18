@@ -6,7 +6,7 @@ const WorkSessionResourceClaimSchema = z.object({
 });
 
 export const AgentInventoryKindSchema = z.enum(['agent', 'human']);
-export const AgentConnectionTypeSchema = z.enum(['api_key', 'oauth', 'lane', 'external_token', 'live_events', 'web']);
+export const AgentConnectionTypeSchema = z.enum(['api_key', 'oauth', 'lane', 'external_token', 'live_events', 'web', 'channel']);
 export const AgentInventoryConnectionSchema = z.object({ type: AgentConnectionTypeSchema, label: z.string() });
 export const AgentInventoryProjectSchema = z.object({ id: z.string().uuid(), key: z.string(), name: z.string() });
 
