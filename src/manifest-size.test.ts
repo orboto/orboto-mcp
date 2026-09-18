@@ -34,10 +34,14 @@ afterEach(() => { vi.restoreAllMocks(); });
  * session scope schema, agent_notify the toSessionRef, and orboto_messages
  * renders sender and receiver identities in its output schema (measured
  * curated = 38,640, full = 168,029 chars, minimal = 3,140 tokens).
+ * ORB-2150 raised the curated ceiling to 39,700: `orboto_messages` gained
+ * the `dismiss` envelope and the per-message `dismissed` record, which is
+ * the surface that stops foreign mail from waking every session of a
+ * shared account (measured curated = 39,461 chars / 10,961 tokens).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
-const CURATED_MAX_CHARS = 39_000;
+const CURATED_MAX_CHARS = 39_700;
 const FULL_MAX_CHARS = 169_000;
 
 /**
@@ -62,7 +66,7 @@ const MINIMAL_MAX_TOKENS = 3_200;
  * The curated tier is ratcheted on its TOOL SCHEMAS (the instructions
  * block has its own budget, enforced in instructions-budget.test.ts).
  */
-const CURATED_SCHEMA_MAX_TOKENS = 10_800;
+const CURATED_SCHEMA_MAX_TOKENS = 11_000;
 
 interface Measurement { count: number; chars: number; instructionsChars: number }
 
