@@ -66,6 +66,12 @@ const MAX_CUT_PASSES = 64;
 export const HANDLE_TTL_MS = 15 * 60 * 1000;
 export const MAX_HANDLES = 16;
 
+/** ORB-2164 - the budget is an MCP-server artefact; the same data over REST or
+ *  either CLI comes back whole, which is the way out that outlives a handle. */
+export const UNCUT_ELSEWHERE =
+  'The cut is an MCP-server artefact: the REST API and both CLIs return the complete body '
+  + '(`orboto get <path>`, `orboto_api_call`, or the named CLI command). There is no CLI expand.';
+
 /**
  * `ORBOTO_MCP_RESPONSE_BUDGET=off` disables the cap entirely (escape
  * hatch for a client that genuinely wants everything);
@@ -406,7 +412,8 @@ function shrink(
   const notice = allOmitted.length > 0
     ? `[Response truncated to the MCP response budget (${budget} chars) - it would otherwise cost `
       + `${originalChars} chars on EVERY later request in this session. Omitted content is not lost: `
-      + `call orboto_response_expand with handle "${handle}" and one of the paths in __truncation.omitted.]`
+      + `call orboto_response_expand with handle "${handle}" and one of the paths in __truncation.omitted. `
+      + `${UNCUT_ELSEWHERE}]`
     : `[Response is ${originalChars} chars, over the MCP response budget (${budget} chars), and nothing in it `
       + 'could be cut safely - it is protected or uncuttable content. NOTHING was omitted; there is no remainder to fetch.]';
 
@@ -419,7 +426,8 @@ function shrink(
       omitted: allOmitted,
       howToGetTheRest:
         `Call orboto_response_expand { handle: "${handle}", path: "<one of omitted[].path>" } for the omitted `
-        + 'remainder. Omit `path` to list what is available. The handle expires 15 minutes after this call.',
+        + 'remainder. Omit `path` to list what is available. The handle lives in this MCP server process and '
+        + `expires 15 minutes after this call. ${UNCUT_ELSEWHERE}`,
       ...(atFloor ? { atFloor: true } : {}),
     };
     (structured as Record<string, unknown>).__truncation = block;

@@ -17,6 +17,7 @@ import {
   HANDLE_TTL_MS,
   storePayload,
   PROTECT_TEXT_META,
+  UNCUT_ELSEWHERE,
 } from './response-budget.js';
 import { makeResponseExpandHandler } from './tools/response-expand.js';
 
@@ -112,6 +113,20 @@ describe('over budget', () => {
     const text = (out.result.content[0] as { text: string }).text;
     expect(text).toContain('orboto_response_expand');
     expect(text).toContain(out.handle!);
+  });
+
+  it('ORB-2164: the hint names BOTH ways out - the expand handle and the uncut body over REST or the CLI', () => {
+    const out = applyResponseBudget(TOOL, result({ description: 'd'.repeat(30_000) }));
+    const block = truncationOf(out.result)!;
+    const how = String(block.howToGetTheRest);
+    expect(how).toContain('orboto_response_expand');
+    expect(how).toContain('expires 15 minutes');
+    expect(how).toContain('this MCP server process');
+    expect(how).toContain(UNCUT_ELSEWHERE);
+    const text = (out.result.content[0] as { text: string }).text;
+    expect(text).toContain(UNCUT_ELSEWHERE);
+    expect(UNCUT_ELSEWHERE).toContain('REST API and both CLIs');
+    expect(UNCUT_ELSEWHERE).toContain('no CLI expand');
   });
 
   it('marks the cut inside the value, so a reader cannot mistake it for the whole', () => {
