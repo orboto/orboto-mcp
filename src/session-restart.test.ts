@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { safeSessionName, writeRestartRequest } from './session-restart.js';
+import { claudeSessionsDir, safeSessionName, writeRestartRequest } from './session-restart.js';
 
 let contexts: string;
 let sessions: string;
@@ -57,3 +57,9 @@ describe('ORB-2181 - the restart request file', () => {
 function writeRestartRequestHere(dir: string, reason: string) {
   return writeRestartRequest(dir, { reason, source: 'mcp' }, { now: NOW, root: sessions, contextRoot: contexts });
 }
+
+describe('ORB-2181 - the session root', () => {
+  it('lives under the orboto state directory of the user', () => {
+    expect(claudeSessionsDir().endsWith(path.join('.orboto', 'claude'))).toBe(true);
+  });
+});

@@ -8,7 +8,7 @@
  */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';
-import { resolveProjectByKey, resolveTicketByKey, ticketLine, normalizeName, resolveByName } from './shared.js';
+import { resolveProjectByKey, resolveTicketByKey, ticketLine, normalizeName, resolveByName, mcpProcessInstance, checkoutInstanceToken } from './shared.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
 afterEach(() => { vi.restoreAllMocks(); });
@@ -192,5 +192,12 @@ describe('ORB-2171 - the stdio proxy shares the checkout token with the CLI and 
     expect(checkoutInstanceToken({ ORBOTO_AGENT_SESSION: '  lane-7  ' }, 'host', '/repo')).toBe('lane-7');
     expect(checkoutInstanceToken({}, 'build-host', '/srv/checkout')).toBe('agent-e0b18afc9cec');
     expect(checkoutInstanceToken({}, 'build-host', '/srv/other')).not.toBe('agent-e0b18afc9cec');
+  });
+});
+
+describe('mcpProcessInstance', () => {
+  it('is the checkout token this process derived at start', () => {
+    expect(mcpProcessInstance()).toBe(checkoutInstanceToken());
+    expect(mcpProcessInstance().length).toBeGreaterThan(0);
   });
 });

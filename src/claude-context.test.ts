@@ -6,7 +6,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { readClaudeContext } from './claude-context.js';
+import { claudeContextDir, readClaudeContext } from './claude-context.js';
 
 let root: string;
 
@@ -42,5 +42,11 @@ describe('ORB-2149 - claude statusline context reports', () => {
 
   it('reports nothing when the directory does not exist', () => {
     expect(readClaudeContext('/work/repo', Date.now(), path.join(root, 'missing'))).toBeNull();
+  });
+});
+
+describe('ORB-2149 - the report directory', () => {
+  it('lives under the orboto state directory of the user', () => {
+    expect(claudeContextDir().endsWith(path.join('.orboto', 'claude-context'))).toBe(true);
   });
 });
