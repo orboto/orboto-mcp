@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { CHANNEL_CAPABILITY, CHANNEL_INSTRUCTIONS, CHANNEL_METHOD, InboxChannel, digestMinutesFromEnv, isImmediate, renderEvent, type InboxMessage } from './inbox-channel.js';
+import { CHANNEL_CAPABILITY, CHANNEL_INSTRUCTIONS, CHANNEL_METHOD, CLI_OUTDATED_NOTICE, InboxChannel, cliOutdatedNotice, digestMinutesFromEnv, isImmediate, renderEvent, type InboxMessage } from './inbox-channel.js';
 import { buildOrbotoMcpServer } from './server.js';
 
 function mockMcp() {
@@ -124,6 +124,26 @@ describe('InboxChannel', () => {
     await vi.advanceTimersByTimeAsync(2_000);
     await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2));
     expect(String(fetchFn.mock.calls[1][0])).toContain('since=m1');
+    channel.close();
+  });
+
+  it('ORB-2175 - the stale-CLI finding from `mcp serve` becomes one cli_outdated notice on connect', async () => {
+    expect(cliOutdatedNotice(undefined)).toBe('');
+    expect(cliOutdatedNotice('   ')).toBe('');
+    const finding = 'CLI 0.200.0 is older than the instance 0.201.0 - run `orboto self-update` and restart this session';
+    const content = cliOutdatedNotice(finding);
+    expect(content).toContain(finding);
+    expect(content).toContain('two instance tokens');
+
+    const { mcp, notification } = mockMcp();
+    const fetchFn = vi.fn().mockImplementation(() => new Promise(() => { /* hold */ }));
+    const channel = new InboxChannel({ baseUrl: 'https://x.test', apiKey: 'orb_k', instanceToken: 'mcp-proc', mcp, fetchFn, log: () => {}, digestMinutes: 0 });
+    await channel.deliverNotice(CLI_OUTDATED_NOTICE, content);
+    expect(notification).toHaveBeenCalledTimes(1);
+    const sent = notification.mock.calls[0][0] as { params: { content: string; meta: Record<string, string> } };
+    expect(sent.params.meta).toEqual({ kind: 'notice', notice: 'cli_outdated' });
+    expect(sent.params.content).toBe(content);
+    expect(channel.stats).toMatchObject({ notices: 1, delivered: 0 });
     channel.close();
   });
 });

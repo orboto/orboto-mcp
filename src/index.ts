@@ -63,11 +63,13 @@ async function main() {
     const stdio = new StdioServerTransport();
     await server.connect(stdio);
     if (channel) {
-      const { InboxChannel, digestMinutesFromEnv } = await import('./inbox-channel.js');
+      const { InboxChannel, digestMinutesFromEnv, cliOutdatedNotice, CLI_OUTDATED_NOTICE } = await import('./inbox-channel.js');
       const { mcpProcessInstance } = await import('./tools/shared.js');
       const instanceToken = mcpProcessInstance();
       const inbox = new InboxChannel({ ...clientConfig, instanceToken, mcp: server, digestMinutes: digestMinutesFromEnv(process.env.ORBOTO_MCP_CHANNEL_DIGEST_MINUTES) });
       inbox.start();
+      const outdated = cliOutdatedNotice(process.env.ORBOTO_MCP_CLI_OUTDATED);
+      if (outdated) void inbox.deliverNotice(CLI_OUTDATED_NOTICE, outdated);
       const { readClaudeContext } = await import('./claude-context.js');
       const beat = () => {
         const context = readClaudeContext(process.cwd());

@@ -295,6 +295,20 @@ export class InboxChannel {
   }
 }
 
+/** ORB-2175 - the notice name the stale-CLI finding is delivered under. */
+export const CLI_OUTDATED_NOTICE = 'cli_outdated';
+
+/**
+ * ORB-2175 - `orboto mcp serve` hands its version-skew finding to the proxy in
+ * ORBOTO_MCP_CLI_OUTDATED; the channel says it once on connect, because a CLI
+ * older than the instance leaves this session under a second identity.
+ */
+export function cliOutdatedNotice(raw: string | undefined): string {
+  const finding = (raw ?? '').trim();
+  if (!finding) return '';
+  return `${finding}. Until then this checkout runs under two instance tokens, so this session is woken by its own edits.`;
+}
+
 /** ORB-2140 - the digest window from the environment; NaN or negative fall back to the default. */
 export function digestMinutesFromEnv(raw: string | undefined): number {
   if (raw === undefined || raw.trim() === '') return DEFAULT_DIGEST_MINUTES;
