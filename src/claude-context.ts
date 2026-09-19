@@ -13,10 +13,13 @@ export const CLAUDE_CONTEXT_MAX_AGE_MS = 10 * 60_000;
 export interface ClaudeContextReport {
   contextTokens: number;
   contextWindowSize?: number;
+  /** ORB-2181 - the Claude Code session id the restart request file is keyed by. */
+  sessionId?: string;
 }
 
 interface ContextFile {
   cwd?: unknown;
+  sessionId?: unknown;
   contextTokens?: unknown;
   contextWindowSize?: unknown;
   updatedAt?: unknown;
@@ -51,6 +54,7 @@ export function readClaudeContext(dir: string, now = Date.now(), root = claudeCo
       ...(typeof parsed.contextWindowSize === 'number' && Number.isFinite(parsed.contextWindowSize)
         ? { contextWindowSize: Math.max(0, Math.round(parsed.contextWindowSize)) }
         : {}),
+      ...(typeof parsed.sessionId === 'string' && parsed.sessionId ? { sessionId: parsed.sessionId } : {}),
     });
   }
   return fresh.length === 1 ? fresh[0] : null;

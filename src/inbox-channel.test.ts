@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { CHANNEL_CAPABILITY, CHANNEL_INSTRUCTIONS, CHANNEL_METHOD, CLI_OUTDATED_NOTICE, InboxChannel, cliOutdatedNotice, digestMinutesFromEnv, isImmediate, renderEvent, type InboxMessage } from './inbox-channel.js';
+import { CHANNEL_CAPABILITY, CHANNEL_INSTRUCTIONS, CHANNEL_METHOD, CLI_OUTDATED_NOTICE, InboxChannel, RESTART_REQUESTED_NOTICE, cliOutdatedNotice, digestMinutesFromEnv, isImmediate, renderEvent, type InboxMessage } from './inbox-channel.js';
 import { buildOrbotoMcpServer } from './server.js';
 
 function mockMcp() {
@@ -124,6 +124,31 @@ describe('InboxChannel', () => {
     await vi.advanceTimersByTimeAsync(2_000);
     await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2));
     expect(String(fetchFn.mock.calls[1][0])).toContain('since=m1');
+    channel.close();
+  });
+
+  it('ORB-2181 - a restart_requested notice becomes the supervisor request file and says so', async () => {
+    const { mcp, notification } = mockMcp();
+    const writeRestart = vi.fn().mockReturnValue({ written: true, sessionId: 'sess-1', path: '/home/a/.orboto/claude/sess-1/restart.json', detail: 'ok' });
+    const fetchFn = vi.fn().mockImplementation(() => new Promise(() => { /* hold */ }));
+    const channel = new InboxChannel({ baseUrl: 'https://x.test', apiKey: 'orb_k', instanceToken: 'mcp-proc', mcp, fetchFn, log: () => {}, digestMinutes: 0, writeRestart });
+    await channel.deliverNotice(RESTART_REQUESTED_NOTICE, 'the CLI was updated');
+    expect(writeRestart).toHaveBeenCalledWith(process.cwd(), { reason: 'the CLI was updated', source: 'channel' });
+    const sent = notification.mock.calls[0][0] as { params: { content: string; meta: Record<string, string> } };
+    expect(sent.params.meta).toEqual({ kind: 'notice', notice: 'restart_requested' });
+    expect(sent.params.content).toContain('resumes the same conversation');
+    expect(channel.stats).toMatchObject({ notices: 1, delivered: 0 });
+    channel.close();
+  });
+
+  it('ORB-2181 - a restart_requested notice that cannot be written says why instead of pretending', async () => {
+    const { mcp, notification } = mockMcp();
+    const writeRestart = vi.fn().mockReturnValue({ written: false, sessionId: null, path: null, detail: 'no status line report' });
+    const fetchFn = vi.fn().mockImplementation(() => new Promise(() => { /* hold */ }));
+    const channel = new InboxChannel({ baseUrl: 'https://x.test', apiKey: 'orb_k', instanceToken: 'mcp-proc', mcp, fetchFn, log: () => {}, digestMinutes: 0, writeRestart });
+    await channel.deliverNotice(RESTART_REQUESTED_NOTICE, 'rotated key');
+    const sent = notification.mock.calls[0][0] as { params: { content: string } };
+    expect(sent.params.content).toContain('no status line report');
     channel.close();
   });
 

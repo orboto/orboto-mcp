@@ -5,6 +5,9 @@
  * `orboto_agent_notify`, acks through `orboto_messages`.
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { RESTART_REQUESTED_NOTICE, writeRestartRequest } from './session-restart.js';
+
+export { RESTART_REQUESTED_NOTICE };
 
 interface TokenProviderLike { getAccessToken(): Promise<string> }
 
@@ -48,6 +51,8 @@ export interface InboxChannelOpts {
   now?: () => number;
   /** Replay start; defaults to the moment the channel is created. */
   since?: string;
+  /** ORB-2181 - seam for the restart request file the `restart_requested` notice writes. */
+  writeRestart?: typeof writeRestartRequest;
 }
 
 export interface ChannelEvent { content: string; meta: Record<string, string> }
@@ -207,7 +212,23 @@ export class InboxChannel {
   async deliverNotice(notice: string, content: string): Promise<void> {
     if (!content) return;
     this.stats.notices += 1;
+    if (notice === RESTART_REQUESTED_NOTICE) {
+      await this.emit({ content: this.takeRestartRequest(content), meta: { kind: 'notice', notice } });
+      return;
+    }
     await this.emit({ content, meta: { kind: 'notice', notice } });
+  }
+
+  /** ORB-2181 - an admin restart notice becomes the supervisor's request file. */
+  private takeRestartRequest(reason: string): string {
+    try {
+      const result = (this.opts.writeRestart ?? writeRestartRequest)(process.cwd(), { reason, source: 'channel' });
+      return result.written
+        ? `restart requested by the operator (${reason}) - the orboto claude supervisor restarts this session as soon as this turn ends and resumes the same conversation; Claude Code asks for the development-channel confirmation in that terminal.`
+        : `restart requested by the operator (${reason}), but nothing could be written: ${result.detail}. Run \`orboto claude --restart --reason "${reason}"\` in this session's terminal instead.`;
+    } catch (err) {
+      return `restart requested by the operator (${reason}), but the request file could not be written: ${(err as Error).message}`;
+    }
   }
 
   async flushDigest(): Promise<void> {
@@ -306,7 +327,8 @@ export const CLI_OUTDATED_NOTICE = 'cli_outdated';
 export function cliOutdatedNotice(raw: string | undefined): string {
   const finding = (raw ?? '').trim();
   if (!finding) return '';
-  return `${finding}. Until then this checkout runs under two instance tokens, so this session is woken by its own edits.`;
+  return `${finding}. Until then this checkout runs under two instance tokens, so this session is woken by its own edits. `
+    + 'Fix it yourself: run `orboto self-update`, then `orboto claude --restart --reason "CLI updated"` - the supervisor restarts this session on the same conversation as soon as your turn ends.';
 }
 
 /** ORB-2140 - the digest window from the environment; NaN or negative fall back to the default. */

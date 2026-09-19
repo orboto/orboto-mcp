@@ -47,6 +47,10 @@ export const AgentInventoryEntrySchema = z.object({
     wrongWakeContextTokens: z.number().int(),
     backlogSeen: z.number().int(),
   }),
+  /** ORB-2181 - a restart was requested for this session and its supervisor has not reconnected yet. */
+  restartPending: z.boolean(),
+  /** ORB-2181 - the reason the requester gave; null when nothing is pending. */
+  restartReason: z.string().nullable(),
   lastSeenAt: z.string(),
   createdAt: z.string(),
 });
