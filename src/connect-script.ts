@@ -10,7 +10,7 @@ export const CONNECT_SCRIPT_HEADING = 'If you are an AI agent helping a person s
 export const CONNECT_SCRIPT_STEPS = [
   'Work one step per message: say in one sentence what the step does and why, run it, show the result, and only then move on.',
   'Run every step you can run yourself - `orboto connect --yes` checks Node and Claude Code, writes the `orboto` server entry for this directory and prints the exact start command with the standing arguments.',
-  'Hand the person only the steps that need a human: the browser login, quitting and restarting the session with that command, confirming the servers from `.mcp.json` and the local-development prompt, and, on a Team or Enterprise plan, the one Owner switch that allows channels.',
+  'Hand the person only the steps that need a human: the browser login, the two `/plugin` commands that install the orboto plugin (a CLI cannot type into a running session), quitting and restarting the session with that command, confirming the servers from `.mcp.json` and, in the development form, the local-development prompt, and, on a Team or Enterprise plan, the one Owner switch that allows channels and lists the plugin.',
   'Give every command the person runs verbatim in its own code block, never paraphrased and never merged into prose.',
   'Verify before you continue: `orboto whoami` for the identity, `orboto mcp status` for the entry of this directory, `orboto connect --verify` for the channel.',
   'Never paste a reference page into the chat - link it and keep the message to the step you are on.',
