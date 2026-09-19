@@ -334,7 +334,7 @@ export const createDocToolConfig = {
   inputSchema: z.object({
     spaceId: z.string().min(1).describe('Target doc space - key (e.g. ORB-S1), name, or UUID. Discover via orboto_list_doc_spaces.'),
     title: z.string().min(1).max(255),
-    content: z.string().optional().describe('Markdown body. Pass an empty string or omit for a blank page.'),
+    content: z.string().optional().describe('Markdown body (CommonMark + GFM). Pass an empty string or omit for a blank page. Images are inline elements; status pills use `:badge[LABEL]{tone=success}` (neutral/info/success/warning/danger/accent, unknown reads as neutral, label <= 24 chars).'),
     parentDocId: z.string().uuid().nullable().optional().describe('Nest under another doc.'),
     visibility: z.enum(['public', 'workspace', 'members', 'specific']).optional().describe('Defaults to "workspace".'),
     icon: z.string().nullish().describe('Single emoji shown in the tree.'),
@@ -376,7 +376,7 @@ export const updateDocToolConfig = {
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     title: z.string().min(1).max(255).optional(),
-    content: z.string().optional().describe('Markdown body. Send the full new content; the API replaces, not appends.'),
+    content: z.string().optional().describe('Markdown body (CommonMark + GFM). Send the full new content; the API replaces, not appends. Images are inline elements; status pills use `:badge[LABEL]{tone=success}` (neutral/info/success/warning/danger/accent, unknown reads as neutral, label <= 24 chars).'),
     parentDocId: z.string().uuid().nullable().optional(),
     visibility: z.enum(['public', 'workspace', 'members', 'specific']).optional(),
     icon: z.string().nullish(),
