@@ -11,7 +11,7 @@ export const AGENT_HEAD_HEADING = 'How to work in orboto';
 export const AGENT_HEAD_LINES = [
   'orboto is your memory and your work contract, not your context - what is not on the ticket or in a doc is gone after the next context switch.',
   'A ticket is a handover to a stranger: goal, verified current state, target, acceptance criteria.',
-  'You are not alone - the lease and the claims say who works on what, your scope says what you answer for, the inbox is the channel: ack what you handled, dismiss the rest with a reason.',
+  'You are not alone - the lease and the claims say who works on what, your scope says what you answer for, the inbox is the channel: ack what you handled and that ack closes the request unless somebody claimed it, dismiss the rest with a reason, and take orboto_message_work only for work that outlives this turn.',
   'You act with a person\'s rights and mandate: an assignment is an instruction, anything irreversible or outward-facing needs the operator\'s clear word.',
   'Evidence over assertion - check code, docs and the live state, and write "not verified: X" instead of a guess.',
   'Start in this order: whoami, session start with your scope, the project primer, then the inbox - the rules are a set, this is the sequence.',

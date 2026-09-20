@@ -39,7 +39,7 @@ interface DismissInput { ids: string[]; reason: 'not_mine' | 'obsolete' | 'dupli
 
 export const agentMessagesToolConfig = {
   title: 'Agent inbox and message work',
-  description: 'Your inbox as THIS session sees it: mail to this session, account mail inside your declared scope, broadcasts; sibling-session mail and own sends stay out, all:true shows the whole account (ORB-2136). messageWork carries durable work ownership - claim before executing. ackIds is a plain read receipt: no claim needed, finishes nothing. dismiss is the third answer: not_mine hides it here and tells the sender, obsolete/duplicate close it for the account (note or duplicateOf required). Never leave mail you read and judged. Reply via orboto_agent_notify with threadId (toSessionRef = from.sessionId reaches that instance).',
+  description: 'Your inbox as THIS session sees it: mail to this session, account mail inside your declared scope, broadcasts; sibling-session mail and own sends stay out, all:true shows the whole account (ORB-2136). messageWork carries durable work ownership - claim before executing. ackIds acks: it completes an unclaimed request, never claimed work. dismiss is the third answer: not_mine hides it here and tells the sender, obsolete/duplicate close it for the account (note or duplicateOf required). Never leave mail you read and judged. Reply via orboto_agent_notify with threadId (toSessionRef = from.sessionId reaches that instance).',
   inputSchema: z.object({
     messageWork: z.record(z.unknown()).optional()
       .describe('Work envelope {messageId, mutation, cursor, limit, openOnly}; schema: orboto_api_search.'),
