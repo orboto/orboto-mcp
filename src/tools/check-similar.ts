@@ -27,7 +27,7 @@ interface SimilarResponse {
 export const checkSimilarToolConfig = {
   title: 'Check for similar tickets before creating',
   description:
-    'Run the duplicate-detection pipeline (tsvector + AI-embedding rerank when configured) against a proposed title + description, without creating anything. Returns up to `limit` candidates ranked by similarity. Use this BEFORE `orboto_create_ticket` when you want to confirm a feature is not already tracked - if a high-similarity candidate exists, prefer to comment on / claim / extend it instead of opening a new ticket. Empty result = safe to create. `orboto_create_ticket` runs the same check after the fact and surfaces `similarWarnings` in its response, so this tool is optional but cheaper than a create-then-close round trip. An empty result from a LONG, solution-framed title is weak evidence - detection ranks by term co-occurrence, so also probe with a single distinctive STABLE token (file/component/error-string fragment) and the SYMPTOM wording, not just your intended fix.',
+    'Run the duplicate-detection pipeline (tsvector + AI-embedding rerank when configured) against a proposed title + description, without creating anything. Returns up to `limit` candidates ranked by similarity. Use this BEFORE `orboto_create_ticket` when you want to confirm a feature is not already tracked - if a high-similarity candidate exists, prefer to comment on / claim / extend it instead of opening a new ticket. Empty result = safe to create. `orboto_create_ticket` runs the same check after the fact and surfaces `similarWarnings` in its response, so this tool is optional but cheaper than a create-then-close round trip. Only an AI-embedding candidate carries an absolute similarity; a full-text candidate prints as "text match" without a percentage (its rank is relative, so the best text match always scores 1.000) and can never trigger the hard duplicate-block, and neither can a match against a CLOSED ticket (ORB-2185). An empty result from a LONG, solution-framed title is weak evidence - detection ranks by term co-occurrence, so also probe with a single distinctive STABLE token (file/component/error-string fragment) and the SYMPTOM wording, not just your intended fix.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
     title: z.string().min(1).describe('Proposed ticket title.'),
@@ -65,12 +65,13 @@ export function makeCheckSimilarHandler(client: OrbotoClient) {
 
     const realDuplicates = result.candidates.filter((c) => !c.relation);
     const related = result.candidates.filter((c) => c.relation);
+    const strong = realDuplicates.find((c) => c.matchMode === 'embedding' && c.similarity >= 0.9);
     const recommendation = realDuplicates.length === 0
       ? (related.length === 0
           ? 'No similar tickets found - safe to create.'
           : 'Only related context found (parent/sibling/epic) - safe to create; link them instead of treating as duplicates.')
-      : (realDuplicates[0]!.similarity >= 0.9)
-        ? `HIGH-SIMILARITY MATCH FOUND - review [${realDuplicates[0]!.ticketKey ?? realDuplicates[0]!.id.slice(0, 8)}] "${realDuplicates[0]!.title}" before creating; this may already be tracked.`
+      : strong
+        ? `HIGH-SIMILARITY MATCH FOUND - review [${strong.ticketKey ?? strong.id.slice(0, 8)}] "${strong.title}" before creating; this may already be tracked.`
         : 'Possible related tickets - review the list and decide whether the new ticket adds distinct scope.';
 
     const text = result.candidates.length === 0
@@ -79,11 +80,11 @@ export function makeCheckSimilarHandler(client: OrbotoClient) {
           recommendation,
           `Found ${result.candidates.length} candidate(s) via ${result.mode === 'embedding' ? 'AI embedding rerank' : 'tsvector search'}:`,
           ...result.candidates.map((c) => {
-            const pct = `${Math.round(c.similarity * 100)}%`;
+            const score = c.matchMode === 'embedding' ? `${Math.round(c.similarity * 100)}% AI match` : 'text match';
             const status = c.statusName ? ` [${c.statusName}]` : '';
             const key = c.ticketKey ?? c.id.slice(0, 8);
             const rel = c.relation ? ` (related: ${c.relation})` : '';
-            return `  - ${key}${status} (${pct} ${c.matchMode})${rel}: ${c.title}`;
+            return `  - ${key}${status} (${score})${rel}: ${c.title}`;
           }),
         ].join('\n');
 

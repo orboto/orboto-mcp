@@ -49,7 +49,7 @@ export const bulkCreateTicketsToolConfig = {
     failed: z.array(z.object({ index: z.number().int(), title: z.string(), error: z.string() })),
     duplicateFlags: z.array(z.object({
       key: z.string().describe('The new, flagged ticket.'),
-      matches: z.array(z.object({ ticketKey: z.string().nullable(), similarity: z.number() })),
+      matches: z.array(z.object({ ticketKey: z.string().nullable(), similarity: z.number().nullable() })),
     })),
     languageWarnings: z.number().int().describe('Drafts with a language warning.'),
   }).shape,
@@ -85,7 +85,8 @@ export function makeBulkCreateTicketsHandler(client: OrbotoClient) {
 
     const created: string[] = [];
     const failed: Array<{ index: number; title: string; error: string }> = [];
-    const duplicateFlags: Array<{ key: string; matches: Array<{ ticketKey: string | null; similarity: number }> }> = [];
+    const duplicateFlags: Array<{ key: string; matches: Array<{ ticketKey: string | null; similarity: number | null }> }> = [];
+    let degraded = 0;
     let languageWarnings = 0;
 
     for (let i = 0; i < input.tickets.length; i++) {
@@ -112,17 +113,19 @@ export function makeBulkCreateTicketsHandler(client: OrbotoClient) {
           similarWarnings?: SimilarWarning[];
           languageWarning?: LanguageWarning;
           duplicateCheckDeferred?: boolean;
+          duplicateCheckDegraded?: boolean;
         }>(`/projects/${project.id}/tickets${qs}`, body);
 
         created.push(res.ticketKey ?? res.id);
         if (res.languageWarning) languageWarnings++;
+        if (res.duplicateCheckDegraded) degraded++;
         const warnings = res.similarWarnings ?? [];
         if (warnings.length > 0) {
           duplicateFlags.push({
             key: res.ticketKey ?? res.id,
             matches: warnings.slice(0, 3).map((w) => ({
               ticketKey: w.ticketKey,
-              similarity: Math.round(w.similarity * 100) / 100,
+              similarity: w.matchMode === 'embedding' ? Math.round(w.similarity * 100) / 100 : null,
             })),
           });
         }
@@ -139,13 +142,16 @@ export function makeBulkCreateTicketsHandler(client: OrbotoClient) {
     ];
     if (created.length > 0) lines.push(`Created: ${created.join(', ')}`);
     for (const f of duplicateFlags) {
-      lines.push(`⚠ ${f.key} may duplicate ${f.matches.map((m) => `${m.ticketKey ?? '?'} (${m.similarity})`).join(', ')} - review before treating as new work.`);
+      lines.push(`⚠ ${f.key} may duplicate ${f.matches.map((m) => `${m.ticketKey ?? '?'} (${m.similarity === null ? 'text match' : m.similarity})`).join(', ')} - review before treating as new work.`);
     }
     for (const f of failed) {
       lines.push(`✗ draft ${f.index} "${f.title}": ${f.error}`);
     }
     if (languageWarnings > 0) {
       lines.push(`⚠ ${languageWarnings} draft(s) in a non-workspace language - consider rewriting for search/duplicate consistency.`);
+    }
+    if (degraded > 0) {
+      lines.push(`ℹ ${degraded} draft(s) ran a degraded duplicate-check - the block is on but only full-text candidates were found, whose rank is relative, so nothing was compared with the threshold.`);
     }
 
     return {

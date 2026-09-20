@@ -136,17 +136,34 @@ describe('orboto_create_ticket', () => {
     expect(text).toContain('ACME-42');
     expect(text).toContain('91% AI match');
     expect(text).toContain('ACME-13');
+    expect(text).toContain('Done, text match');
+    expect(text).not.toContain('72%');
     const sc = res.structuredContent as { similarWarnings: Record<string, unknown>[]; createdTicketKey: string };
     expect(sc.similarWarnings).toHaveLength(2);
     expect(sc.createdTicketKey).toBe('ACME-99');
     expect(sc.similarWarnings.map((w) => w.ticketKey)).not.toContain(sc.createdTicketKey);
     for (const w of sc.similarWarnings) {
-      expect(Object.keys(w).sort()).toEqual(['relation', 'similarity', 'statusCategory', 'ticketKey', 'title']);
+      expect(Object.keys(w).sort()).toEqual(['matchMode', 'relation', 'similarity', 'statusCategory', 'ticketKey', 'title']);
     }
     expect(sc.similarWarnings[0]).toEqual({
       ticketKey: 'ACME-42', title: 'Authentication breaks for SAML',
-      statusCategory: 'in_progress', similarity: 0.91, relation: null,
+      statusCategory: 'in_progress', similarity: 0.91, matchMode: 'embedding', relation: null,
     });
+    expect(sc.similarWarnings[1]).toEqual({
+      ticketKey: 'ACME-13', title: 'Auth flow regressed',
+      statusCategory: 'done', similarity: null, matchMode: 'tsvector', relation: null,
+    });
+  });
+
+  it('a degraded duplicate-check is surfaced on the created ticket (ORB-2185)', async () => {
+    stub([
+      { json: PROJ },
+      { json: { ...TICKET, ticketKey: 'ACME-101', duplicateCheckDegraded: true, similarWarnings: [] } },
+    ]);
+    const res = await makeCreateTicketHandler(client)({ projectKey: 'ACME', title: 'degraded check' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Duplicate-check degraded');
+    expect((res.structuredContent as { duplicateCheckDegraded?: boolean }).duplicateCheckDegraded).toBe(true);
   });
 
   it('returns no warning block when similarWarnings is empty', async () => {
@@ -260,8 +277,10 @@ describe('orboto_create_ticket', () => {
       errorKey: 'errors.tickets.duplicate_blocked',
       threshold: 0.9,
       topSimilarity: 0.98,
+      decidingMode: 'embedding',
+      decidingTicketKey: 'ACME-7',
       similarWarnings: [
-        { id: 't1', ticketKey: 'ACME-7', title: 'Webhook signature mismatch', statusName: 'To Do', statusColor: null, statusCategory: 'todo', similarity: 0.98, matchMode: 'tsvector' },
+        { id: 't1', ticketKey: 'ACME-7', title: 'Webhook signature mismatch', statusName: 'To Do', statusColor: null, statusCategory: 'todo', similarity: 0.98, matchMode: 'embedding' },
       ],
     });
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
@@ -277,8 +296,11 @@ describe('orboto_create_ticket', () => {
     expect(text).toContain('BLOCKED');
     expect(text).toContain('ACME-7');
     expect(text).toContain('allowDuplicate: true');
-    const sc = res.structuredContent as { duplicateBlocked: boolean; similarWarnings: unknown[] };
+    expect(text).toContain('decided by ACME-7, AI embedding match on an OPEN ticket');
+    const sc = res.structuredContent as { duplicateBlocked: boolean; decidingMode: string; decidingTicketKey: string; similarWarnings: unknown[] };
     expect(sc.duplicateBlocked).toBe(true);
+    expect(sc.decidingMode).toBe('embedding');
+    expect(sc.decidingTicketKey).toBe('ACME-7');
     expect(sc.similarWarnings).toHaveLength(1);
   });
 
