@@ -14,6 +14,8 @@ interface UserRow {
   isBot: boolean;
   createdAt: string;
   lastSeenAt?: string | null;
+  provisionedByPlatform?: boolean;
+  purpose?: string | null;
 }
 
 interface AuditEntry {
@@ -87,7 +89,9 @@ export function makeListUsersHandler(client: OrbotoClient) {
         if (u.isBot) tags.push('bot');
         if (u.isExternal) tags.push('external');
         if (!u.isActive) tags.push('disabled');
-        return `- ${u.fullName} <${u.email}>${tags.length ? ` [${tags.join(', ')}]` : ''}`;
+        if (u.provisionedByPlatform) tags.push('provisioned by the platform');
+        const purpose = u.provisionedByPlatform && u.purpose ? ` - ${u.purpose}` : '';
+        return `- ${u.fullName} <${u.email}>${tags.length ? ` [${tags.join(', ')}]` : ''}${purpose}`;
       }).join('\n');
 
     return {
@@ -102,6 +106,8 @@ export function makeListUsersHandler(client: OrbotoClient) {
           isExternal: u.isExternal,
           isBot: u.isBot,
           lastSeenAt: u.lastSeenAt ?? null,
+          provisionedByPlatform: u.provisionedByPlatform ?? false,
+          purpose: u.purpose ?? null,
         })),
       },
     };
