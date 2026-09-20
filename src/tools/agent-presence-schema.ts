@@ -51,6 +51,8 @@ export const AgentInventoryEntrySchema = z.object({
   restartPending: z.boolean(),
   /** ORB-2181 - the reason the requester gave; null when nothing is pending. */
   restartReason: z.string().nullable(),
+  /** ORB-2189 - the answering instance holds this session's live wake channel, so a restart request can reach it. */
+  restartable: z.boolean(),
   lastSeenAt: z.string(),
   createdAt: z.string(),
 });
