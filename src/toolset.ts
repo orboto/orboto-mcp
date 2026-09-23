@@ -5,7 +5,26 @@
  * @see ORB-1805
  */
 
-export type Toolset = 'minimal' | 'curated' | 'full';
+export type Toolset = 'channel' | 'minimal' | 'curated' | 'full';
+
+/** ORB-2210 - no tools: the agent works through the orboto CLI, the server carries the wake channel. */
+export const CHANNEL_TOOLSET_INSTRUCTIONS = [
+  'orboto is a ticket and project management system; ticket keys look like `PROJ-123`.',
+  'This server carries no tools. Work through the orboto CLI in the shell: `orboto help` lists the commands,',
+  '`orboto session-start` prints the binding workspace rules and your in-progress work (run it first and after a context compaction),',
+  'and `orboto agent-heartbeat --role <role> --scope-projects <KEY,KEY>` declares what this session is responsible for.',
+  'Always: claim or create a ticket before touching code, one commit per ticket with the key in the subject, never mark work done that is not done.',
+  'MCP tools come back on request: `?toolset=curated|full` (HTTP) or ORBOTO_MCP_TOOLSET=curated|full (stdio).',
+].join(' ');
+
+/** ORB-2210 - the wake-channel paragraph of the `channel` toolset, in CLI commands instead of tool names. */
+export const CHANNEL_TOOLSET_WAKE_INSTRUCTIONS = [
+  'Wake channel: messages for this session arrive as <channel source="orboto" id="..." kind="..."> events.',
+  'A ticket-ready or a request inside your scope is the operator\'s instruction - act on it.',
+  'Read a cut message with `orboto messages`, reply with `orboto agent-notify <email> <subject> --session <from_session>`,',
+  'acknowledge with `orboto messages --ack <id>` once handled, and dismiss what is not yours with',
+  '`orboto messages --dismiss <id> --reason not-mine|obsolete|duplicate`. Never answer the channel itself.',
+].join(' ');
 
 /**
  * ORB-1805 - the small-context tier.
@@ -81,13 +100,15 @@ export function resolveToolset(
     v === 'full' ? 'full'
       : v === 'curated' ? 'curated'
         : v === 'minimal' ? 'minimal'
-          : null;
+          : v === 'channel' ? 'channel'
+            : null;
   return parse(explicit) ?? parse(envValue) ?? 'curated';
 }
 
 /** Whether a tool registers under the given toolset. */
 export function toolInToolset(toolName: string, toolset: Toolset): boolean {
   if (toolset === 'full') return true;
+  if (toolset === 'channel') return false;
   if (toolset === 'minimal') return MINIMAL_TOOLS.has(toolName);
   return CURATED_TOOLS.has(toolName);
 }

@@ -8,7 +8,7 @@ import { OrbotoClient, type OrbotoClientConfig } from './orboto-client.js';
 import { registerOrbotoResources } from './resources.js';
 import { registerOrbotoPrompts } from './prompts.js';
 import { registerWithMetrics } from './with-metrics.js';
-import { resolveToolset, toolInToolset, type Toolset } from './toolset.js';
+import { CHANNEL_TOOLSET_INSTRUCTIONS, CHANNEL_TOOLSET_WAKE_INSTRUCTIONS, resolveToolset, toolInToolset, type Toolset } from './toolset.js';
 import { createNudgeState } from './session-nudge.js';
 import { aiStatusToolConfig, makeAiStatusHandler } from './tools/ai-status.js';
 import { draftCustomerReplyToolConfig, makeDraftCustomerReplyHandler } from './tools/customer-draft.js';
@@ -350,16 +350,18 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   const toolset = resolveToolset(opts.toolset, process.env.ORBOTO_MCP_TOOLSET);
 
   let workingRules = FALLBACK_WORKING_RULES;
-  let requireSessionStart = true;
-  try {
-    const connectParams = new URLSearchParams();
-    applyAgentProfile(connectParams);
-    const connectQs = connectParams.toString();
-    const res = await loadRequiredRules(client, `/agent-instructions${connectQs ? `?${connectQs}` : ''}`);
-    if (res?.instructions?.trim()) workingRules = res.instructions.trim();
-    requireSessionStart = res.requireSessionStart ?? true;
-  } catch {
-    workingRules = 'Workspace rules are unavailable. Built-in hints are not a substitute. Call orboto_session_start with forceRules and retry after connectivity or authentication recovers.';
+  let requireSessionStart = toolset !== 'channel';
+  if (toolset !== 'channel') {
+    try {
+      const connectParams = new URLSearchParams();
+      applyAgentProfile(connectParams);
+      const connectQs = connectParams.toString();
+      const res = await loadRequiredRules(client, `/agent-instructions${connectQs ? `?${connectQs}` : ''}`);
+      if (res?.instructions?.trim()) workingRules = res.instructions.trim();
+      requireSessionStart = res.requireSessionStart ?? true;
+    } catch {
+      workingRules = 'Workspace rules are unavailable. Built-in hints are not a substitute. Call orboto_session_start with forceRules and retry after connectivity or authentication recovers.';
+    }
   }
 
   const channelHint = opts.channel ? [CHANNEL_INSTRUCTIONS] : [];
@@ -367,10 +369,12 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
     { name: 'orboto', version: VERSION },
     {
       capabilities: {
-        resources: { subscribe: true, listChanged: true },
+        ...(toolset === 'channel' ? {} : { resources: { subscribe: true, listChanged: true } }),
         ...(opts.channel ? { experimental: { [CHANNEL_CAPABILITY]: {} } } : {}),
       },
-      instructions: toolset === 'minimal'
+      instructions: toolset === 'channel'
+        ? [CHANNEL_TOOLSET_INSTRUCTIONS, ...(opts.channel ? [CHANNEL_TOOLSET_WAKE_INSTRUCTIONS] : [])].join('\n\n')
+        : toolset === 'minimal'
         ? [
           staticMcpHints(toolset),
           'FIRST ACTION: call `orboto_session_start` - it returns the binding workspace rules plus your in-progress work. Re-run it after any context compaction. Non-negotiables: claim or create a ticket before touching code, one commit per ticket with the ticket key in the subject, push after each commit, never mark work done that is not done.',
@@ -592,6 +596,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_admin_agent_drift_list', listAgentDriftToolConfig, makeListAgentDriftHandler(client));
   reg('orboto_admin_agent_drift_resolve', resolveAgentDriftToolConfig, makeResolveAgentDriftHandler(client));
 
+  if (toolset === 'channel') return server;
   registerOrbotoResources(server, client);
   registerOrbotoPrompts(server);
 

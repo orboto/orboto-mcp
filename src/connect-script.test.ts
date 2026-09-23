@@ -10,7 +10,7 @@ import { makeHelpHandler } from './tools/help.js';
 
 const read = (relative: string) => readFileSync(new URL(`../../../${relative}`, import.meta.url), 'utf8');
 
-const CARRIERS = ['docs/connect-your-agent.md', 'docs/claude-code.md', 'skills/orboto/SKILL.md'];
+const CARRIERS = ['docs/connect-your-agent.md', 'docs/claude-code.md', 'skills/orboto/reference/agents.md'];
 
 describe('the connect script', () => {
   it('reads as a numbered script with the pages it links', () => {

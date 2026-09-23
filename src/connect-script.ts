@@ -1,7 +1,7 @@
 /**
  * ORB-2157 - the one source of the script an agent follows when a person
  * asks it to set orboto up. `orboto_help { topic: "connect" }` returns it,
- * docs/connect-your-agent.md, docs/claude-code.md and skills/orboto/SKILL.md
+ * docs/connect-your-agent.md, docs/claude-code.md and skills/orboto/reference/agents.md
  * carry the same sentences, and connect-script.test.ts holds them together.
  */
 

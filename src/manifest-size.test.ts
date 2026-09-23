@@ -179,3 +179,35 @@ describe('ORB-1805 - minimal manifest fits a small context window', () => {
     expect(curated.instructionsChars).toBeGreaterThan(loaded.instructionsChars);
   });
 });
+
+/**
+ * ORB-2210 - the `channel` tier registers no tool, so its whole per-turn
+ * cost is the instructions block; 400 tokens is the ceiling the ticket set.
+ */
+const CHANNEL_MAX_TOKENS = 400;
+
+async function channelInstructions(channel: boolean): Promise<{ tools: number; instructionsChars: number }> {
+  const server = await buildOrbotoMcpServer({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test', toolset: 'channel', channel });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: 'manifest-measure', version: '0.0.0' });
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+  try {
+    const tools = client.getServerCapabilities()?.tools ? (await client.listTools()).tools.length : 0;
+    return { tools, instructionsChars: (client.getInstructions() ?? '').length };
+  } finally {
+    await client.close();
+    await server.close();
+  }
+}
+
+describe('ORB-2210 - the channel manifest costs only its instructions', () => {
+  it('channel: zero tools, instructions with the wake paragraph stay under 400 estimated tokens', async () => {
+    const withWake = await channelInstructions(true);
+    const bare = await channelInstructions(false);
+    process.stdout.write(`[manifest-size] channel: ${withWake.tools} tools, instructions ${withWake.instructionsChars} chars (~${estTokens(withWake.instructionsChars)} tokens)\n`);
+    expect(withWake.tools).toBe(0);
+    expect(bare.tools).toBe(0);
+    expect(estTokens(withWake.instructionsChars)).toBeLessThanOrEqual(CHANNEL_MAX_TOKENS);
+    expect(bare.instructionsChars).toBeLessThan(withWake.instructionsChars);
+  });
+});
