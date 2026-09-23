@@ -8,6 +8,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { CHANNEL_CAPABILITY, CHANNEL_INSTRUCTIONS, CHANNEL_METHOD, CLI_OUTDATED_NOTICE, InboxChannel, RESTART_REQUESTED_NOTICE, cliOutdatedNotice, digestMinutesFromEnv, isImmediate, renderEvent, type InboxMessage } from './inbox-channel.js';
 import { buildOrbotoMcpServer } from './server.js';
+import { _forgetDeclaredScopes, rememberDeclaredScope, rememberedScope } from './session-scope-memory.js';
 
 function mockMcp() {
   const notification = vi.fn().mockResolvedValue(undefined);
@@ -106,6 +107,55 @@ describe('InboxChannel', () => {
     expect(channel.stats).toMatchObject({ delivered: 2, duplicates: 1 });
     expect(channel.stats.reconnects).toBeGreaterThanOrEqual(1);
     channel.close();
+  });
+
+  it('ORB-2209 - every reconnect sends the same instance token, re-sends the declared scope and applies the session frame without an event', async () => {
+    _forgetDeclaredScopes();
+    rememberDeclaredScope('mcp-proc', { role: 'worker', projectKeys: ['ORB'] });
+    const { mcp, notification } = mockMcp();
+    const frame = (count: number) => ({ session: { id: 'sess-1111', scope: { role: 'worker', projectKeys: ['ORB'] }, resumed: count > 0, scopeRestored: false, reconnects: count, lastReconnectAt: count ? '2026-09-18T10:00:02.000Z' : null } });
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce(sse([frame(0)]))
+      .mockResolvedValueOnce(sse([frame(1)]))
+      .mockImplementation(() => new Promise(() => { /* hold */ }));
+    const channel = new InboxChannel({ baseUrl: 'https://x.test', apiKey: 'orb_k', instanceToken: 'mcp-proc', mcp, fetchFn, log: () => {}, digestMinutes: 0 });
+    channel.start();
+    await vi.waitFor(() => expect(channel.session?.reconnects).toBe(0));
+    await vi.advanceTimersByTimeAsync(2_000);
+    await vi.waitFor(() => expect(channel.session?.reconnects).toBe(1));
+    expect(fetchFn.mock.calls.length).toBeGreaterThanOrEqual(2);
+    for (const [url, init] of fetchFn.mock.calls.slice(0, 2)) {
+      expect(init.headers['x-orboto-agent-session']).toBe('mcp-proc');
+      expect(String(url)).toContain('sessionFrame=1');
+      expect(decodeURIComponent(String(url))).toContain('declaredScope={"role":"worker","projectKeys":["ORB"]}');
+    }
+    expect(channel.session).toMatchObject({ id: 'sess-1111', resumed: true, scope: { projectKeys: ['ORB'] } });
+    expect(notification).not.toHaveBeenCalled();
+    channel.close();
+  });
+
+  it('ORB-2209 - a proxy that never declared a scope, or cleared it, re-sends nothing; a server-confirmed scope replaces the remembered one', async () => {
+    _forgetDeclaredScopes();
+    const { mcp } = mockMcp();
+    const fetchFn = vi.fn().mockImplementation(() => new Promise(() => { /* hold */ }));
+    const quiet = new InboxChannel({ baseUrl: 'https://x.test', apiKey: 'orb_k', instanceToken: 'mcp-never', mcp, fetchFn, log: () => {}, digestMinutes: 0 });
+    quiet.start();
+    await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1));
+    expect(String(fetchFn.mock.calls[0][0])).not.toContain('declaredScope');
+    quiet.close();
+
+    rememberDeclaredScope('mcp-cleared', null);
+    expect(rememberedScope('mcp-cleared')).toBeNull();
+    rememberDeclaredScope('mcp-changed', { projectKeys: ['OLD'] });
+    const changed = new InboxChannel({ baseUrl: 'https://x.test', apiKey: 'orb_k', instanceToken: 'mcp-changed', mcp, fetchFn, log: () => {}, digestMinutes: 0 });
+    changed.applySession({ id: 's', scope: { projectKeys: ['NEW'] }, resumed: true, scopeRestored: false, reconnects: 3, lastReconnectAt: null });
+    expect(rememberedScope('mcp-changed')).toEqual({ projectKeys: ['NEW'] });
+    changed.applySession({ id: 's', scope: null, resumed: true, scopeRestored: false, reconnects: 4, lastReconnectAt: null });
+    expect(rememberedScope('mcp-changed')).toEqual({ projectKeys: ['NEW'] });
+    rememberDeclaredScope('mcp-never-2', null);
+    const other = new InboxChannel({ baseUrl: 'https://x.test', apiKey: 'orb_k', instanceToken: 'mcp-untouched', mcp, fetchFn, log: () => {}, digestMinutes: 0 });
+    other.applySession({ id: 's', scope: { projectKeys: ['SRV'] }, resumed: false, scopeRestored: false, reconnects: 0, lastReconnectAt: null });
+    expect(rememberedScope('mcp-untouched')).toBeNull();
   });
 
   it('ORB-2151 - a server notice becomes its own event and never becomes the replay anchor', async () => {

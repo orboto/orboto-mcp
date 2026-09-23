@@ -5,6 +5,9 @@ const WorkSessionResourceClaimSchema = z.object({
   state: z.enum(['granted', 'waiting']).optional(), requestedAt: z.string().optional(),
 });
 
+/** ORB-2209 - one account reference, shared by `actsAs` and `owner`. */
+const AgentAccountRefSchema = z.object({ id: z.string().uuid(), name: z.string().nullable(), email: z.string() });
+
 export const AgentInventoryKindSchema = z.enum(['agent', 'human']);
 export const AgentConnectionTypeSchema = z.enum(['api_key', 'oauth', 'lane', 'external_token', 'live_events', 'web', 'channel']);
 export const AgentInventoryConnectionSchema = z.object({ type: AgentConnectionTypeSchema, label: z.string() });
@@ -17,8 +20,8 @@ export const AgentInventoryEntrySchema = z.object({
   kind: AgentInventoryKindSchema,
   /** Alias of `kind === 'agent'`. */
   isBot: z.boolean(),
-  actsAs: z.object({ id: z.string().uuid(), name: z.string().nullable(), email: z.string() }).nullable(),
-  owner: z.object({ id: z.string().uuid(), name: z.string().nullable(), email: z.string() }).nullable(),
+  actsAs: AgentAccountRefSchema.nullable(),
+  owner: AgentAccountRefSchema.nullable(),
   autonomyPaused: z.boolean(),
   sessionId: z.string().uuid(),
   status: z.string(),
@@ -53,6 +56,9 @@ export const AgentInventoryEntrySchema = z.object({
   restartReason: z.string().nullable(),
   /** ORB-2189 - the answering instance holds this session's live wake channel, so a restart request can reach it. */
   restartable: z.boolean(),
+  /** ORB-2209 - stream reconnects this row survived; the id and the scope stayed the same. */
+  reconnects: z.number().int(),
+  lastReconnectAt: z.string().nullable(),
   lastSeenAt: z.string(),
   createdAt: z.string(),
 });

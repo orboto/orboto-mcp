@@ -6,6 +6,8 @@
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { RESTART_REQUESTED_NOTICE, writeRestartRequest } from './session-restart.js';
+import { confirmScope, rememberedScope } from './session-scope-memory.js';
+import type { AgentSessionScope } from './tools/agent-session-scope.js';
 
 export { RESTART_REQUESTED_NOTICE };
 
@@ -57,6 +59,16 @@ export interface InboxChannelOpts {
 
 export interface ChannelEvent { content: string; meta: Record<string, string> }
 
+/** ORB-2209 - the `session` frame the stream opens with: the same id and scope on every reconnect. */
+export interface ChannelSession {
+  id: string;
+  scope: AgentSessionScope | null;
+  resumed: boolean;
+  scopeRestored: boolean;
+  reconnects: number;
+  lastReconnectAt: string | null;
+}
+
 /** The instructions paragraph Claude Code delivers on connect when the channel is active. */
 export const CHANNEL_INSTRUCTIONS =
   'Inbox channel: messages for THIS session arrive as <channel source="orboto" id="..." kind="..." ...> events - '
@@ -67,7 +79,8 @@ export const CHANNEL_INSTRUCTIONS =
   + 'not_mine for another session\'s mail (the sender is told, and the message never reaches this session again), obsolete or duplicate with a note when the request is already done. '
   + 'A session that declared no scope is woken by mail addressed to it and by broadcasts only, and gets one notice event saying so on connect: '
   + 'declare the scope with orboto_session_start { scope: { role, projectKeys } } to be woken by the account\'s project mail again - '
-  + 'the rest of the account\'s inbox stays readable with orboto_messages the whole time.';
+  + 'the rest of the account\'s inbox stays readable with orboto_messages the whole time. '
+  + 'Declare it once: the session keeps its id and scope across reconnects and restarts of this terminal.';
 
 const START_FLAG = '--dangerously-load-development-channels server:orboto';
 
@@ -170,6 +183,8 @@ export class InboxChannel {
   private batch: InboxMessage[] = [];
   /** Counters an operator can read from the log; tests read them directly. */
   readonly stats = { delivered: 0, digested: 0, duplicates: 0, reconnects: 0, notices: 0 };
+  /** ORB-2209 - what the server said on the last connect. */
+  session: ChannelSession | null = null;
 
   constructor(opts: InboxChannelOpts) {
     this.opts = opts;
@@ -217,6 +232,13 @@ export class InboxChannel {
       return;
     }
     await this.emit({ content, meta: { kind: 'notice', notice } });
+  }
+
+  /** ORB-2209 - the id and scope the server resumed; never a channel event. */
+  applySession(session: ChannelSession): void {
+    this.session = session;
+    confirmScope(this.opts.instanceToken, session.scope ?? null);
+    this.log(`inbox session ${session.id.slice(0, 8)}${session.resumed ? ` resumed (reconnect ${session.reconnects})` : ''}${session.scopeRestored ? ', scope re-declared' : ''}`);
   }
 
   /** ORB-2181 - an admin restart notice becomes the supervisor's request file. */
@@ -275,7 +297,9 @@ export class InboxChannel {
     const fetchFn = this.opts.fetchFn ?? fetch;
     this.abort = new AbortController();
     const since = this.lastId ?? this.since;
-    const url = `${this.opts.baseUrl.replace(/\/$/, '')}/v1/agent/messages/stream?since=${encodeURIComponent(since)}`;
+    const resent = rememberedScope(this.opts.instanceToken);
+    const url = `${this.opts.baseUrl.replace(/\/$/, '')}/v1/agent/messages/stream?since=${encodeURIComponent(since)}&sessionFrame=1`
+      + (resent ? `&declaredScope=${encodeURIComponent(JSON.stringify(resent))}` : '');
     const bearer = this.opts.tokenProvider ? await this.opts.tokenProvider.getAccessToken() : (this.opts.apiKey ?? '');
     const res = await fetchFn(url, {
       method: 'GET',
@@ -303,8 +327,9 @@ export class InboxChannel {
           buf = buf.slice(idx + 2);
           const line = frame.split('\n').find((l) => l.startsWith('data: '));
           if (!line) continue;
-          let parsed: InboxMessage & { notice?: string; content?: string };
+          let parsed: InboxMessage & { notice?: string; content?: string; session?: ChannelSession };
           try { parsed = JSON.parse(line.slice(6)); } catch { continue; }
+          if (parsed.session) { this.applySession(parsed.session); continue; }
           if (parsed.notice) { await this.deliverNotice(parsed.notice, parsed.content ?? ''); continue; }
           await this.deliver(parsed);
         }

@@ -9,6 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';
 import { makeSessionStartHandler } from './session-start.js';
+import { _forgetDeclaredScopes, rememberedScope } from '../session-scope-memory.js';
 import { CHANNEL_START_COMMANDS, CHANNEL_START_COMMANDS_WITHOUT_CLI } from '../inbox-channel.js';
 import { readFileSync } from 'node:fs';
 import { makeResponseExpandHandler } from './response-expand.js';
@@ -623,6 +624,24 @@ describe('ORB-2136 - session scope and ref', () => {
     expect(text).toContain('toSessionRef: "cbb52195"');
     expect(text).toContain('from spec@orboto.io (spec, s1)');
     expect(res.structuredContent).toMatchObject({ session: { ref: 'mcp-abc123', id: 'cbb52195-0000-4000-8000-000000000000', scope: { role: 'integrator', projectKeys: ['ORB'] } } });
+  });
+
+  it('ORB-2209 - reports the kept scope with its reconnects, and remembers the declaration for the channel', async () => {
+    _forgetDeclaredScopes();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const path = new URL(url.toString()).pathname;
+      const body = path === '/v1/agent/heartbeat'
+        ? { sessionToken: 'x', sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: { role: 'worker', projectKeys: ['ORB'] }, reconnects: 6, lastReconnectAt: '2026-09-21T23:01:22.000Z' }
+        : path === '/agent-instructions' ? { instructions: 'rules here', rulesHash: 'fixture' } : {};
+      return { ok: true, status: 200, statusText: 'OK', json: async () => body, text: async () => '' } as unknown as Response;
+    });
+    const reread = await makeSessionStartHandler(client)({}, { sessionId: 'keep1' });
+    expect((reread.content[0] as { text: string }).text).toContain('stays with this session across reconnects and restarts; declare it again only to change it. It survived 6 reconnect(s), the last at 2026-09-21T23:01:22.000Z.');
+    expect(reread.structuredContent).toMatchObject({ session: { reconnects: 6, reconnectedAt: '2026-09-21T23:01:22.000Z' } });
+    expect(rememberedScope('mcp-keep1')).toBeNull();
+
+    await makeSessionStartHandler(client)({ scope: { role: 'worker', projectKeys: ['orb'] } }, { sessionId: 'keep1' });
+    expect(rememberedScope('mcp-keep1')).toEqual({ role: 'worker', projectKeys: ['ORB'] });
   });
 
   it('without a scope the heartbeat body stays empty and the digest says no scope is declared', async () => {

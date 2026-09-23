@@ -17,6 +17,7 @@ import { PROTECT_TEXT_META, storePayload } from '../response-budget.js';
 import { loadRequiredRules } from '../required-rules.js';
 import { GIT_HEALTH_REASON_TEXT } from './git-health-reasons.js';
 import { channelStartLines } from '../inbox-channel.js';
+import { rememberDeclaredScope } from '../session-scope-memory.js';
 import { agentHeadText } from '../agent-head.js';
 
 export const sessionStartToolConfig = {
@@ -36,7 +37,7 @@ export const sessionStartToolConfig = {
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
-interface SessionRegistration { sessionId: string; scope: AgentSessionScope | null }
+interface SessionRegistration { sessionId: string; scope: AgentSessionScope | null; reconnects?: number; lastReconnectAt?: string | null }
 
 interface Me { email?: string; fullName?: string; locale?: string; workspaceLocale?: string }
 interface Ticket {
@@ -210,6 +211,13 @@ async function buildTicketBundle(
   };
 }
 
+/** ORB-2209 - a declared scope stays with the instance token; the agent declares it once per terminal. */
+export function identityLine(registration: Pick<SessionRegistration, 'reconnects' | 'lastReconnectAt'>): string {
+  const count = registration.reconnects ?? 0;
+  const kept = count > 0 ? ` It survived ${count} reconnect(s), the last at ${registration.lastReconnectAt ?? 'an unknown time'}.` : '';
+  return `This scope stays with this session across reconnects and restarts; declare it again only to change it.${kept}`;
+}
+
 export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: boolean } = {}) {
   let lastKnownRulesHash: string | undefined;
 
@@ -252,8 +260,9 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
     }
 
     const registration = await client.post<SessionRegistration>('/v1/agent/heartbeat', input.scope !== undefined ? { scope: input.scope } : {}, { instanceToken })
-      .then((r) => (r && typeof r.sessionId === 'string' ? { sessionId: r.sessionId, scope: r.scope ?? null } : null))
+      .then((r) => (r && typeof r.sessionId === 'string' ? { sessionId: r.sessionId, scope: r.scope ?? null, reconnects: r.reconnects, lastReconnectAt: r.lastReconnectAt } : null))
       .catch(() => null);
+    if (input.scope !== undefined && registration) rememberDeclaredScope(instanceToken, registration.scope);
     const [me, rules, assigned, timer, inboxRaw] = await Promise.all([
       client.get<Me>('/users/me').catch(() => null),
       loadRequiredRules(client, rulesPath, rulesParams.get('knownRulesHash') ?? undefined),
@@ -352,6 +361,7 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
       ? [registration.scope.role ? `role ${registration.scope.role}` : null, registration.scope.projectKeys?.length ? `projects ${registration.scope.projectKeys.join(', ')}` : null, registration.scope.ticketKeys?.length ? `tickets ${registration.scope.ticketKeys.join(', ')}` : null].filter(Boolean).join('; ')
       : 'no scope declared - this session lists every account-addressed message; pass scope: { projectKeys, role } to narrow it';
     lines.push(`ref ${instanceToken}${registration ? `, instance ${registration.sessionId.slice(0, 8)}` : ''}. ${scopeText}. Peers reach exactly this session with orboto_agent_notify { toSessionRef: "${registration ? registration.sessionId.slice(0, 8) : instanceToken}" }.`);
+    if (registration?.scope) lines.push(identityLine(registration));
     if (opts.channel) lines.push('', ...channelStartLines());
     if (pendingMessages.length > 0) {
       lines.push('', '## Agent messages - unread');
@@ -380,7 +390,10 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
         })),
         ...(elsewhereCount > 0 ? { inProgressElsewhereCount: elsewhereCount } : {}),
         timer: timer?.ticketId ? { ticketKey: timer.ticketKey ?? null, startedAt: timer.startedAt ?? null } : null,
-        session: { ref: instanceToken, id: registration?.sessionId ?? null, scope: registration?.scope ?? null },
+        session: {
+          ref: instanceToken, id: registration?.sessionId ?? null, scope: registration?.scope ?? null,
+          reconnects: registration?.reconnects ?? 0, reconnectedAt: registration?.lastReconnectAt ?? null,
+        },
         gitHealth: {
           unhealthy: gitHealthWithConnections
             .map((p) => ({ projectId: p.projectId, connections: p.connections.filter((c) => !c.healthy) }))
