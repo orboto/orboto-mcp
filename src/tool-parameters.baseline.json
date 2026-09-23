@@ -1260,7 +1260,8 @@
   "orboto_list_projects": {
     "params": [
       "limit",
-      "query"
+      "query",
+      "search"
     ],
     "required": [],
     "enums": {}

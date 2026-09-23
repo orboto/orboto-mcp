@@ -64,6 +64,29 @@ describe('tools/list-projects', () => {
     expect(result.structuredContent).toMatchObject({ total: 5, totalProjects: 5 });
   });
 
+  it('ORB-2203: search asks the API with ?search= and still counts every visible project', async () => {
+    const all = [
+      { id: 'p1', key: 'ACME', name: 'Acme', description: 'Customer portal', status: 'active' },
+      { id: 'p2', key: 'TOOL', name: 'Internal Tools', description: null, status: 'draft' },
+    ];
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      const body = url.includes('search=') ? [all[0]] : all;
+      return { ok: true, status: 200, statusText: 'OK', json: async () => body } as unknown as Response;
+    });
+    const result = await makeListProjectsHandler(client)({ search: ' portal ' });
+    const urls = fetchSpy.mock.calls.map(([input]) => String(input));
+    expect(urls.some((u) => u.endsWith('/projects?search=portal'))).toBe(true);
+    expect(result.content[0]).toEqual({ type: 'text', text: '- ACME - Acme (active)\n(1 project(s) matching "portal", complete.)' });
+    expect(result.structuredContent).toMatchObject({ total: 1, totalProjects: 2, query: null });
+  });
+
+  it('ORB-2203: without search only the plain list is fetched', async () => {
+    const fetchSpy = mockFetch([]);
+    await makeListProjectsHandler(client)({ query: 'x' });
+    expect(fetchSpy.mock.calls.map(([input]) => String(input)).every((u) => !u.includes('search='))).toBe(true);
+  });
+
   it('renders an empty-state text block when the API returns no rows', async () => {
     mockFetch([]);
     const result = await makeListProjectsHandler(client)();

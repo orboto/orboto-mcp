@@ -16,13 +16,13 @@ interface ProjectRow {
 export const listProjectsToolConfig = {
   title: 'List projects',
   description:
-    'Return projects the authenticated user can see (key, name, status). Useful first step of a workflow. '
-    + 'If you are after one project, pass `query` to filter by key/name instead of pulling the whole list - '
-    + 'and note you can usually use a project key directly with other tools without listing at all. '
-    + 'When the result says it is partial, refine with `query` rather than re-calling.',
+    'Projects the user can see (key, name, status). To find one, pass `search` (key, name, description, customer) '
+    + 'instead of pulling the whole list; a project key usually works directly with other tools. '
+    + 'When the result is partial, refine rather than re-call.',
   inputSchema: z.object({
-    query: z.string().optional().describe('Substring matched against key or name.'),
-    limit: z.number().int().min(1).max(200).optional().describe('Max projects. Default 50.'),
+    search: z.string().optional().describe('Key, name, description, customer.'),
+    query: z.string().optional().describe('Key/name substring.'),
+    limit: z.number().int().min(1).max(200).optional().describe('Default 50.'),
   }).shape,
   outputSchema: z.object({
     projects: z.array(z.object({
@@ -40,12 +40,18 @@ export const listProjectsToolConfig = {
 };
 
 export function makeListProjectsHandler(client: OrbotoClient) {
-  return async ({ query, limit }: { query?: string; limit?: number } = {}): Promise<CallToolResult> => {
-    const projects = await client.get<ProjectRow[]>('/projects');
+  return async ({ search, query, limit }: { search?: string; query?: string; limit?: number } = {}): Promise<CallToolResult> => {
+    const s = (search ?? '').trim();
+    const [projects, found] = await Promise.all([
+      client.get<ProjectRow[]>('/projects'),
+      s ? client.get<ProjectRow[]>(`/projects?search=${encodeURIComponent(s)}`) : Promise.resolve(null),
+    ]);
     const q = (query ?? '').trim().toLowerCase();
+    const base = found ?? projects;
     const matched = q
-      ? projects.filter((p) => `${p.key} ${p.name}`.toLowerCase().includes(q))
-      : projects;
+      ? base.filter((p) => `${p.key} ${p.name}`.toLowerCase().includes(q))
+      : base;
+    const term = [s, q].filter(Boolean).map((v) => `"${v}"`).join(' and ');
     const cap = Math.min(limit ?? 50, 200);
     const shown = matched.slice(0, cap);
     const rows = shown.map((p) => ({ id: p.id, key: p.key, name: p.name, status: p.status, description: p.description }));
@@ -53,10 +59,10 @@ export function makeListProjectsHandler(client: OrbotoClient) {
     const lines = rows.map((r) => `- ${r.key} - ${r.name} (${r.status})`);
     const partial = shown.length < matched.length;
     const footer = matched.length === 0
-      ? (q ? `No projects match "${q}".` : 'No projects visible to this user.')
+      ? (term ? `No projects match ${term}.` : 'No projects visible to this user.')
       : partial
-        ? `\nShowing first ${shown.length} of ${matched.length} match(es) (of ${projects.length} total) - pass a narrower query to filter.`
-        : `\n(${matched.length} project(s)${q ? ` matching "${q}"` : ''}, complete.)`;
+        ? `\nShowing first ${shown.length} of ${matched.length} match(es) (of ${projects.length} total) - pass a narrower search to filter.`
+        : `\n(${matched.length} project(s)${term ? ` matching ${term}` : ''}, complete.)`;
     const text = matched.length === 0 ? footer : lines.join('\n') + footer;
 
     return {
