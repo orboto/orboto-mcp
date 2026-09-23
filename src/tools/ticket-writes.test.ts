@@ -254,6 +254,26 @@ describe('orboto_create_ticket', () => {
     expect(sc.languageWarning.severity).toBe('block');
   });
 
+  it('reads the way out from the hint, never from the sentence written for a person (ORB-2200)', async () => {
+    const blockBody = JSON.stringify({
+      error: 'This ticket looks like it is written in a different language (de) than this project expects (en). If the language is intentional, you can keep the ticket as it is.',
+      errorKey: 'errors.tickets.language_mismatch',
+      languageWarning: { code: 'language_mismatch', severity: 'block', detected: 'de', expected: 'en' },
+      hint: { query: 'allowLanguageMismatch=true' },
+    });
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      if ((init?.method ?? 'GET') === 'GET') {
+        return { ok: true, status: 200, statusText: 'OK', json: async () => PROJ, text: async () => '' } as unknown as Response;
+      }
+      return { ok: false, status: 422, statusText: 'Unprocessable', json: async () => ({}), text: async () => blockBody } as unknown as Response;
+    });
+    const res = await makeCreateTicketHandler(client)({ projectKey: 'ACME', title: 'Authentifizierung schlägt fehl bei externen Nutzern' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('retry the same call with allowLanguageMismatch=true');
+    expect(text).not.toContain('keep the ticket as it is');
+    expect((res.structuredContent as { hint: unknown }).hint).toEqual({ query: 'allowLanguageMismatch=true' });
+  });
+
   it('passes allowLanguageMismatch as a query param when the override is set (ORB-990)', async () => {
     let createUrl = '';
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {

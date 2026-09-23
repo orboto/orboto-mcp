@@ -249,7 +249,7 @@ interface TicketPreflight {
   severity: 'ok' | 'warn' | 'block';
   blockedBy: string[];
   verdicts: {
-    language: PreflightVerdict & { code: string | null; detected: string | null; expected: string; enforced: boolean };
+    language: PreflightVerdict & { code: string | null; detected: string | null; expected: string; enforced: boolean; hint?: { query: string } };
     type: PreflightVerdict & { value: string | null; allowed: string[] };
     labels: PreflightVerdict & { unknown: string[]; ambiguous: Array<{ name: string; matches: string[] }>; resolved: string[]; available: string[] };
     duplicates: PreflightVerdict & { threshold: number; topSimilarity: number; candidates: SimilarWarning[] };
@@ -267,7 +267,7 @@ function preflightResult(preflight: TicketPreflight, projectKey: string): CallTo
     preflight.ok
       ? `✓ Pre-flight clean for ${projectKey} - re-send the same arguments without dryRun to create the ticket.`
       : `⛔ Pre-flight BLOCKED for ${projectKey} (${preflight.blockedBy.join(', ')}) - nothing was created. Fix the payload and run the pre-flight again.`,
-    `  ${icon[preflight.verdicts.language.severity]} language: ${preflight.verdicts.language.message}`,
+    `  ${icon[preflight.verdicts.language.severity]} language: ${preflight.verdicts.language.message}${preflight.verdicts.language.hint ? ` Keep it only on purpose: ${preflight.verdicts.language.hint.query}.` : ''}`,
     `  ${icon[preflight.verdicts.type.severity]} type: ${preflight.verdicts.type.message}`,
     `  ${icon[preflight.verdicts.labels.severity]} labels: ${preflight.verdicts.labels.message}`,
     `  ${icon[preflight.verdicts.duplicates.severity]} duplicates: ${preflight.verdicts.duplicates.message}`,
@@ -353,16 +353,17 @@ function withDeliveryModeWarning(
  */
 function languageBlockResult(err: unknown, verb: string): CallToolResult | null {
   if (!(err instanceof OrbotoApiError) || err.status !== 422) return null;
-  let parsed: { error?: string; languageWarning?: LanguageWarning } = {};
+  let parsed: { error?: string; languageWarning?: LanguageWarning; hint?: { query?: string } } = {};
   try { parsed = JSON.parse(err.body) as typeof parsed; } catch { /* non-JSON body */ }
   if (!parsed.languageWarning) return null;
   const lw = parsed.languageWarning;
+  const retry = `retry the same call with ${parsed.hint?.query ?? 'allowLanguageMismatch=true'}`;
   const text = `⛔ ${verb} blocked - strict ticket-language enforcement is on.\n` +
     `This content reads as "${lw.detected}" but the workspace language is "${lw.expected}".\n` +
-    `Rewrite it in ${lw.expected.toUpperCase()}, or - only if you are sure the language is intentional - retry the same call with allowLanguageMismatch=true.`;
+    `Rewrite it in ${lw.expected.toUpperCase()}, or - only if you are sure the language is intentional - ${retry}.`;
   return {
     content: [{ type: 'text', text }],
-    structuredContent: { blocked: true, languageWarning: lw },
+    structuredContent: { blocked: true, languageWarning: lw, ...(parsed.hint ? { hint: parsed.hint } : {}) },
     isError: true,
   };
 }
