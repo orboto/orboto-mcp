@@ -8,9 +8,12 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey } from './shared.js';
 
+const SEARCH_TYPES = ['ticket', 'comment', 'doc', 'project', 'milestone', 'space', 'customer'] as const;
+type SearchType = typeof SEARCH_TYPES[number];
+
 /** Matches SearchResultSchema in @orboto/shared-schema. */
 interface SearchHit {
-  type: 'ticket' | 'comment' | 'doc';
+  type: SearchType;
   id: string;
   title: string;
   excerpt: string;
@@ -20,6 +23,8 @@ interface SearchHit {
   spaceName: string | null;
   url: string;
   ticketKey?: string | null;
+  key?: string | null;
+  projectKey?: string | null;
   rank?: number;
 }
 
@@ -35,11 +40,10 @@ interface SearchResponse {
 export const searchToolConfig = {
   title: 'Search across orboto',
   description:
-    'Full-text search across tickets, comments, and docs. Honours the caller\'s visibility - private tickets and internal comments never appear unless the caller can already see them. Recall (ORB-1695): when the strict all-terms pass finds nothing, the server automatically retries with an OR-relaxed pass plus semantic (embedding) recall - the response\'s `pass` field says which pass produced the hits, and relaxed-pass hits deserve a skeptical read (they matched SOME terms or only the meaning, not all terms). Still prefer a single distinctive STABLE token (file/component/error-string fragment like "AdminCodesPage") and search the SYMPTOM, not your intended fix.',
+    'Search tickets, comments and docs; `types` adds projects, milestones, spaces, customers. Content matches full text, jump types match key and name; `types` defaults to ticket, comment, doc. Honours the caller\'s visibility - private tickets and internal comments never appear unless the caller can already see them. Recall (ORB-1695): when the strict all-terms pass finds nothing, the server automatically retries with an OR-relaxed pass plus semantic (embedding) recall - the response\'s `pass` field says which pass produced the hits, and relaxed-pass hits deserve a skeptical read (they matched SOME terms or only the meaning, not all terms). Still prefer a single distinctive STABLE token (file/component/error-string fragment like "AdminCodesPage") and search the SYMPTOM, not your intended fix.',
   inputSchema: z.object({
     query: z.string().min(1).describe('Search terms, e.g. "queue worker retry".'),
-    types: z.array(z.enum(['ticket', 'comment', 'doc'])).optional()
-      .describe('Restrict to entity types. Omit for all.'),
+    types: z.array(z.enum(SEARCH_TYPES)).optional(),
     projectKey: z.string().optional().describe('Restrict to one project.'),
     limit: z.number().int().min(1).max(50).default(15),
   }).shape,
@@ -49,7 +53,7 @@ export const searchToolConfig = {
 export function makeSearchHandler(client: OrbotoClient) {
   return async (input: {
     query: string;
-    types?: Array<'ticket' | 'comment' | 'doc'>;
+    types?: SearchType[];
     projectKey?: string;
     limit?: number;
   }): Promise<CallToolResult> => {
@@ -75,9 +79,10 @@ export function makeSearchHandler(client: OrbotoClient) {
       ? `No hits for "${input.query}".`
       : `Hits${headerHint}${relaxedNote}:\n\n` + res.items.map((h) => {
         const tag = h.type.toUpperCase();
-        const ident = h.ticketKey ?? h.id;
-        const project = h.projectName ? ` · ${h.projectName}` : '';
-        return `- [${tag} ${ident}${project}] ${h.title}\n  ${h.excerpt}`;
+        const ident = h.ticketKey ?? h.key ?? h.id;
+        const project = h.projectName && h.type !== 'project' ? ` · ${h.projectName}` : '';
+        const excerpt = h.excerpt ? `\n  ${h.excerpt}` : '';
+        return `- [${tag} ${ident}${project}] ${h.title}${excerpt}`;
       }).join('\n\n');
 
     return {
@@ -93,6 +98,8 @@ export function makeSearchHandler(client: OrbotoClient) {
           title: h.title,
           excerpt: h.excerpt,
           ticketKey: h.ticketKey ?? null,
+          key: h.key ?? h.ticketKey ?? null,
+          projectKey: h.projectKey ?? null,
           projectName: h.projectName,
           spaceName: h.spaceName,
           url: h.url,

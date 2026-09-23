@@ -16,7 +16,7 @@ interface ProjectRow {
 export const listProjectsToolConfig = {
   title: 'List projects',
   description:
-    'Projects the user can see (key, name, status). To find one, pass `search` (key, name, description, customer) '
+    'Projects the user can see. To find one, pass `search` (key, name, description, customer) '
     + 'instead of pulling the whole list; a project key usually works directly with other tools. '
     + 'When the result is partial, refine rather than re-call.',
   inputSchema: z.object({

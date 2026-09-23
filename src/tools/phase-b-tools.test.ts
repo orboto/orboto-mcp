@@ -538,6 +538,28 @@ describe('orboto_search', () => {
     expect(sc.total).toBe(42);
     expect(sc.hasMore).toBe(true);
   });
+
+  it('ORB-2201: passes the jump types and renders project and milestone hits by key', async () => {
+    const calls = stub([
+      {
+        json: {
+          items: [
+            { type: 'project', id: 'p1', key: 'ACME', projectKey: 'ACME', title: 'Acme', excerpt: '', projectId: 'p1', projectName: 'Acme', spaceId: null, spaceName: null, url: '/projects/acme', rank: 2000 },
+            { type: 'milestone', id: 'm1', key: 'ACME-M1', projectKey: 'ACME', title: 'Launch', excerpt: '', projectId: 'p1', projectName: 'Acme', spaceId: null, spaceName: null, url: '/projects/acme?milestoneIds=m1', rank: 200 },
+          ],
+          nextCursor: null,
+          total: 2,
+        },
+      },
+    ]);
+    const res = await makeSearchHandler(client)({ query: 'acme', types: ['project', 'milestone'] });
+    expect(calls[0]).toContain('types=project%2Cmilestone');
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('- [PROJECT ACME] Acme');
+    expect(text).toContain('- [MILESTONE ACME-M1 · Acme] Launch');
+    const sc = res.structuredContent as { hits: Array<{ key: string; projectKey: string }> };
+    expect(sc.hits.map((h) => [h.key, h.projectKey])).toEqual([['ACME', 'ACME'], ['ACME-M1', 'ACME']]);
+  });
 });
 
 describe('doc tools', () => {

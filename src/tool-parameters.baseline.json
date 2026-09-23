@@ -1881,7 +1881,11 @@
     "enums": {
       "types[]": [
         "comment",
+        "customer",
         "doc",
+        "milestone",
+        "project",
+        "space",
         "ticket"
       ]
     }
