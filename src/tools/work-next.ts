@@ -51,9 +51,9 @@ export const workNextToolConfig = {
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME") or UUID.'),
     agentTag: z.string().min(1).max(64).optional()
-      .describe('ORB-1772 - preferred-not-exclusive routing tag: tickets labeled `agent:<tag>` rank first for a matching caller, foreign `agent:*` tags rank last but stay eligible. Lowercased server-side. Set it to this worker\'s routing tag (often the model or fleet lane name).'),
+      .describe('ORB-1772 - preferred routing tag: `agent:<tag>` tickets rank first, foreign `agent:*` last but eligible. Lowercased; often the model or fleet lane name.'),
     role: z.enum(['implementation', 'review', 'preflight', 'integration', 'spec']).optional()
-      .describe('Default `implementation`. The dispatcher only reserves a ticket whose (ticket, role) lease is free for THIS role.'),
+      .describe('Default `implementation`; reserves only a ticket whose (ticket, role) lease is free.'),
     leaseSeconds: z.number().int().min(60).max(86_400).optional()
       .describe('How long the lease should hold without renewal. Default 900 (15 min).'),
     startTimer: z.boolean().optional()
@@ -61,11 +61,11 @@ export const workNextToolConfig = {
     agentSessionToken: z.string().optional()
       .describe('Stable per-agent-instance token. Omit to use this MCP connection\'s own instance id.'),
     resourceClaims: z.array(z.object(ResourceClaimShape)).max(50).optional()
-      .describe('ORB-1610 - resource claims to acquire alongside the reservation, AND to filter candidates: a ticket already held under a conflicting GRANTED write claim elsewhere is skipped even when its (ticket, role) lease is free.'),
+      .describe('ORB-1610 - claims to acquire with the reservation; a ticket under a conflicting granted write claim is skipped.'),
     onConflict: z.enum(['reject', 'queue']).optional()
       .describe('Only matters when `resourceClaims` is set on the WINNING candidate. Default `reject`.'),
     peek: z.boolean().optional()
-      .describe('ORB-1930 - answer "is there work for me?" WITHOUT reserving anything: the same candidate walk (role pool, lane caps, labels, dependencies, leases), but no lease, no timer, no lane quota consumed. Returns `candidate` (the ticket a real pull would reserve right now) or the usual empty reason. Use it before spending a model turn on self-tasking.'),
+      .describe('ORB-1930 - "is there work for me?" without reserving: the same candidate walk, no lease, timer or lane quota; returns `candidate` or the empty reason.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };

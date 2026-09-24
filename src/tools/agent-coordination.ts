@@ -118,11 +118,12 @@ interface NotifyResponse {
 export const agentNotifyToolConfig = {
   title: 'Notify another agent / user',
   description:
-    'Send a fire-and-forget message to a user (bot or human) by email; it lands in their inbox (orboto_messages) and, for humans, in-app. kind: info | request (answer expected) | complete (sub-task done) | error. payload: free-form JSON; threadId links a reply to the message it answers. toSessionRef (instance short id, session ref or id) reaches ONE session of the account; project scopes an account message to sessions declared on it (ORB-2136).',
+    'Message a user (bot or human) by email; lands in their inbox (orboto_messages), for humans in-app. kind: request|error = work inside the scope the recipient holds (request needs project or toSessionRef + outcome); info = information; complete = result (needs outcome). payload: free-form JSON; threadId links a reply to the message it answers. toSessionRef (instance short id, session ref or id) reaches ONE session of the account; project scopes an account message to sessions declared on it (ORB-2136).',
   inputSchema: z.object({
     targetEmail: z.string().email(),
     kind: z.enum(['info', 'request', 'complete', 'error']).default('info'),
     subject: z.string().min(1).max(200),
+    outcome: z.string().min(10).max(1000).optional(),
     payload: z.record(z.string(), z.unknown()).optional(),
     threadId: z.string().uuid().optional(),
     project: z.string().min(1).max(64).optional().describe('Project key or UUID: scope the message to the recipient session working that project.'),
@@ -168,17 +169,32 @@ export function makeAgentBroadcastHandler(client: OrbotoClient) {
   };
 }
 
+/** ORB-2223 - the message-kind definition this versioned sender enforces; the API only warns. */
+export function notifyDefinitionError(args: { kind?: string; outcome?: string; project?: string; toSessionRef?: string }): string | null {
+  const kind = args.kind ?? 'info';
+  if ((kind === 'request' || kind === 'complete') && !args.outcome?.trim()) {
+    return `Invalid arguments: \`outcome\` is required for a ${kind} - the outcome sentence (what must be true when it is done, or what was delivered).`;
+  }
+  if (kind === 'request' && !args.project && !args.toSessionRef) {
+    return 'Invalid arguments: a request needs a target - `project` (key or UUID) or `toSessionRef`.';
+  }
+  return null;
+}
+
 export function makeAgentNotifyHandler(client: OrbotoClient) {
   return async (args: {
     targetEmail: string;
     kind?: 'info' | 'request' | 'complete' | 'error';
     subject: string;
+    outcome?: string;
     payload?: Record<string, unknown>;
     threadId?: string;
     project?: string;
     senderRef?: string;
     toSessionRef?: string;
   }, extra?: unknown): Promise<CallToolResult> => {
+    const invalid = notifyDefinitionError(args);
+    if (invalid) return { isError: true, content: [{ type: 'text', text: invalid }] };
     const senderRef = mcpInstanceToken(args.senderRef, extra as { sessionId?: string } | undefined);
     const res = await client.post<NotifyResponse>('/v1/agent/notify', { ...args, senderRef }, { instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
     const target = res.toSessionId ? `${args.targetEmail} session ${res.toSessionId.slice(0, 8)}` : args.targetEmail;

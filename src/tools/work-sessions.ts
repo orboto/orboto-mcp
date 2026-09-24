@@ -468,7 +468,7 @@ export const workFinishToolConfig = {
     sessionId: z.string().uuid().describe('The id returned by orboto_work_start / orboto_work_session_start.'),
     outcome: z.enum(['finished', 'cancelled']).optional()
       .describe('`finished` (default) drives the ticket transition below. `cancelled` = abandoned attempt; time is still booked, the ticket is left untouched.'),
-    commitSha: z.string().optional().describe('The commit this session produced. Recorded as an attestation immediately, verified asynchronously once git ingestion catches up - never blocks this call.'),
+    commitSha: z.string().optional().describe('The commit this session produced; an attestation now, verified once git ingestion catches up.'),
     verification: z.object({
       reviewOfSessionId: z.string().uuid().optional().describe('Exact independent implementation work session this review examined.'),
       reviewVerdict: z.enum(['approved', 'rework']).optional().describe('Explicit review outcome, paired with reviewOfSessionId; never inferred from later ticket status.'),
@@ -478,8 +478,8 @@ export const workFinishToolConfig = {
       notes: z.string().optional(),
     }).optional().describe('Which gates you actually ran and what they said. This is the attestation a reviewer reads cold.'),
     targetCategory: z.enum(['todo', 'in_progress', 'in_review', 'done', 'wont_fix']).optional()
-      .describe('Default `done`. Use `in_review` when a human should look at it first. Only applied for an implementation session with outcome `finished`.'),
-    note: z.string().optional().describe('The completion note posted on the ticket. Auto-generated (booked time + commit + verification summary) when omitted.'),
+      .describe('Default `done`; `in_review` when a human should look first. Implementation sessions with outcome `finished` only.'),
+    note: z.string().optional().describe('The completion note on the ticket; generated from booked time, commit and verification when omitted.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };

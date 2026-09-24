@@ -150,10 +150,21 @@ describe('orboto_agent_notify', () => {
     });
 
     const handler = makeAgentNotifyHandler(client);
+    const refused = await handler({ targetEmail: 'bob@example.com', kind: 'request', subject: 'Please review ORB-42' });
+    expect(refused.isError).toBe(true);
+    expect((refused.content[0] as { text: string }).text).toContain('`outcome` is required for a request');
+    const noTarget = await handler({ targetEmail: 'bob@example.com', kind: 'request', subject: 'Please review ORB-42', outcome: 'ORB-42 has a review verdict' });
+    expect((noTarget.content[0] as { text: string }).text).toContain('`project` (key or UUID) or `toSessionRef`');
+    const noOutcome = await handler({ targetEmail: 'bob@example.com', kind: 'complete', subject: 'Done' });
+    expect((noOutcome.content[0] as { text: string }).text).toContain('`outcome` is required for a complete');
+    expect(capturedBody).toHaveLength(0);
+
     const result = await handler({
       targetEmail: 'bob@example.com',
       kind: 'request',
       subject: 'Please review ORB-42',
+      outcome: 'ORB-42 has a review verdict',
+      project: 'ORB',
       payload: { ticketKey: 'ORB-42' },
     });
 
@@ -161,6 +172,8 @@ describe('orboto_agent_notify', () => {
       targetEmail: 'bob@example.com',
       kind: 'request',
       subject: 'Please review ORB-42',
+      outcome: 'ORB-42 has a review verdict',
+      project: 'ORB',
       payload: { ticketKey: 'ORB-42' },
     });
     expect((result.content[0] as { text: string }).text).toContain('notified bob@example.com');
