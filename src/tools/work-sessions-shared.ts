@@ -16,6 +16,7 @@ export interface ResourceClaim {
   mode: 'read' | 'write';
   state?: 'granted' | 'waiting';
   requestedAt?: string;
+  grantedAt?: string;
 }
 
 export interface WorkSessionRow {

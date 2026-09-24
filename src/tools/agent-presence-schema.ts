@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { AgentSessionScopeSchema } from './agent-session-scope.js';
 const WorkSessionResourceClaimSchema = z.object({
   kind: z.enum(['path', 'named']), value: z.string().min(1).max(500), mode: z.enum(['read', 'write']),
-  state: z.enum(['granted', 'waiting']).optional(), requestedAt: z.string().optional(),
+  state: z.enum(['granted', 'waiting']).optional(), requestedAt: z.string().optional(), grantedAt: z.string().optional(),
 });
 
 /** ORB-2209 - one account reference, shared by `actsAs` and `owner`. */
