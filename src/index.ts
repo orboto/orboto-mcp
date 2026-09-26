@@ -66,6 +66,8 @@ async function main() {
       const { InboxChannel, digestMinutesFromEnv, cliOutdatedNotice, CLI_OUTDATED_NOTICE } = await import('./inbox-channel.js');
       const { mcpProcessInstance } = await import('./tools/shared.js');
       const instanceToken = mcpProcessInstance();
+      const { declareEnvProjectScope } = await import('./project-scope.js');
+      await declareEnvProjectScope(preflightClient, instanceToken);
       const inbox = new InboxChannel({ ...clientConfig, instanceToken, mcp: server, digestMinutes: digestMinutesFromEnv(process.env.ORBOTO_MCP_CHANNEL_DIGEST_MINUTES) });
       inbox.start();
       const outdated = cliOutdatedNotice(process.env.ORBOTO_MCP_CLI_OUTDATED);

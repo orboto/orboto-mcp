@@ -18,6 +18,7 @@ import { loadRequiredRules } from '../required-rules.js';
 import { GIT_HEALTH_REASON_TEXT } from './git-health-reasons.js';
 import { channelStartLines } from '../inbox-channel.js';
 import { rememberDeclaredScope } from '../session-scope-memory.js';
+import { declareEnvProjectScope, envProjectScope } from '../project-scope.js';
 import { agentHeadText } from '../agent-head.js';
 
 export const sessionStartToolConfig = {
@@ -259,10 +260,14 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
       };
     }
 
-    const registration = await client.post<SessionRegistration>('/v1/agent/heartbeat', input.scope !== undefined ? { scope: input.scope } : {}, { instanceToken })
-      .then((r) => (r && typeof r.sessionId === 'string' ? { sessionId: r.sessionId, scope: r.scope ?? null, reconnects: r.reconnects, lastReconnectAt: r.lastReconnectAt } : null))
+    const toRegistration = (r: SessionRegistration | null) => (r && typeof r.sessionId === 'string' ? { sessionId: r.sessionId, scope: r.scope ?? null, reconnects: r.reconnects, lastReconnectAt: r.lastReconnectAt } : null);
+    let registration = await client.post<SessionRegistration>('/v1/agent/heartbeat', input.scope !== undefined ? { scope: input.scope } : {}, { instanceToken })
+      .then(toRegistration)
       .catch(() => null);
     if (input.scope !== undefined && registration) rememberDeclaredScope(instanceToken, registration.scope);
+    if (input.scope === undefined && registration && !registration.scope && envProjectScope()) {
+      registration = toRegistration(await declareEnvProjectScope(client, instanceToken) as SessionRegistration | null) ?? registration;
+    }
     const [me, rules, assigned, timer, inboxRaw] = await Promise.all([
       client.get<Me>('/users/me').catch(() => null),
       loadRequiredRules(client, rulesPath, rulesParams.get('knownRulesHash') ?? undefined),
