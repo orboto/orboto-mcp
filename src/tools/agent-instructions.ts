@@ -36,7 +36,7 @@ function renderBlock(b: BlockRow): string {
 export const listAgentInstructionsToolConfig = {
   title: 'MANAGE the workspace coding-agent rule blocks (admin)',
   description:
-    'ADMIN/MANAGEMENT tool - lists the individual rule BLOCKS at a scope (workspace: needs admin:ai:read; project: needs project:edit; personal: your own) so they can be edited/toggled/reordered. This is NOT how you read the rules to follow. To LOAD the rules you must follow as an agent, call orboto_session_start instead - it returns the complete assembled rule set.',
+    'ADMIN tool: lists the rule BLOCKS at a scope for editing, not the rules to follow. Scopes: workspace needs admin:ai:read, project needs project:edit, personal is your own; blocks can be edited, toggled and reordered. This is NOT how you read the rules to follow. To LOAD the rules you must follow as an agent, call orboto_session_start instead - it returns the complete assembled rule set.',
   inputSchema: z.object({
     scope: z.enum(['workspace', 'customer', 'project', 'personal']).default('workspace'),
     projectId: z.string().uuid().optional().describe('Required for scope=project.'),
@@ -94,7 +94,7 @@ export function makeListAgentInstructionsHandler(client: OrbotoClient) {
 export const createAgentInstructionToolConfig = {
   title: 'Add a custom coding-agent rule block',
   description:
-    'Create a custom rule block at a scope: workspace (every agent; admin:ai:write), customer (every project of one customer; customer:write), project (one project; project:edit), or personal (your own). For scope=customer pass customerId; for scope=project pass projectId.'
+    'Create a custom rule block at a scope (workspace, customer, project or personal). Workspace reaches every agent (admin:ai:write), customer every project of one customer (customer:write), project one project (project:edit), personal only you. For scope=customer pass customerId; for scope=project pass projectId.'
     + RULE_WRITING_CONTRACT,
   inputSchema: z.object({
     title: z.string().min(1).max(120),

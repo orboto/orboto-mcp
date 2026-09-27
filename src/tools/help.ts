@@ -19,7 +19,7 @@ const TOPICS: Record<string, (() => string) | undefined> = { connect: connectScr
 export const helpToolConfig = {
   title: 'Full guidance for one orboto tool',
   description:
-    'Return the complete guidance text (workflows, warnings, edge cases) for one orboto tool by name - manifest descriptions are one-line summaries, this is the rest. Call it before first use of an unfamiliar write tool. topic: "connect" returns the step-by-step script for setting a person up, topic: "onboarding" the first five minutes and the work loop.',
+    'Return the complete guidance text for one orboto tool by name. Manifest descriptions are one-line summaries; this adds the workflows, warnings and edge cases. Call it before first use of an unfamiliar write tool. topic: "connect" returns the step-by-step script for setting a person up, topic: "onboarding" the first five minutes and the work loop.',
   inputSchema: z.object({
     tool: z.string().min(1).max(128).optional().describe('Tool name, e.g. orboto_create_ticket.'),
     topic: z.enum(['connect', 'onboarding']).optional().describe('Guidance topic instead of a tool.'),

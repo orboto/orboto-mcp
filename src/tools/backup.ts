@@ -95,7 +95,7 @@ export function makeListBackupsHandler(client: OrbotoClient) {
 export const downloadBackupToolConfig = {
   title: 'Download a stored backup run',
   description:
-    'Download a stored backup run by run id (from orboto_list_backups) as a base64 resource attachment; an encrypted run downloads sealed and needs its key to restore. Requires admin:backup:read.',
+    'Download a stored backup run by run id as a base64 resource attachment. The id comes from orboto_list_backups; an encrypted run downloads sealed and needs its key to restore. Requires admin:backup:read.',
   inputSchema: z.object({
     runId: z.string().uuid().describe('Backup run id from orboto_list_backups.'),
   }).shape,

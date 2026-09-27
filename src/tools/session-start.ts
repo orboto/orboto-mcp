@@ -25,7 +25,8 @@ export const sessionStartToolConfig = {
   title: 'Load the rules you must follow + re-orient',
   description:
     'THE canonical way to LOAD the binding workspace rules you must follow as an agent. Run it as your FIRST action in a session and immediately AFTER any context compaction. Returns a one-line-per-rule INDEX of the binding working-rules plus their hash (or a compact "unchanged" ack on a repeat call within the same connection) - read the index, then call this tool again with `rulesOnly: true` to read the full text of the rules whenever you do not already hold that exact hash, and expand before acting on any rule whose title touches what you are about to do. Also returns your in-progress tickets - each flagged LANDED, IDLE when it has a linked commit but has not moved for days, i.e. finished work you never handed to review - your running timer, and a warning if a project\'s git connection looks unhealthy (commit ingestion may be stalled). Pass `ticketKey` to also get a one-shot bundle for that ticket: project primer, the full ticket with dependencies + checklists, that project\'s git health, and any other agent sessions currently on it - replacing several separate calls. (Do NOT use orboto_list_agent_instructions to read the rules - that tool MANAGES/edits rule blocks for admins; this one is what you read to know how to work.) Registers this session (a heartbeat on its instance row) and is otherwise read-only. '
-    + '**Parameters.** `rulesOnly: true` returns ONLY the complete rules text (nothing else) and is never truncated - the cheapest way to read the rules the index listed. `projectId` adds that project\'s rules on top of the workspace + personal ones. `ticketKey` ("ACME-42") bundles that ticket\'s primer, full detail, dependencies, checklists, git health and other active agent sessions into the same response. `forceRules: true` returns the full rules text inline with the rest of the digest even when this connection already delivered them - use it whenever the rules are NOT in your context right now: after a compaction, a /clear, or a fresh agent taking over an existing connection. `agentKind` (coding, orchestrator, reviewer, runner) and `modelTier` (frontier, standard, small) are your self-declared classification; rule blocks and per-tier rule text are targeted by them. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility; the returned session.ref is what peers pass as toSessionRef (ORB-2136).',
+    + '**Parameters.** `rulesOnly: true` returns ONLY the complete rules text (nothing else) and is never truncated - the cheapest way to read the rules the index listed. `projectId` adds that project\'s rules on top of the workspace + personal ones. `ticketKey` ("ACME-42") bundles that ticket\'s primer, full detail, dependencies, checklists, git health and other active agent sessions into the same response. `forceRules: true` returns the full rules text inline with the rest of the digest even when this connection already delivered them - use it whenever the rules are NOT in your context right now: after a compaction, a /clear, or a fresh agent taking over an existing connection. `agentKind` (coding, orchestrator, reviewer, runner) and `modelTier` (frontier, standard, small) are your self-declared classification; rule blocks and per-tier rule text are targeted by them. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility; the returned session.ref is what peers pass as toSessionRef (ORB-2136). '
+    + 'The digest also carries the Knowledge block (ORB-2225): the wiki index of your declared projects and of the Operations wiki, their latest log entries and open lint issues; ask the wiki with orboto_knowledge_ask before asking a person, file durable facts with orboto_knowledge_add.',
   inputSchema: z.object({
     projectId: z.string().uuid().optional().describe('Also load this project\'s rules.'),
     ticketKey: z.string().min(3).optional().describe('Ticket key ("ACME-42") - bundles that ticket\'s full context.'),
@@ -212,6 +213,39 @@ async function buildTicketBundle(
   };
 }
 
+interface KnowledgeIndex {
+  source: string;
+  spaces: Array<{ spaceKey: string | null; spaceName: string; projectKey: string | null; pages: number; sources: number; openLintIssues: number; indexDoc: { key: string | null } | null }>;
+  missing: Array<{ projectKey: string | null; reason: string; setupCommand: string | null }>;
+  text: string;
+}
+
+/** ORB-2225 - the Knowledge block stays small; the rest is one expand away. */
+export const KNOWLEDGE_BLOCK_CHARS = 1500;
+
+export function knowledgeLines(text: string): { lines: string[]; handle?: string } {
+  if (text.length <= KNOWLEDGE_BLOCK_CHARS) return { lines: text.split('\n') };
+  const cut = text.slice(0, KNOWLEDGE_BLOCK_CHARS);
+  const kept = cut.slice(0, Math.max(cut.lastIndexOf('\n'), 0));
+  const handle = storePayload('orboto_session_start', {
+    structuredContent: { knowledge: text }, text,
+    omitted: [{ path: 'knowledge', kind: 'string', omittedChars: text.length - kept.length }],
+  });
+  return {
+    handle,
+    lines: [...kept.split('\n'), `(Knowledge block cut at ${kept.length} of ${text.length} characters: orboto_response_expand { handle: "${handle}", path: "knowledge" }, or GET /knowledge.)`],
+  };
+}
+
+function knowledgeSummary(index: KnowledgeIndex, handle: string | undefined): Record<string, unknown> {
+  return {
+    source: index.source,
+    spaces: index.spaces.map((s) => ({ spaceKey: s.spaceKey ?? s.spaceName, projectKey: s.projectKey, indexDocKey: s.indexDoc?.key ?? null, pages: s.pages, sources: s.sources, openLintIssues: s.openLintIssues })),
+    missing: index.missing,
+    ...(handle ? { handle } : {}),
+  };
+}
+
 /** ORB-2209 - a declared scope stays with the instance token; the agent declares it once per terminal. */
 export function identityLine(registration: Pick<SessionRegistration, 'reconnects' | 'lastReconnectAt'>): string {
   const count = registration.reconnects ?? 0;
@@ -268,7 +302,7 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
     if (input.scope === undefined && registration && !registration.scope && envProjectScope()) {
       registration = toRegistration(await declareEnvProjectScope(client, instanceToken) as SessionRegistration | null) ?? registration;
     }
-    const [me, rules, assigned, timer, inboxRaw] = await Promise.all([
+    const [me, rules, assigned, timer, inboxRaw, knowledge] = await Promise.all([
       client.get<Me>('/users/me').catch(() => null),
       loadRequiredRules(client, rulesPath, rulesParams.get('knownRulesHash') ?? undefined),
       client.get<{ items?: Ticket[] } | Ticket[]>('/users/me/assigned-tickets?statuses=IN_PROGRESS,IN_REVIEW&limit=20').catch(() => ({ items: [] })),
@@ -276,6 +310,9 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
       client.get<{ messages?: Array<{ id: string; fromUserId: string; from?: { label?: string }; kind: string; subject: string; createdAt: string }> }>('/v1/agent/messages?limit=10', { instanceToken })
         .then((r) => (Array.isArray(r?.messages) ? r.messages : []))
         .catch(() => []),
+      client.get<KnowledgeIndex>('/knowledge', { instanceToken })
+        .then((r) => (typeof r?.text === 'string' && Array.isArray(r.spaces) && Array.isArray(r.missing) ? r : null))
+        .catch(() => null),
     ]);
     const pendingMessages = inboxRaw.map((m) => ({ id: m.id, fromUserId: m.fromUserId, from: m.from?.label ?? m.fromUserId, kind: m.kind, subject: m.subject, createdAt: m.createdAt }));
     const tickets: Ticket[] = Array.isArray(assigned) ? assigned : (assigned?.items ?? []);
@@ -361,6 +398,8 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
     }
     lines.push('', '## Timer');
     lines.push(timer?.ticketId ? `Running on ${timer.ticketKey ?? timer.ticketId} since ${timer.startedAt ?? 'earlier'}.` : 'No timer running.');
+    const knowledgeBlock = knowledge?.text ? knowledgeLines(knowledge.text) : null;
+    if (knowledgeBlock) lines.push('', ...knowledgeBlock.lines);
     lines.push('', '## This session');
     const scopeText = registration?.scope
       ? [registration.scope.role ? `role ${registration.scope.role}` : null, registration.scope.projectKeys?.length ? `projects ${registration.scope.projectKeys.join(', ')}` : null, registration.scope.ticketKeys?.length ? `tickets ${registration.scope.ticketKeys.join(', ')}` : null].filter(Boolean).join('; ')
@@ -408,6 +447,7 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
             0,
           ),
         },
+        ...(knowledge ? { knowledge: knowledgeSummary(knowledge, knowledgeBlock?.handle) } : {}),
         ...(pendingMessages.length > 0 ? { pendingMessages } : {}),
         ...(bundle ? { ticketBundle: bundle.structured } : {}),
       },

@@ -60,7 +60,7 @@ export function makeWikiAskHandler(client: OrbotoClient) {
 export const wikiLintToolConfig = {
   title: 'Run the LLM-Wiki lint pass on a space',
   description:
-    'Scan an LLM-Wiki space for inconsistencies (orphan pages, missing cross-references, stale pages, unprocessed sources, and - when AI is configured - contradictions and undocumented concepts). Returns the open issues, each with a suggested fix. Wraps POST /spaces/:id/llm-wiki/lint.',
+    'Lint an LLM-Wiki space for inconsistencies. It finds orphan pages, missing cross-references, stale pages, unprocessed sources and, when AI is configured, contradictions and undocumented concepts. Returns the open issues, each with a suggested fix. Wraps POST /spaces/:id/llm-wiki/lint.',
   inputSchema: z.object({
     spaceId: z.string().uuid().describe('The LLM-Wiki space to lint.'),
   }).shape,
@@ -100,7 +100,7 @@ export function makeWikiPlanUpdateHandler(client: OrbotoClient) {
 export const wikiApplyPlanToolConfig = {
   title: 'Apply a previously-planned wiki edit',
   description:
-    'Commit the page operations from a plan created by orboto_wiki_plan_update. Applies every op atomically (each page edit is snapshotted for rollback). Fails with 410 if the plan has expired (>15 min) or was already applied. Wraps POST /spaces/:id/docs/apply-plan.',
+    'Commit the page operations from a plan created by orboto_wiki_plan_update. Applies every op atomically (each page edit is snapshotted for rollback), then rebuilds the index doc of the space and appends a line to its log doc. Fails with 410 if the plan has expired (>15 min) or was already applied. Wraps POST /spaces/:id/docs/apply-plan.',
   inputSchema: z.object({
     spaceId: z.string().uuid(),
     planId: z.string().uuid().describe('The planId returned by orboto_wiki_plan_update.'),
@@ -117,7 +117,7 @@ export function makeWikiApplyPlanHandler(client: OrbotoClient) {
 export const wikiRecordToolConfig = {
   title: 'Record a wiki update in one step (plan + apply)',
   description:
-    'Convenience wrapper that plans an edit from your instruction and immediately applies it - use mid-task to capture a fact or update a page without the two-step review loop. Internally calls plan-update then apply-plan. For a reviewable change, use orboto_wiki_plan_update instead.',
+    'Plan and apply a wiki edit in one step. Use it mid-task to capture a fact or update a page without the two-step review loop. Internally calls plan-update then apply-plan. For a reviewable change, use orboto_wiki_plan_update instead.',
   inputSchema: z.object({
     spaceId: z.string().uuid(),
     instruction: z.string().min(1).max(4000).describe('What to record, in plain language.'),
@@ -189,5 +189,30 @@ export function makeWikiFlagStaleHandler(client: OrbotoClient) {
     input.docId = await resolveDocId(client, input.docId);
     const res = await client.post<{ staleFlagged: boolean }>(`/docs/${input.docId}/flag-stale`, { stale: input.stale ?? true });
     return text(res.staleFlagged ? 'Page flagged as possibly outdated.' : 'Stale flag cleared.', { staleFlagged: res.staleFlagged });
+  };
+}
+
+export const wikiRunsToolConfig = {
+  title: 'Wiki ingest runs',
+  description: 'List the ingest runs of a wiki space (status failed shows each error) or retry a failed run.',
+  inputSchema: z.object({
+    spaceId: z.string().min(1),
+    action: z.enum(['list', 'retry']).optional(),
+    runId: z.string().uuid().optional(),
+    status: z.enum(['pending_review', 'applied', 'failed', 'skipped']).optional(),
+  }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+};
+export function makeWikiRunsHandler(client: OrbotoClient) {
+  return async (input: { spaceId: string; action?: 'list' | 'retry'; runId?: string; status?: string }): Promise<CallToolResult> => {
+    if (input.action === 'retry') {
+      if (!input.runId) return { isError: true, content: [{ type: 'text', text: 'action retry needs the runId of a failed run (action list, status failed).' }] };
+      const res = await client.post<{ runId: string; status: string; queued: boolean; error: string | null }>(`/spaces/${encodeURIComponent(input.spaceId)}/llm-wiki/ingest-runs/${input.runId}/retry`, {});
+      return text(res.queued ? `Run ${res.runId} is queued for the ingest worker again.` : `Run ${res.runId} ran again: ${res.status}${res.error ? ` - ${res.error}` : ''}.`, res);
+    }
+    const qs = input.status ? `?status=${input.status}` : '';
+    const res = await client.get<{ runs: Array<{ id: string; sourceKey: string | null; sourceTitle: string; status: string; error: string | null; createdAt: string }> }>(`/spaces/${encodeURIComponent(input.spaceId)}/llm-wiki/ingest-runs${qs}`);
+    const lines = res.runs.map((r) => `- ${r.id} ${r.status} ${r.sourceKey ?? ''} "${r.sourceTitle}" ${r.createdAt}${r.error ? ` - ${r.error}` : ''}`);
+    return text(lines.length ? lines.join('\n') : 'No ingest runs.', res);
   };
 }

@@ -36,7 +36,7 @@ const TicketDraftSchema = z.object({
 export const bulkCreateTicketsToolConfig = {
   title: 'Create many tickets in one call',
   description:
-    'Create up to 50 tickets in one call - the right tool whenever you are about to create more than ~3 tickets (milestone planning, epic breakdown, import). Per-draft error isolation: a rejected draft (bad label, language block, hard duplicate-block) is reported in `failed` while the rest are still created. Duplicate detection runs per draft and is reported compactly - one line per flagged draft in `duplicateFlags`; review those before treating them as new work. A call-level `milestone` / `parentTicketKey` applies to every draft unless the draft overrides it. Drafts are created in array order, so a draft can NOT reference a sibling draft as parent - create parents first (or in a first call).',
+    'Create up to 50 tickets in one call. It is the right tool whenever you are about to create more than ~3 tickets (milestone planning, epic breakdown, import). Per-draft error isolation: a rejected draft (bad label, language block, hard duplicate-block) is reported in `failed` while the rest are still created. Duplicate detection runs per draft and is reported compactly - one line per flagged draft in `duplicateFlags`; review those before treating them as new work. A call-level `milestone` / `parentTicketKey` applies to every draft unless the draft overrides it. Drafts are created in array order, so a draft can NOT reference a sibling draft as parent - create parents first (or in a first call).',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key - all drafts land here.'),
     tickets: z.array(TicketDraftSchema).min(1).max(50).describe('The ticket drafts, created in order.'),
@@ -164,7 +164,7 @@ export function makeBulkCreateTicketsHandler(client: OrbotoClient) {
 export const bulkAddTicketDependenciesToolConfig = {
   title: 'Add many ticket dependencies in one call',
   description:
-    'Create up to 200 blocked-by edges in one call - use instead of repeated orboto_add_ticket_dependency whenever wiring more than ~3 edges (dependency graphs after a bulk create). Each pair is (ticketKey, dependsOnKey) = "ticket is blocked by dependsOn". Per-pair error isolation; an already-existing edge counts as ok, a cycle rejection lands in `failed` with the API\'s reason.',
+    'Create up to 200 blocked-by edges in one call. Use it instead of repeated orboto_add_ticket_dependency whenever wiring more than ~3 edges (dependency graphs after a bulk create). Each pair is (ticketKey, dependsOnKey) = "ticket is blocked by dependsOn". Per-pair error isolation; an already-existing edge counts as ok, a cycle rejection lands in `failed` with the API\'s reason.',
   inputSchema: z.object({
     pairs: z.array(z.object({
       ticketKey: z.string().min(3).describe('The blocked ticket.'),

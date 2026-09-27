@@ -40,6 +40,7 @@ import { agentMessageWorkToolConfig, makeAgentMessageWorkHandler } from './tools
 import { agentMessagesToolConfig, makeAgentMessagesHandler } from './tools/agent-messages.js';
 import { agentWakesToolConfig, makeAgentWakesHandler } from './tools/agent-wakes.js';
 import { sessionCheckToolConfig, makeSessionCheckHandler } from './tools/session-check.js';
+import { knowledgeAskToolConfig, makeKnowledgeAskHandler, knowledgeAddToolConfig, makeKnowledgeAddHandler } from './tools/knowledge.js';
 import { listProjectsToolConfig, makeListProjectsHandler } from './tools/list-projects.js';
 import { getProjectToolConfig, makeGetProjectHandler } from './tools/get-project.js';
 import { projectReadinessToolConfig, makeProjectReadinessHandler } from './tools/project-readiness.js';
@@ -69,8 +70,7 @@ import {
   wikiRecordToolConfig, makeWikiRecordHandler,
   wikiAppendSectionToolConfig, makeWikiAppendSectionHandler,
   wikiFlagStaleToolConfig, makeWikiFlagStaleHandler,
-  wikiSaveAnswerToolConfig, makeWikiSaveAnswerHandler,
-} from './tools/wiki.js';
+  wikiSaveAnswerToolConfig, makeWikiSaveAnswerHandler, wikiRunsToolConfig, makeWikiRunsHandler } from './tools/wiki.js';
 import {
   personalFactListToolConfig, makePersonalFactListHandler,
   personalFactAddToolConfig, makePersonalFactAddHandler,
@@ -424,6 +424,8 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_messages', agentMessagesToolConfig, makeAgentMessagesHandler(client));
   reg('orboto_agent_wakes', agentWakesToolConfig, makeAgentWakesHandler(client));
   reg('orboto_session_check', sessionCheckToolConfig, makeSessionCheckHandler(client));
+  reg('orboto_knowledge_ask', knowledgeAskToolConfig, makeKnowledgeAskHandler(client));
+  reg('orboto_knowledge_add', knowledgeAddToolConfig, makeKnowledgeAddHandler(client));
   reg('orboto_agent_broadcast', agentBroadcastToolConfig, makeAgentBroadcastHandler(client));
   reg('orboto_list_projects', listProjectsToolConfig, makeListProjectsHandler(client));
   reg('orboto_get_project', getProjectToolConfig, makeGetProjectHandler(client));
@@ -482,6 +484,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_wiki_ingest_url', wikiIngestUrlToolConfig, makeWikiIngestUrlHandler(client));
   reg('orboto_wiki_ask', wikiAskToolConfig, makeWikiAskHandler(client));
   reg('orboto_wiki_lint', wikiLintToolConfig, makeWikiLintHandler(client));
+  reg('orboto_wiki_runs', wikiRunsToolConfig, makeWikiRunsHandler(client));
   reg('orboto_wiki_plan_update', wikiPlanUpdateToolConfig, makeWikiPlanUpdateHandler(client));
   reg('orboto_wiki_apply_plan', wikiApplyPlanToolConfig, makeWikiApplyPlanHandler(client));
   reg('orboto_wiki_record', wikiRecordToolConfig, makeWikiRecordHandler(client));
