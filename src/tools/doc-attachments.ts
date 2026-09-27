@@ -58,7 +58,7 @@ function isImage(mimetype: string): boolean {
 export const uploadDocAttachmentToolConfig = {
   title: 'Upload an attachment to a doc page',
   description:
-    'Upload a file as an attachment on a wiki doc and return its Markdown image (or link) line + the stable download URL. Bytes come in as base64 (`contentBase64`) so this works without local FS access on the agent side. Set `embed=true` to also PATCH the doc body to append the Markdown line - useful for dropping a screenshot into a page in one call. MIME / extension policy is enforced server-side: blocked types (HTML, SVG, executables) surface a 415.',
+    'Upload a file as a doc attachment: returns its Markdown image (or link) line + a stable download URL. Bytes come in as base64 (`contentBase64`) so this works without local FS access on the agent side. Set `embed=true` to also PATCH the doc body to append the Markdown line - useful for dropping a screenshot into a page in one call. MIME / extension policy is enforced server-side: blocked types (HTML, SVG, executables) surface a 415.',
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     filename: z.string().min(1).describe('Display filename, e.g. "architecture-diagram.png".'),

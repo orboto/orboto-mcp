@@ -40,7 +40,7 @@ function isImage(mimetype: string): boolean {
 export const listTicketAttachmentsToolConfig = {
   title: 'List attachments on a ticket',
   description:
-    'Return a ticket\'s attachments newest-first, with each attachment\'s id, filename, content type, size, and stable download URL. Use the returned id with orboto_get_attachment to actually view an image or fetch the bytes. Empty list = no attachments. Input is the ticket key like "ACME-42".',
+    'Return a ticket\'s attachments newest-first: id, filename, content type, size, stable download URL. Use the returned id with orboto_get_attachment to actually view an image or fetch the bytes. Empty list = no attachments. Input is the ticket key like "ACME-42".',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key like "ACME-42".'),
   }).shape,
@@ -86,7 +86,7 @@ export function makeListTicketAttachmentsHandler(client: OrbotoClient) {
 export const getAttachmentToolConfig = {
   title: 'View or fetch an attachment\'s bytes',
   description:
-    'Fetch a single attachment by its id (from orboto_list_ticket_attachments, orboto_get_ticket, or orboto_list_doc_attachments) and return its content. For an image, the model receives an image content block so it actually SEES the screenshot, plus a text line with filename and size. For a non-image, the model gets a text block with metadata and, for small files, the base64 content; large binaries point at the skill\'s download-attachment shortcut. Works for ticket, doc, and comment attachments (the id is global). Enforces the same project/space access check as listing the attachment.',
+    'Fetch an attachment by id (from orboto_list_ticket_attachments or orboto_get_ticket) and return its content. For an image, the model receives an image content block so it actually SEES the screenshot, plus a text line with filename and size. For a non-image, the model gets a text block with metadata and, for small files, the base64 content; large binaries point at the skill\'s download-attachment shortcut. Works for ticket, doc, and comment attachments (the id is global). Enforces the same project/space access check as listing the attachment.',
   inputSchema: z.object({
     attachmentId: z.string().uuid().describe('Attachment UUID from a list/get call.'),
   }).shape,

@@ -79,7 +79,7 @@ export function makeWikiLintHandler(client: OrbotoClient) {
 export const wikiPlanUpdateToolConfig = {
   title: 'Plan a wiki edit (dry-run, no writes)',
   description:
-    'Turn a natural-language instruction into a concrete set of page operations (create / patch / append) WITHOUT writing anything. Returns a planId valid for 15 minutes plus the proposed ops. Review the ops, then call orboto_wiki_apply_plan to commit. Wraps POST /spaces/:id/docs/plan-update.',
+    'Turn a natural-language instruction into page operations (create/patch/append) WITHOUT writing anything. Returns a planId valid for 15 minutes plus the proposed ops. Review the ops, then call orboto_wiki_apply_plan to commit. Wraps POST /spaces/:id/docs/plan-update.',
   inputSchema: z.object({
     spaceId: z.string().uuid().describe('The wiki space to edit.'),
     instruction: z.string().min(1).max(4000).describe('What to change, in plain language.'),

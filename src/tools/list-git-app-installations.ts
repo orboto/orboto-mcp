@@ -25,7 +25,7 @@ interface InstallationRow {
 export const listGitAppInstallationsToolConfig = {
   title: 'List GitHub App installations',
   description:
-    'Every GitHub App installation orboto knows about, across projects (super-admin): the org/user, install time and whether it is suspended.',
+    'Every GitHub App installation orboto knows, across projects (super-admin): org/user, install time, suspended state.',
   inputSchema: z.object({}).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

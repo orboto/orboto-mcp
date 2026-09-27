@@ -88,7 +88,7 @@ export function makeApproveTranslationHandler(client: OrbotoClient) {
 export const revertTranslationToolConfig = {
   title: 'Revert an auto-translated ticket back to the original',
   description:
-    'Restore the pre-translation title + description from the auto-translated audit comment and clear the auto-translate marker + any prior approval. Use when the AI got the translation wrong and the operator wants to start over. 409 if the ticket was never auto-translated. Requires `admin:translation_review`.',
+    'Restore the pre-translation title + description from the audit comment and clear the auto-translate marker + prior approval. Use when the AI got the translation wrong and the operator wants to start over. 409 if the ticket was never auto-translated. Requires `admin:translation_review`.',
   inputSchema: z.object({
     ticketId: z.string().uuid().describe('UUID of the ticket to revert.'),
   }).shape,

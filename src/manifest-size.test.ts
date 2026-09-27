@@ -48,17 +48,11 @@ afterEach(() => { vi.restoreAllMocks(); });
  * write instead of after it (measured curated = 39,679 chars / 11,022
  * tokens, from 39,461 / 10,961 - one boolean parameter, no new tool). The
  * verdicts themselves ride the response, not the manifest.
- * ORB-2229 raised the full ceiling to 173,000: `orboto_secret_scan` (admin
- * toolset only, curated unchanged) reports a nested hits array (entity,
- * class, position, masked preview, space visibility) for the operator
- * secret sweep - measured full = 172,832 chars, up from 171,068 without
- * the tool, so the ceiling already had under 200 chars of headroom before
- * this addition.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
 const CURATED_MAX_CHARS = 39_900;
-const FULL_MAX_CHARS = 173_000;
+const FULL_MAX_CHARS = 171_200;
 
 /**
  * ORB-1805 - the estimator the ticket measured the failure with

@@ -96,7 +96,7 @@ export function makeReviewPolicyCheckHandler(client: OrbotoClient) {
 export const reviewApprovalRecordToolConfig = {
   title: 'Record a review decision against a diff fingerprint',
   description:
-    'Record your review verdict (approve/reject) against the complete version-prefixed fingerprint from orboto_review_fingerprint. A current-algorithm approval is reusable only for identical submitted diff text; even whitespace or file-order changes require a fresh review. Legacy/unversioned records remain history only. This advisory review ledger does not itself enforce ticket closure. Requires ticket:record_review_approval.',
+    'Record your review verdict (approve/reject) against the version-prefixed fingerprint from orboto_review_fingerprint. A current-algorithm approval is reusable only for identical submitted diff text; even whitespace or file-order changes require a fresh review. Legacy/unversioned records remain history only. This advisory review ledger does not itself enforce ticket closure. Requires ticket:record_review_approval.',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key, e.g. ORB-42.'),
     fingerprint: z.string().min(8).describe('From orboto_review_fingerprint.'),

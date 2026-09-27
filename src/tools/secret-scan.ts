@@ -35,27 +35,10 @@ interface SecretScanReport {
 export const secretScanToolConfig = {
   title: 'Secret scan',
   description:
-    'Sweeps docs, revisions, comments, ticket bodies, primer facts and embedding previews for secret-shaped values already stored (ORB-2229, same detector as the write guard). Reports entity, class, position and a masked preview, never the value. redact:true replaces the value, purges the doc\'s revisions, deletes its embedding chunks and re-enqueues it. admin:system:read (write for redact).',
+    'Admin sweep for stored secret-shaped values (ORB-2229); see skill reference admin.md "Secret scan".',
   inputSchema: z.object({
-    redact: z.boolean().optional().describe('Replace every value found and purge its history (default false).'),
-    limit: z.number().int().min(1).max(1000).optional().describe('Max hits (1-1000, default 200).'),
-  }).shape,
-  outputSchema: z.object({
-    scannedAt: z.string(),
-    scanned: z.record(z.number()),
-    hitCount: z.number(),
-    redactedCount: z.number(),
-    hits: z.array(z.object({
-      entity: z.string(),
-      id: z.string(),
-      label: z.string(),
-      field: z.string(),
-      projectKey: z.string().nullable(),
-      spaceVisibility: z.string().nullable(),
-      webUrl: z.string().nullable(),
-      classes: z.array(z.string()),
-      redacted: z.boolean(),
-    })),
+    redact: z.boolean().optional().describe('Replace found values, purge history (default false).'),
+    limit: z.number().int().min(1).max(1000).optional().describe('Max hits (default 200).'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };

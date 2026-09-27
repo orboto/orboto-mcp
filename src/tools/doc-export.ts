@@ -34,7 +34,7 @@ export function makeExportDocMdHandler(client: OrbotoClient) {
 export const exportDocPdfToolConfig = {
   title: 'Export a doc page as PDF',
   description:
-    'Render the doc page to PDF via the workspace\'s PdfService (Puppeteer-backed) and return the bytes as a base64 MCP resource attachment. Requires the PDF engine to be configured - deployments without Chromium / Puppeteer return 503 (errors.pdf.engine_unavailable) which surfaces as an OrbotoApiError.',
+    'Render the doc page to PDF (Puppeteer-backed PdfService) and return the bytes as a base64 MCP resource attachment. Requires the PDF engine to be configured - deployments without Chromium / Puppeteer return 503 (errors.pdf.engine_unavailable) which surfaces as an OrbotoApiError.',
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
   }).shape,

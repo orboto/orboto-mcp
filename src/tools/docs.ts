@@ -271,7 +271,7 @@ export function makeDeleteDocSpaceHandler(client: OrbotoClient) {
 export const listDocsInSpaceToolConfig = {
   title: 'List docs inside a space',
   description:
-    'Return the flat list of doc pages in a space - each carries `parentDocId` so the caller can reconstruct the tree client-side. Use this when an agent needs to find a doc by title rather than asking for a UUID first. Pair with orboto_get_doc to read individual page bodies.',
+    'Return the flat list of doc pages in a space - each carries `parentDocId` to reconstruct the tree client-side. Use this when an agent needs to find a doc by title rather than asking for a UUID first. Pair with orboto_get_doc to read individual page bodies.',
   inputSchema: z.object({
     spaceId: z.string().min(1).describe('Space key (e.g. ORB-S1), name, or UUID. Discover via orboto_list_doc_spaces.'),
   }).shape,
@@ -519,7 +519,7 @@ interface SmartLinkResolution {
 export const resolveDocSmartLinksToolConfig = {
   title: 'Batch-resolve smart-link references to display metadata',
   description:
-    'Resolve `[[doc:UUID]]` / `[[ticket:UUID]]` / `[[milestone:UUID]]` / `[[project:UUID]]` / commit-hash references to their current title + URL. Visibility-filtered - items the caller is not allowed to see come back as missing (the rendering frontend falls back to the literal label in that case). Useful when reading a doc body that contains many tokens and you want to display them with current titles in one round-trip rather than N+1 get-* calls. Max 200 items per call.',
+    'Resolve `[[doc:UUID]]`/`[[ticket:UUID]]`/`[[milestone:UUID]]`/`[[project:UUID]]`/commit-hash references to their title + URL. Visibility-filtered - items the caller is not allowed to see come back as missing (the rendering frontend falls back to the literal label in that case). Useful when reading a doc body that contains many tokens and you want to display them with current titles in one round-trip rather than N+1 get-* calls. Max 200 items per call.',
   inputSchema: z.object({
     items: z.array(z.object({
       type: z.enum(['doc', 'ticket', 'milestone', 'project', 'commit']),

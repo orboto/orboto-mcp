@@ -530,7 +530,7 @@ export function makeCloseTicketHandler(client: OrbotoClient) {
 export const deleteTicketToolConfig = {
   title: 'Permanently delete a ticket',
   description:
-    'DESTRUCTIVE, IRREVERSIBLE hard-delete of a ticket (by key): the row and its history are gone, and a `ticket.deleted` event + webhook fire. Strongly prefer moving the ticket to `wont_fix` (orboto_move_ticket) or closing it instead - wont_fix keeps the history and analytics intact. Only hard-delete a ticket that should truly never have existed (accidental duplicate, spam). Caller must have `ticket:delete`.',
+    'DESTRUCTIVE, IRREVERSIBLE hard-delete of a ticket (by key): row and history gone, a `ticket.deleted` event + webhook fire. Strongly prefer moving the ticket to `wont_fix` (orboto_move_ticket) or closing it instead - wont_fix keeps the history and analytics intact. Only hard-delete a ticket that should truly never have existed (accidental duplicate, spam). Caller must have `ticket:delete`.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
   }).shape,
@@ -919,7 +919,7 @@ export function makeRemoveTicketDependencyHandler(client: OrbotoClient) {
 export const listTicketDependenciesToolConfig = {
   title: 'List a ticket\'s dependencies',
   description:
-    'Show both directions of the dependency graph for a ticket: `blockedBy` (tickets that must finish first) and `blocks` (tickets waiting on this one). ORB-1614: an edge to a ticket in another project you cannot read comes back as an opaque "external dependency" entry (no title/key/status - just whether it is still open).',
+    'Show both directions of a ticket\'s dependency graph: `blockedBy` (must finish first) and `blocks` (waiting on this one). ORB-1614: an edge to a ticket in another project you cannot read comes back as an opaque "external dependency" entry (no title/key/status - just whether it is still open).',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
   }).shape,

@@ -19,7 +19,7 @@ interface UserRow {
 export const whoamiToolConfig = {
   title: 'Show the authenticated MCP principal',
   description:
-    'Return the authenticated user record `{id, email, fullName, isBot, workspaceLocale}` corresponding to the API key this MCP server is running with. Useful for debugging which credential / bot identity is in use when multiple MCP configs are wired to different `orb_*` keys. **`workspaceLocale` (ORB-989)** is the language the workspace expects tickets / comments / docs in - check it before a mass-create so you write in the right language from the start instead of relying on the after-the-fact language-mismatch warning.',
+    'Return the authenticated user record `{id, email, fullName, isBot, workspaceLocale}` for the API key this server runs with. Useful for debugging which credential / bot identity is in use when multiple MCP configs are wired to different `orb_*` keys. **`workspaceLocale` (ORB-989)** is the language the workspace expects tickets / comments / docs in - check it before a mass-create so you write in the right language from the start instead of relying on the after-the-fact language-mismatch warning.',
   inputSchema: z.object({}).shape,
   outputSchema: z.object({
     id: z.string(),

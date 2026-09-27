@@ -82,7 +82,7 @@ function summariseFact(f: PrimerFactRow): string {
 export const primerFactListToolConfig = {
   title: 'List structured project primer facts',
   description:
-    'List structured project facts that feed the AI primer (tech stack, conventions, deployment, architecture, integrations, gotchas, commands). Use this to discover what the project has already documented before adding a new observation. Workspace-wide facts (applying to every project) are merged in by default; pass includeWorkspace=false to see only project-scoped rows.',
+    'List structured project facts feeding the AI primer (stack, conventions, deployment, architecture, integrations, gotchas, commands). Use this to discover what the project has already documented before adding a new observation. Workspace-wide facts (applying to every project) are merged in by default; pass includeWorkspace=false to see only project-scoped rows.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key, e.g. "ORB". Case-insensitive.'),
     category: PrimerFactCategoryEnum.optional().describe(

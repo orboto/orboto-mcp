@@ -211,7 +211,7 @@ export function makeListTimeEntriesHandler(client: OrbotoClient) {
 export const editTimeEntryToolConfig = {
   title: 'Edit / correct a time entry',
   description:
-    'Correct a time entry - fix an over-tracked duration, edit its note, change its date, or re-target it to another ticket. Use THIS (not orboto_log_time) to fix a wrong entry: log_time is additive and only makes the total worse. Get the entryId from orboto_list_time_entries (or an orboto_log_time response). Blocked if the entry is locked by an approved timesheet.',
+    'Correct a time entry: fix a duration, edit its note, change its date, or re-target it to another ticket. Use THIS (not orboto_log_time) to fix a wrong entry: log_time is additive and only makes the total worse. Get the entryId from orboto_list_time_entries (or an orboto_log_time response). Blocked if the entry is locked by an approved timesheet.',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('The ticket the entry currently belongs to.'),
     entryId: z.string().uuid(),

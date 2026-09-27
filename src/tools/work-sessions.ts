@@ -576,7 +576,7 @@ export function makeWorkSessionsHandler(client: OrbotoClient) {
 export const workSessionClaimsAddToolConfig = {
   title: 'Add resource claims to a live work session',
   description:
-    'ORB-1610 - declare more resource claims on a session you already hold (from orboto_work_session_start), without touching the ticket lease or timer. Use this when you did not know the files/resources you would touch at start time, or need to widen scope mid-task. Same conflict rule as start: `write` claims conflict with any OVERLAPPING active write claim workspace-wide; `read` claims never conflict. Default `onConflict: "reject"` fails the WHOLE call (nothing is added) and names every conflicting holder; `queue` accepts the conflicting ones as `state: "waiting"`.',
+    'ORB-1610 - declare more resource claims on a session you hold, without touching the lease or timer. Use this when you did not know the files/resources you would touch at start time, or need to widen scope mid-task. Same conflict rule as start: `write` claims conflict with any OVERLAPPING active write claim workspace-wide; `read` claims never conflict. Default `onConflict: "reject"` fails the WHOLE call (nothing is added) and names every conflicting holder; `queue` accepts the conflicting ones as `state: "waiting"`.',
   inputSchema: z.object({
     sessionId: z.string().uuid().describe('The id returned by orboto_work_session_start.'),
     claims: z.array(z.object(ResourceClaimShape)).min(1).max(50)
@@ -634,7 +634,7 @@ export function makeWorkSessionClaimsAddHandler(client: OrbotoClient) {
 export const workSessionClaimsReleaseToolConfig = {
   title: 'Release resource claims from a live work session',
   description:
-    'ORB-1610 - drop specific resource claims (or all of them) from a session you hold, WITHOUT finishing the session or touching the ticket lease/timer. Releasing a granted write claim immediately runs a grant pass, so the earliest queued waiter for that resource is promoted as part of this call - useful once you know you are done touching a subtree but are not done with the ticket. Omit `claims` to release everything the session holds.',
+    'ORB-1610 - drop resource claims (or all) from a session you hold, WITHOUT finishing it or touching the ticket lease/timer. Releasing a granted write claim immediately runs a grant pass, so the earliest queued waiter for that resource is promoted as part of this call - useful once you know you are done touching a subtree but are not done with the ticket. Omit `claims` to release everything the session holds.',
   inputSchema: z.object({
     sessionId: z.string().uuid().describe('The id returned by orboto_work_session_start.'),
     claims: z.array(z.object({ kind: z.enum(['path', 'named']), value: z.string().min(1).max(500) })).optional()

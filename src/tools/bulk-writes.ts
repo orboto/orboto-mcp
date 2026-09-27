@@ -165,7 +165,7 @@ export function makeBulkPatchTicketsHandler(client: OrbotoClient) {
 export const bulkMoveTicketsToolConfig = {
   title: 'Move many tickets to a status category',
   description:
-    'Move every ticket in `ticketKeys` (or the tickets `query` selects) to the same status category (todo / in_progress / in_review / done / wont_fix). Each ticket lands on its own project\'s first status with that category. Returns the per-ticket outcome.',
+    'Move every ticket in `ticketKeys` (or `query` selects) to the same status category (todo/in_progress/in_review/done/wont_fix). Each ticket lands on its own project\'s first status with that category. Returns the per-ticket outcome.',
   inputSchema: z.object({
     ticketKeys: TICKET_KEY_ARRAY,
     query: QUERY_SOURCE,
@@ -201,7 +201,7 @@ export function makeBulkMoveTicketsHandler(client: OrbotoClient) {
 export const bulkCloseTicketsToolConfig = {
   title: 'Close many tickets (optionally with a shared comment)',
   description:
-    'For every ticket in `ticketKeys` (or the tickets `query` selects): optionally post the same `comment` first, then move it to `done`. Mirrors `orboto.mjs bulk-close`. Comment-first ordering means the close note lands in the audit trail even if the status PATCH 403s.',
+    'For every ticket in `ticketKeys` (or `query` selects): optionally post the same `comment` first, then move to `done`. Mirrors `orboto.mjs bulk-close`. Comment-first ordering means the close note lands in the audit trail even if the status PATCH 403s.',
   inputSchema: z.object({
     ticketKeys: TICKET_KEY_ARRAY,
     query: QUERY_SOURCE,
@@ -294,7 +294,7 @@ async function makeAssigneeResolver(client: OrbotoClient, email: string) {
 export const bulkAssignTicketsToolConfig = {
   title: 'Assign the same user to many tickets',
   description:
-    'POST `assigneeEmail` as an additional assignee on every ticket in `ticketKeys` (or the tickets `query` selects). Multi-assignee is supported - this adds, it does not replace. Idempotent: a 409 (already assigned) counts as success.',
+    'POST `assigneeEmail` as an additional assignee on every ticket in `ticketKeys` (or `query` selects). Multi-assignee: this adds, never replaces. Idempotent: a 409 (already assigned) counts as success.',
   inputSchema: z.object({
     ticketKeys: TICKET_KEY_ARRAY,
     query: QUERY_SOURCE,
@@ -339,7 +339,7 @@ export function makeBulkAssignTicketsHandler(client: OrbotoClient) {
 export const bulkUnassignTicketsToolConfig = {
   title: 'Unassign the same user from many tickets',
   description:
-    'DELETE `assigneeEmail` from every ticket in `ticketKeys` (or the tickets `query` selects). Idempotent: a 404 (was not assigned) counts as success.',
+    'DELETE `assigneeEmail` from every ticket in `ticketKeys` (or `query` selects). Idempotent: a 404 (was not assigned) counts as success.',
   inputSchema: z.object({
     ticketKeys: TICKET_KEY_ARRAY,
     query: QUERY_SOURCE,
