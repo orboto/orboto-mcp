@@ -14,6 +14,7 @@ import { aiStatusToolConfig, makeAiStatusHandler } from './tools/ai-status.js';
 import { draftCustomerReplyToolConfig, makeDraftCustomerReplyHandler } from './tools/customer-draft.js';
 import { embeddingStatusToolConfig, makeEmbeddingStatusHandler } from './tools/embedding-status.js';
 import { aiUsageToolConfig, makeAiUsageHandler } from './tools/ai-usage.js';
+import { secretScanToolConfig, makeSecretScanHandler } from './tools/secret-scan.js';
 import { sessionStartToolConfig, makeSessionStartHandler } from './tools/session-start.js';
 import { CHANNEL_CAPABILITY, CHANNEL_INSTRUCTIONS } from './inbox-channel.js';
 import { loadRequiredRules } from './required-rules.js';
@@ -407,6 +408,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_draft_customer_reply', draftCustomerReplyToolConfig, makeDraftCustomerReplyHandler(client));
   reg('orboto_embedding_status', embeddingStatusToolConfig, makeEmbeddingStatusHandler(client));
   reg('orboto_ai_usage', aiUsageToolConfig, makeAiUsageHandler(client));
+  reg('orboto_secret_scan', secretScanToolConfig, makeSecretScanHandler(client));
   reg('orboto_session_start', sessionStartToolConfig, makeSessionStartHandler(client, { channel: opts.channel }));
   reg('orboto_response_expand', responseExpandToolConfig, makeResponseExpandHandler());
   reg('orboto_help', helpToolConfig, makeHelpHandler());
