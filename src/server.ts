@@ -203,6 +203,7 @@ import {
   unclaimToolConfig, makeUnclaimHandler,
 } from './tools/claim.js';
 import { reportFeedbackToolConfig, makeReportFeedbackHandler } from './tools/feedback.js';
+import { feedbackReplyToolConfig, makeFeedbackReplyHandler } from './tools/feedback-reply.js';
 import {
   listApprovalsToolConfig, makeListApprovalsHandler,
   approvalDecideToolConfig, makeApprovalDecideHandler,
@@ -560,6 +561,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_claim', claimToolConfig, makeClaimHandler(client));
   reg('orboto_unclaim', unclaimToolConfig, makeUnclaimHandler(client));
   reg('orboto_report_feedback', reportFeedbackToolConfig, makeReportFeedbackHandler(client));
+  reg('orboto_feedback_reply', feedbackReplyToolConfig, makeFeedbackReplyHandler(client));
   reg('orboto_list_approvals', listApprovalsToolConfig, makeListApprovalsHandler(client));
   reg('orboto_approval_decide', approvalDecideToolConfig, makeApprovalDecideHandler(client));
   reg('orboto_review_fingerprint', reviewFingerprintToolConfig, makeReviewFingerprintHandler(client));

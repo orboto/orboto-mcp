@@ -15,17 +15,35 @@ export const SUMMARY_MAX_CHARS = 220;
  */
 const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_create_full_backup:
-    'Start a full-workspace backup job (all projects, users, config, attachments); returns the job id to poll via orboto_list_backups.',
+    'Start a full-workspace backup job; returns the job id to poll via orboto_list_backups.',
   orboto_get_ticket:
     'Fetch one ticket by key or UUID with description, status, assignees, checklists and comments.',
   orboto_requirements_spec:
-    'Generate a structured requirements spec for a project or milestone from its tickets (scope, actors, functional + non-functional requirements).',
+    'Generate a structured requirements spec for a project or milestone from its tickets.',
   orboto_update_doc_space:
     'Update a doc space\'s name, description, icon, project binding or access mode (open/restricted) by space id.',
   orboto_search_docs:
     'Full-text search over doc/wiki pages (query, optional space or project filter); returns matching pages with snippets.',
   orboto_critical_path:
-    'Compute the dependency-based critical path for a project or milestone: the blocking chain of tickets that determines the earliest finish.',
+    'Compute the critical path (blocking dependency chain) for a project or milestone.',
+  /** ORB-2237 - `orboto_feedback_reply` needed manifest headroom (the ratchet
+   *  is shrink-only); these entries free it without touching the tools'
+   *  own full documentation (`getToolDoc`/`orboto_help` still see the
+   *  original, uncut description from each tool's own file). */
+  orboto_agent_broadcast:
+    'Fan-out a message to every agent in a workspace, project or topic scope.',
+  orboto_api_search:
+    'Discover REST API endpoints on demand - the escape hatch for any orboto endpoint.',
+  orboto_get_doc:
+    'Return a doc\'s content (Markdown) plus its backlinks.',
+  orboto_primer_fact_list:
+    'List structured project facts feeding the AI primer.',
+  orboto_bulk_move_tickets:
+    'Move every matching ticket to the same status category.',
+  orboto_resolve_doc_smart_links:
+    'Resolve doc/ticket/milestone/project smart-link references to their title + URL.',
+  orboto_admin_translation_revert:
+    'Restore the pre-translation title + description and clear the translation marker.',
 };
 
 /** Runtime registry: tool name -> full guidance text, captured at
