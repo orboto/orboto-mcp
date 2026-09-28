@@ -26,10 +26,7 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
     'Full-text search over doc/wiki pages (query, optional space or project filter); returns matching pages with snippets.',
   orboto_critical_path:
     'Compute the critical path (blocking dependency chain) for a project or milestone.',
-  /** ORB-2237 - `orboto_feedback_reply` needed manifest headroom (the ratchet
-   *  is shrink-only); these entries free it without touching the tools'
-   *  own full documentation (`getToolDoc`/`orboto_help` still see the
-   *  original, uncut description from each tool's own file). */
+  /** ORB-2237 - shortened summaries that pay for `orboto_feedback_reply`; each tool's full text stays in `getToolDoc`. */
   orboto_agent_broadcast:
     'Fan-out a message to every agent in a workspace, project or topic scope.',
   orboto_api_search:
