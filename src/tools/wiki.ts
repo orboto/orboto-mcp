@@ -76,10 +76,18 @@ export function makeWikiLintHandler(client: OrbotoClient) {
   };
 }
 
+type DroppedOp = { title: string; target: string | null; reason: string };
+
+/** ORB-2226 - planner ops whose target page matched no docId, doc key or title. */
+function droppedLines(dropped: DroppedOp[]): string {
+  if (dropped.length === 0) return '';
+  return `\nOps dropped: ${dropped.length}\n${dropped.map((d) => `- ${d.title}${d.target ? ` (target ${d.target})` : ''}: ${d.reason}`).join('\n')}`;
+}
+
 export const wikiPlanUpdateToolConfig = {
   title: 'Plan a wiki edit (dry-run, no writes)',
   description:
-    'Turn a natural-language instruction into page operations (create/patch/append) WITHOUT writing anything. Returns a planId valid for 15 minutes plus the proposed ops. Review the ops, then call orboto_wiki_apply_plan to commit. Wraps POST /spaces/:id/docs/plan-update.',
+    'Turn a natural-language instruction into page operations (create/patch/append) WITHOUT writing anything. Returns a planId valid for 15 minutes plus the proposed ops, and droppedOps: ops whose target page matched no docId, doc key or title. Review the ops, then call orboto_wiki_apply_plan to commit. Wraps POST /spaces/:id/docs/plan-update.',
   inputSchema: z.object({
     spaceId: z.string().uuid().describe('The wiki space to edit.'),
     instruction: z.string().min(1).max(4000).describe('What to change, in plain language.'),
@@ -91,9 +99,10 @@ export function makeWikiPlanUpdateHandler(client: OrbotoClient) {
   return async (input: { spaceId: string; instruction: string; sourceDocId?: string }): Promise<CallToolResult> => {
     const body: Record<string, unknown> = { instruction: input.instruction };
     if (input.sourceDocId) body.sourceDocId = input.sourceDocId;
-    const res = await client.post<{ planId: string; ops: Array<{ op: string; title?: string; summary: string }>; expiresAt: string }>(`/spaces/${input.spaceId}/docs/plan-update`, body);
+    const res = await client.post<{ planId: string; ops: Array<{ op: string; title?: string; summary: string }>; droppedOps?: DroppedOp[]; expiresAt: string }>(`/spaces/${input.spaceId}/docs/plan-update`, body);
     const ops = res.ops.map((o, i) => `${i + 1}. ${o.op} ${o.title ?? ''} - ${o.summary}`).join('\n');
-    return text(`Plan ${res.planId} (expires ${res.expiresAt}):\n${ops}\n\nApply with orboto_wiki_apply_plan(planId).`, { planId: res.planId, ops: res.ops, expiresAt: res.expiresAt });
+    const droppedOps = res.droppedOps ?? [];
+    return text(`Plan ${res.planId} (expires ${res.expiresAt}):\n${ops}${droppedLines(droppedOps)}\n\nApply with orboto_wiki_apply_plan(planId).`, { planId: res.planId, ops: res.ops, droppedOps, expiresAt: res.expiresAt });
   };
 }
 
@@ -129,9 +138,10 @@ export function makeWikiRecordHandler(client: OrbotoClient) {
   return async (input: { spaceId: string; instruction: string; sourceDocId?: string }): Promise<CallToolResult> => {
     const planBody: Record<string, unknown> = { instruction: input.instruction };
     if (input.sourceDocId) planBody.sourceDocId = input.sourceDocId;
-    const plan = await client.post<{ planId: string }>(`/spaces/${input.spaceId}/docs/plan-update`, planBody);
+    const plan = await client.post<{ planId: string; droppedOps?: DroppedOp[] }>(`/spaces/${input.spaceId}/docs/plan-update`, planBody);
     const applied = await client.post<{ touchedDocs: string[] }>(`/spaces/${input.spaceId}/docs/apply-plan`, { planId: plan.planId });
-    return text(`Recorded: ${applied.touchedDocs.length} page(s) updated.`, { planId: plan.planId, touchedDocs: applied.touchedDocs });
+    const droppedOps = plan.droppedOps ?? [];
+    return text(`Recorded: ${applied.touchedDocs.length} page(s) updated.${droppedLines(droppedOps)}`, { planId: plan.planId, touchedDocs: applied.touchedDocs, droppedOps });
   };
 }
 
@@ -211,8 +221,8 @@ export function makeWikiRunsHandler(client: OrbotoClient) {
       return text(res.queued ? `Run ${res.runId} is queued for the ingest worker again.` : `Run ${res.runId} ran again: ${res.status}${res.error ? ` - ${res.error}` : ''}.`, res);
     }
     const qs = input.status ? `?status=${input.status}` : '';
-    const res = await client.get<{ runs: Array<{ id: string; sourceKey: string | null; sourceTitle: string; status: string; error: string | null; createdAt: string }> }>(`/spaces/${encodeURIComponent(input.spaceId)}/llm-wiki/ingest-runs${qs}`);
-    const lines = res.runs.map((r) => `- ${r.id} ${r.status} ${r.sourceKey ?? ''} "${r.sourceTitle}" ${r.createdAt}${r.error ? ` - ${r.error}` : ''}`);
+    const res = await client.get<{ runs: Array<{ id: string; sourceKey: string | null; sourceTitle: string; status: string; error: string | null; droppedOps?: DroppedOp[]; createdAt: string }> }>(`/spaces/${encodeURIComponent(input.spaceId)}/llm-wiki/ingest-runs${qs}`);
+    const lines = res.runs.map((r) => `- ${r.id} ${r.status} ${r.sourceKey ?? ''} "${r.sourceTitle}" ${r.createdAt}${r.droppedOps?.length ? ` (ops dropped: ${r.droppedOps.length})` : ''}${r.error ? ` - ${r.error}` : ''}`);
     return text(lines.length ? lines.join('\n') : 'No ingest runs.', res);
   };
 }

@@ -73,6 +73,13 @@ describe('orboto_wiki_plan_update + apply_plan', () => {
     expect(calls[0].url).toBe(`https://orboto.example.com/spaces/${SPACE}/docs/plan-update`);
     expect((res.content[0] as { text: string }).text).toContain('Plan p1');
   });
+  it('ORB-2226 - plan-update names the ops the planner target could not be resolved for', async () => {
+    stubJSON([{ json: { planId: 'p1', ops: [], droppedOps: [{ title: 'Runbook', target: 'ghost page', reason: 'unknown_target' }], expiresAt: '2026-01-01T00:15:00Z' } }]);
+    const res = await makeWikiPlanUpdateHandler(client)({ spaceId: SPACE, instruction: 'update the runbook' });
+    const out = (res.content[0] as { text: string }).text;
+    expect(out).toContain('Ops dropped: 1');
+    expect(out).toContain('- Runbook (target ghost page): unknown_target');
+  });
   it('apply-plan reports touched docs', async () => {
     stubJSON([{ json: { touchedDocs: [DOC] } }]);
     const res = await makeWikiApplyPlanHandler(client)({ spaceId: SPACE, planId: 'p1' });

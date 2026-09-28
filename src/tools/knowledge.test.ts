@@ -80,4 +80,10 @@ describe('ORB-2225 orboto_wiki_runs', () => {
     expect(textOf(await handler({ spaceId: 'ACME-S1', action: 'retry', runId: '11111111-0000-4000-8000-000000000000' }))).toContain('ran again: applied');
     expect(post).toHaveBeenCalledWith('/spaces/ACME-S1/llm-wiki/ingest-runs/11111111-0000-4000-8000-000000000000/retry', {});
   });
+
+  it('ORB-2226 - a run that left planner ops out says how many', async () => {
+    const get = vi.fn().mockResolvedValue({ runs: [{ id: 'r2', sourceKey: 'ACME-D10', sourceTitle: 'Deploy notes', status: 'applied', error: null, droppedOps: [{ title: 'Deploy', target: 'ACME-D99', reason: 'unknown_target' }], createdAt: '2026-09-27T09:00:00Z' }] });
+    const handler = makeWikiRunsHandler({ get, post: vi.fn() } as unknown as OrbotoClient);
+    expect(textOf(await handler({ spaceId: 'ACME-S1' }))).toContain('r2 applied ACME-D10 "Deploy notes" 2026-09-27T09:00:00Z (ops dropped: 1)');
+  });
 });
