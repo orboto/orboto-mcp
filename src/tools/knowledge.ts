@@ -3,11 +3,12 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { mcpInstanceToken } from './shared.js';
+import { droppedLines, type DroppedOp } from './wiki.js';
 
 interface Citation { index: number; title: string; link: string }
 interface SpaceRef { spaceKey: string | null; spaceName: string; projectKey: string | null }
 interface AskResponse { answer: string; citations: Citation[]; mode: string; abstained: boolean; source: string; spaces: SpaceRef[] }
-interface AddResponse { action: 'recorded' | 'ingesting'; text: string; pages: Array<{ key: string | null; title: string; webUrl: string }>; source: { key: string | null; title: string; webUrl: string } | null }
+interface AddResponse { action: 'recorded' | 'ingesting'; text: string; pages: Array<{ key: string | null; title: string; webUrl: string }>; source: { key: string | null; title: string; webUrl: string } | null; droppedOps?: DroppedOp[] }
 
 type Extra = { sessionId?: string } | undefined;
 
@@ -46,6 +47,6 @@ export function makeKnowledgeAddHandler(client: OrbotoClient) {
     extra?: unknown,
   ): Promise<CallToolResult> => {
     const res = await client.post<AddResponse>('/knowledge/add', input, { instanceToken: mcpInstanceToken(undefined, extra as Extra) });
-    return { content: [{ type: 'text', text: res.text }], structuredContent: res as unknown as Record<string, unknown> };
+    return { content: [{ type: 'text', text: `${res.text}${droppedLines(res.droppedOps ?? [])}` }], structuredContent: res as unknown as Record<string, unknown> };
   };
 }

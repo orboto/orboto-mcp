@@ -32,6 +32,15 @@ describe('ORB-2225 orboto_knowledge_ask and orboto_knowledge_add', () => {
     expect(result.structuredContent).toMatchObject({ action: 'recorded' });
   });
 
+  it('files a fact and lists the ops the wiki agent dropped, as wiki record does', async () => {
+    const droppedOps = [{ title: 'Runner', target: 'ACME-D99', reason: 'unknown_target' }];
+    const post = vi.fn().mockResolvedValue({ action: 'recorded', text: 'Recorded in the ACME-S1 wiki: ACME-D7 "Build host". Cite it by key.', pages: [], source: null, droppedOps });
+    const result = await makeKnowledgeAddHandler({ post } as unknown as OrbotoClient)({ title: 'Build host', content: 'build.example.org', projectKey: 'ACME' });
+    expect(textOf(result)).toContain('Ops dropped: 1');
+    expect(textOf(result)).toContain('- Runner (target ACME-D99): unknown_target');
+    expect(result.structuredContent).toMatchObject({ droppedOps });
+  });
+
   it('both tools carry a title and annotations; ask is read-only, add is not', () => {
     expect(knowledgeAskToolConfig.title).toBeTruthy();
     expect(knowledgeAskToolConfig.annotations.readOnlyHint).toBe(true);

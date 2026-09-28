@@ -76,10 +76,10 @@ export function makeWikiLintHandler(client: OrbotoClient) {
   };
 }
 
-type DroppedOp = { title: string; target: string | null; reason: string };
+export type DroppedOp = { title: string; target: string | null; reason: string };
 
 /** ORB-2226 - planner ops whose target page matched no docId, doc key or title. */
-function droppedLines(dropped: DroppedOp[]): string {
+export function droppedLines(dropped: DroppedOp[]): string {
   if (dropped.length === 0) return '';
   return `\nOps dropped: ${dropped.length}\n${dropped.map((d) => `- ${d.title}${d.target ? ` (target ${d.target})` : ''}: ${d.reason}`).join('\n')}`;
 }
