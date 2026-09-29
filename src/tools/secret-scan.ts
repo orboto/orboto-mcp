@@ -23,6 +23,7 @@ interface SecretScanHit {
   webUrl: string | null;
   findings: SecretFinding[];
   redacted: boolean;
+  moves?: Array<{ findingId: string; kind: string }>;
 }
 
 interface SecretScanReport {
@@ -63,6 +64,9 @@ export function makeSecretScanHandler(client: OrbotoClient) {
         for (const f of hit.findings) {
           lines.push(`    ${f.class} in ${hit.field} at line ${f.line}, column ${f.column} (${f.preview}, ${f.length} chars)`);
         }
+        for (const m of hit.moves ?? []) {
+          lines.push(`    move as ${m.kind}: findingId ${m.findingId} (post /admin/content/secret-scan/move with a key)`);
+        }
       }
       lines.push(report.redacted > 0
         ? `Redacted ${report.redacted} rows; rotate every credential listed above.`
@@ -79,7 +83,7 @@ export function makeSecretScanHandler(client: OrbotoClient) {
         hits: report.hits.map((h) => ({
           entity: h.entity, id: h.id, label: h.label, field: h.field,
           projectKey: h.projectKey, spaceVisibility: h.spaceVisibility, webUrl: h.webUrl,
-          classes: h.findings.map((f) => f.class), redacted: h.redacted,
+          classes: h.findings.map((f) => f.class), redacted: h.redacted, moves: h.moves ?? [],
         })),
       },
     };
