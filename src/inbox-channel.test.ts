@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { CHANNEL_CAPABILITY, CHANNEL_INSTRUCTIONS, CHANNEL_METHOD, CLI_OUTDATED_NOTICE, InboxChannel, RESTART_REQUESTED_NOTICE, cliOutdatedNotice, digestMinutesFromEnv, isImmediate, renderEvent, type InboxMessage } from './inbox-channel.js';
+import { CHANNEL_CAPABILITY, CHANNEL_INSTRUCTIONS, CHANNEL_METHOD, CLI_OUTDATED_NOTICE, InboxChannel, RESTART_REQUESTED_NOTICE, cliOutdatedNotice, digestMinutesFromEnv, isImmediate, renderEvent, scopeHintWithKey, type InboxMessage } from './inbox-channel.js';
 import { buildOrbotoMcpServer } from './server.js';
 import { _forgetDeclaredScopes, rememberDeclaredScope, rememberedScope } from './session-scope-memory.js';
 
@@ -174,6 +174,28 @@ describe('InboxChannel', () => {
     await vi.advanceTimersByTimeAsync(2_000);
     await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2));
     expect(String(fetchFn.mock.calls[1][0])).toContain('since=m1');
+    channel.close();
+  });
+
+  it('ORB-2263 - the scope hint reaches the session once per process, with the checkout project in the CLI call', async () => {
+    const { mcp, notification } = mockMcp();
+    const hint = { notice: 'declare_scope', sessionId: 'cccccccc-0000-4000-8000-000000000000', content: 'declare your scope through the CLI in the shell: orboto session-start --role worker --scope-projects <KEY> - never through the claude.ai connector' };
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce(sse([hint]))
+      .mockResolvedValueOnce(sse([hint]))
+      .mockImplementation(() => new Promise(() => { /* hold */ }));
+    const channel = new InboxChannel({ baseUrl: 'https://x.test', apiKey: 'orb_k', instanceToken: 'mcp-once', mcp, fetchFn, log: () => {}, digestMinutes: 0, projectKey: 'acme' });
+    channel.start();
+    await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(5_000);
+    await vi.waitFor(() => expect(fetchFn.mock.calls.length).toBeGreaterThanOrEqual(3));
+    expect(notification).toHaveBeenCalledTimes(1);
+    const sent = notification.mock.calls[0][0] as { params: { content: string; meta: Record<string, string> } };
+    expect(sent.params.content).toContain('orboto session-start --role worker --scope-projects ACME');
+    expect(sent.params.content).not.toContain('<KEY>');
+    expect(channel.stats.notices).toBe(1);
+    expect(scopeHintWithKey('x <KEY>', undefined)).toBe('x <KEY>');
+    expect(scopeHintWithKey('x <KEY>', 'bad key!')).toBe('x <KEY>');
     channel.close();
   });
 

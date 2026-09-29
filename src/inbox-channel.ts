@@ -14,6 +14,8 @@ export { RESTART_REQUESTED_NOTICE };
 interface TokenProviderLike { getAccessToken(): Promise<string> }
 
 export const CHANNEL_METHOD = 'notifications/claude/channel';
+/** ORB-2263 - the server notice an unscoped channel session gets; the session sees it once, with the exact CLI call. */
+export const DECLARE_SCOPE_NOTICE = 'declare_scope';
 export const CHANNEL_CAPABILITY = 'claude/channel';
 export const DEFAULT_DIGEST_MINUTES = 15;
 const IMMEDIATE_AFTER_MS = 5 * 60_000;
@@ -55,6 +57,8 @@ export interface InboxChannelOpts {
   since?: string;
   /** ORB-2181 - seam for the restart request file the `restart_requested` notice writes. */
   writeRestart?: typeof writeRestartRequest;
+  /** ORB-2263 - the checkout's project for the scope hint; defaults to ORBOTO_PROJECT_KEY. */
+  projectKey?: string;
 }
 
 export interface ChannelEvent { content: string; meta: Record<string, string> }
@@ -78,7 +82,7 @@ export const CHANNEL_INSTRUCTIONS =
   + 'Never answer the channel itself and never ack what you did not handle - dismiss it instead with orboto_messages { dismiss: { ids, reason } }: '
   + 'not_mine for another session\'s mail (the sender is told, and the message never reaches this session again), obsolete or duplicate with a note when the request is already done. '
   + 'A session that declared no scope is woken by mail addressed to it and by broadcasts only, and gets one notice event saying so on connect: '
-  + 'declare the scope with orboto_session_start { scope: { role, projectKeys } } to be woken by the account\'s project mail again - '
+  + 'declare the scope through the CLI in the shell, `orboto session-start --role worker --scope-projects <KEY>`, to be woken by the account\'s project mail again - never through the claude.ai connector, which is another session - '
   + 'the rest of the account\'s inbox stays readable with orboto_messages the whole time. '
   + 'Declare it once: the session keeps its id and scope across reconnects and restarts of this terminal.';
 
@@ -157,6 +161,12 @@ export function renderEvent(m: InboxMessage, now: number): ChannelEvent {
   };
 }
 
+/** ORB-2263 - the scope hint names the project of this checkout in its CLI call when the environment carries one. */
+export function scopeHintWithKey(content: string, rawKey: string | undefined): string {
+  const key = rawKey?.trim().toUpperCase();
+  return key && /^[A-Z][A-Z0-9_]{0,63}$/.test(key) ? content.replaceAll('<KEY>', key) : content;
+}
+
 export function renderDigest(batch: InboxMessage[], now: number): ChannelEvent {
   const lines = [`Inbox digest: ${batch.length} info/complete message(s) since the last event. Ack the ones you handled with orboto_messages { ackIds }.`];
   for (const m of batch) {
@@ -181,6 +191,7 @@ export class InboxChannel {
   private seen = new Set<string>();
   private seenOrder: string[] = [];
   private batch: InboxMessage[] = [];
+  private scopeHintShown = false;
   /** Counters an operator can read from the log; tests read them directly. */
   readonly stats = { delivered: 0, digested: 0, duplicates: 0, reconnects: 0, notices: 0 };
   /** ORB-2209 - what the server said on the last connect. */
@@ -223,9 +234,16 @@ export class InboxChannel {
     }
   }
 
-  /** ORB-2151 - a server notice (the scope hint) is emitted as-is and never becomes the replay anchor. */
+  /** ORB-2151 - a server notice is emitted and never becomes the replay anchor; the scope hint only once per process (ORB-2263). */
   async deliverNotice(notice: string, content: string): Promise<void> {
     if (!content) return;
+    if (notice === DECLARE_SCOPE_NOTICE) {
+      if (this.scopeHintShown) return;
+      this.scopeHintShown = true;
+      this.stats.notices += 1;
+      await this.emit({ content: scopeHintWithKey(content, this.opts.projectKey ?? process.env.ORBOTO_PROJECT_KEY), meta: { kind: 'notice', notice } });
+      return;
+    }
     this.stats.notices += 1;
     if (notice === RESTART_REQUESTED_NOTICE) {
       await this.emit({ content: this.takeRestartRequest(content), meta: { kind: 'notice', notice } });

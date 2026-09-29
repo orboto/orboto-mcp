@@ -109,16 +109,21 @@ export function makeAgentPresenceHandler(client: OrbotoClient) {
   };
 }
 
+/** ORB-2263 - mirror of AgentNotifyRoutedToSchema in @orboto/shared-schema (drift test in agent-coordination.test.ts). */
+export const NOTIFY_ROUTED_TO = ['session', 'scope', 'account'] as const;
+
 interface NotifyResponse {
   ok: true;
   messageId: string;
   toSessionId: string | null;
+  routedTo?: (typeof NOTIFY_ROUTED_TO)[number];
+  routingNote?: string;
 }
 
 export const agentNotifyToolConfig = {
   title: 'Notify another agent / user',
   description:
-    'Message a user (bot or human) by email; lands in their inbox (orboto_messages), for humans in-app. kind: request|error = work inside the scope the recipient holds (request needs project or toSessionRef + outcome); info = information; complete = result (needs outcome). payload: free-form JSON; threadId links a reply to the message it answers. toSessionRef (instance short id, session ref or id) reaches ONE session of the account; project scopes an account message to sessions declared on it (ORB-2136).',
+    'Message a user (bot or human) by email; lands in their inbox (orboto_messages), for humans in-app. kind: request|error = work inside the scope the recipient holds (request needs project or toSessionRef + outcome); info = information; complete = result (needs outcome). payload: free-form JSON; threadId links a reply to the message it answers. toSessionRef (instance short id, session ref or id) reaches ONE session of the account; project scopes an account message to sessions declared on it (ORB-2136). The answer names routedTo (session, scope or account); routingNote "no session declared KEY" means nothing wakes - escalate instead of assuming delivery (ORB-2263).',
   inputSchema: z.object({
     targetEmail: z.string().email(),
     kind: z.enum(['info', 'request', 'complete', 'error']).default('info'),
@@ -126,14 +131,16 @@ export const agentNotifyToolConfig = {
     outcome: z.string().min(10).max(1000).optional(),
     payload: z.record(z.string(), z.unknown()).optional(),
     threadId: z.string().uuid().optional(),
-    project: z.string().min(1).max(64).optional().describe('Project key or UUID: scope the message to the recipient session working that project.'),
-    senderRef: z.string().min(1).max(128).optional().describe('Sender-session ref for self-echo exclusion; defaults to this MCP session.'),
+    project: z.string().min(1).max(64).optional().describe('Project key or UUID.'),
+    senderRef: z.string().min(1).max(128).optional().describe('Sender-session ref; default: this MCP session.'),
     toSessionRef: z.string().min(1).max(200).optional(),
   }).shape,
   outputSchema: z.object({
     ok: z.literal(true),
     messageId: z.string().uuid(),
     toSessionId: z.string().uuid().nullable(),
+    routedTo: z.enum(NOTIFY_ROUTED_TO),
+    routingNote: z.string().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -198,9 +205,11 @@ export function makeAgentNotifyHandler(client: OrbotoClient) {
     const senderRef = mcpInstanceToken(args.senderRef, extra as { sessionId?: string } | undefined);
     const res = await client.post<NotifyResponse>('/v1/agent/notify', { ...args, senderRef }, { instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
     const target = res.toSessionId ? `${args.targetEmail} session ${res.toSessionId.slice(0, 8)}` : args.targetEmail;
+    const routedTo = res.routedTo ?? (res.toSessionId ? 'session' : 'account');
+    const note = res.routingNote ? ` - ${res.routingNote}` : '';
     return {
-      content: [{ type: 'text', text: `notified ${target} (message ${res.messageId} - delivered live if connected, waits in their inbox otherwise)` }],
-      structuredContent: { ok: true, messageId: res.messageId, toSessionId: res.toSessionId ?? null },
+      content: [{ type: 'text', text: `notified ${target} (message ${res.messageId}, routed to ${routedTo}${note})` }],
+      structuredContent: { ok: true, messageId: res.messageId, toSessionId: res.toSessionId ?? null, routedTo, ...(res.routingNote ? { routingNote: res.routingNote } : {}) },
     };
   };
 }
