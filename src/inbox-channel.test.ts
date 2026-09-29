@@ -56,17 +56,13 @@ describe('renderEvent / isImmediate', () => {
     expect(isImmediate(msg({ kind: 'info', payload: { message: 'pushed abc' } }), NOW, 0)).toBe(true);
   });
 
-  it('ORB-2265 - info addressed to this session or in a thread it sent into wakes at once; account and broadcast info stays digest material', () => {
-    const mine = 'bbbbbbbb-0000-4000-8000-000000000000';
+  it('ORB-2265 - info flagged addressed or in a sent thread wakes at once; account and broadcast info stays digest material', () => {
     const info = (over: Partial<InboxMessage> = {}) => msg({ kind: 'info', payload: { message: 'z440-2 is off' }, ...over });
-    expect(isImmediate(info({ toSessionId: mine }), NOW, 15, mine)).toBe(true);
-    expect(isImmediate(info(), NOW, 15, mine)).toBe(true);
-    expect(isImmediate(info({ kind: 'complete', payload: null, toSessionId: mine }), NOW, 15, mine)).toBe(true);
-    expect(isImmediate(info({ threadId: 't1', inSentThread: true, toSessionId: null, to: { email: 'claude@orboto.io', sessionId: null } }), NOW, 15, mine)).toBe(true);
-    expect(isImmediate(info({ toSessionId: null, to: { email: 'claude@orboto.io', sessionId: null } }), NOW, 15, mine)).toBe(false);
-    expect(isImmediate(info({ threadId: 't1', toSessionId: null, to: { email: 'claude@orboto.io', sessionId: null } }), NOW, 15, mine)).toBe(false);
-    expect(isImmediate(info({ toSessionId: 'cccccccc-0000-4000-8000-000000000000', to: { email: 'x@orboto.io', sessionId: 'cccccccc-0000-4000-8000-000000000000' } }), NOW, 15, mine)).toBe(false);
-    expect(isImmediate(info({ toSessionId: null, to: { email: 'claude@orboto.io', sessionId: null }, projectKey: null }), NOW, 15, null)).toBe(false);
+    expect(isImmediate(info({ addressed: true }), NOW, 15)).toBe(true);
+    expect(isImmediate(info({ kind: 'complete', payload: null, addressed: true }), NOW, 15)).toBe(true);
+    expect(isImmediate(info({ threadId: 't1', inSentThread: true }), NOW, 15)).toBe(true);
+    expect(isImmediate(info(), NOW, 15)).toBe(false);
+    expect(isImmediate(info({ threadId: 't1' }), NOW, 15)).toBe(false);
   });
 
   it('reads the digest window from the environment with a safe default', () => {
@@ -86,10 +82,10 @@ describe('InboxChannel', () => {
     channel.applySession({ id: mine, scope: null, resumed: false, scopeRestored: false, reconnects: 0, lastReconnectAt: null });
     const noSession = { email: 'claude@orboto.io', sessionId: null, label: 'claude@orboto.io' };
     const base = { kind: 'info', payload: { message: 'z440-2 is off' }, createdAt: '2026-09-18 09:59:50+00' };
-    await channel.deliver(msg({ ...base, id: 'addr', toSessionId: mine }));
-    await channel.deliver(msg({ ...base, id: 'thread', threadId: 't1', inSentThread: true, toSessionId: null, to: noSession }));
-    await channel.deliver(msg({ ...base, id: 'account', toSessionId: null, to: noSession }));
-    await channel.deliver(msg({ ...base, id: 'stale-thread', threadId: 't0', toSessionId: null, to: noSession }));
+    await channel.deliver(msg({ ...base, id: 'addr', addressed: true }));
+    await channel.deliver(msg({ ...base, id: 'thread', threadId: 't1', inSentThread: true, to: noSession }));
+    await channel.deliver(msg({ ...base, id: 'account', to: noSession }));
+    await channel.deliver(msg({ ...base, id: 'stale-thread', threadId: 't0', to: noSession }));
     expect(notification).toHaveBeenCalledTimes(2);
     expect(notification.mock.calls.map((c) => (c[0] as { params: { meta: { id: string } } }).params.meta.id)).toEqual(['addr', 'thread']);
     expect(channel.stats).toMatchObject({ delivered: 2, digested: 2 });
