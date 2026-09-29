@@ -7,8 +7,11 @@
  * agent-sessions.test.ts.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { OrbotoClient } from '../orboto-client.js';
 import {
+  NOTIFY_ROUTED_TO,
+  agentNotifyToolConfig,
   makeAgentHeartbeatHandler,
   makeAgentPresenceHandler,
   makeAgentNotifyHandler,
@@ -196,6 +199,29 @@ describe('orboto_agent_notify', () => {
     expect((capturedBody[0] as { senderRef?: string }).senderRef).toBe('mcp-abc123');
     await handler({ targetEmail: 'bob@example.com', subject: 'hi', senderRef: 'runner:custom' }, { sessionId: 'abc123' });
     expect((capturedBody[1] as { senderRef?: string }).senderRef).toBe('runner:custom');
+  });
+});
+
+describe('orboto_agent_notify routing (ORB-2263)', () => {
+  it('mirrors the routedTo values of the shared schema', () => {
+    const shared = readFileSync(new URL('../../../../packages/shared-schema/src/agent-message-kinds.ts', import.meta.url), 'utf8');
+    const match = shared.match(/AgentNotifyRoutedToSchema = z\.enum\(\[([^\]]+)\]\)/);
+    expect(match).not.toBeNull();
+    const values = match![1].split(',').map((v) => v.trim().replace(/'/g, ''));
+    expect(values).toEqual([...NOTIFY_ROUTED_TO]);
+    expect(agentNotifyToolConfig.description).toContain('routedTo');
+    expect(agentNotifyToolConfig.description).toContain('no session declared KEY');
+  });
+
+  it('answers routedTo account with the routing note so the sender escalates', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => ({
+      ok: true, status: 200, statusText: 'OK',
+      json: async () => ({ ok: true, messageId: '00000000-0000-4000-8000-000000000000', toSessionId: null, routedTo: 'account', routingNote: 'no session declared HIVE - the message waits in the account inbox and wakes no session; escalate or address a session instead of assuming delivery' }),
+      text: async () => '',
+    } as unknown as Response));
+    const result = await makeAgentNotifyHandler(client)({ targetEmail: 'bot@example.org', kind: 'request', subject: 'build HIVE-720', outcome: 'HIVE-720 is built and in review', project: 'HIVE' });
+    expect(result.structuredContent).toMatchObject({ routedTo: 'account', routingNote: expect.stringContaining('no session declared HIVE') });
+    expect((result.content[0] as { text: string }).text).toContain('routed to account - no session declared HIVE');
   });
 });
 

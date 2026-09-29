@@ -9,10 +9,10 @@ export const CONNECT_SCRIPT_HEADING = 'If you are an AI agent helping a person s
 
 export const CONNECT_SCRIPT_STEPS = [
   'Work one step per message: say in one sentence what the step does and why, run it, show the result, and only then move on.',
-  'Run every step you can run yourself - `orboto connect --yes` checks Node and Claude Code, writes the `orboto` server entry for this directory and prints the exact start command with the standing arguments.',
+  'Run every step you can run yourself - `orboto connect --yes --project <KEY>` wires this directory (profile pointer, project, the `orboto` server entry, one identity, the completion hook), probes the wake channel and ends with the checklist; exit code 0 means every line passed, and a failing line names its fix.',
   'Hand the person only the steps that need a human: the browser login, the two `/plugin` commands that install the orboto plugin (a CLI cannot type into a running session), quitting and restarting the session with that command, confirming the servers from `.mcp.json` and, in the development form, the local-development prompt, and, on a Team or Enterprise plan, the one Owner switch that allows channels and lists the plugin.',
   'Give every command the person runs verbatim in its own code block, never paraphrased and never merged into prose.',
-  'Verify before you continue: `orboto whoami` for the identity, `orboto mcp status` for the entry of this directory, `orboto connect --verify` for the channel.',
+  'Verify before you continue: every line of the `orboto connect` checklist passes, `orboto doctor` prints the same checklist later, `orboto connect --verify` probes the running session; declare or change the scope with `orboto session-start` in the shell, never through the claude.ai connector.',
   'Never paste a reference page into the chat - link it and keep the message to the step you are on.',
   'Never ask for an API key, a password or a token in the chat; `orboto login` writes the credential itself.',
   'When a check fails, name the cause from the troubleshooting table, fix it, and repeat the check before the next step.',
