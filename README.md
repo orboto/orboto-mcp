@@ -123,7 +123,7 @@ Omit `ORBOTO_API_KEY` to use OAuth login instead. `codex mcp add` writes the sam
 | `ORBOTO_MCP_PORT` | no | Listen port when transport is `http`. Default `3100`. |
 | `ORBOTO_MCP_CLIENT` | no | User-agent suffix that lands in the API audit log. Useful for filtering audit rows by client. |
 | `ORBOTO_MCP_CHANNEL` | no | `1` (default) makes the stdio proxy a Claude Code channel: it follows the session's inbox stream and pushes each message as a `notifications/claude/channel` event that wakes the session (`claude --dangerously-load-development-channels server:orboto`, ORB-2140). `0` disables it. |
-| `ORBOTO_MCP_CHANNEL_DIGEST_MINUTES` | no | Digest window for `info` / `complete` inbox mail on the channel. Default `15`; `0` delivers every message at once. Requests, errors, questions and mail older than five minutes always go out immediately. |
+| `ORBOTO_MCP_CHANNEL_DIGEST_MINUTES` | no | Digest window for account-addressed or broadcast `info` / `complete` inbox mail on the channel. Default `15`; `0` delivers every message at once. Requests, errors, questions, mail addressed to this session, replies in a thread this session sent into within 24 hours and mail older than five minutes always go out immediately. |
 
 ## Version compatibility
 

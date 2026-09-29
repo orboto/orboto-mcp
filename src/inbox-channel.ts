@@ -39,6 +39,9 @@ export interface InboxMessage {
   threadId?: string | null;
   projectKey?: string | null;
   createdAt: string;
+  toSessionId?: string | null;
+  /** ORB-2265 - set by the stream: this session sent into the message's thread within the last 24 hours. */
+  inSentThread?: boolean;
 }
 
 export interface InboxChannelOpts {
@@ -132,10 +135,17 @@ function waitedMinutes(createdAt: string, now: number): number {
   return Math.max(0, Math.floor((now - t) / 60_000));
 }
 
-/** A message goes out at once when it asks for something or already waited; the rest is digest material. */
-export function isImmediate(m: InboxMessage, now: number, digestMinutes: number): boolean {
+/** ORB-2265 - a message addressed to this session, or answering a thread it sent into, is never digest material. */
+export function isForThisSession(m: InboxMessage, sessionId: string | null | undefined): boolean {
+  if (m.inSentThread === true) return true;
+  return !!sessionId && (m.toSessionId === sessionId || m.to?.sessionId === sessionId);
+}
+
+/** A message goes out at once when it asks for something, is addressed to this session, answers its thread or already waited; account and broadcast info is digest material. */
+export function isImmediate(m: InboxMessage, now: number, digestMinutes: number, sessionId?: string | null): boolean {
   if (digestMinutes <= 0) return true;
   if (m.kind === 'request' || m.kind === 'error') return true;
+  if (isForThisSession(m, sessionId)) return true;
   if (waitedMinutes(m.createdAt, now) * 60_000 >= IMMEDIATE_AFTER_MS) return true;
   return ASK.test(`${m.subject} ${firstLine(m.payload)}`);
 }
@@ -222,7 +232,7 @@ export class InboxChannel {
     if (this.seen.has(m.id)) { this.stats.duplicates += 1; return; }
     this.remember(m.id);
     this.lastId = m.id;
-    if (isImmediate(m, this.now(), this.digestMinutes)) {
+    if (isImmediate(m, this.now(), this.digestMinutes, this.session?.id)) {
       await this.emit(renderEvent(m, this.now()));
       this.stats.delivered += 1;
       return;
