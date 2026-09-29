@@ -81,7 +81,10 @@ async function main() {
       beat();
       const beats = setInterval(beat, 60_000);
       beats.unref?.();
-      stdio.onclose = () => { clearInterval(beats); inbox.close(); };
+      const cleanup = () => { clearInterval(beats); inbox.close(); };
+      stdio.onclose = cleanup;
+      const { endProbeSessionOnStdinEnd } = await import('./probe-session.js');
+      endProbeSessionOnStdinEnd({ env: process.env, stdin: process.stdin, client: preflightClient, instanceToken, cleanup, exit: (code) => process.exit(code) });
     }
     return;
   }
