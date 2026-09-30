@@ -1,9 +1,13 @@
 /** ORB-2272 - the MCP releases the capacity claims of its agent session: granted ones on may_stop, every one with sessionEnd and at session end. */
 import { EventEmitter } from 'node:events';
-import { describe, expect, it, vi } from 'vitest';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OrbotoClient } from '../orboto-client.js';
 import { OrbotoApiError } from '../orboto-client.js';
 import { makeSessionCheckHandler } from './session-check.js';
+import { mcpProcessInstance } from './shared.js';
 import { releaseCapacityAtSessionEnd, releaseCapacityOnStdinEnd, releaseSessionCapacity } from './capacity-session.js';
 
 const GRANTED = { id: 'c-granted', resourceName: 'build-host:runner-1', state: 'granted' };
@@ -90,11 +94,98 @@ describe('ORB-2272 - the MCP session end releases every claim of the session', (
   it('stdio: stdin end releases once, and the probe exit awaits the same run', async () => {
     const api = fakeClient('continue');
     const stdin = new EventEmitter();
-    const run = releaseCapacityOnStdinEnd(stdin, api.client, 'mcp-proc');
+    const run = releaseCapacityOnStdinEnd(stdin, api.client, 'mcp-proc', { ORBOTO_PROBE_SESSION: '1' });
     stdin.emit('end');
     stdin.emit('close');
     await run();
     expect(api.released.map((r) => r.id)).toEqual(['c-granted', 'c-queued']);
     expect(api.get.mock.calls.filter(([p]) => p === '/agents/session/unfinished')).toHaveLength(1);
+  });
+});
+
+describe('ORB-2272 - a live CLI --hold marker keeps its claim on the stdio process token', () => {
+  let home: string;
+  const realHome = process.env.HOME;
+  const marker = (id: string) => join(home, '.orboto', 'capacity-holds', `${id}.json`);
+  const writeMarker = (id: string, pid: number) => {
+    mkdirSync(join(home, '.orboto', 'capacity-holds'), { recursive: true, mode: 0o700 });
+    writeFileSync(marker(id), JSON.stringify({ pid }), { mode: 0o600 });
+  };
+  const deadPid = () => {
+    let pid = 2_000_000;
+    for (; pid < 2_100_000; pid += 1) {
+      try { process.kill(pid, 0); } catch { return pid; }
+    }
+    return pid;
+  };
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'orboto-holds-'));
+    process.env.HOME = home;
+  });
+  afterEach(() => {
+    process.env.HOME = realHome;
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('may_stop on the process token keeps a claim whose marker names a live pid, and the marker', async () => {
+    writeMarker('c-granted', process.pid);
+    const api = fakeClient('may_stop');
+    await makeSessionCheckHandler(api.client)({ action: 'check' });
+    expect(api.released).toEqual([]);
+    expect(existsSync(marker('c-granted'))).toBe(true);
+  });
+
+  it('a marker with a dead pid is removed and the claim is released', async () => {
+    writeMarker('c-granted', deadPid());
+    const api = fakeClient('may_stop');
+    await makeSessionCheckHandler(api.client)({ action: 'check' });
+    expect(api.released.map((r) => r.id)).toEqual(['c-granted']);
+    expect(existsSync(marker('c-granted'))).toBe(false);
+  });
+
+  it('sessionEnd releases the held claim regardless and leaves the marker to its process', async () => {
+    writeMarker('c-granted', process.pid);
+    const api = fakeClient('continue');
+    await makeSessionCheckHandler(api.client)({ action: 'check', sessionEnd: true });
+    expect(api.released.map((r) => r.id)).toEqual(['c-granted', 'c-queued']);
+  });
+
+  it('an HTTP session token ignores the marker (it never shares a checkout)', async () => {
+    writeMarker('c-granted', process.pid);
+    const api = fakeClient('may_stop');
+    await makeSessionCheckHandler(api.client)({ action: 'check' }, { sessionId: 'http-1' });
+    expect(api.released.map((r) => r.id)).toEqual(['c-granted']);
+  });
+
+  it('a marker another process wrote without a pid does not keep the claim', async () => {
+    mkdirSync(join(home, '.orboto', 'capacity-holds'), { recursive: true });
+    writeFileSync(marker('c-granted'), '{"pid":"x"}');
+    const api = fakeClient('may_stop');
+    await makeSessionCheckHandler(api.client)({ action: 'check' });
+    expect(api.released.map((r) => r.id)).toEqual(['c-granted']);
+  });
+
+  it('a real stdio stdin end releases only the unheld granted claim, a probe end every claim', async () => {
+    const heldGranted = { ...GRANTED, id: 'c-held' };
+    writeMarker('c-held', process.pid);
+    const listing = (client: ReturnType<typeof fakeClient>) => {
+      client.get.mockImplementation(async (path: string) => {
+        if (path === '/agents/session/unfinished') return { sessionId: 'sess-uuid', verdict: 'continue', reason: 'continue', text: 'x' };
+        return { items: [heldGranted, GRANTED, QUEUED], nextCursor: null };
+      });
+    };
+    const real = fakeClient('continue');
+    listing(real);
+    const stdin = new EventEmitter();
+    await (() => { const run = releaseCapacityOnStdinEnd(stdin, real.client, mcpProcessInstance(), {}); stdin.emit('end'); return run(); })();
+    expect(real.released.map((r) => r.id)).toEqual(['c-granted']);
+    expect(existsSync(marker('c-held'))).toBe(true);
+
+    const probe = fakeClient('continue');
+    listing(probe);
+    const probeStdin = new EventEmitter();
+    await (() => { const run = releaseCapacityOnStdinEnd(probeStdin, probe.client, mcpProcessInstance(), { ORBOTO_PROBE_SESSION: '1' }); probeStdin.emit('end'); return run(); })();
+    expect(probe.released.map((r) => r.id)).toEqual(['c-held', 'c-granted', 'c-queued']);
   });
 });

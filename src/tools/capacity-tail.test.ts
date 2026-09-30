@@ -126,6 +126,6 @@ describe('ORB-2272 - orboto_help topic capacity', () => {
   it('serves the claim, renew, release and windows recipes', async () => {
     const res = await makeHelpHandler()({ topic: 'capacity' });
     const text = (res.content[0] as { text: string }).text;
-    for (const needle of ['"path":"/capacity/claims"', '/renew', '/release', '/capacity/windows', 'sessionEnd']) expect(text).toContain(needle);
+    for (const needle of ['"path":"/capacity/claims"', '/renew', '/release', '/capacity/windows', 'sessionEnd', '?toolset=full', 'ORBOTO_MCP_TOOLSET=full', 'capacity-holds', 'A curated agent has no orboto_session_check', 'session-check --session-end']) expect(text).toContain(needle);
   });
 });

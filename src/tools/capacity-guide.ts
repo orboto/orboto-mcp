@@ -22,8 +22,10 @@ export function capacityGuideText(): string {
     'Reserved windows of every resource:',
     '  orboto_api_call {"method":"GET","path":"/capacity/windows"}',
     '',
-    'Automatic release: orboto_session_check releases the granted claims of this session when its verdict is may_stop,',
-    'and every claim of the session with sessionEnd: true; the MCP server does the same when the session closes.',
+    'Automatic release: orboto_session_check (full toolset only: ?toolset=full or ORBOTO_MCP_TOOLSET=full) releases the granted claims of this session on may_stop,',
+    'except claims a live `orboto capacity claim --hold` process keeps (marker ~/.orboto/capacity-holds/<claimId>.json), and every claim with sessionEnd: true.',
+    'A curated agent has no orboto_session_check: it releases with orboto_api_call POST /capacity/claims/<claimId>/release, and the SessionEnd hook (`orboto session-check --session-end`) ends the rest.',
+    'The MCP server releases every claim when a probe or an HTTP client ends its session; a stdio stdin end (reconnect, harness restart) releases only the granted claims no live hold keeps.',
     'A claim not renewed by its deadline expires and the next claim in line gets the slot. A yieldRequest on your claim asks you to release early; nothing is ever killed.',
     'Resources and windows are administered with admin:capacity:write on the Capacity page or through the same REST routes.',
   ].join('\n');

@@ -2,7 +2,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { mcpInstanceToken } from './shared.js';
+import { mcpInstanceToken, mcpProcessInstance } from './shared.js';
 import { describeCapacityRelease, releaseSessionCapacity, type CapacityRelease } from './capacity-session.js';
 
 interface Unfinished {
@@ -45,7 +45,7 @@ export function makeSessionCheckHandler(client: OrbotoClient) {
     if (args.sessionEnd === true) {
       capacity = await releaseSessionCapacity(client, res.sessionId, 'all', 'agent session ended', instanceToken);
     } else if (res.verdict === 'may_stop') {
-      capacity = await releaseSessionCapacity(client, res.sessionId, 'granted', 'completion check: may_stop', instanceToken);
+      capacity = await releaseSessionCapacity(client, res.sessionId, 'granted', 'completion check: may_stop', instanceToken, { respectHolds: instanceToken === mcpProcessInstance() });
     }
     const note = capacity ? describeCapacityRelease(capacity) : '';
     return {
