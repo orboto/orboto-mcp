@@ -622,6 +622,7 @@ describe('ORB-2136 - session scope and ref', () => {
     const text = (res.content[0] as { text: string }).text;
     expect(text).toContain('ref mcp-abc123, instance cbb52195. role integrator; projects ORB');
     expect(text).toContain('toSessionRef: "cbb52195"');
+    expect(text).toContain('Address form: peers reach this session and every other integrator of the project with orboto_agent_notify { to: "integrator@ORB" }');
     expect(text).toContain('from spec@orboto.io (spec, s1)');
     expect(res.structuredContent).toMatchObject({ session: { ref: 'mcp-abc123', id: 'cbb52195-0000-4000-8000-000000000000', scope: { role: 'integrator', projectKeys: ['ORB'] } } });
   });

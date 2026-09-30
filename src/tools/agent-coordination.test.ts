@@ -293,3 +293,48 @@ describe('ORB-2136 - session addressing', () => {
     expect(result.structuredContent).toMatchObject({ scope: { role: 'integrator', projectKeys: ['ORB'] } });
   });
 });
+
+describe('orboto_agent_notify role addresses (ORB-2264)', () => {
+  it('sends `to` as written, lists every recipient and needs no targetEmail', async () => {
+    const bodies: unknown[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      bodies.push(JSON.parse(String((init as RequestInit).body)));
+      return {
+        ok: true, status: 200, statusText: 'OK', text: async () => '',
+        json: async () => ({
+          ok: true, messageId: '00000000-0000-4000-8000-000000000001', toSessionId: '00000000-0000-4000-8000-0000000000aa', routedTo: 'session',
+          messageIds: ['00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002'],
+          recipients: [{ label: 'claude@orboto.io (integrator, aaaaaaaa)', sessionId: 'a' }, { label: 'claude+b@orboto.io (integrator, bbbbbbbb)', sessionId: 'b' }],
+        }),
+      } as unknown as Response;
+    });
+    const result = await makeAgentNotifyHandler(client)({ to: 'integrator@ORB', kind: 'request', subject: 'release 0.212.0', outcome: 'the release is tagged and deployed' });
+    expect(bodies[0]).toMatchObject({ to: 'integrator@ORB', kind: 'request' });
+    expect((bodies[0] as { targetEmail?: string }).targetEmail).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({ routedTo: 'session', recipients: ['claude@orboto.io (integrator, aaaaaaaa)', 'claude+b@orboto.io (integrator, bbbbbbbb)'] });
+  });
+
+  it('turns 409 no_recipient into a tool error that names the live sessions and the queue option', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => ({
+      ok: false, status: 409, statusText: 'Conflict', json: async () => ({}),
+      text: async () => JSON.stringify({
+        error: 'x', errorKey: 'errors.agents.no_recipient',
+        errorParams: { address: 'review@ORB', reason: 'no_recipient', liveSessions: [{ shortId: 'f072e1c5', email: 'claude@orboto.io', addresses: ['integrator@ORB'] }] },
+      }),
+    } as unknown as Response));
+    const result = await makeAgentNotifyHandler(client)({ to: 'review@ORB', kind: 'request', subject: 'review ORB-1', outcome: 'ORB-1 is reviewed with findings' });
+    expect(result.isError).toBe(true);
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain('review@ORB');
+    expect(text).toContain('integrator@ORB (claude@orboto.io, f072e1c5)');
+    expect(text).toContain('queue: true');
+  });
+
+  it('refuses a message without any recipient before calling the API', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch');
+    const result = await makeAgentNotifyHandler(client)({ subject: 'nobody' });
+    expect(result.isError).toBe(true);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(agentNotifyToolConfig.description).toContain('integrator@KEY');
+  });
+});

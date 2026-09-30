@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import { AgentInventoryEntrySchema, AgentInventoryKindSchema, type AgentInventoryEntry } from './agent-presence-schema.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbotoClient } from '../orboto-client.js';
+import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { mcpInstanceToken } from './shared.js';
 import { AgentSessionScopeSchema, type AgentSessionScope } from './agent-session-scope.js';
 
@@ -118,14 +118,36 @@ interface NotifyResponse {
   toSessionId: string | null;
   routedTo?: (typeof NOTIFY_ROUTED_TO)[number];
   routingNote?: string;
+  recipients?: Array<{ label: string; sessionId: string | null }>;
+  queued?: boolean;
+}
+
+interface NoRecipientBody {
+  errorKey?: string;
+  errorParams?: { address?: string; reason?: string; liveSessions?: Array<{ shortId: string; email: string; addresses: string[] }> };
+}
+
+/** ORB-2264 - the 409 `no_recipient` as a tool error naming who could receive it instead. */
+export function noRecipientText(err: OrbotoApiError): string | null {
+  if (err.status !== 409) return null;
+  let body: NoRecipientBody;
+  try { body = JSON.parse(err.body) as NoRecipientBody; } catch { return null; }
+  if (body.errorKey !== 'errors.agents.no_recipient') return null;
+  const p = body.errorParams ?? {};
+  const live = (p.liveSessions ?? []).map((s) => `${s.addresses[0] ?? s.email} (${s.email}, ${s.shortId})`);
+  return `not sent: no live session can receive a request to ${p.address ?? '?'} (${p.reason ?? 'no_recipient'}). `
+    + (live.length ? `Live sessions: ${live.join('; ')}. ` : 'No live session declared the project. ')
+    + 'Address one of them, or send again with queue: true to keep it until a session declares the project.';
 }
 
 export const agentNotifyToolConfig = {
   title: 'Notify another agent / user',
   description:
-    'Message a user (bot or human) by email; lands in their inbox (orboto_messages), for humans in-app. kind: request|error = work inside the scope the recipient holds (request needs project or toSessionRef + outcome); info = information; complete = result (needs outcome). payload: free-form JSON; threadId links a reply to the message it answers. toSessionRef (instance short id, session ref or id) reaches ONE session of the account; project scopes an account message to sessions declared on it (ORB-2136). The answer names routedTo (session, scope or account); routingNote "no session declared KEY" means nothing wakes - escalate instead of assuming delivery (ORB-2263).',
+    'Message an agent or user. `to` takes a role address integrator@KEY (every live session with that role on the project, any account, each as addressed mail), an account email or a session id; targetEmail names the account (with a role address it narrows to that account). kind: request|error = work inside the scope the recipient holds (request needs a target + outcome); info = information; complete = result (needs outcome). payload: free-form JSON; threadId links a reply to the message it answers. toSessionRef (instance short id, session ref or id) reaches ONE session of the account; project scopes an account message to sessions declared on it (ORB-2136). A request no live session can receive is refused (no_recipient, naming the live sessions of the project; orboto_who lists them before sending) unless queue: true keeps it in the inbox until a session declares the project (ORB-2264). The answer names routedTo (session, scope or account); routingNote "no session declared KEY" means nothing wakes - escalate instead of assuming delivery (ORB-2263).',
   inputSchema: z.object({
-    targetEmail: z.string().email(),
+    targetEmail: z.string().email().optional(),
+    to: z.string().min(3).max(200).optional(),
+    queue: z.boolean().optional(),
     kind: z.enum(['info', 'request', 'complete', 'error']).default('info'),
     subject: z.string().min(1).max(200),
     outcome: z.string().min(10).max(1000).optional(),
@@ -141,6 +163,8 @@ export const agentNotifyToolConfig = {
     toSessionId: z.string().uuid().nullable(),
     routedTo: z.enum(NOTIFY_ROUTED_TO),
     routingNote: z.string().optional(),
+    recipients: z.array(z.string()).optional(),
+    queued: z.boolean().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -177,20 +201,23 @@ export function makeAgentBroadcastHandler(client: OrbotoClient) {
 }
 
 /** ORB-2223 - the message-kind definition this versioned sender enforces; the API only warns. */
-export function notifyDefinitionError(args: { kind?: string; outcome?: string; project?: string; toSessionRef?: string }): string | null {
+export function notifyDefinitionError(args: { kind?: string; outcome?: string; project?: string; toSessionRef?: string; to?: string; targetEmail?: string }): string | null {
   const kind = args.kind ?? 'info';
+  if (!args.to && !args.targetEmail) return 'Invalid arguments: name a recipient - `to` (integrator@KEY, an email or a session id) or `targetEmail`.';
   if ((kind === 'request' || kind === 'complete') && !args.outcome?.trim()) {
     return `Invalid arguments: \`outcome\` is required for a ${kind} - the outcome sentence (what must be true when it is done, or what was delivered).`;
   }
-  if (kind === 'request' && !args.project && !args.toSessionRef) {
-    return 'Invalid arguments: a request needs a target - `project` (key or UUID) or `toSessionRef`.';
+  if (kind === 'request' && !args.project && !args.toSessionRef && !(args.to && !args.to.includes('.'))) {
+    return 'Invalid arguments: a request needs a target - a role address in `to` (integrator@KEY), `project` (key or UUID) or `toSessionRef`.';
   }
   return null;
 }
 
 export function makeAgentNotifyHandler(client: OrbotoClient) {
   return async (args: {
-    targetEmail: string;
+    targetEmail?: string;
+    to?: string;
+    queue?: boolean;
     kind?: 'info' | 'request' | 'complete' | 'error';
     subject: string;
     outcome?: string;
@@ -203,13 +230,27 @@ export function makeAgentNotifyHandler(client: OrbotoClient) {
     const invalid = notifyDefinitionError(args);
     if (invalid) return { isError: true, content: [{ type: 'text', text: invalid }] };
     const senderRef = mcpInstanceToken(args.senderRef, extra as { sessionId?: string } | undefined);
-    const res = await client.post<NotifyResponse>('/v1/agent/notify', { ...args, senderRef }, { instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
-    const target = res.toSessionId ? `${args.targetEmail} session ${res.toSessionId.slice(0, 8)}` : args.targetEmail;
+    let res: NotifyResponse;
+    try {
+      res = await client.post<NotifyResponse>('/v1/agent/notify', { ...args, senderRef }, { instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
+    } catch (err) {
+      const refused = err instanceof OrbotoApiError ? noRecipientText(err) : null;
+      if (refused) return { isError: true, content: [{ type: 'text', text: refused }] };
+      throw err;
+    }
+    const who = args.to ?? args.targetEmail ?? '?';
+    const recipients = (res.recipients ?? []).map((r) => r.label);
+    const target = recipients.length > 1 ? recipients.join(', ') : res.toSessionId ? `${who} session ${res.toSessionId.slice(0, 8)}` : who;
     const routedTo = res.routedTo ?? (res.toSessionId ? 'session' : 'account');
     const note = res.routingNote ? ` - ${res.routingNote}` : '';
     return {
-      content: [{ type: 'text', text: `notified ${target} (message ${res.messageId}, routed to ${routedTo}${note})` }],
-      structuredContent: { ok: true, messageId: res.messageId, toSessionId: res.toSessionId ?? null, routedTo, ...(res.routingNote ? { routingNote: res.routingNote } : {}) },
+      content: [{ type: 'text', text: `${res.queued ? 'queued for' : 'notified'} ${target} (message ${res.messageId}, routed to ${routedTo}${note})` }],
+      structuredContent: {
+        ok: true, messageId: res.messageId, toSessionId: res.toSessionId ?? null, routedTo,
+        ...(res.routingNote ? { routingNote: res.routingNote } : {}),
+        ...(recipients.length ? { recipients } : {}),
+        ...(res.queued ? { queued: true } : {}),
+      },
     };
   };
 }

@@ -159,15 +159,16 @@
       "kind",
       "payload",
       "project",
+      "queue",
       "senderRef",
       "subject",
       "targetEmail",
       "threadId",
+      "to",
       "toSessionRef"
     ],
     "required": [
-      "subject",
-      "targetEmail"
+      "subject"
     ],
     "enums": {
       "kind": [
@@ -2623,6 +2624,23 @@
         "integration",
         "preflight",
         "review"
+      ]
+    }
+  },
+  "orboto_who": {
+    "params": [
+      "project",
+      "role"
+    ],
+    "required": [],
+    "enums": {
+      "role": [
+        "coordinator",
+        "integrator",
+        "lead",
+        "review",
+        "spec",
+        "worker"
       ]
     }
   }

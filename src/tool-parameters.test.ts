@@ -1,10 +1,11 @@
 /**
  * ORB-1805 - the schema diet must never cost a PARAMETER.
  *
- * ORB-2157 - one reviewed baseline edit: `orboto_help.tool` is no longer
- * required, because the tool now also answers `topic` ("connect" returns the
- * setup script). The parameter itself is untouched and still the only way to
- * ask for a tool's guidance; a call with neither says which topics exist.
+ * Reviewed baseline edits: ORB-2157 made `orboto_help.tool` optional (the
+ * tool also answers `topic`; a call with neither lists the topics); ORB-2264
+ * made `orboto_agent_notify.targetEmail` optional (`to` names the recipient
+ * too, a role address like integrator@KEY reaches several accounts; the
+ * parameter stays and narrows a role address to one account).
  */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';

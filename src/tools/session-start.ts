@@ -405,6 +405,8 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
       ? [registration.scope.role ? `role ${registration.scope.role}` : null, registration.scope.projectKeys?.length ? `projects ${registration.scope.projectKeys.join(', ')}` : null, registration.scope.ticketKeys?.length ? `tickets ${registration.scope.ticketKeys.join(', ')}` : null].filter(Boolean).join('; ')
       : 'no scope declared - this session lists every account-addressed message; pass scope: { projectKeys, role } to narrow it';
     lines.push(`ref ${instanceToken}${registration ? `, instance ${registration.sessionId.slice(0, 8)}` : ''}. ${scopeText}. Peers reach exactly this session with orboto_agent_notify { toSessionRef: "${registration ? registration.sessionId.slice(0, 8) : instanceToken}" }.`);
+    const roleAddresses = registration?.scope?.role ? (registration.scope.projectKeys ?? []).map((k) => `${registration.scope!.role}@${k}`) : [];
+    if (roleAddresses.length) lines.push(`Address form: peers reach this session and every other ${registration!.scope!.role} of the project with orboto_agent_notify { to: "${roleAddresses[0]}" } (${roleAddresses.join(', ')}); address a role, never a session id copied from a log.`);
     if (registration?.scope) lines.push(identityLine(registration));
     if (opts.channel) lines.push('', ...channelStartLines());
     if (pendingMessages.length > 0) {
