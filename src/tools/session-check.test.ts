@@ -11,7 +11,7 @@ describe('orboto_session_check', () => {
     const body = { sessionId: 's1', verdict: 'continue', reason: 'runnable', text: 'orboto completion guard: this session still owns runnable authorized work, so the turn does not end yet.' };
     const get = vi.fn().mockResolvedValue(body);
     const result = await makeSessionCheckHandler({ get } as unknown as OrbotoClient)({});
-    expect(get).toHaveBeenCalledWith('/agents/session/unfinished');
+    expect(get).toHaveBeenCalledWith('/agents/session/unfinished', { instanceToken: expect.stringMatching(/^agent-/) });
     expect(textOf(result)).toContain('does not end yet');
     expect(result.structuredContent).toMatchObject({ verdict: 'continue' });
   });
@@ -23,8 +23,8 @@ describe('orboto_session_check', () => {
     const handler = makeSessionCheckHandler({ post } as unknown as OrbotoClient);
     expect((await handler({ action: 'pause' })).isError).toBe(true);
     expect(textOf(await handler({ action: 'pause', reason: 'Waiting for the release window' }))).toContain('Waiting for the release window');
-    expect(post).toHaveBeenCalledWith('/agents/session/pause', { reason: 'Waiting for the release window' });
+    expect(post).toHaveBeenCalledWith('/agents/session/pause', { reason: 'Waiting for the release window' }, { instanceToken: expect.stringMatching(/^agent-/) });
     expect(textOf(await handler({ action: 'resume' }))).toContain('Not paused');
-    expect(post).toHaveBeenLastCalledWith('/agents/session/resume', {});
+    expect(post).toHaveBeenLastCalledWith('/agents/session/resume', {}, { instanceToken: expect.stringMatching(/^agent-/) });
   });
 });

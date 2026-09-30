@@ -62,6 +62,8 @@ async function main() {
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
     const stdio = new StdioServerTransport();
     await server.connect(stdio);
+    const { releaseCapacityOnStdinEnd } = await import('./tools/capacity-session.js');
+    const releaseCapacity = releaseCapacityOnStdinEnd(process.stdin, preflightClient, (await import('./tools/shared.js')).mcpProcessInstance());
     if (channel) {
       const { InboxChannel, digestMinutesFromEnv, cliOutdatedNotice, CLI_OUTDATED_NOTICE } = await import('./inbox-channel.js');
       const { mcpProcessInstance } = await import('./tools/shared.js');
@@ -84,7 +86,7 @@ async function main() {
       const cleanup = () => { clearInterval(beats); inbox.close(); };
       stdio.onclose = cleanup;
       const { endProbeSessionOnStdinEnd } = await import('./probe-session.js');
-      endProbeSessionOnStdinEnd({ env: process.env, stdin: process.stdin, client: preflightClient, instanceToken, cleanup, exit: (code) => process.exit(code) });
+      endProbeSessionOnStdinEnd({ env: process.env, stdin: process.stdin, client: preflightClient, instanceToken, cleanup, exit: (code) => process.exit(code), settle: releaseCapacity });
     }
     return;
   }

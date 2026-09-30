@@ -153,6 +153,7 @@ function fakeApi(opts: { enabled?: boolean; mcpUseGranted?: boolean; userMcpEnab
     mcpUseGranted: opts.mcpUseGranted ?? true,
     userMcpEnabled: opts.userMcpEnabled ?? true,
     seenAuth: [] as string[],
+    capacityReleased: [] as Array<{ id: string; session: string }>,
   };
   const api = createNodeServer((req, res) => {
     const url = req.url ?? '';
@@ -175,6 +176,23 @@ function fakeApi(opts: { enabled?: boolean; mcpUseGranted?: boolean; userMcpEnab
     if (url.startsWith('/agent-instructions')) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ instructions: '' }));
+      return;
+    }
+    if (url.startsWith('/agents/session/unfinished')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ sessionId: 'sess-uuid', verdict: 'continue', reason: 'runnable', text: 'continue' }));
+      return;
+    }
+    if (url.startsWith('/capacity/claims?')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ items: [{ id: 'c-granted', resourceName: 'build-host:runner-1', state: 'granted' }, { id: 'c-queued', resourceName: 'unity:mac-1', state: 'queued' }], nextCursor: null }));
+      return;
+    }
+    const release = /^\/capacity\/claims\/([^/]+)\/release$/.exec(url);
+    if (release && req.method === 'POST') {
+      state.capacityReleased.push({ id: release[1]!, session: String(req.headers['x-orboto-agent-session'] ?? '') });
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: release[1], state: 'released' }));
       return;
     }
     if (url.startsWith('/sse/mcp-events')) {
@@ -269,6 +287,22 @@ describe('ORB-1353 - persisted-session resilience (transport, fake api)', () => 
     expect(res.headers.get('mcp-session-id')).toBe(sid);
     await res.text();
     expect(store.resolve).toHaveBeenCalledWith('orb_alice', sid);
+  });
+
+  it('ORB-2272 - the client ending its session (DELETE) releases the granted and the queued capacity claim of that session', async () => {
+    const store = fakeStore();
+    const fake = fakeApi();
+    const { base } = await startWithFakeApi(store.store, fake);
+    const initRes = await post(base, INIT_BODY, { authorization: 'Bearer orb_alice' });
+    const sid = initRes.headers.get('mcp-session-id')!;
+    await initRes.text();
+    const del = await fetch(`${base}/mcp`, { method: 'DELETE', headers: { authorization: 'Bearer orb_alice', 'mcp-session-id': sid } });
+    await del.text();
+    expect(del.status).toBeLessThan(300);
+    expect(fake.state.capacityReleased).toEqual([
+      { id: 'c-granted', session: `mcp-${sid}` },
+      { id: 'c-queued', session: `mcp-${sid}` },
+    ]);
   });
 
   it('auto-adopts an unknown session id under a FRESH id when auth is valid (layer 2)', async () => {

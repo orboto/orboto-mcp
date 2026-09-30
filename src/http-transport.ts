@@ -14,6 +14,7 @@ import { OrbotoClient, preflightMcpSession } from './orboto-client.js';
 import type { OAuthTokenProviderLike } from './orboto-client.js';
 import { EventBridge } from './event-bridge.js';
 import { mcpInstanceToken } from './tools/shared.js';
+import { releaseCapacityAtSessionEnd } from './tools/capacity-session.js';
 
 /**
  * ORB-1353 - persisted-session store. The transport calls these to survive an
@@ -404,6 +405,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
         }
       }
       void store.remove(token, sessionId).catch(() => { /* best-effort */ });
+      if (sessionId) await releaseCapacityAtSessionEnd(existing?.client ?? new OrbotoClient({ baseUrl, apiKey: token }), mcpInstanceToken(undefined, { sessionId }));
       if (existing) {
         await existing.transport.handleRequest(req, res);
         return;

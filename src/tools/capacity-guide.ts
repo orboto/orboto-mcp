@@ -1,0 +1,30 @@
+/** ORB-2272 - the build capacity recipes for an MCP agent, served by orboto_help topic "capacity". */
+export function capacityGuideText(): string {
+  return [
+    'Build capacity (shared build hosts, CI runners, game build hosts) runs through orboto_api_call; the metrics label each call as orboto_capacity_list, _claim, _renew, _release or _windows.',
+    '',
+    'Who holds a resource, its queue and windows:',
+    '  orboto_api_call {"method":"GET","path":"/capacity/resources/build-host:runner-1"}',
+    'Every resource with used slots and queue length:',
+    '  orboto_api_call {"method":"GET","path":"/capacity/resources"}',
+    'Your own active claims:',
+    '  orboto_api_call {"method":"GET","path":"/capacity/claims","query":{"mine":true,"active":true}}',
+    '',
+    'Claim before a heavy run (granted when a slot is free, else queued by priority release > develop > pr > batch, then arrival):',
+    '  orboto_api_call {"method":"POST","path":"/capacity/claims","body":{"resource":"build-host:runner-1","reason":"0.212.0 release build","expectedMinutes":45,"priority":"release"}}',
+    '  The claim is held by this agent session. A queued answer names its position, what it waits for (waitingFor) and the holders.',
+    'Renew while the run lasts, and while queued, before the deadline in the claim:',
+    '  orboto_api_call {"method":"POST","path":"/capacity/claims/<claimId>/renew","body":{}}',
+    'Poll a queued claim until state is granted:',
+    '  orboto_api_call {"method":"GET","path":"/capacity/claims/<claimId>"}',
+    'Release when the run ends (idempotent):',
+    '  orboto_api_call {"method":"POST","path":"/capacity/claims/<claimId>/release","body":{"reason":"build done"}}',
+    'Reserved windows of every resource:',
+    '  orboto_api_call {"method":"GET","path":"/capacity/windows"}',
+    '',
+    'Automatic release: orboto_session_check releases the granted claims of this session when its verdict is may_stop,',
+    'and every claim of the session with sessionEnd: true; the MCP server does the same when the session closes.',
+    'A claim not renewed by its deadline expires and the next claim in line gets the slot. A yieldRequest on your claim asks you to release early; nothing is ever killed.',
+    'Resources and windows are administered with admin:capacity:write on the Capacity page or through the same REST routes.',
+  ].join('\n');
+}

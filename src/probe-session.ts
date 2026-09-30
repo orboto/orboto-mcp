@@ -18,6 +18,8 @@ export interface ProbeEndOptions {
   instanceToken: string;
   cleanup: () => void;
   exit: (code: number) => void;
+  /** ORB-2272 - awaited before the session row ends, so its capacity claims are released first. */
+  settle?: () => Promise<unknown>;
 }
 
 /** Answers false outside a probe; inside one, ends the session for good and exits once stdin ends. */
@@ -28,7 +30,9 @@ export function endProbeSessionOnStdinEnd(opts: ProbeEndOptions): boolean {
     if (ended) return;
     ended = true;
     opts.cleanup();
-    void opts.client.post('/v1/agent/end-session', {}, { instanceToken: opts.instanceToken })
+    void (opts.settle ?? (() => Promise.resolve()))()
+      .catch(() => undefined)
+      .then(() => opts.client.post('/v1/agent/end-session', {}, { instanceToken: opts.instanceToken }))
       .catch(() => undefined)
       .finally(() => opts.exit(0));
   };

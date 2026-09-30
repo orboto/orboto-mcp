@@ -11,6 +11,7 @@ import { applyResponseBudget, TruncationBlockAdvertisedSchema } from './response
 import { buildStrictInputSchema, isRawShape } from './input-schema.js';
 import { captureToolDoc, summarizeToolDescription } from './tool-docs.js';
 import { postLogEntry, redactSecrets } from './mcp-instrument.js';
+import { envelopeStatus, metricsToolName } from './tail-labels.js';
 
 /**
  * ORB-1174 - turn an OrbotoApiError into an actionable, agent-visible
@@ -72,16 +73,19 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
       });
       return gated;
     }
+    const label = metricsToolName(toolName, args);
     try {
       const handlerResult = await handler(args, extra);
       const budgeted = applyResponseBudget(toolName, handlerResult);
       const result = budgeted.result;
-      const isError = result.isError === true;
-      if (nudge) recordSessionStartResult(nudge, toolName, !isError);
+      const inner = label === toolName ? undefined : envelopeStatus(handlerResult.structuredContent);
+      const isError = result.isError === true || (inner !== undefined && inner >= 400);
+      if (nudge) recordSessionStartResult(nudge, toolName, result.isError !== true);
       void postLogEntry(client, {
-        toolName,
+        toolName: label,
         durationMs: Date.now() - start,
         success: !isError,
+        ...(inner !== undefined && inner >= 400 ? { statusCode: inner } : {}),
         errorMessage: isError && result.content[0] && 'text' in result.content[0]
           ? redactSecrets(String(result.content[0].text)).slice(0, 500)
           : undefined,
@@ -100,12 +104,12 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
       }
       if (err instanceof OrbotoApiError) {
         const text = formatApiError(err);
-        void postLogEntry(client, { toolName, durationMs, success: false, statusCode: err.status, errorMessage: redactSecrets(text).slice(0, 500), clientHint });
+        void postLogEntry(client, { toolName: label, durationMs, success: false, statusCode: err.status, errorMessage: redactSecrets(text).slice(0, 500), clientHint });
         const errResult: CallToolResult = { isError: true, content: [{ type: 'text', text }] };
         return wantsNudge ? prependNudge(errResult) : errResult;
       }
       void postLogEntry(client, {
-        toolName,
+        toolName: label,
         durationMs,
         success: false,
         errorMessage: redactSecrets(err instanceof Error ? err.message : String(err)).slice(0, 500),
