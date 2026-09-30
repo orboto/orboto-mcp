@@ -15,6 +15,7 @@ export const TAIL_LABELS: readonly TailLabel[] = [
   { method: 'POST', path: new RegExp(`^/capacity/claims/${SEG}/renew$`), label: 'orboto_capacity_renew' },
   { method: 'POST', path: new RegExp(`^/capacity/claims/${SEG}/release$`), label: 'orboto_capacity_release' },
   { method: 'GET', path: /^\/capacity\/windows$/, label: 'orboto_capacity_windows' },
+  { method: 'GET', path: /^\/capacity\/metrics$/, label: 'orboto_capacity_stats' },
 ];
 
 /** The metrics label of one tool call: the stand-in tool name for a labelled api_call, else the tool name itself. */

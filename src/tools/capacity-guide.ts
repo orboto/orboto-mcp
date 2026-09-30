@@ -1,7 +1,7 @@
 /** ORB-2272 - the build capacity recipes for an MCP agent, served by orboto_help topic "capacity". */
 export function capacityGuideText(): string {
   return [
-    'Build capacity (shared build hosts, CI runners, game build hosts) runs through orboto_api_call; the metrics label each call as orboto_capacity_list, _claim, _renew, _release or _windows.',
+    'Build capacity (shared build hosts, CI runners, game build hosts) runs through orboto_api_call; the metrics label each call as orboto_capacity_list, _claim, _renew, _release, _windows or _stats.',
     '',
     'Who holds a resource, its queue and windows:',
     '  orboto_api_call {"method":"GET","path":"/capacity/resources/build-host:runner-1"}',
@@ -21,6 +21,8 @@ export function capacityGuideText(): string {
     '  orboto_api_call {"method":"POST","path":"/capacity/claims/<claimId>/release","body":{"reason":"build done"}}',
     'Reserved windows of every resource:',
     '  orboto_api_call {"method":"GET","path":"/capacity/windows"}',
+    'Wait, hold, expirations, yields, overrun alerts and queue depth per resource over the last 24 hours and 7 days (needs admin:agents:read):',
+    '  orboto_api_call {"method":"GET","path":"/capacity/metrics","query":{"resource":"build-host:runner-1"}}',
     '',
     'Automatic release: orboto_session_check (full toolset only: ?toolset=full or ORBOTO_MCP_TOOLSET=full) releases the granted claims of this session on may_stop,',
     'except claims a live `orboto capacity claim --hold` process keeps (marker ~/.orboto/capacity-holds/<claimId>.json), and every claim with sessionEnd: true.',

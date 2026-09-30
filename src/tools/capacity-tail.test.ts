@@ -118,7 +118,31 @@ describe('ORB-2272 - metrics labels of the capacity tail', () => {
     ];
     for (const [method, path, label] of cases) expect(metricsToolName('orboto_api_call', { method, path }), `${method} ${path}`).toBe(label);
     expect(metricsToolName('orboto_get_ticket', { method: 'POST', path: '/capacity/claims' })).toBe('orboto_get_ticket');
-    expect(new Set(TAIL_LABELS.map((l) => l.label))).toEqual(new Set(['orboto_capacity_list', 'orboto_capacity_claim', 'orboto_capacity_renew', 'orboto_capacity_release', 'orboto_capacity_windows']));
+    expect(new Set(TAIL_LABELS.map((l) => l.label))).toEqual(new Set(['orboto_capacity_list', 'orboto_capacity_claim', 'orboto_capacity_renew', 'orboto_capacity_release', 'orboto_capacity_windows', 'orboto_capacity_stats']));
+  });
+
+  it('ORB-2275 - labels the metrics read as orboto_capacity_stats, with or without a query', () => {
+    expect(metricsToolName('orboto_api_call', { method: 'GET', path: '/capacity/metrics' })).toBe('orboto_capacity_stats');
+    expect(metricsToolName('orboto_api_call', { method: 'get', path: '/capacity/metrics?resource=build-host:runner-1' })).toBe('orboto_capacity_stats');
+    expect(metricsToolName('orboto_api_call', { method: 'POST', path: '/capacity/metrics' })).toBe('orboto_api_call');
+  });
+});
+
+describe('ORB-2275 - capacity metrics through orboto_api_call', () => {
+  it('reads the 24-hour and 7-day metrics per resource, a 403 without admin:agents:read comes back as data and counts as a failed orboto_capacity_stats', async () => {
+    const window = { grants: 3, waitSecondsMax: 600, holds: 2, expirations: 1, yields: 0, queueDepthMax: 2 };
+    let allowed = true;
+    const { instrument, proxied } = mockApi(() => (allowed
+      ? { status: 200, body: { items: [{ resourceName: 'build-host:runner-1', queueDepth: 1, overrunning: 0, last24h: window, last7d: window }], nextCursor: null } }
+      : { status: 403, body: { error: 'Forbidden', errorKey: 'errors.permissions.forbidden' } }));
+    const ok = await apiCall({ method: 'GET', path: '/capacity/metrics', query: { resource: 'build-host:runner-1' } }, {});
+    expect(JSON.stringify(ok.structuredContent)).toContain('"waitSecondsMax":600');
+    allowed = false;
+    const denied = await apiCall({ method: 'GET', path: '/capacity/metrics' }, {});
+    expect(denied.structuredContent).toMatchObject({ status: 403 });
+    await flush();
+    expect(proxied.map((p) => `${p.method} ${p.path}`)).toEqual(['GET /capacity/metrics', 'GET /capacity/metrics']);
+    expect(instrument.map((e) => [e.toolName, e.success])).toEqual([['orboto_capacity_stats', true], ['orboto_capacity_stats', false]]);
   });
 });
 
@@ -126,6 +150,6 @@ describe('ORB-2272 - orboto_help topic capacity', () => {
   it('serves the claim, renew, release and windows recipes', async () => {
     const res = await makeHelpHandler()({ topic: 'capacity' });
     const text = (res.content[0] as { text: string }).text;
-    for (const needle of ['"path":"/capacity/claims"', '/renew', '/release', '/capacity/windows', 'sessionEnd', '?toolset=full', 'ORBOTO_MCP_TOOLSET=full', 'capacity-holds', 'A curated agent has no orboto_session_check', 'session-check --session-end']) expect(text).toContain(needle);
+    for (const needle of ['"path":"/capacity/claims"', '/renew', '/release', '/capacity/windows', 'sessionEnd', '?toolset=full', 'ORBOTO_MCP_TOOLSET=full', 'capacity-holds', 'A curated agent has no orboto_session_check', 'session-check --session-end', '"path":"/capacity/metrics"', 'admin:agents:read']) expect(text).toContain(needle);
   });
 });
