@@ -443,7 +443,7 @@ export const moveDocToolConfig = {
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     parentDocId: z.string().uuid().nullable().optional().describe('null = top-level; UUID = nest under that doc.'),
-    spaceId: z.string().uuid().optional().describe('Move into a different space. Caller must be member of both.'),
+    spaceId: z.string().uuid().optional().describe('Move into a different space. Caller must be member of both; the parent must live in the target space, and without parentDocId the doc lands at the top level.'),
     sortOrder: z.number().int().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -475,9 +475,9 @@ export function makeMoveDocHandler(client: OrbotoClient) {
 }
 
 export const duplicateDocSpaceToolConfig = {
-  title: 'Duplicate a doc space (clone the space + every doc inside it)',
+  title: 'Duplicate a doc space (clone the space + the docs you can read)',
   description:
-    'Fork a doc space along with its entire doc tree. The new space\'s name becomes `<source> (copy)`, parent-child relationships in the tree are preserved via UUID remap. Useful when an agent wants to iterate on a runbook space without mutating the original.',
+    'Fork a doc space along with its doc tree. Needs manage rights on the source space; only docs the caller can read are copied. The new space\'s name becomes `<source> (copy)`, parent-child relationships in the tree are preserved via UUID remap. Useful when an agent wants to iterate on a runbook space without mutating the original.',
   inputSchema: z.object({
     spaceId: z.string().uuid().describe('Source space to duplicate.'),
   }).shape,
