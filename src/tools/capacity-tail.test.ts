@@ -111,6 +111,10 @@ describe('ORB-2272 - metrics labels of the capacity tail', () => {
       ['POST', `/capacity/claims/${CLAIM}/renew`, 'orboto_capacity_renew'],
       ['POST', `/capacity/claims/${CLAIM}/release`, 'orboto_capacity_release'],
       ['GET', '/capacity/windows', 'orboto_capacity_windows'],
+      ['GET', '/capacity/resources/build-host:runner-1/plan', 'orboto_capacity_plan'],
+      ['POST', '/capacity/resources/unity:build/plan?book=true', 'orboto_capacity_plan'],
+      ['POST', '/capacity/seeds/nightly-unity', 'orboto_capacity_seed'],
+      ['POST', '/capacity/seeds/other', 'orboto_api_call'],
       ['POST', '/capacity/resources', 'orboto_api_call'],
       ['POST', `/capacity/claims/${CLAIM}/yield`, 'orboto_api_call'],
       ['GET', '/capacity', 'orboto_api_call'],
@@ -118,7 +122,7 @@ describe('ORB-2272 - metrics labels of the capacity tail', () => {
     ];
     for (const [method, path, label] of cases) expect(metricsToolName('orboto_api_call', { method, path }), `${method} ${path}`).toBe(label);
     expect(metricsToolName('orboto_get_ticket', { method: 'POST', path: '/capacity/claims' })).toBe('orboto_get_ticket');
-    expect(new Set(TAIL_LABELS.map((l) => l.label))).toEqual(new Set(['orboto_capacity_list', 'orboto_capacity_claim', 'orboto_capacity_renew', 'orboto_capacity_release', 'orboto_capacity_windows', 'orboto_capacity_stats']));
+    expect(new Set(TAIL_LABELS.map((l) => l.label))).toEqual(new Set(['orboto_capacity_list', 'orboto_capacity_claim', 'orboto_capacity_renew', 'orboto_capacity_release', 'orboto_capacity_windows', 'orboto_capacity_plan', 'orboto_capacity_seed', 'orboto_capacity_stats']));
   });
 
   it('ORB-2275 - labels the metrics read as orboto_capacity_stats, with or without a query', () => {
@@ -143,13 +147,15 @@ describe('ORB-2275 - capacity metrics through orboto_api_call', () => {
     await flush();
     expect(proxied.map((p) => `${p.method} ${p.path}`)).toEqual(['GET /capacity/metrics', 'GET /capacity/metrics']);
     expect(instrument.map((e) => [e.toolName, e.success])).toEqual([['orboto_capacity_stats', true], ['orboto_capacity_stats', false]]);
+    expect(new Set(TAIL_LABELS.map((l) => l.label))).toEqual(new Set(['orboto_capacity_list', 'orboto_capacity_claim', 'orboto_capacity_renew', 'orboto_capacity_release', 'orboto_capacity_windows', 'orboto_capacity_plan', 'orboto_capacity_seed', 'orboto_capacity_stats']));
   });
 });
 
 describe('ORB-2272 - orboto_help topic capacity', () => {
-  it('serves the claim, renew, release and windows recipes', async () => {
+  it('serves the claim, renew, release, windows and plan recipes', async () => {
     const res = await makeHelpHandler()({ topic: 'capacity' });
     const text = (res.content[0] as { text: string }).text;
     for (const needle of ['"path":"/capacity/claims"', '/renew', '/release', '/capacity/windows', 'sessionEnd', '?toolset=full', 'ORBOTO_MCP_TOOLSET=full', 'capacity-holds', 'A curated agent has no orboto_session_check', 'session-check --session-end', '"path":"/capacity/metrics"', 'admin:agents:read']) expect(text).toContain(needle);
+    for (const needle of ['"path":"/capacity/claims"', '/renew', '/release', '/capacity/windows', '/plan', '"book":true', 'graceMinutes', 'capacity plan <resource> --for 45m --book', 'sessionEnd', '?toolset=full', 'ORBOTO_MCP_TOOLSET=full', 'capacity-holds', 'A curated agent has no orboto_session_check', 'session-check --session-end', '/capacity/seeds/nightly-unity', 'capacity wait <claimId> --hold -- <command...>', 'takes no slot']) expect(text).toContain(needle);
   });
 });

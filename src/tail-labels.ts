@@ -1,4 +1,4 @@
-/** ORB-2272 - an orboto_api_call on a tail route is logged under the tool name it stands in for; leaf module. */
+/** ORB-2272, ORB-2274 - an orboto_api_call on a tail route is logged under the tool name it stands in for; leaf module. */
 
 interface TailLabel {
   method: string;
@@ -16,6 +16,9 @@ export const TAIL_LABELS: readonly TailLabel[] = [
   { method: 'POST', path: new RegExp(`^/capacity/claims/${SEG}/release$`), label: 'orboto_capacity_release' },
   { method: 'GET', path: /^\/capacity\/windows$/, label: 'orboto_capacity_windows' },
   { method: 'GET', path: /^\/capacity\/metrics$/, label: 'orboto_capacity_stats' },
+  { method: 'GET', path: new RegExp(`^/capacity/resources/${SEG}/plan$`), label: 'orboto_capacity_plan' },
+  { method: 'POST', path: new RegExp(`^/capacity/resources/${SEG}/plan$`), label: 'orboto_capacity_plan' },
+  { method: 'POST', path: /^\/capacity\/seeds\/nightly-unity$/, label: 'orboto_capacity_seed' },
 ];
 
 /** The metrics label of one tool call: the stand-in tool name for a labelled api_call, else the tool name itself. */
