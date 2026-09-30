@@ -146,7 +146,7 @@ export function makeGetDocHandler(client: OrbotoClient) {
 export const createDocSpaceToolConfig = {
   title: 'Create a doc space',
   description:
-    'Create a new wiki space. IMPORTANT: every project ALREADY has an auto-generated general space (slug `<key>-general`, system-generated, holds the AI primer + manual notes) - do NOT create a second space just to hold a project\'s docs. Call orboto_list_doc_spaces first and reuse the existing project space; only create a new one for a genuinely separate collection. `type=global` creates a workspace-wide space (super-admin only); `type=project` creates a space scoped to a project - pass `projectKey` (e.g. "ORB"); a raw `projectId` UUID is still accepted for back-compat. The slug is derived from `name` when omitted. Returns the new space row.',
+    'Create a new wiki space. IMPORTANT: every project ALREADY has an auto-generated general space (slug `<key>-general`, system-generated, holds the AI primer + manual notes) - do NOT create a second space just to hold a project\'s docs. Call orboto_list_doc_spaces first and reuse the existing project space; only create a new one for a genuinely separate collection. `type=global` creates a workspace-wide space (super-admin only); `type=project` creates a space scoped to a project - pass `projectKey` (e.g. "ORB"); a raw `projectId` UUID is still accepted for back-compat. The slug is derived from `name` when omitted. A project space needs `project:edit` on the target project (404 otherwise). Returns the new space row.',
   inputSchema: z.object({
     name: z.string().min(1).max(100).describe('Display name.'),
     type: z.enum(['global', 'project']).describe('Scope: workspace-wide or project-scoped.'),
@@ -251,7 +251,7 @@ export function makeUpdateDocSpaceHandler(client: OrbotoClient) {
 export const deleteDocSpaceToolConfig = {
   title: 'Delete a doc space',
   description:
-    'DESTRUCTIVE - cascades through every doc in the space (the pages themselves are gone, not just hidden). System-generated project primer spaces refuse deletion (they cascade only when the owning project is deleted). Returns success silently; 404 surfaces as an OrbotoApiError.',
+    'DESTRUCTIVE - cascades through every doc in the space (the pages themselves are gone, not just hidden). System-generated project primer spaces refuse deletion (they cascade only when the owning project is deleted). Needs `project:edit` on the space\'s project (global spaces: super-admin): 404 for a space the caller cannot see or that does not exist, 403 for one they cannot manage. Returns success silently; errors surface as an OrbotoApiError.',
   inputSchema: z.object({
     spaceId: z.string().uuid(),
   }).shape,
