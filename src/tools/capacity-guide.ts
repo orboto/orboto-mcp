@@ -1,7 +1,7 @@
 /** ORB-2272, ORB-2274 - the build capacity recipes for an MCP agent, served by orboto_help topic "capacity". */
 export function capacityGuideText(): string {
   return [
-    'Build capacity (shared build hosts, CI runners, game build hosts) runs through orboto_api_call; the metrics label each call as orboto_capacity_list, _claim, _renew, _release, _windows or _plan.',
+    'Build capacity (shared build hosts, CI runners, game build hosts) runs through orboto_api_call; the metrics label each call as orboto_capacity_list, _claim, _renew, _release, _windows, _plan or _seed.',
     '',
     'Who holds a resource, its queue and windows:',
     '  orboto_api_call {"method":"GET","path":"/capacity/resources/build-host:runner-1"}',
@@ -26,11 +26,15 @@ export function capacityGuideText(): string {
     '  orboto_api_call {"method":"GET","path":"/capacity/resources/build-host:runner-1/plan","query":{"minutes":45,"notBefore":"2026-10-01T18:00:00+02:00"}}',
     'Book it: a reservation claim of this session that nothing else can take, granted at startsAt with a wake message; renew it within graceMinutes (default 15) of the grant or it expires:',
     '  orboto_api_call {"method":"POST","path":"/capacity/resources/build-host:runner-1/plan","body":{"minutes":45,"book":true,"reason":"0.212.0 release window","priority":"release"}}',
-    'An integrator books the release window this way (CLI: orboto capacity plan <resource> --for 45m --book) before pushing the release commit;',
-    'a release reservation keeps every lower priority off the resource during its run, so plan a develop run with "priority":"develop".',
+    'Use it: renew once right after the grant (that sets usedAt), then while the run lasts, and release it when the run ends; from a shell, orboto capacity wait <claimId> --hold -- <command...> does all three.',
+    'An integrator books the release window this way (CLI: orboto capacity plan <resource> --for 45m --book --priority release) before pushing the release commit;',
+    'a release reservation takes no slot: it keeps every lower priority off the resource during its run while the release runs use every slot, so plan a develop run with "priority":"develop".',
+    '',
+    'Seed the nightly Unity build window on the instance that runs the Unity host (admin:capacity:write, idempotent; optional resource, default unity:build, and timezone, default the workspace zone):',
+    '  orboto_api_call {"method":"POST","path":"/capacity/seeds/nightly-unity","body":{}}',
     '',
     'Automatic release: orboto_session_check (full toolset only: ?toolset=full or ORBOTO_MCP_TOOLSET=full) releases the granted claims of this session on may_stop,',
-    'except claims a live `orboto capacity claim --hold` process keeps (marker ~/.orboto/capacity-holds/<claimId>.json), and every claim with sessionEnd: true.',
+    'except claims a live `orboto capacity claim --hold` or `orboto capacity wait --hold` process keeps (marker ~/.orboto/capacity-holds/<claimId>.json), and every claim with sessionEnd: true.',
     'A curated agent has no orboto_session_check: it releases with orboto_api_call POST /capacity/claims/<claimId>/release, and the SessionEnd hook (`orboto session-check --session-end`) ends the rest.',
     'The MCP server releases every claim when a probe or an HTTP client ends its session; a stdio stdin end (reconnect, harness restart) releases only the granted claims no live hold keeps.',
     'A claim not renewed by its deadline expires and the next claim in line gets the slot. A yieldRequest on your claim asks you to release early; nothing is ever killed.',
