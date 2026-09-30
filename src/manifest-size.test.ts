@@ -48,16 +48,13 @@ afterEach(() => { vi.restoreAllMocks(); });
  * write instead of after it (measured curated = 39,679 chars / 11,022
  * tokens, from 39,461 / 10,961 - one boolean parameter, no new tool). The
  * verdicts themselves ride the response, not the manifest.
- * ORB-2338 raised the full ceiling to 173,300: `orboto_live_transcript`
- * reads a live session's structured conversation (prompts, tool groups,
- * turn ends, usage, context) in the full toolset (measured full = 172,174
- * chars); the curated tier reaches it through the escape hatch and is
- * unchanged.
+ * ORB-2338 added no named tool; the transcript rides the escape hatch and
+ * the resource.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
 const CURATED_MAX_CHARS = 39_900;
-const FULL_MAX_CHARS = 173_300;
+const FULL_MAX_CHARS = 171_200;
 
 /**
  * ORB-1805 - the estimator the ticket measured the failure with

@@ -142,7 +142,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     new ResourceTemplate('orboto://live/{sessionId}/transcript', { list: undefined }),
     {
       title: 'Live session transcript',
-      description: 'ORB-2338 - the newest lines of a live agent session you may see: prompts, assistant markdown, tool groups, turn ends, usage and context, masked. Cut to 4,000 characters with an explicit note; orboto_live_transcript pages the rest.',
+      description: 'ORB-2338 - the newest lines of a live agent session you may see: prompts, assistant markdown, tool groups, turn ends, usage and context, masked. Cut to 4,000 characters with an explicit note; the rest is paged with `orboto_api_call get /agents/live-sessions/<id>/transcript?afterSeq=N`.',
       mimeType: 'text/markdown',
     },
     async (uri, vars) => ({

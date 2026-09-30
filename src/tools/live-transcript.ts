@@ -1,10 +1,8 @@
 /**
  * ORB-2338 - a live session's transcript for an agent: the ORB-2242 lines
  * and the structured conversation (prompts, assistant markdown, tool groups,
- * turn ends, usage, context) as compact lines within the response budget.
+ * turn ends, usage, context) as compact lines in the transcript resource.
  */
-import { z } from 'zod';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 
 /** Mirrors LIVE_TRANSCRIPT_EVENT_KINDS of @orboto/shared-schema; the MCP package ships without it, apps/api/src/test/agent-live-mcp-drift.test.ts pins the copy. */
@@ -100,38 +98,6 @@ export function renderTranscriptLines(items: LiveLine[]): string[] {
   return latestLines(items).map((line) => `${line.seq} ${line.at} ${renderLiveEvent(line.event)}`);
 }
 
-export const liveTranscriptToolConfig = {
-  title: 'Live session transcript',
-  description:
-    'Read a live session\'s transcript. It is the harness conversation as the runner streams it (Admin -> Agents -> Live, `orboto live transcript`): user prompts, the assistant\'s markdown, tool groups with their counts by kind, wall time and masked arguments, questions and permission asks, turn ends with duration, model and effort, usage windows with their reset time, and the context fill - next to the older text, tool_call, tool_result and status lines. Every line was masked before it was stored. Pages run in sequence order under the transcript cursor; `afterSeq` catches up after the last line you read, `order: desc` reads the newest first. A running tool group is replaced by a later line of the same `groupId`; the text lists only the latest. Read-only; the session must be one you may see (404 otherwise).',
-  inputSchema: z.object({
-    sessionId: z.string().uuid().describe('Live session id.'),
-    afterSeq: z.number().int().min(0).optional().describe('Lines after this seq.'),
-    order: z.enum(['asc', 'desc']).optional().describe('Default asc.'),
-    kinds: z.array(z.enum(LIVE_KINDS)).max(LIVE_KINDS.length).optional().describe('Only these kinds.'),
-    limit: z.number().int().min(1).max(200).optional().describe('Default 50.'),
-    cursor: z.string().optional().describe('Cursor of the last answer.'),
-  }).shape,
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-};
-
-export function makeLiveTranscriptHandler(client: OrbotoClient) {
-  return async (args: { sessionId: string; afterSeq?: number; order?: 'asc' | 'desc'; kinds?: string[]; limit?: number; cursor?: string }): Promise<CallToolResult> => {
-    const qs = new URLSearchParams({ limit: String(args.limit ?? 50) });
-    if (args.afterSeq !== undefined) qs.set('afterSeq', String(args.afterSeq));
-    if (args.order) qs.set('order', args.order);
-    if (args.cursor) qs.set('cursor', args.cursor);
-    const page = await client.get<LivePage>(`/agents/live-sessions/${encodeURIComponent(args.sessionId)}/transcript?${qs}`);
-    const items = args.kinds?.length ? page.items.filter((line) => args.kinds!.includes(line.event.kind)) : page.items;
-    const lines = renderTranscriptLines(items);
-    const tail = page.nextCursor ? `\n\n(next cursor: ${page.nextCursor})` : '';
-    return {
-      content: [{ type: 'text', text: `${lines.length ? lines.join('\n') : '(no lines)'}\n\nlastSeq ${page.lastSeq}${tail}` }],
-      structuredContent: { items, nextCursor: page.nextCursor, lastSeq: page.lastSeq } as unknown as Record<string, unknown>,
-    };
-  };
-}
-
 /** The resource answer's cap; it runs outside the tool budget, so it cuts itself, explicitly. */
 export const LIVE_RESOURCE_CHARS = 4000;
 
@@ -149,7 +115,7 @@ export function renderTranscriptResource(sessionId: string, page: { items: LiveL
   }
   const omitted = lines.length - kept.length;
   const note = omitted > 0 || (sorted[0]?.seq ?? 1) > 1
-    ? `\n[truncated: earlier lines are not shown here - read them with orboto_live_transcript { sessionId: "${sessionId}" }${omitted > 0 ? `; ${omitted} of the newest ${lines.length} did not fit` : ''}]`
+    ? `\n[truncated: earlier lines are not shown here - page the rest with orboto_api_call get /agents/live-sessions/${sessionId}/transcript?afterSeq=N${omitted > 0 ? `; ${omitted} of the newest ${lines.length} did not fit` : ''}]`
     : '';
   return `${head}\n${kept.length ? kept.join('\n') : '_No lines yet._'}${note}`;
 }
