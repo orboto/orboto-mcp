@@ -137,7 +137,7 @@ export function noRecipientText(err: OrbotoApiError): string | null {
   const live = (p.liveSessions ?? []).map((s) => `${s.addresses[0] ?? s.email} (${s.email}, ${s.shortId})`);
   return `not sent: no live session can receive a request to ${p.address ?? '?'} (${p.reason ?? 'no_recipient'}). `
     + (live.length ? `Live sessions: ${live.join('; ')}. ` : 'No live session declared the project. ')
-    + 'Address one of them, or send again with queue: true to keep it until a session declares the project.';
+    + 'Address one of them, or send again with queue: true and project to keep it until a session declares the project.';
 }
 
 export const agentNotifyToolConfig = {
