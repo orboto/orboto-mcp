@@ -1,7 +1,7 @@
-/** ORB-2272 - the build capacity recipes for an MCP agent, served by orboto_help topic "capacity". */
+/** ORB-2272, ORB-2274 - the build capacity recipes for an MCP agent, served by orboto_help topic "capacity". */
 export function capacityGuideText(): string {
   return [
-    'Build capacity (shared build hosts, CI runners, game build hosts) runs through orboto_api_call; the metrics label each call as orboto_capacity_list, _claim, _renew, _release or _windows.',
+    'Build capacity (shared build hosts, CI runners, game build hosts) runs through orboto_api_call; the metrics label each call as orboto_capacity_list, _claim, _renew, _release, _windows or _plan.',
     '',
     'Who holds a resource, its queue and windows:',
     '  orboto_api_call {"method":"GET","path":"/capacity/resources/build-host:runner-1"}',
@@ -21,6 +21,13 @@ export function capacityGuideText(): string {
     '  orboto_api_call {"method":"POST","path":"/capacity/claims/<claimId>/release","body":{"reason":"build done"}}',
     'Reserved windows of every resource:',
     '  orboto_api_call {"method":"GET","path":"/capacity/windows"}',
+    '',
+    'Plan: the earliest slot for a duration, around windows, holders, the queue and booked reservations (409 when nothing fits within 14 days):',
+    '  orboto_api_call {"method":"GET","path":"/capacity/resources/build-host:runner-1/plan","query":{"minutes":45,"notBefore":"2026-10-01T18:00:00+02:00"}}',
+    'Book it: a reservation claim of this session that nothing else can take, granted at startsAt with a wake message; renew it within graceMinutes (default 15) of the grant or it expires:',
+    '  orboto_api_call {"method":"POST","path":"/capacity/resources/build-host:runner-1/plan","body":{"minutes":45,"book":true,"reason":"0.212.0 release window","priority":"release"}}',
+    'An integrator books the release window this way (CLI: orboto capacity plan <resource> --for 45m --book) before pushing the release commit;',
+    'a release reservation keeps every lower priority off the resource during its run, so plan a develop run with "priority":"develop".',
     '',
     'Automatic release: orboto_session_check (full toolset only: ?toolset=full or ORBOTO_MCP_TOOLSET=full) releases the granted claims of this session on may_stop,',
     'except claims a live `orboto capacity claim --hold` process keeps (marker ~/.orboto/capacity-holds/<claimId>.json), and every claim with sessionEnd: true.',
