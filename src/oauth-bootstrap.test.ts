@@ -5,7 +5,7 @@
  * its testable pieces (PKCE, authorize-url, request builders).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -22,8 +22,10 @@ import {
   clearCachedGrant,
   createTokenProvider,
   bootstrapOAuth,
+  withCacheLock,
   EXPIRY_SKEW_MS,
   type OAuthTokenSet,
+  type TokenStore,
 } from './oauth-bootstrap.js';
 
 describe('PKCE', () => {
@@ -237,5 +239,134 @@ describe('bootstrapOAuth cached-grant path', () => {
       openBrowser: vi.fn(), cachePath: path, log: () => {},
     })).rejects.toThrow(/discovery failed/);
     expect(loadCachedGrant('https://x.test', path)).toBeNull();
+  });
+});
+
+describe('createTokenProvider with a shared store', () => {
+  const expired: OAuthTokenSet = { accessToken: 'at0', refreshToken: 'rt0', expiresAt: 0, scope: 'mcp' };
+  const storeOf = (read: () => OAuthTokenSet | null): TokenStore => ({ withLock: (fn) => fn(), read });
+
+  it('adopts a newer live token set persisted after construction instead of rotating', async () => {
+    const refresh = vi.fn();
+    const p = createTokenProvider(expired, refresh, undefined, () => 1_000, storeOf(() => ({
+      accessToken: 'at5', refreshToken: 'rt5', expiresAt: 10_000_000, scope: 'mcp',
+    })));
+    expect(await p.getAccessToken()).toBe('at5');
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('continues from the newer refresh token when the stored access token is expired too', async () => {
+    const refresh = vi.fn().mockResolvedValue({ accessToken: 'at6', refreshToken: 'rt6', expiresAt: 10_000_000, scope: 'mcp' });
+    const p = createTokenProvider(expired, refresh, undefined, () => 1_000, storeOf(() => ({
+      accessToken: 'at5', refreshToken: 'rt5', expiresAt: 0, scope: 'mcp',
+    })));
+    expect(await p.getAccessToken()).toBe('at6');
+    expect(refresh).toHaveBeenCalledWith('rt5');
+  });
+
+  it('forceRefresh with the same stored token rotates it, with a different live one adopts it', async () => {
+    const live: OAuthTokenSet = { accessToken: 'at1', refreshToken: 'rt1', expiresAt: 10_000_000, scope: 'mcp' };
+    const refresh = vi.fn().mockResolvedValue({ accessToken: 'at2', refreshToken: 'rt2', expiresAt: 10_000_000, scope: 'mcp' });
+    let onDisk: OAuthTokenSet = live;
+    const p = createTokenProvider(live, refresh, (n) => { onDisk = n; }, () => 1_000, storeOf(() => onDisk));
+    expect(await p.forceRefresh()).toBe('at2');
+    expect(refresh).toHaveBeenCalledWith('rt1');
+    onDisk = { accessToken: 'at9', refreshToken: 'rt9', expiresAt: 10_000_000, scope: 'mcp' };
+    expect(await p.forceRefresh()).toBe('at9');
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+});
+
+describe('bootstrapOAuth with two processes on one cache', () => {
+  let dir: string;
+  let path: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'orboto-oauth-'));
+    path = join(dir, 'cache.json');
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  function rotatingServer() {
+    let live = 'rt0';
+    let n = 0;
+    const sent: string[] = [];
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { refresh_token: string };
+      sent.push(body.refresh_token);
+      await new Promise((r) => setTimeout(r, 30));
+      if (body.refresh_token !== live) return new Response('{"error":"invalid_grant"}', { status: 400 });
+      n += 1;
+      live = `rt${n}`;
+      return jsonResponse({ access_token: `at${n}`, refresh_token: live, expires_in: 3600, scope: 'mcp offline_access' });
+    }) as unknown as typeof fetch;
+    return { fetchImpl, sent };
+  }
+
+  const seed = () => saveCachedGrant('https://x.test', {
+    clientId: 'cid', refreshToken: 'rt0', scope: 'mcp offline_access', tokenEndpoint: 'https://x.test/oauth/token',
+  }, path);
+
+  it('two concurrent boots on an expired cache rotate once and share the token', async () => {
+    seed();
+    const { fetchImpl, sent } = rotatingServer();
+    const boot = () => bootstrapOAuth({ apiBaseUrl: 'https://x.test/api', fetchImpl, openBrowser: vi.fn(), cachePath: path, log: () => {} });
+    const [a, b] = await Promise.all([boot(), boot()]);
+    expect(sent).toEqual(['rt0']);
+    expect(await a.getAccessToken()).toBe('at1');
+    expect(await b.getAccessToken()).toBe('at1');
+    expect(loadCachedGrant('https://x.test', path)).toMatchObject({ refreshToken: 'rt1', accessToken: 'at1' });
+  });
+
+  it('a boot with a live cached access token rotates nothing, and the later refresh sends the first process rotated token', async () => {
+    seed();
+    const { fetchImpl, sent } = rotatingServer();
+    let offset = 0;
+    const now = () => Date.now() + offset;
+    const boot = () => bootstrapOAuth({ apiBaseUrl: 'https://x.test/api', fetchImpl, openBrowser: vi.fn(), cachePath: path, log: () => {}, now });
+    const a = await boot();
+    const b = await boot();
+    expect(sent).toEqual(['rt0']);
+
+    offset = 2 * 3600_000;
+    expect(await a.getAccessToken()).toBe('at2');
+    expect(await b.getAccessToken()).toBe('at2');
+    expect(sent).toEqual(['rt0', 'rt1']);
+
+    offset = 4 * 3600_000;
+    expect(await b.forceRefresh()).toBe('at3');
+    expect(sent).toEqual(['rt0', 'rt1', 'rt2']);
+    expect(await a.getAccessToken()).toBe('at3');
+    expect(sent).toHaveLength(3);
+  });
+});
+
+describe('withCacheLock', () => {
+  let dir: string;
+  let path: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'orboto-oauth-'));
+    path = join(dir, 'cache.json');
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('serialises holders and removes the lock file afterwards', async () => {
+    const order: string[] = [];
+    const hold = (tag: string) => withCacheLock(path, async () => {
+      order.push(`${tag}+`);
+      await new Promise((r) => setTimeout(r, 20));
+      order.push(`${tag}-`);
+    });
+    await Promise.all([hold('a'), hold('b')]);
+    expect(order.join(' ')).toMatch(/^(a\+ a- b\+ b-|b\+ b- a\+ a-)$/);
+    expect(existsSync(`${path}.lock`)).toBe(false);
+  });
+
+  it('reclaims a stale lock and times out on a held one', async () => {
+    writeFileSync(`${path}.lock`, '1');
+    const old = new Date(Date.now() - 120_000);
+    utimesSync(`${path}.lock`, old, old);
+    await expect(withCacheLock(path, async () => 'ok')).resolves.toBe('ok');
+    writeFileSync(`${path}.lock`, '1');
+    await expect(withCacheLock(path, async () => 'x', { timeoutMs: 60 })).rejects.toThrow(/holds the OAuth cache lock/);
   });
 });

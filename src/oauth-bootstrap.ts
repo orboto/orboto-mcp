@@ -3,7 +3,7 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { VERSION } from './version.js';
@@ -41,6 +41,9 @@ export interface CachedGrant {
   /** Metadata endpoints captured at register time so a refresh doesn't need to
    *  re-discover. */
   tokenEndpoint: string;
+  accessToken?: string;
+  /** Epoch ms at which the cached access token expires. */
+  expiresAt?: number;
 }
 
 type FetchLike = typeof fetch;
@@ -131,7 +134,7 @@ export function buildAuthorizeUrl(
   return u.toString();
 }
 
-function parseTokenResponse(json: unknown): OAuthTokenSet {
+function parseTokenResponse(json: unknown, now: () => number = Date.now): OAuthTokenSet {
   const t = json as {
     access_token?: string;
     refresh_token?: string;
@@ -143,7 +146,7 @@ function parseTokenResponse(json: unknown): OAuthTokenSet {
   return {
     accessToken: t.access_token,
     refreshToken: t.refresh_token ?? null,
-    expiresAt: Date.now() + expiresInMs,
+    expiresAt: now() + expiresInMs,
     scope: t.scope ?? BOOTSTRAP_SCOPE,
   };
 }
@@ -175,6 +178,7 @@ export async function refreshTokens(
   tokenEndpoint: string,
   params: { clientId: string; refreshToken: string },
   fetchImpl: FetchLike = fetch,
+  now: () => number = Date.now,
 ): Promise<OAuthTokenSet> {
   const res = await fetchImpl(tokenEndpoint, {
     method: 'POST',
@@ -189,7 +193,7 @@ export async function refreshTokens(
     const body = await res.text().catch(() => '');
     throw new Error(`OAuth token refresh failed: ${res.status} ${body}`);
   }
-  return parseTokenResponse(await res.json());
+  return parseTokenResponse(await res.json(), now);
 }
 
 /** Cache file path. Honours ORBOTO_MCP_TOKEN_CACHE for tests / custom homes. */
@@ -215,21 +219,59 @@ export function loadCachedGrant(origin: string, path = tokenCachePath()): Cached
   return file[origin] ?? null;
 }
 
+function writeCacheFile(path: string, file: CacheFile): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = `${path}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`;
+  writeFileSync(tmp, JSON.stringify(file, null, 2), { mode: 0o600 });
+  try { chmodSync(tmp, 0o600); } catch { /* best-effort on platforms without chmod */ }
+  renameSync(tmp, path);
+}
+
 export function saveCachedGrant(origin: string, grant: CachedGrant, path = tokenCachePath()): void {
   const file = readCacheFile(path);
   file[origin] = grant;
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(file, null, 2), { mode: 0o600 });
-  try { chmodSync(path, 0o600); } catch { /* best-effort on platforms without chmod */ }
+  writeCacheFile(path, file);
 }
 
 export function clearCachedGrant(origin: string, path = tokenCachePath()): void {
   const file = readCacheFile(path);
   if (!(origin in file)) return;
   delete file[origin];
+  writeCacheFile(path, file);
+}
+
+export const CACHE_LOCK_STALE_MS = 60_000;
+export const CACHE_LOCK_TIMEOUT_MS = 75_000;
+
+/** Runs `fn` while holding `<cache>.lock`, so processes sharing one cache never present the same refresh token twice. */
+export async function withCacheLock<T>(
+  path: string,
+  fn: () => Promise<T>,
+  opts: { timeoutMs?: number; staleMs?: number } = {},
+): Promise<T> {
+  const lockPath = `${path}.lock`;
+  const staleMs = opts.staleMs ?? CACHE_LOCK_STALE_MS;
+  const deadline = Date.now() + (opts.timeoutMs ?? CACHE_LOCK_TIMEOUT_MS);
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(file, null, 2), { mode: 0o600 });
-  try { chmodSync(path, 0o600); } catch { /* best-effort */ }
+  for (;;) {
+    try {
+      const fd = openSync(lockPath, 'wx', 0o600);
+      try { writeSync(fd, String(process.pid)); } finally { closeSync(fd); }
+      break;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+      try {
+        if (Date.now() - statSync(lockPath).mtimeMs > staleMs) { unlinkSync(lockPath); continue; }
+      } catch { continue; }
+      if (Date.now() > deadline) throw new Error('Another orboto-mcp process holds the OAuth cache lock.');
+      await new Promise((r) => setTimeout(r, 25));
+    }
+  }
+  try {
+    return await fn();
+  } finally {
+    try { unlinkSync(lockPath); } catch { /* already reclaimed as stale */ }
+  }
 }
 
 /**
@@ -243,21 +285,36 @@ export interface OAuthTokenProvider {
   forceRefresh(): Promise<string>;
 }
 
+/** Shared persistence a provider re-reads under the lock before every refresh. */
+export interface TokenStore {
+  withLock<T>(fn: () => Promise<T>): Promise<T>;
+  read(): OAuthTokenSet | null;
+}
+
 /**
  * Build a token provider around an initial token set + a refresh closure.
- * Kept pure (no I/O of its own beyond the injected refresh fn) so the
- * refresh-on-expiry logic unit tests deterministically with a fake clock.
+ * With a store, a refresh first adopts a newer token set another process
+ * persisted and rotates only when no live access token is on disk.
  */
 export function createTokenProvider(
   initial: OAuthTokenSet,
   refresh: (refreshToken: string) => Promise<OAuthTokenSet>,
   onRefreshed?: (next: OAuthTokenSet) => void,
   now: () => number = Date.now,
+  store?: TokenStore,
 ): OAuthTokenProvider {
   let current = initial;
   let inflight: Promise<string> | null = null;
 
-  async function doRefresh(): Promise<string> {
+  const live = (t: OAuthTokenSet) => now() < t.expiresAt - EXPIRY_SKEW_MS;
+
+  async function rotate(forced: boolean): Promise<string> {
+    const seen = current.accessToken;
+    const stored = store?.read();
+    if (stored && stored.refreshToken && stored.refreshToken !== current.refreshToken) {
+      current = stored;
+      if (live(stored) && (!forced || stored.accessToken !== seen)) return current.accessToken;
+    }
     if (!current.refreshToken) {
       throw new Error('OAuth session expired and no refresh token is available - reconnect the client.');
     }
@@ -267,14 +324,18 @@ export function createTokenProvider(
     return current.accessToken;
   }
 
+  function doRefresh(forced: boolean): Promise<string> {
+    return store ? store.withLock(() => rotate(forced)) : rotate(forced);
+  }
+
   return {
     async getAccessToken() {
-      if (now() < current.expiresAt - EXPIRY_SKEW_MS) return current.accessToken;
-      if (!inflight) inflight = doRefresh().finally(() => { inflight = null; });
+      if (live(current)) return current.accessToken;
+      if (!inflight) inflight = doRefresh(false).finally(() => { inflight = null; });
       return inflight;
     },
     async forceRefresh() {
-      if (!inflight) inflight = doRefresh().finally(() => { inflight = null; });
+      if (!inflight) inflight = doRefresh(true).finally(() => { inflight = null; });
       return inflight;
     },
   };
@@ -410,10 +471,10 @@ export async function runLoopbackAuthorization(opts: {
 
 /**
  * Resolve an OAuth token provider for the stdio proxy. Order:
- *   1. A cached grant whose refresh token still works -> silent refresh.
- *   2. Otherwise run the interactive browser-assisted loopback flow once.
- * Either way the resulting grant is persisted (0600) so the next boot is
- * silent. The returned provider auto-refreshes and re-persists on rotation.
+ *   1. A cached grant with a live access token -> used as is, nothing rotates.
+ *   2. A cached grant whose refresh token still works -> silent refresh under the cache lock.
+ *   3. Otherwise run the interactive browser-assisted loopback flow once.
+ * The returned provider re-reads the cache under the lock before every refresh.
  */
 export async function bootstrapOAuth(opts: {
   apiBaseUrl: string;
@@ -421,36 +482,56 @@ export async function bootstrapOAuth(opts: {
   fetchImpl?: FetchLike;
   openBrowser?: (url: string) => Promise<boolean>;
   cachePath?: string;
+  now?: () => number;
 }): Promise<OAuthTokenProvider> {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const log = opts.log ?? ((m) => process.stderr.write(`${m}\n`));
   const origin = deriveOrigin(opts.apiBaseUrl);
   const cachePath = opts.cachePath ?? tokenCachePath();
+  const now = opts.now ?? Date.now;
 
-  const persist = (clientId: string, tokenEndpoint: string, tokens: OAuthTokenSet) => {
-    if (tokens.refreshToken) {
+  const providerFor = (clientId: string, tokenEndpoint: string, initial: OAuthTokenSet) => {
+    const store: TokenStore = {
+      withLock: (fn) => withCacheLock(cachePath, fn),
+      read: () => {
+        const g = loadCachedGrant(origin, cachePath);
+        if (!g || g.clientId !== clientId) return null;
+        return { accessToken: g.accessToken ?? '', refreshToken: g.refreshToken, expiresAt: g.expiresAt ?? 0, scope: g.scope };
+      },
+    };
+    const persist = (tokens: OAuthTokenSet) => {
+      if (!tokens.refreshToken) return;
       saveCachedGrant(origin, {
         clientId, tokenEndpoint, refreshToken: tokens.refreshToken, scope: tokens.scope,
+        accessToken: tokens.accessToken, expiresAt: tokens.expiresAt,
       }, cachePath);
-    }
+    };
+    return createTokenProvider(
+      initial,
+      (rt) => refreshTokens(tokenEndpoint, { clientId, refreshToken: rt }, fetchImpl, now),
+      persist,
+      now,
+      store,
+    );
   };
 
   const cached = loadCachedGrant(origin, cachePath);
   if (cached) {
+    const provider = providerFor(cached.clientId, cached.tokenEndpoint, {
+      accessToken: cached.accessToken ?? '', refreshToken: cached.refreshToken,
+      expiresAt: cached.expiresAt ?? 0, scope: cached.scope,
+    });
     try {
-      const tokens = await refreshTokens(cached.tokenEndpoint, {
-        clientId: cached.clientId, refreshToken: cached.refreshToken,
-      }, fetchImpl);
-      persist(cached.clientId, cached.tokenEndpoint, tokens);
+      await provider.getAccessToken();
       log('[orboto-mcp] reconnected via cached OAuth session (no browser needed)');
-      return createTokenProvider(
-        tokens,
-        (rt) => refreshTokens(cached.tokenEndpoint, { clientId: cached.clientId, refreshToken: rt }, fetchImpl),
-        (next) => persist(cached.clientId, cached.tokenEndpoint, next),
-      );
+      return provider;
     } catch (e) {
       log(`[orboto-mcp] cached OAuth session no longer valid (${(e as Error).message}); re-authorizing`);
-      clearCachedGrant(origin, cachePath);
+      await withCacheLock(cachePath, async () => {
+        const onDisk = loadCachedGrant(origin, cachePath);
+        const renewedElsewhere = onDisk?.accessToken && (onDisk.expiresAt ?? 0) - EXPIRY_SKEW_MS > now();
+        if (onDisk && !renewedElsewhere) clearCachedGrant(origin, cachePath);
+      });
     }
   }
 
@@ -458,11 +539,14 @@ export async function bootstrapOAuth(opts: {
   const { tokens, clientId } = await runLoopbackAuthorization({
     meta, log, openBrowser: opts.openBrowser, fetchImpl,
   });
-  persist(clientId, meta.token_endpoint, tokens);
+  if (tokens.refreshToken) {
+    await withCacheLock(cachePath, async () => {
+      saveCachedGrant(origin, {
+        clientId, tokenEndpoint: meta.token_endpoint, refreshToken: tokens.refreshToken as string, scope: tokens.scope,
+        accessToken: tokens.accessToken, expiresAt: tokens.expiresAt,
+      }, cachePath);
+    });
+  }
   log('[orboto-mcp] OAuth authorization complete');
-  return createTokenProvider(
-    tokens,
-    (rt) => refreshTokens(meta.token_endpoint, { clientId, refreshToken: rt }, fetchImpl),
-    (next) => persist(clientId, meta.token_endpoint, next),
-  );
+  return providerFor(clientId, meta.token_endpoint, tokens);
 }
