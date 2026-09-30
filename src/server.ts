@@ -40,6 +40,7 @@ import {
 import { agentMessageWorkToolConfig, makeAgentMessageWorkHandler } from './tools/agent-message-work.js';
 import { agentMessagesToolConfig, makeAgentMessagesHandler } from './tools/agent-messages.js';
 import { agentWakesToolConfig, makeAgentWakesHandler } from './tools/agent-wakes.js';
+import { liveTranscriptToolConfig, makeLiveTranscriptHandler } from './tools/live-transcript.js';
 import { agentWhoToolConfig, makeAgentWhoHandler } from './tools/agent-who.js';
 import { sessionCheckToolConfig, makeSessionCheckHandler } from './tools/session-check.js';
 import { knowledgeAskToolConfig, makeKnowledgeAskHandler, knowledgeAddToolConfig, makeKnowledgeAddHandler } from './tools/knowledge.js';
@@ -428,6 +429,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_message_work', agentMessageWorkToolConfig, makeAgentMessageWorkHandler(client));
   reg('orboto_messages', agentMessagesToolConfig, makeAgentMessagesHandler(client));
   reg('orboto_agent_wakes', agentWakesToolConfig, makeAgentWakesHandler(client));
+  reg('orboto_live_transcript', liveTranscriptToolConfig, makeLiveTranscriptHandler(client));
   reg('orboto_session_check', sessionCheckToolConfig, makeSessionCheckHandler(client));
   reg('orboto_knowledge_ask', knowledgeAskToolConfig, makeKnowledgeAskHandler(client));
   reg('orboto_knowledge_add', knowledgeAddToolConfig, makeKnowledgeAddHandler(client));

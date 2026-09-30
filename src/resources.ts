@@ -5,6 +5,7 @@ import { ResourceTemplate, type McpServer } from '@modelcontextprotocol/sdk/serv
 import { OrbotoApiError, type OrbotoClient } from './orboto-client.js';
 import { loadRequiredRules } from './required-rules.js';
 import { resolveProjectByKey, resolveTicketByKey, type TicketRow } from './tools/shared.js';
+import { readTranscriptResource } from './tools/live-transcript.js';
 
 interface CommentPage {
   items: Array<{ content: string; userName: string | null; createdAt: string; isInternal: boolean }>;
@@ -134,6 +135,19 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
         }],
       };
     },
+  );
+
+  server.registerResource(
+    'live-transcript',
+    new ResourceTemplate('orboto://live/{sessionId}/transcript', { list: undefined }),
+    {
+      title: 'Live session transcript',
+      description: 'ORB-2338 - the newest lines of a live agent session you may see: prompts, assistant markdown, tool groups, turn ends, usage and context, masked. Cut to 4,000 characters with an explicit note; orboto_live_transcript pages the rest.',
+      mimeType: 'text/markdown',
+    },
+    async (uri, vars) => ({
+      contents: [{ uri: uri.href, mimeType: 'text/markdown', text: await readTranscriptResource(client, String(vars.sessionId)) }],
+    }),
   );
 
   server.registerResource(
