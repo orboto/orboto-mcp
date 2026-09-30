@@ -8,7 +8,7 @@ import type { OrbotoClient } from '../orboto-client.js';
 /** Mirrors LIVE_TRANSCRIPT_EVENT_KINDS of @orboto/shared-schema; the MCP package ships without it, apps/api/src/test/agent-live-mcp-drift.test.ts pins the copy. */
 export const LIVE_KINDS = [
   'text', 'tool_call', 'tool_result', 'question', 'permission_prompt', 'limit_prompt', 'login', 'status',
-  'user_prompt', 'assistant_text', 'tool_group', 'turn_end', 'usage', 'context',
+  'user_prompt', 'assistant_text', 'tool_group', 'turn_end', 'usage', 'context', 'checkout',
 ] as const;
 
 interface ToolItem { toolUseId: string; name: string; kind: string; summary: string; isError?: boolean; durationMs?: number }
@@ -29,7 +29,11 @@ export type LiveEvent =
   | { kind: 'tool_group'; groupId: string; final: boolean; counts: Array<{ kind: string; count: number }>; durationMs: number; items: ToolItem[]; omittedItems?: number }
   | { kind: 'turn_end'; durationMs: number; model?: string; effort?: string; outcome: string }
   | { kind: 'usage'; windows: UsageWindow[] }
-  | { kind: 'context'; percent: number; tokens?: number; windowSize?: number };
+  | { kind: 'context'; percent: number; tokens?: number; windowSize?: number }
+  | {
+    kind: 'checkout'; repository: string; reason?: string; branch?: string; base?: string; upstream?: { ref: string; ahead: number; behind: number };
+    filesChanged: number; insertions: number; deletions: number; files: Array<{ path: string; insertions: number; deletions: number }>;
+  };
 
 export interface LiveLine { id: string; sessionId: string; seq: number; at: string; maskedCount: number; event: LiveEvent }
 interface LivePage { items: LiveLine[]; nextCursor: string | null; lastSeq: number }
@@ -85,6 +89,11 @@ export function renderLiveEvent(event: LiveEvent): string {
     case 'turn_end': return `-- turn ${event.outcome} after ${seconds(event.durationMs)}${event.model ? `, ${event.model}` : ''}${event.effort ? ` (${event.effort})` : ''}`;
     case 'usage': return `[usage: ${event.windows.map((w) => `${USAGE_LABEL[w.window] ?? w.window} ${Math.round(w.usedPercent)}%${w.resetsAt ? ` (resets ${w.resetsAt})` : ''}`).join(', ')}]`;
     case 'context': return `[context ${Math.round(event.percent)}%${event.tokens !== undefined && event.windowSize !== undefined ? `, ${event.tokens} of ${event.windowSize} tokens` : ''}]`;
+    case 'checkout': {
+      if (event.repository === 'none') return `[checkout: no repository (${event.reason ?? 'unknown'})]`;
+      const upstream = event.upstream ? `, upstream ${event.upstream.ref} +${event.upstream.ahead}/-${event.upstream.behind}` : ', no upstream';
+      return `[diff +${event.insertions} -${event.deletions}, ${event.filesChanged} files on ${event.branch ?? '?'} against ${event.base ?? 'HEAD'}${upstream}]`;
+    }
   }
 }
 

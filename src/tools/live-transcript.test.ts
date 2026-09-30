@@ -25,11 +25,15 @@ const conversation: LiveEvent[] = [
   { kind: 'turn_end', durationMs: 1_351_000, model: 'claude-opus-5-5', effort: 'high', outcome: 'done' },
   { kind: 'usage', windows: [{ window: 'five_hour', usedPercent: 36, resetsAt: '2026-09-30T15:00:00Z' }, { window: 'seven_day', usedPercent: 67 }] },
   { kind: 'context', percent: 51, tokens: 510_000, windowSize: 1_000_000 },
+  { kind: 'checkout', repository: 'git', branch: 'acme-12-preview', base: 'main', upstream: { ref: 'origin/acme-12-preview', ahead: 2, behind: 0 }, filesChanged: 2, insertions: 42, deletions: 7, files: [] },
+  { kind: 'checkout', repository: 'none', reason: 'detached_head', filesChanged: 0, insertions: 0, deletions: 0, files: [] },
 ];
 
 describe('live transcript rendering', () => {
   it('knows every kind the contract names and renders each to one non-empty line head', () => {
-    expect(LIVE_KINDS).toHaveLength(14);
+    expect(LIVE_KINDS).toHaveLength(15);
+    expect(renderLiveEvent(conversation[conversation.length - 2]!)).toBe('[diff +42 -7, 2 files on acme-12-preview against main, upstream origin/acme-12-preview +2/-0]');
+    expect(renderLiveEvent(conversation[conversation.length - 1]!)).toBe('[checkout: no repository (detached_head)]');
     for (const event of conversation) expect(renderLiveEvent(event).length).toBeGreaterThan(3);
   });
 });
