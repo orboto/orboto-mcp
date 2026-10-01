@@ -689,3 +689,20 @@ describe('ORB-2136 - session scope and ref', () => {
     expect(docs).toContain('orboto mcp install');
   });
 });
+
+describe('ORB-2347 - an unregistered caller is told it sees account mail only', () => {
+  it('states the rule in the This session line when the heartbeat registers nothing, and keeps the scope text for a registered session', async () => {
+    stubByPath({ '/agent-instructions': { instructions: 'rules', rulesHash: 'h' } });
+    const unregistered = (await makeSessionStartHandler(client)()).content[0] as { text: string };
+    expect(unregistered.text).toContain('registration failed - only account mail is listed; retry orboto_session_start');
+    expect(unregistered.text).not.toContain('lists every account-addressed message');
+
+    stubByPath({
+      '/v1/agent/heartbeat': { sessionId: '8772a665-0000-4000-8000-000000000000', scope: null },
+      '/agent-instructions': { instructions: 'rules', rulesHash: 'h2' },
+    });
+    const registered = (await makeSessionStartHandler(client)({ forceRules: true })).content[0] as { text: string };
+    expect(registered.text).toContain('lists every account-addressed message');
+    expect(registered.text).not.toContain('not registered');
+  });
+});

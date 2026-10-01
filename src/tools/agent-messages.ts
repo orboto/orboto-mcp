@@ -37,9 +37,11 @@ interface AgentMessage {
 
 interface DismissInput { ids: string[]; reason: 'not_mine' | 'obsolete' | 'duplicate'; note?: string; duplicateOf?: string }
 
+const UNREGISTERED_INBOX_HINT = 'Not registered: only account mail is listed. Register with orboto_session_start to see the mail addressed to your session.';
+
 export const agentMessagesToolConfig = {
   title: 'Agent inbox and message work',
-  description: 'Your inbox as THIS session sees it. It holds mail to this session, account mail inside your declared scope, broadcasts; sibling-session mail and own sends stay out, all:true shows the whole account (ORB-2136). messageWork carries durable work ownership - claim before executing. ackIds acks: it completes an unclaimed request; claimed work with open steps is refused until messageWork completes or blocks it. dismiss is the third answer: not_mine hides it here and tells the sender, obsolete/duplicate close it for the account (note or duplicateOf required). Never leave mail you read and judged. Reply via orboto_agent_notify with threadId (toSessionRef = from.sessionId reaches that instance).',
+  description: 'Your inbox as THIS session sees it. It holds mail to this session, account mail inside your declared scope, broadcasts; sibling-session mail and own sends stay out, all:true is the account view (ORB-2136). Before orboto_session_start only account mail is listed; register to see mail addressed to your session (ORB-2347). messageWork carries durable work ownership - claim before executing. ackIds acks: it completes an unclaimed request; claimed work with open steps is refused until messageWork completes or blocks it. dismiss is the third answer: not_mine hides it here and tells the sender, obsolete/duplicate close it for the account (note or duplicateOf required). Never leave mail you read and judged. Reply via orboto_agent_notify with threadId (toSessionRef = from.sessionId reaches that instance).',
   inputSchema: z.object({
     messageWork: z.record(z.unknown()).optional()
       .describe('Work envelope {messageId, mutation, cursor, limit, openOnly}; schema: orboto_api_search.'),
@@ -122,6 +124,7 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
       lines.unshift(`Dismissed ${dismissedCount} message(s) as ${args.dismiss.reason}${closedCount > 0 ? `, ${closedCount} closed for the account` : ''}${feedbackSent > 0 ? `, ${feedbackSent} sender(s) told about the misroute` : ''}.`);
     }
     if (sessionId) lines.push(`This session: ${sessionId.slice(0, 8)} (ref ${instanceToken}).`);
+    else lines.push(UNREGISTERED_INBOX_HINT);
     return {
       content: [{ type: 'text', text: lines.join('\n') }],
       structuredContent: {
