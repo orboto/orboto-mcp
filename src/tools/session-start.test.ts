@@ -694,7 +694,7 @@ describe('ORB-2347 - an unregistered caller is told it sees account mail only', 
   it('states the rule in the This session line when the heartbeat registers nothing, and keeps the scope text for a registered session', async () => {
     stubByPath({ '/agent-instructions': { instructions: 'rules', rulesHash: 'h' } });
     const unregistered = (await makeSessionStartHandler(client)()).content[0] as { text: string };
-    expect(unregistered.text).toContain('not registered - only account mail is listed; orboto_session_start registers you');
+    expect(unregistered.text).toContain('registration failed - only account mail is listed; retry orboto_session_start');
     expect(unregistered.text).not.toContain('lists every account-addressed message');
 
     stubByPath({
