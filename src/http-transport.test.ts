@@ -97,6 +97,7 @@ describe('ORB-941 - graceful close of in-flight MCP sessions on kill-switch', ()
       tokenHolder: { current: 'orb_dummy' },
       userEmail: 'owner@orboto.test',
       lastTouchAt: Date.now(),
+      lastActiveAt: Date.now(),
     };
     return { session, close, log };
   }

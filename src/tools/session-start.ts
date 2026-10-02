@@ -13,7 +13,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { resolveTicketByKey, type TicketRow , applyAgentProfile, mcpInstanceToken } from './shared.js';
 import { AgentSessionScopeSchema, type AgentSessionScope } from './agent-session-scope.js';
-import { PROTECT_TEXT_META, storePayload } from '../response-budget.js';
+import { PROCESS_OWNER, PROTECT_TEXT_META, storePayload } from '../response-budget.js';
 import { loadRequiredRules } from '../required-rules.js';
 import { GIT_HEALTH_REASON_TEXT } from './git-health-reasons.js';
 import { channelStartLines } from '../inbox-channel.js';
@@ -223,14 +223,14 @@ interface KnowledgeIndex {
 /** ORB-2225 - the Knowledge block stays small; the rest is one expand away. */
 export const KNOWLEDGE_BLOCK_CHARS = 1500;
 
-export function knowledgeLines(text: string): { lines: string[]; handle?: string } {
+export function knowledgeLines(text: string, owner: object = PROCESS_OWNER): { lines: string[]; handle?: string } {
   if (text.length <= KNOWLEDGE_BLOCK_CHARS) return { lines: text.split('\n') };
   const cut = text.slice(0, KNOWLEDGE_BLOCK_CHARS);
   const kept = cut.slice(0, Math.max(cut.lastIndexOf('\n'), 0));
   const handle = storePayload('orboto_session_start', {
     structuredContent: { knowledge: text }, text,
     omitted: [{ path: 'knowledge', kind: 'string', omittedChars: text.length - kept.length }],
-  });
+  }, Date.now(), owner);
   return {
     handle,
     lines: [...kept.split('\n'), `(Knowledge block cut at ${kept.length} of ${text.length} characters: orboto_response_expand { handle: "${handle}", path: "knowledge" }, or GET /knowledge.)`],
@@ -371,7 +371,7 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
         structuredContent: { rules: rules.instructions ?? '' },
         text: rules.instructions ?? '',
         omitted: [{ path: 'rules', kind: 'string', omittedChars: rulesText.length }],
-      });
+      }, Date.now(), client);
       lines.push(
         `${rulesIndex.length} rule(s) bind you (${rulesChars} characters, hash ${rules.rulesHash}). Titles only - the full text is NOT in this response.`,
         `${HOW_TO_READ_RULES} Read any rule below whose title touches what you are about to do BEFORE you do it. (orboto_response_expand { handle: "${rulesHandle}", path: "rules" } serves the same text from this process for 15 minutes.)`,
@@ -398,7 +398,7 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
     }
     lines.push('', '## Timer');
     lines.push(timer?.ticketId ? `Running on ${timer.ticketKey ?? timer.ticketId} since ${timer.startedAt ?? 'earlier'}.` : 'No timer running.');
-    const knowledgeBlock = knowledge?.text ? knowledgeLines(knowledge.text) : null;
+    const knowledgeBlock = knowledge?.text ? knowledgeLines(knowledge.text, client) : null;
     if (knowledgeBlock) lines.push('', ...knowledgeBlock.lines);
     lines.push('', '## This session');
     const scopeText = registration?.scope

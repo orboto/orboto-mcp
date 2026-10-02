@@ -15,6 +15,7 @@ import type { OAuthTokenProviderLike } from './orboto-client.js';
 import { EventBridge } from './event-bridge.js';
 import { mcpInstanceToken } from './tools/shared.js';
 import { releaseCapacityAtSessionEnd } from './tools/capacity-session.js';
+import { idleSessions, resolveSessionLimits, sessionsOverOwnerCap, type SessionLimits } from './session-limits.js';
 
 /**
  * ORB-1353 - persisted-session store. The transport calls these to survive an
@@ -61,6 +62,8 @@ export interface HttpServerOptions {
   baseUrl: string;
   /** Override the persisted-session store (tests inject a fake). */
   sessionStore?: McpSessionStore;
+  /** Override the per-user session cap and idle reap (tests). */
+  limits?: Partial<SessionLimits>;
 }
 
 /** ORB-1470 - a per-session, MUTABLE bearer holder. The session's
@@ -108,6 +111,8 @@ export interface McpSession {
   userEmail: string;
   /** Epoch ms of the last persistence touch, for throttling (ORB-1353). */
   lastTouchAt: number;
+  /** Epoch ms of the last request, for the per-user cap and the idle reap. */
+  lastActiveAt: number;
 }
 
 /** How an unknown (not-in-memory) session id should be handled. Pure decision
@@ -269,8 +274,14 @@ function wwwAuthChallenge(
   return `Bearer realm="orboto-mcp", error="${error}", error_description="${description.replace(/"/g, '\\"')}", resource_metadata="${resourceMetadata}"`;
 }
 
-export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
+export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides }: HttpServerOptions) {
   const sessions = new Map<string, McpSession>();
+  const limits = resolveSessionLimits(undefined, limitOverrides);
+
+  async function makeRoomFor(userEmail: string): Promise<void> {
+    const over = sessionsOverOwnerCap(sessions.values(), userEmail, limits.maxSessionsPerUser);
+    if (over.length > 0) await closeAllMcpSessions(over, `you reached the limit of ${limits.maxSessionsPerUser} open sessions; the least recently used one is closed.`);
+  }
 
   const store = sessionStore ?? createApiSessionStore(baseUrl);
 
@@ -303,13 +314,14 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
     userEmail: string,
     toolset?: Toolset,
   ): Promise<McpSession> {
+    await makeRoomFor(userEmail);
     const { sessionClient, mcp, bridge } = await buildSessionCore(tokenHolder, userAgentSuffix, toolset, chosenSessionId);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
     transport.onclose = () => { sessions.delete(chosenSessionId); bridge.close(); };
     await mcp.connect(transport);
     forceInitialized(transport, chosenSessionId);
     const session: McpSession = {
-      transport, mcp, client: sessionClient, bridge, tokenHolder, userEmail, lastTouchAt: Date.now(),
+      transport, mcp, client: sessionClient, bridge, tokenHolder, userEmail, lastTouchAt: Date.now(), lastActiveAt: Date.now(),
     };
     sessions.set(chosenSessionId, session);
     bridge.start();
@@ -346,6 +358,11 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
   }
   const killSwitchTimer = setInterval(() => { void pollKillSwitch(); }, pollMs);
   killSwitchTimer.unref?.();
+  const reapTimer = setInterval(() => {
+    const idle = idleSessions(sessions.values(), Date.now(), limits.idleMs);
+    if (idle.length > 0) void closeAllMcpSessions(idle, 'the session was idle too long.');
+  }, limits.reapIntervalMs);
+  reapTimer.unref?.();
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     if (req.method === 'GET' && req.url === '/health') {
@@ -438,6 +455,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
         );
         session.tokenHolder.current = token;
       }
+      session.lastActiveAt = Date.now();
       await session.transport.handleRequest(req, res, body);
       const now = Date.now();
       if (now - session.lastTouchAt >= TOUCH_THROTTLE_MS) {
@@ -504,6 +522,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
         });
       }
 
+      await makeRoomFor(ownerEmail);
       const tokenHolder: SessionTokenHolder = { current: token };
       const { sessionClient, mcp, bridge } = await buildSessionCore(tokenHolder, userAgentSuffix, toolset);
       const clientInfo = clientInfoLabel(body);
@@ -511,7 +530,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (sid: string) => {
           sessions.set(sid, {
-            transport, mcp, client: sessionClient, bridge, tokenHolder, userEmail: ownerEmail, lastTouchAt: Date.now(),
+            transport, mcp, client: sessionClient, bridge, tokenHolder, userEmail: ownerEmail, lastTouchAt: Date.now(), lastActiveAt: Date.now(),
           });
           bridge.setInstanceToken(mcpInstanceToken(undefined, { sessionId: sid }));
           bridge.start();
@@ -532,7 +551,7 @@ export function createHttpServer({ baseUrl, sessionStore }: HttpServerOptions) {
     sendError(res, 400, 'Missing mcp-session-id header or initialize request');
   });
 
-  server.on('close', () => clearInterval(killSwitchTimer));
+  server.on('close', () => { clearInterval(killSwitchTimer); clearInterval(reapTimer); });
 
   (server as unknown as { __mcp: McpServerInternals }).__mcp = { sessions, store };
 
