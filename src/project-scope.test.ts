@@ -1,7 +1,7 @@
 /** ORB-2224 - the project a session declares from ORBOTO_PROJECT_KEY, and its drift against the CLI that writes it. */
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { declareEnvProjectScope, envProjectScope, PROJECT_KEY_ENV, scopeDeclared } from './project-scope.js';
+import { CONTROL_ROLE, declareEnvProjectScope, envProjectScope, PROJECT_KEY_ENV, SESSION_ROLE_ENV, scopeDeclared } from './project-scope.js';
 import { _forgetDeclaredScopes, rememberedScope } from './session-scope-memory.js';
 import { OrbotoClient } from './orboto-client.js';
 import { makeSessionStartHandler } from './tools/session-start.js';
@@ -88,5 +88,50 @@ describe('ORB-2224 - ORBOTO_PROJECT_KEY', () => {
     expect(beats).toEqual([{}, { scope: { role: 'worker', projectKeys: ['ACME'] } }]);
     expect((res.content[0] as { text: string }).text).toContain('projects ACME');
     expect(rememberedScope('mcp-scope1')).toEqual({ role: 'worker', projectKeys: ['ACME'] });
+  });
+});
+
+describe('ORB-2448 - ORBOTO_SESSION_ROLE', () => {
+  it('names the variable and the role the CLI and shared-schema use', () => {
+    expect(read('cli/internal/cmd/claude_control_session.go')).toContain(`const SessionRoleEnv = "${SESSION_ROLE_ENV}"`);
+    expect(read('cli/internal/cmd/claude_control_session.go')).toContain(`const ControlRoleDefault = "${CONTROL_ROLE}"`);
+    expect(read('packages/shared-schema/src/agent-session-scope.ts')).toContain(`AGENT_CONTROL_ROLES: readonly AgentSessionRole[] = ['${CONTROL_ROLE}']`);
+    expect(read('apps/mcp/src/project-scope.ts')).toContain(`process.env.${SESSION_ROLE_ENV}`);
+    expect(read('docs/env.md')).toContain(`| \`${SESSION_ROLE_ENV}\` | mcp |`);
+  });
+
+  it('declares a control session without a project ahead of the project key; any other role is ignored', async () => {
+    expect(envProjectScope('ACME', ' Coordinator ')).toEqual({ role: 'coordinator' });
+    expect(envProjectScope(undefined, 'coordinator')).toEqual({ role: 'coordinator' });
+    expect(envProjectScope('ACME', 'lead')).toEqual({ role: 'worker', projectKeys: ['ACME'] });
+    expect(envProjectScope(undefined, 'lead')).toBeNull();
+    const client = fakeClient({ sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: null });
+    await declareEnvProjectScope(client, 'agent-control', undefined, 'coordinator');
+    expect(client.calls[1]).toEqual({ method: 'POST', path: '/v1/agent/heartbeat', body: { scope: { role: 'coordinator' } }, instanceToken: 'agent-control' });
+    expect(rememberedScope('agent-control')).toEqual({ role: 'coordinator' });
+  });
+
+  it('orboto_session_start without a scope declares the control session the environment names', async () => {
+    vi.stubEnv(SESSION_ROLE_ENV, 'coordinator');
+    vi.stubEnv(PROJECT_KEY_ENV, 'ACME');
+    const beats: unknown[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const u = new URL(url.toString());
+      let body: unknown = {};
+      if (u.pathname === '/v1/agent/heartbeat') {
+        const sent = init?.body ? JSON.parse(init.body as string) : {};
+        beats.push(sent);
+        body = { sessionToken: 'x', sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: sent.scope ?? null };
+      } else if (u.pathname === '/v1/agent/session') {
+        body = { sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: null };
+      } else if (u.pathname === '/agent-instructions') {
+        body = { instructions: 'rules here', rulesHash: 'fixture' };
+      }
+      return { ok: true, status: 200, statusText: 'OK', json: async () => body, text: async () => '' } as unknown as Response;
+    });
+    const client = new OrbotoClient({ baseUrl: 'http://api.test', apiKey: 'k' });
+    await makeSessionStartHandler(client)({}, { sessionId: 'control1' });
+    expect(beats).toEqual([{}, { scope: { role: 'coordinator' } }]);
+    expect(rememberedScope('mcp-control1')).toEqual({ role: 'coordinator' });
   });
 });
