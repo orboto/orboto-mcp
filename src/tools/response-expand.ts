@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   budgetFor,
+  PROCESS_OWNER,
   readPayload,
   resolvePath,
   type OmittedEntry,
@@ -39,9 +40,9 @@ function describeOmitted(entries: OmittedEntry[]): string {
     .join('\n');
 }
 
-export function makeResponseExpandHandler() {
+export function makeResponseExpandHandler(owner: object = PROCESS_OWNER) {
   return async (input: { handle: string; path?: string; cursor?: number }): Promise<CallToolResult> => {
-    const stored = readPayload(input.handle);
+    const stored = readPayload(input.handle, Date.now(), owner);
     if (!stored) return expired(input.handle);
 
     const omitted = stored.omitted ?? [];

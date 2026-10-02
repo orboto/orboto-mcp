@@ -285,6 +285,27 @@ describe('nothing is lost - orboto_response_expand', () => {
   });
 });
 
+describe('a handle is readable only by the session that produced it', () => {
+  it('another session cannot read or expand a handle, the owner can', async () => {
+    const sessionA = {};
+    const sessionB = {};
+    const out = applyResponseBudget(TOOL, result({ description: 'private '.repeat(5_000) }), {}, sessionA);
+    expect(out.handle).toBeDefined();
+
+    expect(readPayload(out.handle!, Date.now(), sessionB)).toBeNull();
+    const foreign = await makeResponseExpandHandler(sessionB)({ handle: out.handle!, path: 'description' });
+    expect(foreign.isError).toBe(true);
+    expect(JSON.stringify(foreign)).not.toContain('private');
+
+    const own = await makeResponseExpandHandler(sessionA)({ handle: out.handle!, path: 'description' });
+    expect(own.isError).toBeUndefined();
+  });
+
+  it('issues handles with at least 64 bits of randomness', () => {
+    expect(storePayload(TOOL, { text: 'a' })).toMatch(/^[0-9a-f]{16}$/);
+  });
+});
+
 describe('the handle store is bounded', () => {
   it('evicts the oldest beyond MAX_HANDLES', () => {
     const first = storePayload(TOOL, { text: 'a' });

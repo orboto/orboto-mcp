@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer as createNodeServer, type Server } from 'node:http';
 import { AddressInfo } from 'node:net';
 import { createHttpServer, type McpServerInternals, type McpSessionStore } from './http-transport.js';
+import type { SessionLimits } from './session-limits.js';
 
 let server: Server | null = null;
 let api: Server | null = null;
@@ -72,11 +73,11 @@ const store: McpSessionStore = {
   remove: async () => {},
 };
 
-async function start(): Promise<string> {
+async function start(limits?: Partial<SessionLimits>): Promise<string> {
   api = fakeApiPerUser();
   await new Promise<void>((r) => api!.listen(0, r));
   const { port: apiPort } = api!.address() as AddressInfo;
-  server = createHttpServer({ baseUrl: `http://127.0.0.1:${apiPort}`, sessionStore: store });
+  server = createHttpServer({ baseUrl: `http://127.0.0.1:${apiPort}`, sessionStore: store, limits });
   await new Promise<void>((r) => server!.listen(0, r));
   const { port } = server!.address() as AddressInfo;
   return `http://127.0.0.1:${port}`;
@@ -158,4 +159,36 @@ describe('ORB-1576 - request body cap', () => {
   });
 });
 
-void vi;
+function internals(): McpServerInternals {
+  return (server as unknown as { __mcp: McpServerInternals }).__mcp;
+}
+
+describe('per-user session cap and idle reap', () => {
+  it('closes the owner\'s least recently used session when a new one would exceed the cap', async () => {
+    const base = await start({ maxSessionsPerUser: 2 });
+    const first = await initSession(base, 'orb_alice');
+    const second = await initSession(base, 'orb_alice');
+    const mallory = await initSession(base, 'orb_mallory');
+    const third = await initSession(base, 'orb_alice');
+
+    const ids = [...internals().sessions.keys()];
+    expect(ids).not.toContain(first);
+    expect(ids).toEqual(expect.arrayContaining([second, third, mallory]));
+    expect([...internals().sessions.values()].filter((s) => s.userEmail === 'alice@example.com')).toHaveLength(2);
+  });
+
+  it('drops sessions that stayed idle past the limit', async () => {
+    const base = await start({ idleMs: 1_000, reapIntervalMs: 20 });
+    const sid = await initSession(base, 'orb_alice');
+    internals().sessions.get(sid)!.lastActiveAt = Date.now() - 5_000;
+    await vi.waitFor(() => expect(internals().sessions.has(sid)).toBe(false), { timeout: 2_000 });
+  });
+
+  it('keeps an active session past the idle limit check', async () => {
+    const base = await start({ idleMs: 60_000, reapIntervalMs: 20 });
+    const sid = await initSession(base, 'orb_alice');
+    await new Promise((r) => setTimeout(r, 100));
+    expect(internals().sessions.has(sid)).toBe(true);
+  });
+});
+

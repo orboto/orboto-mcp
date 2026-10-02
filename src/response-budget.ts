@@ -128,6 +128,8 @@ function safeStringify(value: unknown): string {
 
 export interface StoredPayload {
   toolName: string;
+  /** The session object that produced the payload; only it can read the handle back. */
+  owner: object;
   storedAt: number;
   /** The FULL payload as the handler produced it, pre-truncation. */
   structuredContent?: unknown;
@@ -150,16 +152,26 @@ function pruneHandles(now: number): void {
   }
 }
 
-export function storePayload(toolName: string, payload: Omit<StoredPayload, 'toolName' | 'storedAt'>, now = Date.now()): string {
-  const handle = randomUUID().slice(0, 8);
-  handles.set(handle, { toolName, storedAt: now, ...payload });
+/** Owner used by single-session callers (stdio, tests); HTTP sessions pass their own client. */
+export const PROCESS_OWNER: object = Object.freeze({});
+
+export function storePayload(
+  toolName: string,
+  payload: Omit<StoredPayload, 'toolName' | 'storedAt' | 'owner'>,
+  now = Date.now(),
+  owner: object = PROCESS_OWNER,
+): string {
+  const handle = randomUUID().replace(/-/g, '').slice(0, 16);
+  handles.set(handle, { toolName, storedAt: now, owner, ...payload });
   pruneHandles(now);
   return handle;
 }
 
-export function readPayload(handle: string, now = Date.now()): StoredPayload | null {
+/** The stored payload for a handle, or null when it expired or belongs to another session. */
+export function readPayload(handle: string, now = Date.now(), owner: object = PROCESS_OWNER): StoredPayload | null {
   pruneHandles(now);
-  return handles.get(handle) ?? null;
+  const stored = handles.get(handle);
+  return stored && stored.owner === owner ? stored : null;
 }
 
 /** Record what the shrink pass cut, so the expand tool can list the paths. */
@@ -315,6 +327,7 @@ export function applyResponseBudget(
   toolName: string,
   result: CallToolResult,
   env: NodeJS.ProcessEnv = process.env,
+  owner: object = PROCESS_OWNER,
 ): BudgetOutcome {
   const protectText = takeProtectTextFlag(result);
   const originalChars = measureResult(result);
@@ -327,7 +340,7 @@ export function applyResponseBudget(
   }
 
   try {
-    return shrink(toolName, result, budget, originalChars, protectText);
+    return shrink(toolName, result, budget, originalChars, protectText, owner);
   } catch {
     return { result, responseChars: originalChars, originalChars, truncatedChars: 0 };
   }
@@ -339,6 +352,7 @@ function shrink(
   budget: number,
   originalChars: number,
   protectText = false,
+  owner: object = PROCESS_OWNER,
 ): BudgetOutcome {
   const fullText = (result.content ?? [])
     .map((part) => textOf(part) ?? '')
@@ -346,7 +360,7 @@ function shrink(
   const handle = storePayload(toolName, {
     structuredContent: result.structuredContent,
     text: fullText,
-  });
+  }, Date.now(), owner);
 
   const omitted: OmittedEntry[] = [];
   const structured: unknown = result.structuredContent === undefined
