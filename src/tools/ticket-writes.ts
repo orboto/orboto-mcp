@@ -919,7 +919,7 @@ export function makeRemoveTicketDependencyHandler(client: OrbotoClient) {
 export const listTicketDependenciesToolConfig = {
   title: 'List a ticket\'s dependencies',
   description:
-    'Show both directions of a ticket\'s dependency graph: `blockedBy` (must finish first) and `blocks` (waiting on this one). ORB-1614: an edge to a ticket in another project you cannot read comes back as an opaque "external dependency" entry (no title/key/status - just whether it is still open).',
+    'Show both directions of a ticket\'s dependency graph: `blockedBy` (must finish first) and `blocks` (waiting on this one). ORB-1614: an edge to a ticket you cannot read comes back as an opaque stub (no title/key/status - just whether it is still open); `external` marks another project.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
   }).shape,
