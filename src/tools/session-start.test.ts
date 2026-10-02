@@ -516,12 +516,12 @@ describe('ORB-1818 - rules index instead of the full rule text', () => {
     const res = await makeSessionStartHandler(client)();
     const { rulesHandle } = res.structuredContent as { rulesHandle: string };
 
-    const expand = await makeResponseExpandHandler()({ handle: rulesHandle, path: 'rules' });
+    const expand = await makeResponseExpandHandler(client)({ handle: rulesHandle, path: 'rules' });
     const chunks: string[] = [];
     let cursor: number | null = 0;
     let guard = 0;
     while (cursor !== null && guard++ < 20) {
-      const page = await makeResponseExpandHandler()({ handle: rulesHandle, path: 'rules', cursor });
+      const page = await makeResponseExpandHandler(client)({ handle: rulesHandle, path: 'rules', cursor });
       const s = page.structuredContent as { chunk: string; nextCursor: number | null };
       chunks.push(s.chunk);
       cursor = s.nextCursor;

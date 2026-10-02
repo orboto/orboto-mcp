@@ -413,7 +413,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_ai_usage', aiUsageToolConfig, makeAiUsageHandler(client));
   reg('orboto_secret_scan', secretScanToolConfig, makeSecretScanHandler(client));
   reg('orboto_session_start', sessionStartToolConfig, makeSessionStartHandler(client, { channel: opts.channel }));
-  reg('orboto_response_expand', responseExpandToolConfig, makeResponseExpandHandler());
+  reg('orboto_response_expand', responseExpandToolConfig, makeResponseExpandHandler(client));
   reg('orboto_help', helpToolConfig, makeHelpHandler());
   reg('orboto_api_search', apiSearchToolConfig, makeApiSearchHandler(client));
   reg('orboto_api_call', apiCallToolConfig, makeApiCallHandler(client));

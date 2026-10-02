@@ -76,7 +76,7 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
     const label = metricsToolName(toolName, args);
     try {
       const handlerResult = await handler(args, extra);
-      const budgeted = applyResponseBudget(toolName, handlerResult);
+      const budgeted = applyResponseBudget(toolName, handlerResult, process.env, client);
       const result = budgeted.result;
       const inner = label === toolName ? undefined : envelopeStatus(handlerResult.structuredContent);
       const isError = result.isError === true || (inner !== undefined && inner >= 400);
