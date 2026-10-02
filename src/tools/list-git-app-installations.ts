@@ -20,12 +20,13 @@ interface InstallationRow {
   accountType: string;
   installedAt: string;
   suspendedAt: string | null;
+  projects?: Array<{ id: string; key: string; name: string }>;
 }
 
 export const listGitAppInstallationsToolConfig = {
   title: 'List GitHub App installations',
   description:
-    'Every GitHub App installation orboto knows, across projects (super-admin): org/user, install time, suspended state.',
+    'Every GitHub App installation orboto knows (admin:system:read): org/user, install time, suspended state and the project keys allowed to use it.',
   inputSchema: z.object({}).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -34,15 +35,17 @@ export function makeListGitAppInstallationsHandler(client: OrbotoClient) {
   return async (): Promise<CallToolResult> => {
     const rows = await client.get<InstallationRow[]>('/admin/git-app-installations');
     const out = rows.map((r) => ({
+      id: r.id,
       provider: r.provider,
       accountLogin: r.accountLogin,
       accountType: r.accountType,
       installedAt: r.installedAt,
       suspended: r.suspendedAt !== null,
+      projects: (r.projects ?? []).map((p) => p.key),
     }));
     const text = out.length === 0
       ? 'No GitHub App installations registered.'
-      : out.map((r) => `- ${r.accountLogin} (${r.accountType}) - installed ${r.installedAt}${r.suspended ? ' - SUSPENDED' : ''}`).join('\n');
+      : out.map((r) => `- ${r.accountLogin} (${r.accountType}) - installed ${r.installedAt}${r.suspended ? ' - SUSPENDED' : ''} - projects: ${r.projects.length > 0 ? r.projects.join(', ') : 'none'}`).join('\n');
     return {
       content: [{ type: 'text', text }],
       structuredContent: { installations: out },
