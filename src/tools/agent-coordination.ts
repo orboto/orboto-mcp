@@ -14,12 +14,13 @@ interface HeartbeatResponse {
   sessionToken: string;
   sessionId: string;
   scope: AgentSessionScope | null;
+  startedBy?: string | null;
 }
 
 export const agentHeartbeatToolConfig = {
   title: 'Agent heartbeat (Multi-Agent Coordination)',
   description:
-    'Register or refresh this agent\'s presence with status detail. A live connection already counts as online (an open MCP event stream, `orboto messages --follow`, the agent WebSocket) - the heartbeat adds status: idle (default) | working (+workingOnTicketId) | blocked, capabilities (free-form strings for operator filters) and clientInfo.name (the runtime), and is the only presence path for turn-based clients without a standing connection. Rows older than 90 s count as offline; persist the returned sessionToken and send it on later heartbeats. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility (ORB-2136); an empty object clears it.',
+    'Register or refresh this agent\'s presence with status detail. A live connection already counts as online (an open MCP event stream, `orboto messages --follow`, the agent WebSocket) - the heartbeat adds status: idle (default) | working (+workingOnTicketId) | blocked, capabilities (free-form strings for operator filters) and clientInfo.name (the runtime), and is the only presence path for turn-based clients without a standing connection. Rows older than 90 s count as offline; persist the returned sessionToken and send it on later heartbeats. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility (ORB-2136); an empty object clears it. `startedBy` (ORB-2449): the starter session of the same account, copied on this session\'s complete and ticket-ready mail.',
   inputSchema: z.object({
     sessionToken: z.string().nullable().optional(),
     scope: AgentSessionScopeSchema.optional(),
@@ -32,6 +33,7 @@ export const agentHeartbeatToolConfig = {
       host: z.string().optional(),
       user_agent: z.string().optional(),
     }).optional(),
+    startedBy: z.string().uuid().optional(),
   }).shape,
   outputSchema: z.object({
     sessionToken: z.string(),
@@ -50,6 +52,7 @@ export function makeAgentHeartbeatHandler(client: OrbotoClient) {
       workingOnTicketId?: string | null;
       capabilities?: string[];
       clientInfo?: { name?: string; version?: string; host?: string; user_agent?: string };
+      startedBy?: string;
     },
     extra?: unknown,
   ): Promise<CallToolResult> => {
@@ -57,7 +60,7 @@ export function makeAgentHeartbeatHandler(client: OrbotoClient) {
     const scope = res.scope ? ` scope=${JSON.stringify(res.scope)}` : '';
     return {
       content: [{ type: 'text', text: `heartbeat ack - sessionToken=${res.sessionToken.slice(0, 8)}… session ${res.sessionId.slice(0, 8)}${scope}` }],
-      structuredContent: { sessionToken: res.sessionToken, sessionId: res.sessionId, scope: res.scope ?? null },
+      structuredContent: { sessionToken: res.sessionToken, sessionId: res.sessionId, scope: res.scope ?? null, ...(res.startedBy !== undefined ? { startedBy: res.startedBy } : {}) },
     };
   };
 }
