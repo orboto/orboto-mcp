@@ -1,4 +1,6 @@
-/** Bounds on in-memory MCP HTTP sessions. */
+/** Bounds on in-memory MCP HTTP sessions and their resource subscriptions. */
+import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+
 export interface SessionLimits {
   maxSessionsPerUser: number;
   idleMs: number;
@@ -38,4 +40,21 @@ export function sessionsOverOwnerCap<T extends LimitedSession>(sessions: Iterabl
 
 export function idleSessions<T extends LimitedSession>(sessions: Iterable<T>, now: number, idleMs: number): T[] {
   return [...sessions].filter((s) => now - s.lastActiveAt >= idleMs);
+}
+
+export const MAX_SUBSCRIPTIONS_PER_SESSION = 500;
+export const MAX_SUBSCRIPTION_URI_LENGTH = 2048;
+
+/** Validates a resources/subscribe URI before it joins the session's set; throws InvalidParams otherwise. */
+export function assertSubscribable(subs: Set<string>, uri: string): void {
+  if (typeof uri !== 'string' || !uri.startsWith('orboto://') || uri.length > MAX_SUBSCRIPTION_URI_LENGTH) {
+    throw new McpError(ErrorCode.InvalidParams, `Subscriptions accept orboto:// resource URIs up to ${MAX_SUBSCRIPTION_URI_LENGTH} characters`);
+  }
+  if (!subs.has(uri) && subs.size >= MAX_SUBSCRIPTIONS_PER_SESSION) {
+    throw new McpError(ErrorCode.InvalidParams, `A session holds at most ${MAX_SUBSCRIPTIONS_PER_SESSION} resource subscriptions`);
+  }
+}
+
+export function uriForLog(uri: string): string {
+  return uri.length > 200 ? `${uri.slice(0, 200)}...` : uri;
 }

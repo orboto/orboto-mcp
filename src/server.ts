@@ -10,6 +10,7 @@ import { registerOrbotoPrompts } from './prompts.js';
 import { registerWithMetrics } from './with-metrics.js';
 import { CHANNEL_TOOLSET_INSTRUCTIONS, CHANNEL_TOOLSET_WAKE_INSTRUCTIONS, resolveToolset, toolInToolset, type Toolset } from './toolset.js';
 import { createNudgeState } from './session-nudge.js';
+import { assertSubscribable, uriForLog } from './session-limits.js';
 import { aiStatusToolConfig, makeAiStatusHandler } from './tools/ai-status.js';
 import { draftCustomerReplyToolConfig, makeDraftCustomerReplyHandler } from './tools/customer-draft.js';
 import { embeddingStatusToolConfig, makeEmbeddingStatusHandler } from './tools/embedding-status.js';
@@ -614,13 +615,14 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   if (opts.subscriptions) {
     const subs = opts.subscriptions;
     server.server.setRequestHandler(SubscribeRequestSchema, async (req) => {
+      assertSubscribable(subs, req.params.uri);
       subs.add(req.params.uri);
-      try { process.stderr.write(`[orboto-mcp] subscribe → ${req.params.uri} (total subs: ${subs.size})\n`); } catch { /* ignore */ }
+      try { process.stderr.write(`[orboto-mcp] subscribe → ${uriForLog(req.params.uri)} (total subs: ${subs.size})\n`); } catch { /* ignore */ }
       return {};
     });
     server.server.setRequestHandler(UnsubscribeRequestSchema, async (req) => {
       subs.delete(req.params.uri);
-      try { process.stderr.write(`[orboto-mcp] unsubscribe → ${req.params.uri} (remaining: ${subs.size})\n`); } catch { /* ignore */ }
+      try { process.stderr.write(`[orboto-mcp] unsubscribe → ${uriForLog(req.params.uri)} (remaining: ${subs.size})\n`); } catch { /* ignore */ }
       return {};
     });
   }
