@@ -343,11 +343,23 @@ export function createTokenProvider(
 
 /** Open a URL in the user's default browser. Returns false if no opener is
  *  available (headless) so the caller can print the URL for manual paste. */
+/** The opener command for a platform; never a shell, so the URL is one argv entry (Windows uses the URL protocol handler like the Go CLI). */
+function browserOpenerCommand(platform: NodeJS.Platform, url: string): { cmd: string; args: string[] } {
+  if (platform === 'darwin') return { cmd: 'open', args: [url] };
+  if (platform === 'win32') return { cmd: 'rundll32', args: ['url.dll,FileProtocolHandler', url] };
+  return { cmd: 'xdg-open', args: [url] };
+}
+
 export async function openInBrowser(url: string): Promise<boolean> {
   if (process.env.ORBOTO_MCP_NO_BROWSER === '1') return false;
-  const platform = process.platform;
-  const cmd = platform === 'darwin' ? 'open' : platform === 'win32' ? 'cmd' : 'xdg-open';
-  const args = platform === 'win32' ? ['/c', 'start', '""', url] : [url];
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
+  const { cmd, args } = browserOpenerCommand(process.platform, parsed.href);
   try {
     const { spawn } = await import('node:child_process');
     const child = spawn(cmd, args, { stdio: 'ignore', detached: true });
