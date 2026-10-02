@@ -289,7 +289,7 @@ export const TruncationBlockSchema = z.object({
  */
 export const TruncationBlockAdvertisedSchema = z.object({ handle: z.string() })
   .passthrough()
-  .describe('Response was cut; pass `handle` to orboto_response_expand.');
+  .describe('Response cut; pass `handle` to orboto_response_expand.');
 
 export interface TruncationBlock {
   handle: string;

@@ -292,6 +292,18 @@ describe('ORB-2136 - session addressing', () => {
     expect(seen[0].headers['x-orboto-agent-session']).toBe('mcp-abc123');
     expect(result.structuredContent).toMatchObject({ scope: { role: 'integrator', projectKeys: ['ORB'] } });
   });
+
+  it('agent_heartbeat names the starter and answers the recorded one (ORB-2449)', async () => {
+    const starter = '5a1c0d2e-7b3f-4c11-9e2a-0c0ffee00001';
+    const seen: Array<Record<string, unknown>> = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      seen.push(JSON.parse((init?.body as string) ?? '{}'));
+      return { ok: true, status: 200, statusText: 'OK', json: async () => ({ sessionToken: 'mcp-abc123', sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: { role: 'worker' }, startedBy: starter }), text: async () => '' } as unknown as Response;
+    });
+    const result = await makeAgentHeartbeatHandler(client)({ scope: { role: 'worker' }, startedBy: starter }, { sessionId: 'abc123' });
+    expect(seen[0]).toMatchObject({ startedBy: starter });
+    expect(result.structuredContent).toMatchObject({ startedBy: starter });
+  });
 });
 
 describe('orboto_agent_notify role addresses (ORB-2264)', () => {
