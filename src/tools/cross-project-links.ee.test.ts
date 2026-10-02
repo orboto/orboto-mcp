@@ -14,6 +14,8 @@ import {
   makeAddCrossProjectLinkHandler,
   makeUpdateCrossProjectLinkHandler,
   makeRemoveCrossProjectLinkHandler,
+  addCrossProjectLinkToolConfig,
+  updateCrossProjectLinkToolConfig,
 } from './cross-project-links.ee.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -181,5 +183,13 @@ describe('orboto_remove_cross_project_link', () => {
     await expect(
       makeRemoveCrossProjectLinkHandler(client)({ sourceTicketKey: 'ORB-42', linkId: LINK_ID }),
     ).rejects.toBeInstanceOf(OrbotoApiError);
+  });
+});
+
+describe('ORB-2437 status-sync grant in the tool descriptions', () => {
+  it('add and update name ticket:edit and ticket:change_status as the grant for enabling sync', () => {
+    expect(addCrossProjectLinkToolConfig.description).toContain('ticket:edit and ticket:change_status in both projects');
+    expect(updateCrossProjectLinkToolConfig.description).toContain('ticket:edit and ticket:change_status in both projects');
+    expect(addCrossProjectLinkToolConfig.description).not.toContain('Caller must be a member of BOTH');
   });
 });
