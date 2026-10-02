@@ -20,7 +20,7 @@ interface HeartbeatResponse {
 export const agentHeartbeatToolConfig = {
   title: 'Agent heartbeat (Multi-Agent Coordination)',
   description:
-    'Register or refresh this agent\'s presence with status detail. A live connection already counts as online (an open MCP event stream, `orboto messages --follow`, the agent WebSocket) - the heartbeat adds status: idle (default) | working (+workingOnTicketId) | blocked, capabilities (free-form strings for operator filters) and clientInfo.name (the runtime), and is the only presence path for turn-based clients without a standing connection. Rows older than 90 s count as offline; persist the returned sessionToken and send it on later heartbeats. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility (ORB-2136); an empty object clears it. `startedBy` (ORB-2449): the starter session of the same account, copied on this session\'s complete and ticket-ready mail.',
+    'Register or refresh this agent\'s presence with status detail. A live connection already counts as online (an open MCP event stream, `orboto messages --follow`, the agent WebSocket) - the heartbeat adds status: idle (default) | working (+workingOnTicketId) | blocked, capabilities (free-form strings for operator filters) and clientInfo.name (the runtime), and is the only presence path for turn-based clients without a standing connection. Rows older than 90 s count as offline; persist the returned sessionToken and send it on later heartbeats. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility (ORB-2136); an empty object clears it. `startedBy`: starter session id, same account.',
   inputSchema: z.object({
     sessionToken: z.string().nullable().optional(),
     scope: AgentSessionScopeSchema.optional(),
@@ -39,6 +39,7 @@ export const agentHeartbeatToolConfig = {
     sessionToken: z.string(),
     sessionId: z.string().uuid(),
     scope: AgentSessionScopeSchema.nullable(),
+    startedBy: z.string().uuid().nullable().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
