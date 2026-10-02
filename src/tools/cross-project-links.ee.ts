@@ -73,7 +73,7 @@ export function makeListCrossProjectLinksHandler(client: OrbotoClient) {
 export const addCrossProjectLinkToolConfig = {
   title: 'Add a cross-project link between two tickets',
   description:
-    'Create a formal relation between two tickets in different projects. Caller must be a member of BOTH the source and target projects. Relation types: counterpart (parallel work in two repos - bidirectional), depends_on (this ticket waits for the other), blocks (the other waits for this), related (loose association). Pass statusSyncEnabled=true to opt into auto-close: when a counterpart-linked ticket moves to done, the other auto-closes too. Off by default.',
+    'Create a formal relation between two tickets in different projects. The caller must be a member of both projects and read both tickets. Relation types: counterpart (parallel work, bidirectional), depends_on (this waits for the other), blocks (the other waits for this), related (loose). statusSyncEnabled=true (default off) auto-closes the other end of a counterpart link when one moves to done; it needs ticket:edit and ticket:change_status in both projects (403 otherwise). A close by a user lacking those grants or read access on the far end leaves it open, audited and notified.',
   inputSchema: z.object({
     sourceTicketKey: z.string().min(3),
     targetTicketKey: z.string().min(3),
@@ -104,7 +104,7 @@ export function makeAddCrossProjectLinkHandler(client: OrbotoClient) {
 export const updateCrossProjectLinkToolConfig = {
   title: 'Toggle status-sync on a cross-project link',
   description:
-    'Flip the statusSyncEnabled flag on an existing cross-project link. When enabled on a counterpart-typed link, the other end auto-closes when this one moves to done (and vice versa). Other relation types ignore the flag at runtime, so toggling it on them is a no-op as far as status-sync goes.',
+    'Flip statusSyncEnabled on an existing cross-project link. Enabling needs ticket:edit and ticket:change_status in both projects (403 otherwise); disabling is always allowed. On a counterpart link the other end auto-closes when one moves to done, if the closing user holds those grants and read access there. Other relation types ignore the flag.',
   inputSchema: z.object({
     sourceTicketKey: z.string().min(3),
     linkId: z.string().uuid(),
