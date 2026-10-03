@@ -16,6 +16,7 @@ describe('ORB-2458 - chat bot tail labels', () => {
     expect(call('POST', '/admin/chat-bot/connections')).toBe('orboto_chat_bot_admin');
     expect(call('POST', `/admin/chat-bot/connections/${ID}/rotate-credentials`)).toBe('orboto_chat_bot_admin');
     expect(call('POST', `/admin/chat-bot/connections/${ID}/discord-commands`)).toBe('orboto_chat_bot_admin');
+    expect(call('POST', `/admin/chat-bot/connections/${ID}/unpin`)).toBe('orboto_chat_bot_admin');
     expect(call('PATCH', '/admin/chat-bot/settings')).toBe('orboto_chat_bot_admin');
     expect(call('DELETE', `/admin/chat-bot/connections/${ID}`)).toBe('orboto_chat_bot_admin');
     expect(call('POST', `/admin/chat-bot/links/${ID}/revoke`)).toBe('orboto_chat_bot_admin');
