@@ -19,6 +19,15 @@ export const TAIL_LABELS: readonly TailLabel[] = [
   { method: 'GET', path: new RegExp(`^/capacity/resources/${SEG}/plan$`), label: 'orboto_capacity_plan' },
   { method: 'POST', path: new RegExp(`^/capacity/resources/${SEG}/plan$`), label: 'orboto_capacity_plan' },
   { method: 'POST', path: /^\/capacity\/seeds\/nightly-unity$/, label: 'orboto_capacity_seed' },
+  { method: 'GET', path: /^\/admin\/chat-bot\/(connections(\/[^/]+\/(health|slack-manifest))?|routes|links|settings|deliveries)$/, label: 'orboto_chat_bot_status' },
+  { method: 'GET', path: new RegExp(`^/(chat-bot/connections|chat-bot/links/mine|projects/${SEG}/chat-bot/routes)$`), label: 'orboto_chat_bot_status' },
+  { method: 'POST', path: /^\/admin\/chat-bot\/(connections(\/[^/]+\/(rotate-credentials|slack-install|discord-commands))?|links\/[^/]+\/revoke|deliveries\/[^/]+\/retry)$/, label: 'orboto_chat_bot_admin' },
+  { method: 'PATCH', path: /^\/admin\/chat-bot\/(connections\/[^/]+|settings)$/, label: 'orboto_chat_bot_admin' },
+  { method: 'DELETE', path: /^\/admin\/chat-bot\/connections\/[^/]+$/, label: 'orboto_chat_bot_admin' },
+  { method: 'POST', path: new RegExp(`^/projects/${SEG}/chat-bot/routes(/${SEG}/send-test)?$`), label: 'orboto_chat_bot_route' },
+  { method: 'PATCH', path: new RegExp(`^/projects/${SEG}/chat-bot/routes/${SEG}$`), label: 'orboto_chat_bot_route' },
+  { method: 'DELETE', path: new RegExp(`^/projects/${SEG}/chat-bot/routes/${SEG}$`), label: 'orboto_chat_bot_route' },
+  { method: 'POST', path: /^\/chat-bot\/links\/(confirm|[^/]+\/revoke)$/, label: 'orboto_chat_bot_link' },
 ];
 
 /** The metrics label of one tool call: the stand-in tool name for a labelled api_call, else the tool name itself. */
