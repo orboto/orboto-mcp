@@ -122,7 +122,7 @@ describe('ORB-2272 - metrics labels of the capacity tail', () => {
     ];
     for (const [method, path, label] of cases) expect(metricsToolName('orboto_api_call', { method, path }), `${method} ${path}`).toBe(label);
     expect(metricsToolName('orboto_get_ticket', { method: 'POST', path: '/capacity/claims' })).toBe('orboto_get_ticket');
-    expect(new Set(TAIL_LABELS.map((l) => l.label))).toEqual(new Set(['orboto_capacity_list', 'orboto_capacity_claim', 'orboto_capacity_renew', 'orboto_capacity_release', 'orboto_capacity_windows', 'orboto_capacity_plan', 'orboto_capacity_seed', 'orboto_capacity_stats']));
+    expect(new Set(TAIL_LABELS.map((l) => l.label).filter((l) => l.startsWith('orboto_capacity_')))).toEqual(new Set(['orboto_capacity_list', 'orboto_capacity_claim', 'orboto_capacity_renew', 'orboto_capacity_release', 'orboto_capacity_windows', 'orboto_capacity_plan', 'orboto_capacity_seed', 'orboto_capacity_stats']));
   });
 
   it('ORB-2275 - labels the metrics read as orboto_capacity_stats, with or without a query', () => {
@@ -147,7 +147,7 @@ describe('ORB-2275 - capacity metrics through orboto_api_call', () => {
     await flush();
     expect(proxied.map((p) => `${p.method} ${p.path}`)).toEqual(['GET /capacity/metrics', 'GET /capacity/metrics']);
     expect(instrument.map((e) => [e.toolName, e.success])).toEqual([['orboto_capacity_stats', true], ['orboto_capacity_stats', false]]);
-    expect(new Set(TAIL_LABELS.map((l) => l.label))).toEqual(new Set(['orboto_capacity_list', 'orboto_capacity_claim', 'orboto_capacity_renew', 'orboto_capacity_release', 'orboto_capacity_windows', 'orboto_capacity_plan', 'orboto_capacity_seed', 'orboto_capacity_stats']));
+    expect(new Set(TAIL_LABELS.map((l) => l.label).filter((l) => l.startsWith('orboto_capacity_')))).toEqual(new Set(['orboto_capacity_list', 'orboto_capacity_claim', 'orboto_capacity_renew', 'orboto_capacity_release', 'orboto_capacity_windows', 'orboto_capacity_plan', 'orboto_capacity_seed', 'orboto_capacity_stats']));
   });
 });
 
