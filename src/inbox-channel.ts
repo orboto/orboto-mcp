@@ -43,6 +43,13 @@ export interface InboxMessage {
   addressed?: boolean;
   /** ORB-2265 - set by the stream: this session sent into the message's thread within the last 24 hours. */
   inSentThread?: boolean;
+  /** ORB-2467 - count and total size of the attachments; names never reach the channel. */
+  attachments?: { count: number; label: string };
+}
+
+/** ORB-2467 - `attachments: 1 archive, 12.4 MB (orboto messages --download <id>)`, or nothing. */
+export function attachmentLine(m: Pick<InboxMessage, 'id' | 'attachments'>): string {
+  return m.attachments?.count ? `attachments: ${m.attachments.label} (orboto messages --download ${m.id})` : '';
 }
 
 export interface InboxChannelOpts {
@@ -160,6 +167,8 @@ export function renderEvent(m: InboxMessage, now: number): ChannelEvent {
     `from ${from} to ${to}${m.projectKey ? ` | project ${m.projectKey}` : ''} | id ${m.id}${m.threadId ? ` | thread ${m.threadId}` : ''}`,
   ];
   if (body) lines.push(body);
+  const carried = attachmentLine(m);
+  if (carried) lines.push(carried);
   const waited = waitedMinutes(m.createdAt, now);
   return {
     content: lines.join('\n'),
@@ -181,7 +190,8 @@ export function renderDigest(batch: InboxMessage[], now: number): ChannelEvent {
   const lines = [`Inbox digest: ${batch.length} info/complete message(s) since the last event. Ack the ones you handled with orboto_messages { ackIds }.`];
   for (const m of batch) {
     const text = firstLine(m.payload);
-    lines.push(`- [${m.kind}] ${m.subject} | from ${m.from?.label ?? m.fromUserId ?? 'unknown'}${m.projectKey ? ` | ${m.projectKey}` : ''} | id ${m.id}${text ? ` | ${text.slice(0, 160)}` : ''}`);
+    const carried = m.attachments?.count ? ` | attachments: ${m.attachments.label}` : '';
+    lines.push(`- [${m.kind}] ${m.subject} | from ${m.from?.label ?? m.fromUserId ?? 'unknown'}${m.projectKey ? ` | ${m.projectKey}` : ''} | id ${m.id}${carried}${text ? ` | ${text.slice(0, 160)}` : ''}`);
   }
   return { content: lines.join('\n'), meta: { kind: 'digest', count: String(batch.length), waited_min: String(waitedMinutes(batch[0].createdAt, now)) } };
 }

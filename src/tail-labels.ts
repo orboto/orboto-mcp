@@ -30,6 +30,9 @@ export const TAIL_LABELS: readonly TailLabel[] = [
   { method: 'POST', path: /^\/chat-bot\/links\/(confirm|[^/]+\/revoke)$/, label: 'orboto_chat_bot_link' },
   { method: 'POST', path: /^\/v1\/agent\/broadcast\/live$/, label: 'orboto_agent_notice' },
   { method: 'GET', path: new RegExp(`^/v1/agent/broadcasts/live(/${SEG})?$`), label: 'orboto_agent_notice_status' },
+  { method: 'GET', path: new RegExp(`^/v1/agent/messages/${SEG}/attachments(/${SEG}/url)?$`), label: 'orboto_agent_message_attachments' },
+  { method: 'GET', path: /^\/admin\/agents\/transfers$/, label: 'orboto_agent_transfers' },
+  { method: 'DELETE', path: new RegExp(`^/admin/agents/transfers/${SEG}$`), label: 'orboto_agent_transfers' },
 ];
 
 /** The metrics label of one tool call: the stand-in tool name for a labelled api_call, else the tool name itself. */
