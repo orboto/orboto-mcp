@@ -223,6 +223,17 @@ describe('orboto_agent_notify routing (ORB-2263)', () => {
     expect(result.structuredContent).toMatchObject({ routedTo: 'account', routingNote: expect.stringContaining('no session declared HIVE') });
     expect((result.content[0] as { text: string }).text).toContain('routed to account - no session declared HIVE');
   });
+
+  it('ORB-2465: passes the agent-broadcast live hint on in the text, not in the output schema', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => ({
+      ok: true, status: 200, statusText: 'OK',
+      json: async () => ({ ok: true, messageId: '00000000-0000-4000-8000-000000000000', toSessionId: null, routedTo: 'account', hint: 'account mail without --project wakes no particular session; send orboto agent-broadcast live' }),
+      text: async () => '',
+    } as unknown as Response));
+    const result = await makeAgentNotifyHandler(client)({ targetEmail: 'bot@example.org', kind: 'info', subject: 'restart' });
+    expect((result.content[0] as { text: string }).text).toContain('\nhint: account mail without --project');
+    expect(result.structuredContent).not.toHaveProperty('hint');
+  });
 });
 
 describe('orboto_messages (ORB-1742 self-echo exclusion)', () => {
