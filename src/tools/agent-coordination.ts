@@ -124,6 +124,7 @@ interface NotifyResponse {
   routingNote?: string;
   recipients?: Array<{ label: string; sessionId: string | null }>;
   queued?: boolean;
+  hint?: string;
 }
 
 interface NoRecipientBody {
@@ -248,7 +249,7 @@ export function makeAgentNotifyHandler(client: OrbotoClient) {
     const routedTo = res.routedTo ?? (res.toSessionId ? 'session' : 'account');
     const note = res.routingNote ? ` - ${res.routingNote}` : '';
     return {
-      content: [{ type: 'text', text: `${res.queued ? 'queued for' : 'notified'} ${target} (message ${res.messageId}, routed to ${routedTo}${note})` }],
+      content: [{ type: 'text', text: `${res.queued ? 'queued for' : 'notified'} ${target} (message ${res.messageId}, routed to ${routedTo}${note})${res.hint ? `\nhint: ${res.hint}` : ''}` }],
       structuredContent: {
         ok: true, messageId: res.messageId, toSessionId: res.toSessionId ?? null, routedTo,
         ...(res.routingNote ? { routingNote: res.routingNote } : {}),

@@ -28,6 +28,8 @@ export const TAIL_LABELS: readonly TailLabel[] = [
   { method: 'PATCH', path: new RegExp(`^/projects/${SEG}/chat-bot/routes/${SEG}$`), label: 'orboto_chat_bot_route' },
   { method: 'DELETE', path: new RegExp(`^/projects/${SEG}/chat-bot/routes/${SEG}$`), label: 'orboto_chat_bot_route' },
   { method: 'POST', path: /^\/chat-bot\/links\/(confirm|[^/]+\/revoke)$/, label: 'orboto_chat_bot_link' },
+  { method: 'POST', path: /^\/v1\/agent\/broadcast\/live$/, label: 'orboto_agent_notice' },
+  { method: 'GET', path: new RegExp(`^/v1/agent/broadcasts/live(/${SEG})?$`), label: 'orboto_agent_notice_status' },
 ];
 
 /** The metrics label of one tool call: the stand-in tool name for a labelled api_call, else the tool name itself. */

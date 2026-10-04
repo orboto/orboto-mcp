@@ -50,6 +50,8 @@ afterEach(() => { vi.restoreAllMocks(); });
  * verdicts themselves ride the response, not the manifest.
  * ORB-2338 added no named tool; the transcript rides the escape hatch and
  * the resource.
+ * ORB-2465 added no named tool: the live notice rides the escape hatch
+ * (full = 171,194 chars, 6 free).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

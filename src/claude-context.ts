@@ -5,7 +5,7 @@
  * nothing - the ledger then says "unknown", never an estimate.
  */
 import { readdirSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, hostname } from 'node:os';
 import path from 'node:path';
 
 export const CLAUDE_CONTEXT_MAX_AGE_MS = 10 * 60_000;
@@ -58,4 +58,10 @@ export function readClaudeContext(dir: string, now = Date.now(), root = claudeCo
     });
   }
   return fresh.length === 1 ? fresh[0] : null;
+}
+
+/** ORB-2465 - the channel heartbeat's clientInfo: the wake channel, the host `--host` filters on, and the context report. */
+export function channelClientInfo(context: ClaudeContextReport | null, host: string = hostname()): Record<string, unknown> {
+  const value = host.trim().toLowerCase().slice(0, 200);
+  return { channel: 'claude-code', ...(value ? { host: value } : {}), ...(context ?? {}) };
 }

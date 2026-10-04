@@ -207,6 +207,13 @@ export function checkoutInstanceToken(env: NodeJS.ProcessEnv = process.env, host
 
 const MCP_PROCESS_INSTANCE = checkoutInstanceToken();
 
+/** ORB-2465 - the machine a stdio proxy runs on, lower-cased, as `agent-broadcast live --host` matches it; an HTTP connection (per-connection session id) runs on the server, so it reports none. */
+export function localSessionHost(extra?: { sessionId?: string }, host: string = hostname()): string | undefined {
+  if (extra?.sessionId) return undefined;
+  const value = host.trim().toLowerCase().slice(0, 200);
+  return value || undefined;
+}
+
 /** Precedence: explicit caller-supplied token > per-connection MCP session id
  *  (distinct per client even on a shared HTTP server) > per-process id (stdio). */
 export function mcpInstanceToken(explicit?: string, extra?: { sessionId?: string }): string {

@@ -14,6 +14,8 @@ import { CHANNEL_START_COMMANDS, CHANNEL_START_COMMANDS_WITHOUT_CLI } from '../i
 import { readFileSync } from 'node:fs';
 import { makeResponseExpandHandler } from './response-expand.js';
 import { applyResponseBudget, budgetFor, DEFAULT_BUDGET_CHARS } from '../response-budget.js';
+import { hostname } from 'node:os';
+import { localSessionHost } from './shared.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
 afterEach(() => { vi.restoreAllMocks(); });
@@ -643,6 +645,22 @@ describe('ORB-2136 - session scope and ref', () => {
 
     await makeSessionStartHandler(client)({ scope: { role: 'worker', projectKeys: ['orb'] } }, { sessionId: 'keep1' });
     expect(rememberedScope('mcp-keep1')).toEqual({ role: 'worker', projectKeys: ['ORB'] });
+  });
+
+  it('ORB-2465 - a stdio session reports its host on the heartbeat; an HTTP connection reports none', async () => {
+    const seen: Array<{ path: string; body: unknown }> = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const u = new URL(url.toString());
+      seen.push({ path: u.pathname, body: init?.body ? JSON.parse(init.body as string) : undefined });
+      const body = u.pathname === '/v1/agent/heartbeat'
+        ? { sessionToken: 'x', sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: null }
+        : u.pathname === '/agent-instructions' ? { instructions: 'rules here', rulesHash: 'fixture' } : {};
+      return { ok: true, status: 200, statusText: 'OK', json: async () => body, text: async () => '' } as unknown as Response;
+    });
+    await makeSessionStartHandler(client)({});
+    expect(seen.find((c) => c.path === '/v1/agent/heartbeat')?.body).toEqual({ clientInfo: { host: hostname().trim().toLowerCase() } });
+    expect(localSessionHost({ sessionId: 'http-1' }, 'server')).toBeUndefined();
+    expect(localSessionHost(undefined, ' Mac-A ')).toBe('mac-a');
   });
 
   it('without a scope the heartbeat body stays empty and the digest says no scope is declared', async () => {

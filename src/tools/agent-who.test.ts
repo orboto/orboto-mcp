@@ -33,4 +33,8 @@ describe('orboto_who', () => {
     expect(agentWhoToolConfig.annotations.readOnlyHint).toBe(true);
     expect(whoLine({ ...entry, addresses: [], role: null, channel: { announced: null, online: false }, currentTicket: null })).toContain('no scope');
   });
+
+  it('ORB-2465: names the host a live notice filters on', () => {
+    expect(whoLine({ ...entry, host: 'build-host-a' })).toContain('session f072e1c5, host build-host-a, working');
+  });
 });
