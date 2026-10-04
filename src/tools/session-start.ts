@@ -11,7 +11,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { resolveTicketByKey, type TicketRow , applyAgentProfile, mcpInstanceToken } from './shared.js';
+import { resolveTicketByKey, type TicketRow , applyAgentProfile, mcpInstanceToken, localSessionHost } from './shared.js';
 import { AgentSessionScopeSchema, type AgentSessionScope } from './agent-session-scope.js';
 import { PROCESS_OWNER, PROTECT_TEXT_META, storePayload } from '../response-budget.js';
 import { loadRequiredRules } from '../required-rules.js';
@@ -295,7 +295,8 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
     }
 
     const toRegistration = (r: SessionRegistration | null) => (r && typeof r.sessionId === 'string' ? { sessionId: r.sessionId, scope: r.scope ?? null, reconnects: r.reconnects, lastReconnectAt: r.lastReconnectAt } : null);
-    let registration = await client.post<SessionRegistration>('/v1/agent/heartbeat', input.scope !== undefined ? { scope: input.scope } : {}, { instanceToken })
+    const host = localSessionHost(extra as { sessionId?: string } | undefined);
+    let registration = await client.post<SessionRegistration>('/v1/agent/heartbeat', { ...(input.scope !== undefined ? { scope: input.scope } : {}), ...(host ? { clientInfo: { host } } : {}) }, { instanceToken })
       .then(toRegistration)
       .catch(() => null);
     if (input.scope !== undefined && registration) rememberDeclaredScope(instanceToken, registration.scope);

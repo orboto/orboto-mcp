@@ -15,6 +15,7 @@ interface WhoEntry {
   channel: { announced: string | null; online: boolean };
   currentTicket: { key: string | null; title: string } | null;
   status: string;
+  host?: string | null;
 }
 
 export const agentWhoToolConfig = {
@@ -33,7 +34,8 @@ export function whoLine(s: WhoEntry): string {
   const address = s.addresses.join(', ') || (s.role ? `${s.role} (no project)` : 'no scope');
   const channel = s.channel.announced ? `${s.channel.announced}${s.channel.online ? ' online' : ' offline'}` : 'no channel';
   const ticket = s.currentTicket ? `; on ${s.currentTicket.key ?? s.currentTicket.title}` : '';
-  return `- ${address} - ${s.email} session ${s.shortId}, ${s.status}, ${channel}, last seen ${s.lastSeenAt}${ticket}`;
+  const host = s.host ? `, host ${s.host}` : '';
+  return `- ${address} - ${s.email} session ${s.shortId}${host}, ${s.status}, ${channel}, last seen ${s.lastSeenAt}${ticket}`;
 }
 
 export function makeAgentWhoHandler(client: OrbotoClient) {

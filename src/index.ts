@@ -74,10 +74,9 @@ async function main() {
       inbox.start();
       const outdated = cliOutdatedNotice(process.env.ORBOTO_MCP_CLI_OUTDATED);
       if (outdated) void inbox.deliverNotice(CLI_OUTDATED_NOTICE, outdated);
-      const { readClaudeContext } = await import('./claude-context.js');
+      const { readClaudeContext, channelClientInfo } = await import('./claude-context.js');
       const beat = () => {
-        const context = readClaudeContext(process.cwd());
-        preflightClient.post('/v1/agent/heartbeat', { clientInfo: { channel: 'claude-code', ...(context ?? {}) } }, { instanceToken })
+        preflightClient.post('/v1/agent/heartbeat', { clientInfo: channelClientInfo(readClaudeContext(process.cwd())) }, { instanceToken })
           .catch((err) => { console.error(`[orboto-mcp] channel heartbeat failed: ${(err as Error).message}`); });
       };
       beat();

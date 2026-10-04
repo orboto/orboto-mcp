@@ -6,7 +6,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { claudeContextDir, readClaudeContext } from './claude-context.js';
+import { channelClientInfo, claudeContextDir, readClaudeContext } from './claude-context.js';
 
 let root: string;
 
@@ -48,5 +48,12 @@ describe('ORB-2149 - claude statusline context reports', () => {
 describe('ORB-2149 - the report directory', () => {
   it('lives under the orboto state directory of the user', () => {
     expect(claudeContextDir().endsWith(path.join('.orboto', 'claude-context'))).toBe(true);
+  });
+});
+
+describe('ORB-2465 - the channel heartbeat names its host', () => {
+  it('sends the lower-cased host next to the channel and the context report', () => {
+    expect(channelClientInfo({ contextTokens: 10 }, ' Build-Host-A ')).toEqual({ channel: 'claude-code', host: 'build-host-a', contextTokens: 10 });
+    expect(channelClientInfo(null, '')).toEqual({ channel: 'claude-code' });
   });
 });
