@@ -7,6 +7,7 @@ import { specReleaseInfo } from './shared.js';
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
+import { COMMENT_FULL_COUNT, fetchThread, selectComments, type ShownComment } from './comment-thread.js';
 import { formatDependencySummary, resolveTicketByKey, type TicketDependencySummary, type TicketRow } from './shared.js';
 
 interface TicketSummaryRow {
@@ -73,17 +74,17 @@ interface AttachmentRow {
 }
 interface CursorPage<T> { items: T[]; nextCursor: string | null }
 
-const COMMENT_PAGE_SIZE = 50;
-
 export const getTicketToolConfig = {
   title: 'Get ticket details',
   description:
-    'Return a ticket\'s decision card: description, status, priority, milestone, assignees, labels, dates, estimate/logged time, checklist progress, parent + sub-ticket count, the OPEN dependency edges in both directions ("Blocked by" / "Blocks", keys + statuses - the full graph stays on orboto_list_ticket_dependencies) - plus COUNTS for everything omitted (commentCount, gitActivityCount, attachmentCount, childCount). Full blocks are opt-in via `include` (ORB-1698): pass e.g. include: ["comments"] to get the comment bodies, ["git","attachments","children","raci","checklistItems"] likewise. Input is the ticket key like "ACME-42".',
+    'A ticket\'s decision card: description, status, priority, milestone, assignees, labels, dates, checklist progress, parent, open dependency edges and COUNTS of what is omitted (`include` opts blocks in). Comments: newest first, 3 newest in full, older shortened; `full` all, `commentId` one. Input: ticket key like "ACME-42".',
   inputSchema: z.object({
-    ticketKey: z.string().min(3).describe('Ticket key like "ACME-42".'),
+    ticketKey: z.string().min(3).describe('Key like "ACME-42".'),
     include: z.array(z.enum(['comments', 'git', 'attachments', 'children', 'raci', 'checklistItems']))
       .optional()
-      .describe('Blocks to inline in full. Default: none (counts only).'),
+      .describe('Blocks to inline.'),
+    full: z.boolean().optional().describe('Comments in full.'),
+    commentId: z.string().optional().describe('One comment (id or prefix).'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -91,13 +92,13 @@ export const getTicketToolConfig = {
 type IncludeBlock = 'comments' | 'git' | 'attachments' | 'children' | 'raci' | 'checklistItems';
 
 export function makeGetTicketHandler(client: OrbotoClient) {
-  return async ({ ticketKey, include }: { ticketKey: string; include?: IncludeBlock[] }): Promise<CallToolResult> => {
+  return async ({ ticketKey, include, full: fullComments, commentId }: { ticketKey: string; include?: IncludeBlock[]; full?: boolean; commentId?: string }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
-    const inc = new Set<IncludeBlock>(include ?? []);
+    const inc = new Set<IncludeBlock>(commentId ? [...(include ?? []), 'comments'] : (include ?? []));
 
     const parentId = ticket.parentTicketId ?? null;
 
-    const [enriched, parent, childrenPage, attachments, commentsPage, checklists, gitActivity] = await Promise.all([
+    const [enriched, parent, childrenPage, attachments, thread, checklists, gitActivity] = await Promise.all([
       client.get<TicketRow>(`/projects/${ticket.projectId}/tickets/${ticket.id}`).catch(swallow404<TicketRow | null>(null)),
       parentId
         ? client.get<TicketSummaryRow>(`/projects/${ticket.projectId}/tickets/${parentId}`).catch(swallow404<TicketSummaryRow | null>(null))
@@ -106,11 +107,7 @@ export function makeGetTicketHandler(client: OrbotoClient) {
         `/projects/${ticket.projectId}/tickets?parentTicketId=${ticket.id}&limit=50`,
       ).catch(swallow404<CursorPage<TicketSummaryRow>>({ items: [], nextCursor: null })),
       client.get<AttachmentRow[]>(`/tickets/${ticket.id}/attachments`).catch(swallow404<AttachmentRow[]>([])),
-      inc.has('comments')
-        ? client.get<CursorPage<CommentRow>>(
-            `/tickets/${ticket.id}/comments?limit=${COMMENT_PAGE_SIZE}`,
-          ).catch(swallow404<CursorPage<CommentRow>>({ items: [], nextCursor: null }))
-        : Promise.resolve({ items: [], nextCursor: null } as CursorPage<CommentRow>),
+      inc.has('comments') ? fetchThread(client, ticket.id) : Promise.resolve([] as CommentRow[]),
       inc.has('checklistItems')
         ? client.get<ChecklistRow[]>(`/tickets/${ticket.id}/checklists`).catch(swallow404<ChecklistRow[]>([]))
         : Promise.resolve([] as ChecklistRow[]),
@@ -119,12 +116,14 @@ export function makeGetTicketHandler(client: OrbotoClient) {
         : Promise.resolve([] as GitActivityRow[]),
     ]);
 
-    const comments = commentsPage.items;
-    const hasMoreComments = !!commentsPage.nextCursor;
+    const selected = selectComments(thread, { full: fullComments, commentId });
+    if (selected.error) return { isError: true, content: [{ type: 'text', text: selected.error }] };
+    const comments = selected.shown;
+    const commentTotal = thread.length;
     const children = childrenPage.items;
     const full = enriched ?? ticket;
 
-    const commentCount = full.commentCount ?? (inc.has('comments') ? comments.length : 0);
+    const commentCount = full.commentCount ?? (inc.has('comments') ? commentTotal : 0);
     const gitCount = full.gitActivityCount ?? (inc.has('git') ? gitActivity.length : 0);
     const omitted: string[] = [];
     if (!inc.has('comments') && commentCount > 0) omitted.push(`comments (${commentCount})`);
@@ -137,7 +136,7 @@ export function makeGetTicketHandler(client: OrbotoClient) {
       : undefined;
 
     return {
-      content: [{ type: 'text', text: formatTicket(full, inc, comments, hasMoreComments, checklists, gitActivity, parent, children, attachments, includeHint) }],
+      content: [{ type: 'text', text: formatTicket(full, inc, comments, commentTotal, ticketKey, checklists, gitActivity, parent, children, attachments, includeHint) }],
       structuredContent: {
         id: full.id,
         key: full.ticketKey,
@@ -194,15 +193,18 @@ export function makeGetTicketHandler(client: OrbotoClient) {
         checklistProgress: full.checklistProgress ?? { done: 0, total: 0 },
         ...(includeHint ? { includeHint } : {}),
         ...(inc.has('comments') ? {
-          comments: comments.map((c) => ({
-            id: c.id, // ORB-1285 - needed to target a comment for edit/delete
+          comments: comments.map(({ row: c, excerpt, length, rest }) => ({
+            id: c.id,
             author: c.userName ?? null,
-            body: c.content,
+            body: excerpt,
+            bodyLength: length,
+            ...(rest > 0 ? { bodyTruncated: true } : {}),
             createdAt: c.createdAt,
             editedAt: c.editedAt ?? null,
             isInternal: c.isInternal,
           })),
-          commentsHasMore: hasMoreComments,
+          commentTotal,
+          commentsHasMore: false,
         } : {}),
         ...(inc.has('checklistItems') ? {
           checklists: checklists.map((cl) => ({
@@ -263,8 +265,9 @@ function dependencyEdge(e: TicketDependencySummary): Record<string, unknown> {
 function formatTicket(
   ticket: TicketRow,
   inc: Set<IncludeBlock>,
-  comments: CommentRow[],
-  hasMoreComments: boolean,
+  comments: ShownComment[],
+  commentTotal: number,
+  ticketKey: string,
   checklists: ChecklistRow[],
   gitActivity: GitActivityRow[],
   parent: TicketSummaryRow | null,
@@ -302,6 +305,7 @@ function formatTicket(
     ticket.labels && ticket.labels.length > 0
       ? `Labels: ${ticket.labels.map((l) => l.name).join(', ')}`
       : null,
+    ticket.branchName ? `Branch: ${ticket.branchName}` : null,
     ticket.webUrl ? `Link: ${ticket.webUrl}` : null,
     formatDependencySummary('Blocked by', ticket.blockedByOpenCount, ticket.blockedByOpen),
     formatDependencySummary('Blocks', ticket.blocksOpenCount, ticket.blocksOpen),
@@ -343,16 +347,15 @@ function formatTicket(
     commentLines.push('', `Comments: ${ticket.commentCount}`);
   }
   if (inc.has('comments') && comments.length > 0) {
-    const headerLine = hasMoreComments
-      ? `## Comments (${comments.length} shown, more in the UI)`
-      : `## Comments (${comments.length})`;
-    commentLines.push('', headerLine);
-    for (const c of comments) {
+    const shortened = comments.some((c) => c.rest > 0);
+    commentLines.push('', `## Comments (${commentTotal}, newest first${shortened ? `; the ${COMMENT_FULL_COUNT} newest in full, full: true prints all` : ''})`);
+    for (const { row: c, excerpt, length, rest } of comments) {
       commentLines.push(
-        `**${c.userName ?? '(unknown author)'}** - ${c.createdAt}${c.isInternal ? ' [internal]' : ''}`,
-        c.content,
-        '',
+        `**${c.userName ?? '(unknown author)'}** - ${c.createdAt}${c.isInternal ? ' [internal]' : ''} - ${length} chars - ${c.id}`,
+        excerpt,
       );
+      if (rest > 0) commentLines.push(`... ${rest} more characters: orboto_get_ticket { ticketKey: "${ticketKey}", commentId: "${c.id}" }`);
+      commentLines.push('');
     }
   }
 

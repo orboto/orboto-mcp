@@ -282,7 +282,7 @@ describe('orboto_get_ticket', () => {
     expect((res.structuredContent as Record<string, unknown>).commentCount).toBe(34);
   });
 
-  it('include: ["comments"] restores cursor-paged bodies exactly as before', async () => {
+  it('include: ["comments"] returns the thread newest first with the body length', async () => {
     const calls = stub([
       { json: PROJ },
       { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-6', title: 'X', status: 'TODO', gitActivityCount: 0, parentTicketId: null } },
@@ -292,7 +292,7 @@ describe('orboto_get_ticket', () => {
       {
         json: {
           items: [{ id: 'c1', ticketId: 't1', userId: 'u1', content: 'first thought', isInternal: false, createdAt: 'now', userName: 'Ada' }],
-          nextCursor: 'next-page-token',
+          nextCursor: null,
         },
       },
     ]);
@@ -300,18 +300,19 @@ describe('orboto_get_ticket', () => {
     expect(calls.some((c) => c.includes('/tickets/t1/comments?limit='))).toBe(true);
     const sc = res.structuredContent as {
       comments: Array<{ body: string; author: string }>;
-      commentsHasMore: boolean;
+      commentTotal: number;
       parentTicket: unknown;
     };
     expect(sc.comments[0]).toEqual({
       id: 'c1', // ORB-1285 - comment id is surfaced for edit/delete targeting
       body: 'first thought',
+      bodyLength: 13,
       author: 'Ada',
       createdAt: 'now',
       editedAt: null,
       isInternal: false,
     });
-    expect(sc.commentsHasMore).toBe(true);
+    expect(sc.commentTotal).toBe(1);
     expect(sc.parentTicket).toBeNull();
   });
 

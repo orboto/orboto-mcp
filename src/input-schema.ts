@@ -64,7 +64,7 @@ function applyAliases(toolName: string, shape: z.ZodRawShape, value: unknown): u
   }
 
   if ('id' in out && !('id' in shape)) {
-    const candidates = ID_LIKE_CANONICALS.filter((c) => c in shape && !(c in out));
+    const candidates = ID_LIKE_CANONICALS.filter((c) => c in shape && !(c in out) && !(toolName === 'orboto_get_ticket' && c === 'commentId'));
     if (candidates.length === 1) {
       const canonical = candidates[0];
       const { id, ...rest } = out;
