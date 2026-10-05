@@ -302,6 +302,7 @@ function formatTicket(
     ticket.labels && ticket.labels.length > 0
       ? `Labels: ${ticket.labels.map((l) => l.name).join(', ')}`
       : null,
+    ticket.branchName ? `Branch: ${ticket.branchName}` : null,
     ticket.webUrl ? `Link: ${ticket.webUrl}` : null,
     formatDependencySummary('Blocked by', ticket.blockedByOpenCount, ticket.blockedByOpen),
     formatDependencySummary('Blocks', ticket.blocksOpenCount, ticket.blocksOpen),
