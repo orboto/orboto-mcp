@@ -22,32 +22,36 @@ interface TicketPage {
 export const listTicketsToolConfig = {
   title: 'List tickets',
   description:
-    'List tickets in a project, optionally filtered by status category, milestone name, or assignee email. Set unscheduled=true for the product backlog (everything not planned into a milestone yet). Returns up to 50 tickets per call.',
+    'List tickets in a project, filtered by status category, milestone or assignee email. unscheduled=true = the backlog (no milestone yet). Up to 50 per call.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
     specState: TicketSpecStateSchema.optional(),
     statusCategory: z
       .enum(['todo', 'in_progress', 'in_review', 'done', 'wont_fix'])
       .optional()
-      .describe('Filter to one workflow category. Omit for all.'),
+      .describe('One workflow category. Omit for all.'),
+    open: z
+      .boolean()
+      .optional()
+      .describe('true = only todo, in_progress, in_review. Not with statusCategory.'),
     milestone: z
       .string()
       .optional()
-      .describe('Key (ORB-M3), name, or UUID. Omit for all, backlog included.'),
+      .describe('Key (ORB-M3), name or UUID.'),
     unscheduled: z
       .boolean()
       .optional()
-      .describe('true = only the backlog: tickets with no milestone. Cannot be combined with `milestone`.'),
+      .describe('true = only tickets with no milestone. Not with `milestone`.'),
     assigneeEmail: z
       .string()
       .optional()
-      .describe('Project-member email. Omit for all, unassigned included.'),
+      .describe('Project-member email.'),
     parentTicketKey: z
       .string()
       .optional()
       .describe('Only children of this ticket - walks an epic.'),
     limit: z.number().int().min(1).max(50).default(25).describe('Max rows to return.'),
-    verbose: z.boolean().default(false).describe('true = full rows; default is the decision fields only.'),
+    verbose: z.boolean().default(false).describe('true = full rows.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -59,6 +63,7 @@ export function makeListTicketsHandler(client: OrbotoClient) {
     statusCategory?: 'todo' | 'in_progress' | 'in_review' | 'done' | 'wont_fix';
     milestone?: string;
     unscheduled?: boolean;
+    open?: boolean;
     assigneeEmail?: string;
     parentTicketKey?: string;
     limit?: number;
@@ -70,6 +75,10 @@ export function makeListTicketsHandler(client: OrbotoClient) {
     qs.set('limit', String(input.limit ?? 25));
     if (input.specState) qs.set('specState', input.specState);
     if (input.statusCategory) qs.set('statusCategory', input.statusCategory);
+    if (input.open && input.statusCategory) {
+      throw new Error('Pass either `open` or `statusCategory`, not both.');
+    }
+    if (input.open) qs.set('open', 'true');
     if (input.unscheduled && input.milestone) {
       throw new Error('Pass either `milestone` or `unscheduled: true`, not both.');
     }
