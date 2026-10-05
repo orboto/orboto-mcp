@@ -31,7 +31,7 @@ describe('summarizeToolDescription', () => {
 
   it('uses the hand-written override when one exists', () => {
     const s = summarizeToolDescription('orboto_get_ticket', 'A very long first sentence that would otherwise be cut mid-flow because it enumerates every field the response carries and never stops');
-    expect(s).toContain('Fetch one ticket');
+    expect(s).toContain('Fetch a ticket');
     expect(s.length).toBeLessThanOrEqual(SUMMARY_MAX_CHARS);
   });
 
