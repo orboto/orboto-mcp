@@ -76,11 +76,11 @@ export function makeUpdateProjectHandler(client: OrbotoClient) {
 
 export const createProjectToolConfig = {
   title: 'Create a new project',
-  description: 'Create a project with an optional key (auto-derived if omitted). Requires project:create or super-admin. Returns identity, status and the measured readiness checklist with fix actions. Reuse its auto-created doc space via orboto_list_doc_spaces.',
+  description: 'Create a project with an optional key (omit it and orboto suggests one from the initials of the name, e.g. "Game Development Knowledgebase" gives GDK; a number is appended while taken). Requires project:create or super-admin. Returns identity, status and the measured readiness checklist with fix actions. Reuse its auto-created doc space via orboto_list_doc_spaces.',
   inputSchema: z.object({
     name: z.string().min(1).max(255).describe('Project name.'),
     key: z.string().min(2).max(10).regex(PROJECT_KEY_RE).optional()
-      .describe('Key; auto-derived if omitted.'),
+      .describe('Key; omit it and orboto suggests one from the initials of the name.'),
     description: z.string().nullable().optional().describe('Description.'),
     customerId: z.string().regex(UUID_RE).nullable().optional()
       .describe('Customer UUID.'),
