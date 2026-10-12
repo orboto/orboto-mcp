@@ -21,6 +21,12 @@ describe('ORB-2508 - Lexware tail labels', () => {
     expect(call('DELETE', '/admin/integrations/lexware')).toBe('orboto_lexware_admin');
   });
 
+  it('labels the customer contact mapping as orboto_lexware_contact (ORB-2511)', () => {
+    const path = '/customers/6f1c2b1e-3d4a-4b5c-8d9e-0a1b2c3d4e5f/lexware-contact';
+    for (const method of ['GET', 'PUT', 'DELETE']) expect(call(method, path), method).toBe('orboto_lexware_contact');
+    expect(call('GET', `${path}?name=Acme&page=1`)).toBe('orboto_lexware_contact');
+  });
+
   it('leaves the public receiver unlabelled', () => {
     expect(call('POST', '/inbound/lexware/6f1c2b1e-3d4a-4b5c-8d9e-0a1b2c3d4e5f')).toBe('orboto_api_call');
   });
