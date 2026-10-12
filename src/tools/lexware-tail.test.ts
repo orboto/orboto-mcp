@@ -27,6 +27,14 @@ describe('ORB-2508 - Lexware tail labels', () => {
     expect(call('GET', `${path}?name=Acme&page=1`)).toBe('orboto_lexware_contact');
   });
 
+  it('labels the billing run preview, create, list and refresh as orboto_lexware_billing_run (ORB-2512)', () => {
+    const base = '/customers/6f1c2b1e-3d4a-4b5c-8d9e-0a1b2c3d4e5f/lexware-billing-runs';
+    for (const path of [`${base}/preview`, base, `${base}/7a1c2b1e-3d4a-4b5c-8d9e-0a1b2c3d4e5f/refresh`]) expect(call('POST', path), path).toBe('orboto_lexware_billing_run');
+    expect(call('GET', `${base}?limit=20`)).toBe('orboto_lexware_billing_run');
+    expect(call('GET', '/admin/integrations/lexware/billing-runs')).toBe('orboto_lexware_billing_run');
+    expect(call('DELETE', base)).toBe('orboto_api_call');
+  });
+
   it('leaves the public receiver unlabelled', () => {
     expect(call('POST', '/inbound/lexware/6f1c2b1e-3d4a-4b5c-8d9e-0a1b2c3d4e5f')).toBe('orboto_api_call');
   });
