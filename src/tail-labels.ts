@@ -37,7 +37,7 @@ export const TAIL_LABELS: readonly TailLabel[] = [
   { method: 'PUT', path: new RegExp(`^/customers/${SEG}/lexware-contact$`), label: 'orboto_lexware_contact' },
   { method: 'DELETE', path: new RegExp(`^/customers/${SEG}/lexware-contact$`), label: 'orboto_lexware_contact' },
   { method: 'POST', path: new RegExp(`^/customers/${SEG}/lexware-billing-runs(/preview|/${SEG}/refresh)?$`), label: 'orboto_lexware_billing_run' },
-  { method: 'GET', path: new RegExp(`^/customers/${SEG}/lexware-billing-runs$`), label: 'orboto_lexware_billing_run' },
+  { method: 'GET', path: new RegExp(`^/customers/${SEG}/lexware-billing-runs(/summary)?$`), label: 'orboto_lexware_billing_run' },
   { method: 'GET', path: /^\/admin\/integrations\/lexware\/billing-runs$/, label: 'orboto_lexware_billing_run' },
   { method: 'POST', path: /^\/v1\/agent\/broadcast\/live$/, label: 'orboto_agent_notice' },
   { method: 'GET', path: new RegExp(`^/v1/agent/broadcasts/live(/${SEG})?$`), label: 'orboto_agent_notice_status' },
