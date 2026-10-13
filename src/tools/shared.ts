@@ -19,6 +19,8 @@ export interface ProjectRow {
   status: string;
   language?: string | null;
   raciEnabled?: boolean;
+  customerId?: string | null;
+  internal?: boolean;
 }
 
 export async function resolveProjectByKey(

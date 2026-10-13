@@ -688,8 +688,10 @@
   },
   "orboto_create_project": {
     "params": [
+      "customer",
       "customerId",
       "description",
+      "internal",
       "key",
       "language",
       "name"

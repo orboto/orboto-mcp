@@ -148,6 +148,36 @@ describe('orboto_create_project', () => {
     });
   });
 
+  it('ORB-2503 - resolves customer by case-insensitive exact name before the POST', async () => {
+    const calls = stub([
+      { json: [{ id: 'c-2', name: 'Acme Labs' }, { id: 'c-1', name: 'ACME' }] },
+      { json: { readiness, id: 'new4', key: 'AC', name: 'Acme app', description: null, status: 'active', customerId: 'c-1', internal: false } },
+    ]);
+    const res = await makeCreateProjectHandler(client)({ name: 'Acme app', customer: 'acme' });
+    expect(calls[0].url).toBe('https://orboto.example.com/customers?includeInactive=true&search=acme');
+    expect(calls[1].body).toEqual({ name: 'Acme app', customerId: 'c-1' });
+    expect(res.structuredContent).toMatchObject({ customerId: 'c-1', internal: false });
+  });
+
+  it('ORB-2503 - refuses an ambiguous customer name with the candidates and never POSTs', async () => {
+    const calls = stub([{ json: [{ id: 'c-1', name: 'Acme' }, { id: 'c-2', name: 'acme' }] }]);
+    await expect(makeCreateProjectHandler(client)({ name: 'X', customer: 'ACME' }))
+      .rejects.toThrow(/ambiguous: Acme \(c-1\), acme \(c-2\)/);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('ORB-2503 - refuses an unknown customer name and lists near matches', async () => {
+    stub([{ json: [{ id: 'c-1', name: 'Acme Labs' }] }]);
+    await expect(makeCreateProjectHandler(client)({ name: 'X', customer: 'Acme' }))
+      .rejects.toThrow(/candidates: Acme Labs/);
+  });
+
+  it('ORB-2503 - sends internal with its reason', async () => {
+    const calls = stub([{ json: { readiness, id: 'new5', key: 'OPS', name: 'Ops', description: null, status: 'active', customerId: null, internal: true } }]);
+    await makeCreateProjectHandler(client)({ name: 'Ops', internal: 'Our own infrastructure' });
+    expect(calls[0].body).toEqual({ name: 'Ops', internal: true, internalReason: 'Our own infrastructure' });
+  });
+
   it('surfaces a 409 (duplicate key) as OrbotoApiError', async () => {
     stub([
       { ok: false, status: 409, json: { error: 'project key already exists' } },
