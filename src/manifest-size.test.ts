@@ -52,6 +52,8 @@ afterEach(() => { vi.restoreAllMocks(); });
  * the resource.
  * ORB-2465 added no named tool: the live notice rides the escape hatch
  * (full = 171,194 chars, 6 free).
+ * ORB-2502 gave `orboto_messages` a `since` parameter inside the ceiling: the
+ * limit lost its schema default and the project hint shrank (full = 171,197).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

@@ -33,7 +33,11 @@ interface AgentMessage {
   deliveredAt: string | null;
   readAt: string | null;
   dismissed: { reason: string; note: string | null; duplicateOf: string | null; createdAt: string } | null;
+  excerpt?: string;
+  payloadChars?: number;
 }
+
+interface InboxCounts { unread: number; olderThan7Days: number }
 
 interface DismissInput { ids: string[]; reason: 'not_mine' | 'obsolete' | 'duplicate'; note?: string; duplicateOf?: string }
 
@@ -41,13 +45,14 @@ const UNREGISTERED_INBOX_HINT = 'Not registered: only account mail is listed. Re
 
 export const agentMessagesToolConfig = {
   title: 'Agent inbox and message work',
-  description: 'Your inbox as THIS session sees it. It holds mail to this session, account mail inside your declared scope, broadcasts; sibling-session mail and own sends stay out, all:true is the account view (ORB-2136). Before orboto_session_start only account mail is listed; register to see mail addressed to your session (ORB-2347). messageWork carries durable work ownership - claim before executing. ackIds acks: it completes an unclaimed request; claimed work with open steps is refused until messageWork completes or blocks it. dismiss is the third answer: not_mine hides it here and tells the sender, obsolete/duplicate close it for the account (note or duplicateOf required). Never leave mail you read and judged. Reply via orboto_agent_notify with threadId (toSessionRef = from.sessionId reaches that instance).',
+  description: 'Your inbox as THIS session sees it. It holds mail to this session, account mail inside your declared scope, broadcasts; sibling-session mail and own sends stay out, all:true is the account view with every message in full (ORB-2136). By default it lists the newest 10 unread, newest first, each as a header plus the first 300 payload characters, then the line `N unread, M older than 7 days`; limit and since (ISO time or message id) narrow it (ORB-2502). Before orboto_session_start only account mail is listed; register to see mail addressed to your session (ORB-2347). messageWork carries durable work ownership - claim before executing. ackIds acks: it completes an unclaimed request; claimed work with open steps is refused until messageWork completes or blocks it. dismiss is the third answer: not_mine hides it here and tells the sender, obsolete/duplicate close it for the account (note or duplicateOf required). Never leave mail you read and judged. Reply via orboto_agent_notify with threadId (toSessionRef = from.sessionId reaches that instance).',
   inputSchema: z.object({
     messageWork: z.record(z.unknown()).optional()
       .describe('Work envelope {messageId, mutation, cursor, limit, openOnly}; schema: orboto_api_search.'),
     all: z.boolean().default(false),
-    limit: z.number().int().min(1).max(200).default(50),
-    project: z.string().min(1).max(64).optional().describe('Project key/UUID; includes unscoped mail.'),
+    limit: z.number().int().min(1).max(200).optional(),
+    since: z.string().optional(),
+    project: z.string().min(1).max(64).optional().describe('Key/UUID; includes unscoped mail.'),
     includeOwnSends: z.boolean().default(false),
     ackIds: z.array(z.string().uuid()).max(200).optional().describe('Message ids to mark read.'),
     dismiss: z.object({
@@ -83,8 +88,19 @@ export const agentMessagesToolConfig = {
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
 };
 
+/** ORB-2502 - the compact view: the header, the first 300 payload characters indented, and how much was left out. */
+function compactLines(m: AgentMessage, header: string): string[] {
+  const excerpt = m.excerpt ?? '';
+  const rest = (m.payloadChars ?? 0) - Array.from(excerpt).length;
+  return [
+    header,
+    ...(excerpt ? excerpt.replace(/\n+$/, '').split('\n').map((line) => `  ${line}`) : []),
+    ...(rest > 0 ? [`  ... ${rest} more characters (all:true prints everything)`] : []),
+  ];
+}
+
 export function makeAgentMessagesHandler(client: OrbotoClient) {
-  return async (args: { all?: boolean; limit?: number; project?: string; includeOwnSends?: boolean; ackIds?: string[]; dismiss?: DismissInput; messageWork?: Parameters<ReturnType<typeof makeAgentMessageWorkHandler>>[0] }, extra?: unknown): Promise<CallToolResult> => {
+  return async (args: { all?: boolean; limit?: number; since?: string; project?: string; includeOwnSends?: boolean; ackIds?: string[]; dismiss?: DismissInput; messageWork?: Parameters<ReturnType<typeof makeAgentMessageWorkHandler>>[0] }, extra?: unknown): Promise<CallToolResult> => {
     if (args.messageWork) {
       if (args.ackIds?.length) throw new Error('Use a separate explicit ACK call.');
       const result = await makeAgentMessageWorkHandler(client)(args.messageWork, extra as { sessionId?: string } | undefined);
@@ -107,19 +123,24 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
       const res = await client.post<{ acked: number }>('/v1/agent/messages/ack', { ids: args.ackIds, instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
       acked = res.acked;
     }
+    const compact = !args.all;
     const q = new URLSearchParams();
     if (args.all) q.set('all', 'true');
-    if (args.limit) q.set('limit', String(args.limit));
+    q.set('limit', String(args.limit ?? (compact ? 10 : 50)));
+    if (compact) q.set('compact', 'true');
+    if (args.since) q.set('since', args.since);
     if (args.project) q.set('project', args.project);
     const instanceToken = mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined);
     if (!args.includeOwnSends) q.set('excludeRef', instanceToken);
-    const { messages, sessionId } = await client.get<{ messages: AgentMessage[]; sessionId?: string | null }>(`/v1/agent/messages${q.toString() ? `?${q.toString()}` : ''}`, { instanceToken });
+    const { messages, sessionId, counts } = await client.get<{ messages: AgentMessage[]; sessionId?: string | null; counts?: InboxCounts }>(`/v1/agent/messages?${q.toString()}`, { instanceToken });
+    const header = (m: AgentMessage) => `[${m.kind}]${m.projectKey ? ` [${m.projectKey}]` : ''} ${m.subject} (from ${m.from?.label ?? m.fromUserId} to ${m.to?.label ?? m.toUserId}, ${m.createdAt}, id ${m.id}${m.threadId ? `, thread ${m.threadId}` : ''})`;
     const lines = messages.length === 0
       ? [acked > 0 ? `Acknowledged ${acked} message(s). Inbox empty.` : 'Inbox empty.']
-      : messages.map((m) => `[${m.kind}]${m.projectKey ? ` [${m.projectKey}]` : ''} ${m.subject} (from ${m.from?.label ?? m.fromUserId} to ${m.to?.label ?? m.toUserId}, ${m.createdAt}, id ${m.id}${m.threadId ? `, thread ${m.threadId}` : ''})${m.payload ? ` payload: ${JSON.stringify(m.payload)}` : ''}`);
+      : messages.flatMap((m) => (compact ? compactLines(m, header(m)) : [`${header(m)}${m.payload ? ` payload: ${JSON.stringify(m.payload)}` : ''}`]));
     if (messages.length > 0) {
       lines.push(`Acknowledge with ackIds once handled; reply via orboto_agent_notify with threadId (toSessionRef = the sender's instance short id reaches that session only).`);
     }
+    if (compact && counts) lines.push(`${counts.unread} unread, ${counts.olderThan7Days} older than 7 days (all, limit N, since)`);
     if (args.dismiss) {
       lines.unshift(`Dismissed ${dismissedCount} message(s) as ${args.dismiss.reason}${closedCount > 0 ? `, ${closedCount} closed for the account` : ''}${feedbackSent > 0 ? `, ${feedbackSent} sender(s) told about the misroute` : ''}.`);
     }
@@ -131,7 +152,7 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
         sessionId: sessionId ?? null,
         messages: messages.map((m) => ({
           id: m.id, fromUserId: m.fromUserId, from: m.from, to: m.to, kind: m.kind, subject: m.subject,
-          payload: m.payload, threadId: m.threadId, projectKey: m.projectKey ?? null,
+          payload: compact ? null : m.payload, threadId: m.threadId, projectKey: m.projectKey ?? null,
           createdAt: m.createdAt, readAt: m.readAt, dismissed: m.dismissed ?? null,
         })),
         acked,
