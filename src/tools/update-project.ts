@@ -74,34 +74,50 @@ export function makeUpdateProjectHandler(client: OrbotoClient) {
   };
 }
 
+/** ORB-2503 - a customer by UUID or by case-insensitive exact name; an ambiguous or unknown name is refused with the candidates. */
+export async function resolveCustomerRef(client: OrbotoClient, ref: string): Promise<string> {
+  const wanted = ref.trim();
+  if (UUID_RE.test(wanted)) return wanted;
+  const rows = await client.get<Array<{ id: string; name: string }>>(`/customers?includeInactive=true&search=${encodeURIComponent(wanted)}`);
+  const exact = rows.filter((c) => c.name.trim().toLowerCase() === wanted.toLowerCase());
+  if (exact.length === 1) return exact[0].id;
+  if (exact.length > 1) throw new Error(`Customer name "${wanted}" is ambiguous: ${exact.map((c) => `${c.name} (${c.id})`).join(', ')}. Pass the id.`);
+  if (rows.length === 0) throw new Error(`No customer named "${wanted}".`);
+  throw new Error(`No customer named exactly "${wanted}"; candidates: ${rows.map((c) => c.name).join(', ')}.`);
+}
+
 export const createProjectToolConfig = {
-  title: 'Create a new project',
-  description: 'Create a project with an optional key (auto-derived if omitted). Requires project:create or super-admin. Returns identity, status and the measured readiness checklist with fix actions. Reuse its auto-created doc space via orboto_list_doc_spaces.',
+  title: 'Create a project',
+  description: 'Create a project (key auto-derived if omitted). Agents pass customer or internal. Needs project:create. Returns readiness with fix actions; its doc space is auto-created.',
   inputSchema: z.object({
-    name: z.string().min(1).max(255).describe('Project name.'),
-    key: z.string().min(2).max(10).regex(PROJECT_KEY_RE).optional()
-      .describe('Key; auto-derived if omitted.'),
-    description: z.string().nullable().optional().describe('Description.'),
-    customerId: z.string().regex(UUID_RE).nullable().optional()
-      .describe('Customer UUID.'),
+    name: z.string().min(1).max(255),
+    key: z.string().min(2).max(10).regex(PROJECT_KEY_RE).optional(),
+    description: z.string().nullable().optional(),
+    customerId: z.string().regex(UUID_RE).nullable().optional(),
+    customer: z.string().min(1).optional().describe('Customer name or UUID.'),
+    internal: z.string().min(3).max(200).optional().describe('Reason for no customer.'),
     language: z.enum(LOCALE_CODES).nullable().optional()
-      .describe('Content language; null/omitted inherits workspace.'),
+      .describe('Null inherits workspace.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeCreateProjectHandler(client: OrbotoClient) {
-  return async ({ name, key, description, customerId, language }: {
+  return async ({ name, key, description, customerId, customer, internal, language }: {
     name: string;
     key?: string;
     description?: string | null;
     customerId?: string | null;
+    customer?: string;
+    internal?: string;
     language?: LocaleCode | null;
   }): Promise<CallToolResult> => {
     const body: Record<string, unknown> = { name };
     if (key !== undefined) body.key = key;
     if (description !== undefined) body.description = description;
     if (customerId !== undefined) body.customerId = customerId;
+    if (customer !== undefined) body.customerId = await resolveCustomerRef(client, customer);
+    if (internal !== undefined) Object.assign(body, { internal: true, internalReason: internal });
     if (language !== undefined) body.language = language;
     const created = await client.post<ProjectRow & { readiness?: ProjectReadiness }>('/projects', body);
     const parsed = ProjectReadinessSchema.safeParse(created.readiness);
@@ -119,6 +135,8 @@ export function makeCreateProjectHandler(client: OrbotoClient) {
         description: created.description,
         status: created.status,
         language: created.language ?? null,
+        customerId: created.customerId ?? null,
+        internal: created.internal ?? false,
       },
     };
   };
