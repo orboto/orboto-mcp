@@ -305,33 +305,34 @@ const FALLBACK_WORKING_RULES = [
   'Use sub-tickets for steps large enough to need their own commit / time tracking / review, and checklists for one-liners inside a single ticket\'s scope. Big features (Epic + 3+ phase tickets): create a milestone FIRST, then the Epic, then phase tickets as children on that milestone.',
 ].join(' ');
 
+/** ORB-2552 - Claude Code 2.1.301 keeps the first 2048 UTF-16 characters of a server's instructions and appends "… [truncated]" (measured on the claude.ai connector, docs/agent-access-paths.md). */
+export const CLIENT_INSTRUCTIONS_CAP = 2048;
+
+/** ORB-2552 - the mandatory first action, always the first characters of every tool-carrying instructions block. */
+export const MANDATORY_FIRST_ACTION =
+  'FIRST ACTION, before anything else: call `orboto_session_start` - it returns the binding workspace rules and your in-progress work; call it again after a context compaction. Non-negotiables: claim or create a ticket before touching code, one commit per ticket with the key in the subject, push after each commit, never mark work done that is not done. Complete rules: `orboto_session_start` or the `orboto://rules` resource.';
+
 function staticMcpHints(toolset: Toolset): string {
   if (toolset === 'minimal') {
     return [
-      'orboto is a ticket + project management system. Ticket keys look like `PROJ-123`; the first segment is the project key.',
-      'This is the MINIMAL tool manifest (12 tools) for small context windows. Every other endpoint stays reachable: find it with `orboto_api_search`, run it with `orboto_api_call`. Bigger manifests are opt-in: `?toolset=curated` / `full` (HTTP) or ORBOTO_MCP_TOOLSET (stdio).',
-      'Writes respect the caller\'s permissions - a 403 is the API refusing, not this server.',
+      'orboto is a ticket + project management system; ticket keys look like `PROJ-123`.',
+      'This is the MINIMAL manifest (12 tools). Every other endpoint: find it with `orboto_api_search`, run it with `orboto_api_call`. Bigger manifests: `?toolset=curated|full` (HTTP) or ORBOTO_MCP_TOOLSET (stdio).',
+      'A 403 is the API refusing, not this server.',
     ].join(' ');
   }
   return [
-    'orboto is a ticket + project management system.',
-    'When starting on a project, call `orboto_get_project_primer(<PROJECT_KEY>)` once to load its conventions (tech stack, commands, gotchas, expected ticket language).',
-    'Use `orboto_list_projects` first to discover what the user can see.',
-    'Ticket keys look like `PROJ-123`; the first segment is the project key.',
-    'For "what am I working on?" prefer `orboto_my_tickets`; for "anything about X?" prefer `orboto_search`.',
+    'orboto is a ticket + project management system; ticket keys look like `PROJ-123`.',
+    'Discover projects with `orboto_list_projects`, load one project\'s conventions once with `orboto_get_project_primer(<KEY>)`; "what am I working on?" is `orboto_my_tickets`, "anything about X?" is `orboto_search`.',
     toolset === 'full'
-      ? 'Checklists: `orboto_get_ticket` includes them inline; use `orboto_get_checklists` when you only need the items. A linked-ticket suffix (`↪ [ACME-99]`) means the item is automatically checked/unchecked as that ticket\'s status moves.'
-      : 'Checklists: `orboto_get_ticket` includes them inline. A linked-ticket suffix (`↪ [ACME-99]`) means the item is automatically checked/unchecked as that ticket\'s status moves.',
-    toolset === 'curated'
-      ? 'This is the CURATED tool manifest (the daily high-frequency set). The ENTIRE REST API stays reachable: find any other endpoint + its schema with `orboto_api_search`, then execute it with `orboto_api_call` - permissions are enforced server-side exactly as for named tools. The full named-tool manifest is opt-in: connect with `?toolset=full` (HTTP) or set ORBOTO_MCP_TOOLSET=full (stdio).'
-      : '',
-    'Resources (`orboto://rules`, `orboto://ticket/<key>`, `orboto://doc/<id>`, `orboto://project/<key>`, `orboto://search/<query>`) return read-only Markdown. The `orboto://` URI scheme stays canonical. `orboto://rules` returns the COMPLETE binding rules cap-independently (this instructions block may be truncated by the client). Prompts (`plan-sprint`, `triage-my-tickets`, `summarize-project`, `estimate-ticket`, `find-duplicates`) are one-click guided workflows.',
-    'A few natural parameter spellings (`key`, `query`, `id`, `projectId`, `milestoneId`, `comment`/`message`, `max`, `page`, ...) are silently normalised to the documented name; anything else that still doesn\'t match returns an error naming the tool\'s full parameter list and the closest valid name.',
-    'All writes respect the caller\'s project-level permissions - a 403 means the API rejected the write, not the MCP server.',
-  ].filter((s) => s.length > 0).join(' ');
+      ? '`orboto_get_ticket` includes checklists inline, `orboto_get_checklists` returns only the items.'
+      : 'This is the CURATED tool manifest. The ENTIRE REST API stays reachable: find an endpoint with `orboto_api_search`, run it with `orboto_api_call`; the full manifest is `?toolset=full` (HTTP) or ORBOTO_MCP_TOOLSET=full (stdio).',
+    'Read-only resources: `orboto://ticket/<key>`, `orboto://doc/<id>`, `orboto://project/<key>`, `orboto://search/<query>`.',
+    '`orboto_list_agent_instructions` manages rule blocks for admins; it is not how you read the rules.',
+    'A 403 is the API refusing the write, not this server.',
+  ].join(' ');
 }
 
-const INSTRUCTIONS_BUDGET = 4000;
+const INSTRUCTIONS_BUDGET = CLIENT_INSTRUCTIONS_CAP;
 const RULES_HEADING = 'Working rules for this workspace:\n';
 const TRUNCATION_MARKER =
   '\n\n[... rules truncated to fit the client cap - read the COMPLETE rules via the orboto_session_start tool or the orboto://rules resource ...]';
@@ -380,17 +381,9 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
       instructions: toolset === 'channel'
         ? [CHANNEL_TOOLSET_INSTRUCTIONS, ...(opts.channel ? [CHANNEL_TOOLSET_WAKE_INSTRUCTIONS] : [])].join('\n\n')
         : toolset === 'minimal'
-        ? [
-          staticMcpHints(toolset),
-          'FIRST ACTION: call `orboto_session_start` - it returns the binding workspace rules plus your in-progress work. Re-run it after any context compaction. Non-negotiables: claim or create a ticket before touching code, one commit per ticket with the ticket key in the subject, push after each commit, never mark work done that is not done.',
-          ...channelHint,
-        ].join('\n\n')
+        ? [MANDATORY_FIRST_ACTION, ...channelHint, staticMcpHints(toolset)].join('\n\n')
         : assembleInstructions(
-          [
-            staticMcpHints(toolset),
-            'FIRST ACTION this session: call the `orboto_session_start` tool - it returns the complete, authoritative binding rules you must follow (plus your in-progress work). Re-run it after any context compaction. If the rules below look cut off, `orboto_session_start` and the `orboto://rules` resource always have the full set. (Do NOT use `orboto_list_agent_instructions` to read the rules - that manages rule blocks for admins.) Core non-negotiables: ticket-first (claim or create a ticket before touching code), one commit per ticket with the ticket key in the subject line, push after each commit, and never mark work done that is not actually done.',
-            ...channelHint,
-          ].join('\n\n'),
+          [MANDATORY_FIRST_ACTION, ...channelHint, staticMcpHints(toolset)].join('\n\n'),
           workingRules,
         ),
     },

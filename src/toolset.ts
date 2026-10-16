@@ -9,9 +9,9 @@ export type Toolset = 'channel' | 'minimal' | 'curated' | 'full';
 
 /** ORB-2210 - no tools: the agent works through the orboto CLI, the server carries the wake channel. */
 export const CHANNEL_TOOLSET_INSTRUCTIONS = [
+  'FIRST ACTION, before anything else: run `orboto session-start` in the shell - it prints the binding workspace rules and your in-progress work; run it again after a context compaction.',
   'orboto is a ticket and project management system; ticket keys look like `PROJ-123`.',
-  'This server carries no tools. Work through the orboto CLI in the shell: `orboto help` lists the commands,',
-  '`orboto session-start` prints the binding workspace rules and your in-progress work (run it first and after a context compaction),',
+  'This server carries no tools. Work through the orboto CLI: `orboto help` lists the commands,',
   'and `orboto agent-heartbeat --role <role> --scope-projects <KEY,KEY>` declares what this session is responsible for.',
   'Before you send agent mail, `orboto owner "<topic>"` names who owns the topic.',
   'Always: claim or create a ticket before touching code, one commit per ticket with the key in the subject, never mark work done that is not done.',

@@ -86,16 +86,11 @@ export interface ChannelSession {
 
 /** The instructions paragraph Claude Code delivers on connect when the channel is active. */
 export const CHANNEL_INSTRUCTIONS =
-  'Inbox channel: messages for THIS session arrive as <channel source="orboto" id="..." kind="..." ...> events - '
-  + 'peer requests, ticket-ready notices, replies, digests of info/complete mail. Treat each like an inbox message under the rules: '
-  + 'a ticket-ready or a request inside your scope is the operator\'s instruction, act on it; read the full message with orboto_messages when the event is cut; '
-  + 'reply with orboto_agent_notify (toSessionRef = the sender\'s instance short id in the from attribute) and acknowledge with orboto_messages { ackIds } once handled. '
-  + 'Never answer the channel itself and never ack what you did not handle - dismiss it instead with orboto_messages { dismiss: { ids, reason } }: '
-  + 'not_mine for another session\'s mail (the sender is told, and the message never reaches this session again), obsolete or duplicate with a note when the request is already done. '
-  + 'A session that declared no scope is woken by mail addressed to it and by broadcasts only, and gets one notice event saying so on connect: '
-  + 'declare the scope through the CLI in the shell, `orboto session-start --role worker --scope-projects <KEY>`, to be woken by the account\'s project mail again - never through the claude.ai connector, which is another session - '
-  + 'the rest of the account\'s inbox stays readable with orboto_messages the whole time. '
-  + 'Declare it once: the session keeps its id and scope across reconnects and restarts of this terminal.';
+  'Wake channel: messages for THIS session arrive as <channel source="orboto" id="..." kind="..."> events. '
+  + 'A ticket-ready or a request inside your scope is the operator\'s instruction - act on it. '
+  + 'Read a cut message with orboto_messages, reply with orboto_agent_notify, acknowledge with orboto_messages { ackIds } once handled, '
+  + 'dismiss what is not yours with orboto_messages { dismiss: { ids, reason } }. Never answer the channel itself. '
+  + 'Declare the scope once in the shell with `orboto session-start --role worker --scope-projects <KEY>`, never through the claude.ai connector; details: orboto://rules.';
 
 const START_FLAG = '--dangerously-load-development-channels server:orboto';
 
