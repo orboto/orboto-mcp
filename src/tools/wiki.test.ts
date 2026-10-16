@@ -85,6 +85,22 @@ describe('orboto_wiki_plan_update + apply_plan', () => {
     const res = await makeWikiApplyPlanHandler(client)({ spaceId: SPACE, planId: 'p1' });
     expect((res.content[0] as { text: string }).text).toContain('1 page(s) updated');
   });
+  it('ORB-2468 - apply-plan sends replace only when asked and prints each replaced revision with its restore command', async () => {
+    const replaced = { docId: DOC, revisionId: 'r0000000-0000-4000-8000-000000000001', restoreCommand: 'orboto doc restore KB-D4 r0000000-0000-4000-8000-000000000001' };
+    const calls = stubJSON([{ json: { touchedDocs: [DOC] } }, { json: { touchedDocs: [DOC], replaced: [replaced] } }]);
+    await makeWikiApplyPlanHandler(client)({ spaceId: SPACE, planId: 'p1' });
+    expect(calls[0].body).toEqual({ planId: 'p1' });
+    const res = await makeWikiApplyPlanHandler(client)({ spaceId: SPACE, planId: 'p1', replace: true });
+    expect(calls[1].body).toEqual({ planId: 'p1', replace: true });
+    const out = (res.content[0] as { text: string }).text;
+    expect(out).toContain('Replaced: 1');
+    expect(out).toContain(replaced.restoreCommand);
+    expect(res.structuredContent).toMatchObject({ replaced: [replaced] });
+  });
+  it('ORB-2468 - apply-plan surfaces the 409 shrink refusal as OrbotoApiError', async () => {
+    stubJSON([{ ok: false, status: 409, json: { error: 'This write would drop 90% of the existing page KB-D4', errorKey: 'errors.docs.replace_drops_content' } }]);
+    await expect(makeWikiApplyPlanHandler(client)({ spaceId: SPACE, planId: 'p1' })).rejects.toBeInstanceOf(OrbotoApiError);
+  });
   it('apply-plan surfaces a 410 expired plan as OrbotoApiError', async () => {
     stubJSON([{ ok: false, status: 410, json: { error: 'Plan has expired' } }]);
     await expect(makeWikiApplyPlanHandler(client)({ spaceId: SPACE, planId: 'p1' })).rejects.toBeInstanceOf(OrbotoApiError);
@@ -118,6 +134,13 @@ describe('orboto_wiki_save_answer', () => {
     const res = await makeWikiSaveAnswerHandler(client)({ spaceId: SPACE, question: 'how?', answer: 'like this' });
     expect(calls[0]).toMatchObject({ method: 'POST', url: 'https://orboto.example.com/ai/save-answer-to-wiki', body: { spaceId: SPACE, question: 'how?', answer: 'like this', citations: [] } });
     expect((res.content[0] as { text: string }).text).toMatch(/new wiki page/);
+  });
+  it('ORB-2468 - a re-save passes replace and names the replaced revision', async () => {
+    const replaced = { docId: DOC, revisionId: 'r0000000-0000-4000-8000-000000000002', restoreCommand: 'orboto doc restore KB-D5 r0000000-0000-4000-8000-000000000002' };
+    const calls = stubJSON([{ json: { docId: DOC, created: false, replaced } }]);
+    const res = await makeWikiSaveAnswerHandler(client)({ spaceId: SPACE, question: 'how?', answer: 'new', replace: true });
+    expect(calls[0].body).toMatchObject({ replace: true });
+    expect((res.content[0] as { text: string }).text).toContain(replaced.restoreCommand);
   });
 });
 

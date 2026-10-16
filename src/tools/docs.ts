@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { resolveProjectByKey } from './shared.js';
+import { replacedLines, resolveProjectByKey, type ReplacedRevision } from './shared.js';
 
 interface DocSpaceRow {
   id: string;
@@ -372,11 +372,12 @@ export function makeCreateDocHandler(client: OrbotoClient) {
 export const updateDocToolConfig = {
   title: 'Update a doc page',
   description:
-    'Patch a doc\'s title / content / visibility / parent / icon. Content-only updates do not require sending the title. Every body or title change snapshots the previous version into the revision history automatically - agents can roll back via orboto_restore_doc_revision (when that tool ships in Phase 5). Re-embeds the doc when content or title change.',
+    'Patch a doc; content is appended unless replace. ORB-2468: title, visibility, parent and icon are set as given; content goes in as a new section (identical content twice is a no-op); replace: true replaces the whole page and the answer names the revision holding the previous body plus its restore command. Every body or title change snapshots a revision; orboto_restore_doc_revision rolls back. For one passage or section use orboto_edit_doc.',
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
     title: z.string().min(1).max(255).optional(),
-    content: z.string().optional().describe('Markdown body (CommonMark + GFM). Send the full new content; the API replaces, not appends. Images are inline elements; status pills use `:badge[LABEL]{tone=success}` (neutral/info/success/warning/danger/accent, unknown reads as neutral, label <= 24 chars).'),
+    content: z.string().optional().describe('Markdown to append (with replace: the whole body). Images are inline elements; status pills use `:badge[LABEL]{tone=success}` (neutral/info/success/warning/danger/accent, unknown reads as neutral, label <= 24 chars).'),
+    replace: z.boolean().optional(),
     parentDocId: z.string().uuid().nullable().optional(),
     visibility: z.enum(['public', 'workspace', 'members', 'specific']).optional(),
     icon: z.string().nullish(),
@@ -386,30 +387,39 @@ export const updateDocToolConfig = {
 
 export function makeUpdateDocHandler(client: OrbotoClient) {
   return async (input: {
-    docId: string; title?: string; content?: string;
+    docId: string; title?: string; content?: string; replace?: boolean;
     parentDocId?: string | null; visibility?: 'public' | 'workspace' | 'members' | 'specific';
     icon?: string | null;
   }): Promise<CallToolResult> => {
     input.docId = await resolveDocId(client, input.docId);
     const body: Record<string, unknown> = {};
     if (input.title !== undefined) body.title = input.title;
-    if (input.content !== undefined) body.content = input.content;
+    if (input.content !== undefined && input.replace) Object.assign(body, { content: input.content, replace: true });
     if (input.parentDocId !== undefined) body.parentDocId = input.parentDocId;
     if (input.visibility !== undefined) body.visibility = input.visibility;
     if (input.icon !== undefined) body.icon = input.icon;
-    if (Object.keys(body).length === 0) {
+    const append = input.content !== undefined && !input.replace;
+    if (Object.keys(body).length === 0 && !append) {
       throw new Error('Pass at least one field to update.');
     }
-    const row = await client.patch<DocRow>(`/docs/${input.docId}`, body);
+    if (append && !input.content!.trim()) throw new Error('Nothing to append - pass content, or replace: true to replace the whole page.');
+    const row = Object.keys(body).length > 0 ? await client.patch<DocRow & { replaced?: ReplacedRevision | null }>(`/docs/${input.docId}`, body) : null;
+    const appended = append ? (await client.post<{ appended: boolean }>(`/docs/${input.docId}/append-section`, { content: input.content })).appended : null;
+    const current = row ?? await client.get<DocRow>(`/docs/${input.docId}`);
+    const replaced = row?.replaced ?? null;
+    const how = appended === null ? '' : appended ? '\n  content: appended as a new section' : '\n  content: no change - an identical section is already present';
     return {
-      content: [{ type: 'text', text: `Updated doc: ${row.title}\n  id: ${row.id}\n  updatedAt: ${row.updatedAt}` }],
+      content: [{ type: 'text', text: `Updated doc: ${current.title}\n  id: ${current.id}\n  updatedAt: ${current.updatedAt}${how}${replacedLines(replaced ? [replaced] : [])}` }],
       structuredContent: {
-        id: row.id,
-        title: row.title,
-        spaceId: row.spaceId,
-        parentDocId: row.parentDocId,
-        visibility: row.visibility,
-        updatedAt: row.updatedAt,
+        id: current.id,
+        title: current.title,
+        spaceId: current.spaceId,
+        parentDocId: current.parentDocId,
+        visibility: current.visibility,
+        updatedAt: current.updatedAt,
+        mode: append ? 'append' : input.content !== undefined ? 'replace' : 'fields',
+        appended,
+        replaced,
       },
     };
   };

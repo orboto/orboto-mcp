@@ -41,6 +41,15 @@ describe('ORB-2225 orboto_knowledge_ask and orboto_knowledge_add', () => {
     expect(result.structuredContent).toMatchObject({ droppedOps });
   });
 
+  it('ORB-2468 - a repeated add returns the first request it answered with, nothing filed again', async () => {
+    const duplicate = { of: 'ingesting', requestedAt: '2026-10-16T08:00:00Z', run: { id: '44444444-0000-4000-8000-000000000000', status: 'pending_review' } };
+    const post = vi.fn().mockResolvedValue({ action: 'duplicate', duplicate, text: 'Already ingesting as source ACME-D9 "Runner notes" in the ACME-S1 wiki (/s/d, run 44444444-0000-4000-8000-000000000000 pending_review); not filed again.', pages: [], source: { id: 'd9', key: 'ACME-D9', title: 'Runner notes', webUrl: '/s/d' }, droppedOps: [] });
+    const result = await makeKnowledgeAddHandler({ post } as unknown as OrbotoClient)({ title: 'Runner notes', content: 'x', projectKey: 'ACME' });
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(textOf(result)).toContain('Already ingesting as source ACME-D9');
+    expect(result.structuredContent).toMatchObject({ action: 'duplicate', duplicate });
+  });
+
   it('both tools carry a title and annotations; ask is read-only, add is not', () => {
     expect(knowledgeAskToolConfig.title).toBeTruthy();
     expect(knowledgeAskToolConfig.annotations.readOnlyHint).toBe(true);

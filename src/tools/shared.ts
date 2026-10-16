@@ -13,6 +13,14 @@ import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 /** ORB-2543 - the line every search-shaped tool prints when the API flags `semanticDegraded`. */
 export const SEMANTIC_DEGRADED_LINE = 'semantic search unavailable, showing full-text results';
 
+export type ReplacedRevision = { docId: string; revisionId: string; restoreCommand: string };
+
+/** ORB-2468 - the pages a write replaced, each with the revision holding the previous body and its restore command. */
+export function replacedLines(replaced: ReplacedRevision[]): string {
+  if (replaced.length === 0) return '';
+  return `\nReplaced: ${replaced.length}\n${replaced.map((r) => `- ${r.docId}: previous body in revision ${r.revisionId}, restore with: ${r.restoreCommand}`).join('\n')}`;
+}
+
 export interface ProjectRow {
   spec?: import("./spec-schemas.js").ProjectSpecSettings;
   id: string;

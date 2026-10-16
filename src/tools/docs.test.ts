@@ -271,26 +271,41 @@ describe('orboto_update_doc', () => {
   it('resolves a doc key to the UUID before writing', async () => {
     const calls = stubJSON([
       { json: DOC },                                  // by-key resolve
-      { json: { ...DOC, content: 'appended' } },      // the PATCH
+      { json: { ...DOC, title: 'Renamed' } },         // the PATCH
     ]);
-    await makeUpdateDocHandler(client)({ docId: 'DOC-4', content: 'appended' });
+    await makeUpdateDocHandler(client)({ docId: 'DOC-4', title: 'Renamed' });
     expect(calls[0]).toMatchObject({ method: 'GET', url: 'https://orboto.example.com/docs/by-key/DOC-4' });
     expect(calls[1]).toMatchObject({
       method: 'PATCH',
       url: `https://orboto.example.com/docs/${DOC.id}`,
-      body: { content: 'appended' },
+      body: { title: 'Renamed' },
     });
   });
 
-  it('PATCHes only the content field when only content was supplied', async () => {
-    const calls = stubJSON([{ json: { ...DOC, content: 'new body' } }]);
-    await makeUpdateDocHandler(client)({ docId: DOC.id, content: 'new body' });
-    expect(calls[0]).toMatchObject({
-      method: 'PATCH',
-      url: `https://orboto.example.com/docs/${DOC.id}`,
-      body: { content: 'new body' },
-    });
-    expect(Object.keys(calls[0].body as object)).toEqual(['content']);
+  it('ORB-2468 - appends content as a section and never PATCHes the body without replace', async () => {
+    const calls = stubJSON([{ json: { appended: true } }, { json: DOC }]);
+    const res = await makeUpdateDocHandler(client)({ docId: DOC.id, content: 'new fact' });
+    expect(calls[0]).toMatchObject({ method: 'POST', url: `https://orboto.example.com/docs/${DOC.id}/append-section`, body: { content: 'new fact' } });
+    expect(calls.some((c) => c.method === 'PATCH')).toBe(false);
+    expect(res.structuredContent).toMatchObject({ mode: 'append', appended: true, replaced: null });
+    expect((res.content[0] as { text: string }).text).toContain('appended as a new section');
+  });
+
+  it('ORB-2468 - replace: true PATCHes the whole body and prints the replaced revision with the restore command', async () => {
+    const replaced = { docId: DOC.id, revisionId: 'bbbbbbbb-0000-4000-8000-000000000000', restoreCommand: `orboto doc restore DOC-4 bbbbbbbb-0000-4000-8000-000000000000` };
+    const calls = stubJSON([{ json: { ...DOC, content: 'new body', replaced } }]);
+    const res = await makeUpdateDocHandler(client)({ docId: DOC.id, content: 'new body', replace: true });
+    expect(calls[0]).toMatchObject({ method: 'PATCH', url: `https://orboto.example.com/docs/${DOC.id}`, body: { content: 'new body', replace: true } });
+    expect(res.structuredContent).toMatchObject({ mode: 'replace', replaced });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain(replaced.revisionId);
+    expect(text).toContain(replaced.restoreCommand);
+  });
+
+  it('ORB-2468 - refuses an empty append before hitting the API', async () => {
+    const calls = stubJSON([]);
+    await expect(makeUpdateDocHandler(client)({ docId: DOC.id, content: '  ' })).rejects.toThrow(/Nothing to append/);
+    expect(calls).toHaveLength(0);
   });
 
   it('refuses the no-op call before hitting the API', async () => {

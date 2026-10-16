@@ -9,7 +9,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { SEMANTIC_DEGRADED_LINE } from './shared.js';
+import { SEMANTIC_DEGRADED_LINE, replacedLines, type ReplacedRevision } from './shared.js';
 import { resolveDocId } from './docs.js';
 
 function text(t: string, structured?: Record<string, unknown>): CallToolResult {
@@ -111,17 +111,19 @@ export function makeWikiPlanUpdateHandler(client: OrbotoClient) {
 export const wikiApplyPlanToolConfig = {
   title: 'Apply a previously-planned wiki edit',
   description:
-    'Commit the page operations from a plan created by orboto_wiki_plan_update. Applies every op atomically (each page edit is snapshotted for rollback), then rebuilds the index doc of the space and appends a line to its log doc. Fails with 410 if the plan has expired (>15 min) or was already applied. Wraps POST /spaces/:id/docs/apply-plan.',
+    'Commit the page operations from a plan created by orboto_wiki_plan_update. Applies every op atomically (each page edit is snapshotted for rollback), then rebuilds the index doc of the space and appends a line to its log doc. ORB-2468: a patch op that drops more than half of its page refuses the whole plan with 409 (nothing written) unless replace is true; each rewritten page comes back in replaced with the revision and the restore command. Fails with 410 if the plan has expired (>15 min) or was already applied. Wraps POST /spaces/:id/docs/apply-plan.',
   inputSchema: z.object({
     spaceId: z.string().uuid(),
-    planId: z.string().uuid().describe('The planId returned by orboto_wiki_plan_update.'),
+    planId: z.string().uuid().describe('From orboto_wiki_plan_update.'),
+    replace: z.boolean().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 export function makeWikiApplyPlanHandler(client: OrbotoClient) {
-  return async (input: { spaceId: string; planId: string }): Promise<CallToolResult> => {
-    const res = await client.post<{ touchedDocs: string[] }>(`/spaces/${input.spaceId}/docs/apply-plan`, { planId: input.planId });
-    return text(`Applied plan ${input.planId}: ${res.touchedDocs.length} page(s) updated.`, { touchedDocs: res.touchedDocs });
+  return async (input: { spaceId: string; planId: string; replace?: boolean }): Promise<CallToolResult> => {
+    const res = await client.post<{ touchedDocs: string[]; replaced?: ReplacedRevision[] }>(`/spaces/${input.spaceId}/docs/apply-plan`, { planId: input.planId, ...(input.replace ? { replace: true } : {}) });
+    const replaced = res.replaced ?? [];
+    return text(`Applied plan ${input.planId}: ${res.touchedDocs.length} page(s) updated.${replacedLines(replaced)}`, { touchedDocs: res.touchedDocs, replaced });
   };
 }
 
@@ -168,21 +170,23 @@ export function makeWikiAppendSectionHandler(client: OrbotoClient) {
 export const wikiSaveAnswerToolConfig = {
   title: 'Save a Q&A answer as a wiki page',
   description:
-    'Turn an answer (e.g. from orboto_wiki_ask) into a curated wiki page with smart-links to its citations. Idempotent per (space, question): re-saving the same question updates the page instead of duplicating it. Wraps POST /ai/save-answer-to-wiki.',
+    'Turn an answer (e.g. from orboto_wiki_ask) into a curated wiki page with smart-links to its citations. Idempotent per (space, question): re-saving the same question updates the page instead of duplicating it. ORB-2468: a re-save that drops more than half of the saved page is refused with 409 unless replace is true; an update names the revision it replaced and the restore command. Wraps POST /ai/save-answer-to-wiki.',
   inputSchema: z.object({
     spaceId: z.string().uuid(),
     question: z.string().min(3).max(1000),
     answer: z.string().min(1).max(50_000),
-    title: z.string().max(200).optional().describe('Page title; defaults to the question.'),
+    title: z.string().max(200).optional().describe('Defaults to the question.'),
     parentDocId: z.string().uuid().optional(),
-    citations: z.array(z.object({ docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'), title: z.string() })).max(50).optional().describe('Cited docs to smart-link (from orboto_wiki_ask).'),
+    citations: z.array(z.object({ docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'), title: z.string() })).max(50).optional().describe('From orboto_wiki_ask.'),
+    replace: z.boolean().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 export function makeWikiSaveAnswerHandler(client: OrbotoClient) {
-  return async (input: { spaceId: string; question: string; answer: string; title?: string; parentDocId?: string; citations?: Array<{ docId: string; title: string }> }): Promise<CallToolResult> => {
-    const res = await client.post<{ docId: string; created: boolean }>(`/ai/save-answer-to-wiki`, { ...input, citations: input.citations ?? [] });
-    return text(res.created ? `Saved as a new wiki page (docId: ${res.docId}).` : `Updated the existing wiki page (docId: ${res.docId}).`, { docId: res.docId, created: res.created });
+  return async (input: { spaceId: string; question: string; answer: string; title?: string; parentDocId?: string; citations?: Array<{ docId: string; title: string }>; replace?: boolean }): Promise<CallToolResult> => {
+    const res = await client.post<{ docId: string; created: boolean; replaced?: ReplacedRevision | null }>(`/ai/save-answer-to-wiki`, { ...input, citations: input.citations ?? [] });
+    const replaced = res.replaced ? [res.replaced] : [];
+    return text(res.created ? `Saved as a new wiki page (docId: ${res.docId}).` : `Updated the existing wiki page (docId: ${res.docId}).${replacedLines(replaced)}`, { docId: res.docId, created: res.created, replaced: res.replaced ?? null });
   };
 }
 
