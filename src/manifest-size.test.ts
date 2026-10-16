@@ -54,6 +54,9 @@ afterEach(() => { vi.restoreAllMocks(); });
  * (full = 171,194 chars, 6 free).
  * ORB-2502 gave `orboto_messages` a `since` parameter inside the ceiling: the
  * limit lost its schema default and the project hint shrank (full = 171,197).
+ * ORB-2542 added no named tool: the owner lookup rides `orboto_who` `for` and
+ * the escape hatch; the route/forceTarget parameters fit after tightening the
+ * agent_notify description.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

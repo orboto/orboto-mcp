@@ -156,10 +156,12 @@
   },
   "orboto_agent_notify": {
     "params": [
+      "forceTarget",
       "kind",
       "payload",
       "project",
       "queue",
+      "route",
       "senderRef",
       "subject",
       "targetEmail",
@@ -2631,6 +2633,7 @@
   },
   "orboto_who": {
     "params": [
+      "for",
       "project",
       "role"
     ],

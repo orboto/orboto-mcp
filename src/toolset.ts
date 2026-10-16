@@ -13,6 +13,7 @@ export const CHANNEL_TOOLSET_INSTRUCTIONS = [
   'This server carries no tools. Work through the orboto CLI in the shell: `orboto help` lists the commands,',
   '`orboto session-start` prints the binding workspace rules and your in-progress work (run it first and after a context compaction),',
   'and `orboto agent-heartbeat --role <role> --scope-projects <KEY,KEY>` declares what this session is responsible for.',
+  'Before you send agent mail, `orboto owner "<topic>"` names who owns the topic.',
   'Always: claim or create a ticket before touching code, one commit per ticket with the key in the subject, never mark work done that is not done.',
   'MCP tools come back on request: `?toolset=curated|full` (HTTP) or ORBOTO_MCP_TOOLSET=curated|full (stdio).',
 ].join(' ');
