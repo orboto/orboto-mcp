@@ -37,4 +37,17 @@ describe('orboto_who', () => {
   it('ORB-2465: names the host a live notice filters on', () => {
     expect(whoLine({ ...entry, host: 'build-host-a' })).toContain('session f072e1c5, host build-host-a, working');
   });
+
+  it('ORB-2544: prints origin, state and a shared address, and passes the state filter', async () => {
+    const line = whoLine({ ...entry, state: 'orphaned', sharedAddresses: ['integrator@ORB'], origin: { host: 'build-host', repo: 'sample-repo', pid: 4242, client: 'orboto-cli', clientVersion: '1.2.3', harness: 'claude-code', startedAt: '2026-10-16T08:00:00.000Z' } });
+    expect(line).toContain('session f072e1c5 [orphaned] on build-host sample-repo pid 4242 claude-code orboto-cli 1.2.3 since 2026-10-16T08:00:00.000Z, working');
+    expect(line).toContain('also held by another live session: integrator@ORB');
+    const urls: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      urls.push(String(url));
+      return { ok: true, status: 200, statusText: 'OK', text: async () => '', json: async () => ({ sessions: [] }) } as unknown as Response;
+    });
+    await makeAgentWhoHandler(client)({ state: 'unknown_origin' });
+    expect(urls[0]).toBe('https://orboto.example.com/v1/agent/who?state=unknown_origin');
+  });
 });

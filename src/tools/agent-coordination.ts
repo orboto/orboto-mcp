@@ -66,12 +66,21 @@ export function makeAgentHeartbeatHandler(client: OrbotoClient) {
   };
 }
 
-type PresenceRow = AgentInventoryEntry;
+type PresenceRow = AgentInventoryEntry & { origin?: SessionOrigin; state?: string };
+
+/** ORB-2544 - where a session runs and its state, as one directory phrase; empty when the instance predates the origin. */
+export interface SessionOrigin { host: string | null; repo: string | null; pid: number | null; client: string | null; clientVersion: string | null; harness: string | null; startedAt: string | null }
+export function originText(s: { origin?: SessionOrigin; state?: string }): string {
+  if (!s.origin) return '';
+  const o = s.origin;
+  const where = [o.host ?? 'unknown host', o.repo, o.pid ? `pid ${o.pid}` : null, o.harness, o.client ? `${o.client}${o.clientVersion ? ` ${o.clientVersion}` : ''}` : null].filter(Boolean).join(' ');
+  return ` [${s.state ?? 'live'}] on ${where}${o.startedAt ? ` since ${o.startedAt}` : ''}`;
+}
 
 export const agentPresenceToolConfig = {
   title: 'Workspace agent presence',
   description:
-    'Returns all active orboto agent instances: lane workers/reviewers, inbox and MCP connections, registered runners. Session freshness is 90 seconds; lanes retain their 300-second heartbeat grace. Unexpired work leases keep their owning instance visible. Ticket metadata and claims retain ordinary ticket visibility. Rows include `kind` (agent or human, classified by the credential: agent API key, OAuth grant, lane, external token or bot account; `isBot` is its alias), `actsAs` (the human account an AI client acts under), `projects` (memberships plus lane projects), `connections` (type + label per credential or attachment, `live_events` for the MCP event bridge), owner, lane and stable sessionId; separate instances of one account remain separate. Callers with admin:system:read see every agent; other users see only their own sessions. Each row exposes `userId`, `userEmail`, the agent runtime (`clientInfo.name`), declared `capabilities`, current `status`, the ticket it works on, and `reconnects` survived under the same id and scope. Check it before dispatching a sub-task so you do not step on a parallel run. Filters `projectKey` (rows whose `projects` contain the key) and `kind` (agent | human) narrow the list client-side, the same way `orboto agents --project KEY --bots|--humans` does.',
+    'Active agent instances. The orboto_who set: lane workers and reviewers, inbox, MCP and runner connections; rows carry kind (agent | human, by credential; isBot is its alias), actsAs, owner, projects, connections, lane, sessionId, userEmail, runtime (clientInfo.name), capabilities, status, current ticket, reconnects, origin (host, repo, pid, client, harness, credential) and state (live | quiet | orphaned | unknown_origin). Operators (admin:agents:read or admin:system:read) see the workspace, others their own sessions and those declared on their projects, a foreign row redacted (redacted: true, no pid, repo, machine, connections, inbox or owner). Check it before dispatching a sub-task. projectKey and kind filter client-side like `orboto agents --project KEY --bots|--humans`.',
   inputSchema: z.object({
     projectKey: z.string().min(1).max(64).optional().describe('Keep only rows whose projects contain this project key (case-insensitive).'),
     kind: AgentInventoryKindSchema.optional().describe('Keep only rows classified as agent or human by their credential.'),
@@ -90,7 +99,7 @@ export function filterPresenceRows<T extends Pick<AgentInventoryEntry, 'kind' | 
 
 export function makeAgentPresenceHandler(client: OrbotoClient) {
   return async (args: { projectKey?: string; kind?: 'agent' | 'human' } = {}): Promise<CallToolResult> => {
-    const all = await client.get<PresenceRow[]>('/v1/agent/inventory');
+    const all = (await client.get<{ inventory?: PresenceRow[] }>('/v1/agent/who?include=inventory')).inventory ?? [];
     const sessions = filterPresenceRows(all, args);
     const lines: string[] = [];
     if (sessions.length === 0) {
@@ -103,7 +112,7 @@ export function makeAgentPresenceHandler(client: OrbotoClient) {
         const work = s.workingOnTicket
           ? ` · working on [${s.workingOnTicket.projectKey ?? '?'}] ${s.workingOnTicket.key ?? s.workingOnTicket.id} (${s.workingOnTicket.title})`
           : '';
-        lines.push(`- ${name} <${s.userEmail}> (${runtime}, instance ${s.sessionId}) - ${s.status}${work}; owner: ${s.owner?.name ?? s.owner?.email ?? (s.actsAs ? `acts as ${s.actsAs.name ?? s.actsAs.email}` : s.kind === 'agent' ? 'unassigned' : 'self')}${s.lane ? `; lane: ${s.lane.name}` : ''}${s.projects.length ? `; projects: ${s.projects.map((p) => p.key).join(', ')}` : ''}${s.connections.length ? `; connections: ${s.connections.map((c) => c.type).join(', ')}` : ''}`);
+        lines.push(`- ${name} <${s.userEmail}> (${runtime}, instance ${s.sessionId}) - ${s.status}${originText(s)}${work}; owner: ${s.owner?.name ?? s.owner?.email ?? (s.actsAs ? `acts as ${s.actsAs.name ?? s.actsAs.email}` : s.kind === 'agent' ? 'unassigned' : 'self')}${s.lane ? `; lane: ${s.lane.name}` : ''}${s.projects.length ? `; projects: ${s.projects.map((p) => p.key).join(', ')}` : ''}${s.connections.length ? `; connections: ${s.connections.map((c) => c.type).join(', ')}` : ''}`);
       }
     }
     return {

@@ -111,7 +111,7 @@ describe('preflightMcpSession', () => {
   it('resolves {userEmail} when enabled + mcpUseGranted + userMcpEnabled', async () => {
     mockFetch({ json: async () => ({ enabled: true, mcpUseGranted: true, userMcpEnabled: true, userEmail: 'a@b.c' }) });
     const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
-    await expect(preflightMcpSession(client)).resolves.toEqual({ userEmail: 'a@b.c' });
+    await expect(preflightMcpSession(client)).resolves.toEqual({ userEmail: 'a@b.c', credential: null });
   });
 
   it('throws the per-user opt-out message when userMcpEnabled=false (ORB-942)', async () => {

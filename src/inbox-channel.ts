@@ -7,6 +7,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { RESTART_REQUESTED_NOTICE, writeRestartRequest } from './session-restart.js';
 import { confirmScope, rememberedScope } from './session-scope-memory.js';
+import { originHeader } from './session-origin.js';
 import type { AgentSessionScope } from './tools/agent-session-scope.js';
 
 export { RESTART_REQUESTED_NOTICE };
@@ -17,6 +18,8 @@ export const CHANNEL_METHOD = 'notifications/claude/channel';
 /** ORB-2263 - the server notice an unscoped channel session gets; the session sees it once, with the exact CLI call. */
 export const DECLARE_SCOPE_NOTICE = 'declare_scope';
 export const CHANNEL_CAPABILITY = 'claude/channel';
+/** ORB-2544 - the operator ended this session: the event says so and the channel stops for good. */
+export const SESSION_ENDED_NOTICE = 'session_ended';
 export const DEFAULT_DIGEST_MINUTES = 15;
 const IMMEDIATE_AFTER_MS = 5 * 60_000;
 const CONTENT_CAP = 2000;
@@ -260,6 +263,11 @@ export class InboxChannel {
       return;
     }
     this.stats.notices += 1;
+    if (notice === SESSION_ENDED_NOTICE) {
+      await this.emit({ content, meta: { kind: 'notice', notice } });
+      this.close();
+      return;
+    }
     if (notice === RESTART_REQUESTED_NOTICE) {
       await this.emit({ content: this.takeRestartRequest(content), meta: { kind: 'notice', notice } });
       return;
@@ -336,7 +344,7 @@ export class InboxChannel {
     const bearer = this.opts.tokenProvider ? await this.opts.tokenProvider.getAccessToken() : (this.opts.apiKey ?? '');
     const res = await fetchFn(url, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${bearer}`, Accept: 'text/event-stream', 'x-orboto-agent-session': this.opts.instanceToken },
+      headers: { Authorization: `Bearer ${bearer}`, Accept: 'text/event-stream', 'x-orboto-agent-session': this.opts.instanceToken, 'x-orboto-origin': originHeader() },
       signal: this.abort.signal,
     });
     if (!res.ok || !res.body) throw new Error(`inbox stream handshake failed (status=${res.status})`);

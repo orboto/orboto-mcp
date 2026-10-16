@@ -3,6 +3,7 @@
  * the orboto API.
  */
 import { VERSION } from './version.js';
+import { originHeader } from './session-origin.js';
 
 /** ORB-943 - the two ways the stdio proxy authenticates. A static `orb_*` PAT
  *  (service-account fallback) OR a live OAuth token provider that mints
@@ -99,6 +100,7 @@ export class OrbotoClient {
       const headers: Record<string, string> = {
         ...this.baseHeaders,
         ...(this.instanceToken ? { 'x-orboto-agent-session': this.instanceToken } : {}),
+        'x-orboto-origin': originHeader(),
         ...(accept ? { Accept: accept } : {}),
         ...(init.headers ?? {}),
         Authorization: `Bearer ${token}`,
@@ -244,12 +246,14 @@ export class OrbotoClient {
  */
 export async function preflightMcpSession(client: OrbotoClient): Promise<{
   userEmail: string;
+  credential?: { kind: string; id: string | null } | null;
 }> {
   interface StatusResponse {
     enabled: boolean;
     mcpUseGranted: boolean;
     userMcpEnabled: boolean;
     userEmail: string;
+    credential?: { kind: string; id: string | null } | null;
   }
   let status: StatusResponse;
   try {
@@ -269,5 +273,5 @@ export async function preflightMcpSession(client: OrbotoClient): Promise<{
   if (!status.userMcpEnabled) {
     throw new Error('MCP preflight failed: you have disabled MCP access for your account. Re-enable it in Profile - Connect an AI Client.');
   }
-  return { userEmail: status.userEmail };
+  return { userEmail: status.userEmail, credential: status.credential ?? null };
 }

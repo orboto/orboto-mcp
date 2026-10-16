@@ -13,7 +13,8 @@ import { resolveToolset, type Toolset } from './toolset.js';
 import { OrbotoClient, preflightMcpSession } from './orboto-client.js';
 import type { OAuthTokenProviderLike } from './orboto-client.js';
 import { EventBridge } from './event-bridge.js';
-import { mcpInstanceToken } from './tools/shared.js';
+import { bindSessionInstance, mcpInstanceToken, releaseSessionInstance, stableClientInstance } from './tools/shared.js';
+import { useHttpOrigin } from './session-origin.js';
 import { releaseCapacityAtSessionEnd } from './tools/capacity-session.js';
 import { idleSessions, resolveSessionLimits, sessionsOverOwnerCap, type SessionLimits } from './session-limits.js';
 
@@ -275,6 +276,17 @@ function wwwAuthChallenge(
 }
 
 export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides }: HttpServerOptions) {
+  useHttpOrigin();
+  /** ORB-2544 - a closed MCP session ends its row resumably unless another live session of the same client still acts under the token. */
+  const endInstance = (sessionId: string, client: OrbotoClient) => {
+    const { token, shared } = releaseSessionInstance(sessionId);
+    if (token && !shared) void client.post('/v1/agent/end-session', { resumable: true }, { instanceToken: token }).catch(() => { /* the reaper ends it otherwise */ });
+  };
+  type Credential = { kind: string; id: string | null } | null | undefined;
+  const bindStable = (sessionId: string, userEmail: string, credential: Credential, client: string | undefined) => {
+    const stable = stableClientInstance({ userEmail, credential, client });
+    if (stable) bindSessionInstance(sessionId, stable);
+  };
   const sessions = new Map<string, McpSession>();
   const limits = resolveSessionLimits(undefined, limitOverrides);
 
@@ -313,11 +325,13 @@ export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides
     chosenSessionId: string,
     userEmail: string,
     toolset?: Toolset,
+    credential?: Credential,
   ): Promise<McpSession> {
     await makeRoomFor(userEmail);
+    bindStable(chosenSessionId, userEmail, credential, userAgentSuffix);
     const { sessionClient, mcp, bridge } = await buildSessionCore(tokenHolder, userAgentSuffix, toolset, chosenSessionId);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
-    transport.onclose = () => { sessions.delete(chosenSessionId); bridge.close(); };
+    transport.onclose = () => { sessions.delete(chosenSessionId); bridge.close(); endInstance(chosenSessionId, sessionClient); };
     await mcp.connect(transport);
     forceInitialized(transport, chosenSessionId);
     const session: McpSession = {
@@ -469,10 +483,12 @@ export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides
       const preflightClient = new OrbotoClient({ baseUrl, apiKey: token, userAgentSuffix });
       let authValid = false;
       let callerEmail = '';
+      let callerCredential: Credential;
       try {
         const preflight = await preflightMcpSession(preflightClient);
         authValid = true;
         callerEmail = preflight.userEmail;
+        callerCredential = preflight.credential;
       } catch {
         authValid = false;
       }
@@ -491,14 +507,14 @@ export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides
       }
 
       if (action === 'rehydrate') {
-        const session = await establishForcedSession({ current: token }, userAgentSuffix, sessionId, callerEmail, toolset);
+        const session = await establishForcedSession({ current: token }, userAgentSuffix, sessionId, callerEmail, toolset, callerCredential);
         void store.register(token, { sessionId, userAgent }).catch(() => { /* best-effort */ });
         await session.transport.handleRequest(req, res, body);
         return;
       }
 
       const newSessionId = randomUUID();
-      const session = await establishForcedSession({ current: token }, userAgentSuffix, newSessionId, callerEmail, toolset);
+      const session = await establishForcedSession({ current: token }, userAgentSuffix, newSessionId, callerEmail, toolset, callerCredential);
       overrideSessionIdHeader(req, newSessionId);
       process.stderr.write(
         `[orboto-mcp] auto-adopted stale session ${sessionId} → ${newSessionId} (client=${userAgent ?? 'unknown'})\n`,
@@ -514,8 +530,11 @@ export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides
 
       const preflightClient = new OrbotoClient({ baseUrl, apiKey: token, userAgentSuffix });
       let ownerEmail: string;
+      let ownerCredential: Credential;
       try {
-        ownerEmail = (await preflightMcpSession(preflightClient)).userEmail;
+        const preflight = await preflightMcpSession(preflightClient);
+        ownerEmail = preflight.userEmail;
+        ownerCredential = preflight.credential;
       } catch (err) {
         return sendError(res, 401, (err as Error).message, {
           'WWW-Authenticate': wwwAuthChallenge(req, baseUrl, 'invalid_token', (err as Error).message),
@@ -532,6 +551,7 @@ export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides
           sessions.set(sid, {
             transport, mcp, client: sessionClient, bridge, tokenHolder, userEmail: ownerEmail, lastTouchAt: Date.now(), lastActiveAt: Date.now(),
           });
+          bindStable(sid, ownerEmail, ownerCredential, userAgentSuffix);
           bridge.setInstanceToken(mcpInstanceToken(undefined, { sessionId: sid }));
           bridge.start();
           void store
@@ -542,6 +562,7 @@ export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides
       transport.onclose = () => {
         if (transport.sessionId) sessions.delete(transport.sessionId);
         bridge.close();
+        if (transport.sessionId) endInstance(transport.sessionId, sessionClient);
       };
       await mcp.connect(transport);
       await transport.handleRequest(req, res, body);

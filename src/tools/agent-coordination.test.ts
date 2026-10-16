@@ -54,9 +54,9 @@ describe('orboto_agent_heartbeat', () => {
 });
 
 describe('orboto_agent_presence', () => {
-  it('GETs /v1/agent/inventory and renders one line per session', async () => {
+  it('GETs the inventory through /v1/agent/who and renders one line per session with its origin and state (ORB-2544)', async () => {
     stub([{
-      json: [
+      json: { sessions: [], inventory: [
         {
           userId: '00000000-0000-0000-0000-000000000001',
           userEmail: 'alice@x.test',
@@ -81,21 +81,23 @@ describe('orboto_agent_presence', () => {
           clientInfo: { name: 'dispatcher-daemon' },
           lastSeenAt: new Date().toISOString(),
           createdAt: new Date().toISOString(),
+          origin: { host: 'build-host', repo: 'sample-repo', pid: 4242, client: 'orboto-cli', clientVersion: '1.2.3', harness: 'claude-code', startedAt: null },
+          state: 'orphaned',
         },
-      ],
+      ] },
     }]);
     const handler = makeAgentPresenceHandler(client);
     const result = await handler();
     const text = (result.content[0] as { text: string }).text;
     expect(text).toContain('2 active session(s)');
     expect(text).toContain('Alice <alice@x.test> (claude-code, instance 00000000-0000-0000-0000-000000000010) - working · working on [ORB] ORB-42');
-    expect(text).toContain('bot@x.test <bot@x.test> (dispatcher-daemon, instance 00000000-0000-0000-0000-000000000011) - idle; owner: Alice');
-    expect(vi.mocked(fetch).mock.calls[0][0]).toBe('https://orboto.example.com/v1/agent/inventory');
+    expect(text).toContain('bot@x.test <bot@x.test> (dispatcher-daemon, instance 00000000-0000-0000-0000-000000000011) - idle [orphaned] on build-host sample-repo pid 4242 claude-code orboto-cli 1.2.3; owner: Alice');
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe('https://orboto.example.com/v1/agent/who?include=inventory');
     expect((result.structuredContent as { sessions: unknown[] }).sessions).toHaveLength(2);
   });
 
   it('handles an empty workspace gracefully', async () => {
-    stub([{ json: [] }]);
+    stub([{ json: { sessions: [], inventory: [] } }]);
     const handler = makeAgentPresenceHandler(client);
     const result = await handler();
     expect((result.content[0] as { text: string }).text).toBe('No active agent sessions in the workspace.');
@@ -110,9 +112,9 @@ describe('orboto_agent_presence', () => {
   it('filters by projectKey (case-insensitive, projects only) and kind on the client side (ORB-2135)', async () => {
     const handler = makeAgentPresenceHandler(client);
     const ids = async (args: { projectKey?: string; kind?: 'agent' | 'human' }) => {
-      stub([{ json: presenceRows() }]);
+      stub([{ json: { sessions: [], inventory: presenceRows() } }]);
       const result = await handler(args);
-      expect(vi.mocked(fetch).mock.calls.at(-1)?.[0]).toBe('https://orboto.example.com/v1/agent/inventory');
+      expect(vi.mocked(fetch).mock.calls.at(-1)?.[0]).toBe('https://orboto.example.com/v1/agent/who?include=inventory');
       return (result.structuredContent as { sessions: Array<{ sessionId: string }> }).sessions.map((s) => s.sessionId.slice(-2));
     };
     expect(await ids({})).toEqual(['10', '11', '12']);
@@ -124,13 +126,13 @@ describe('orboto_agent_presence', () => {
   });
 
   it('says when a filter matched nothing but the workspace is not empty', async () => {
-    stub([{ json: presenceRows() }]);
+    stub([{ json: { sessions: [], inventory: presenceRows() } }]);
     const result = await makeAgentPresenceHandler(client)({ projectKey: 'NONE' });
     expect((result.content[0] as { text: string }).text).toBe('No active agent sessions match the filter (3 active in the workspace).');
   });
 
   it('renders acts-as, lane, projects and connection types on each line', async () => {
-    stub([{ json: presenceRows() }]);
+    stub([{ json: { sessions: [], inventory: presenceRows() } }]);
     const text = ((await makeAgentPresenceHandler(client)({ kind: 'agent' })).content[0] as { text: string }).text;
     expect(text).toContain('2 active session(s)');
     expect(text).toContain('owner: Alice; lane: worker-1; projects: ACME, ORB; connections: lane, live_events');

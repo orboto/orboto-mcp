@@ -228,10 +228,33 @@ export function localSessionHost(extra?: { sessionId?: string }, host: string = 
   return value || undefined;
 }
 
-/** Precedence: explicit caller-supplied token > per-connection MCP session id
- *  (distinct per client even on a shared HTTP server) > per-process id (stdio). */
+/** ORB-2544 - the stable token an HTTP MCP session acts under, bound by the transport for the session's lifetime. */
+const sessionInstances = new Map<string, string>();
+
+/** The HTTP transport binds a transport session to the stable token of its client. */
+export function bindSessionInstance(sessionId: string, token: string): void {
+  sessionInstances.set(sessionId, token);
+}
+
+/** Drops the binding; answers whether another live session still acts under the same token. */
+export function releaseSessionInstance(sessionId: string): { token: string | null; shared: boolean } {
+  const token = sessionInstances.get(sessionId) ?? null;
+  sessionInstances.delete(sessionId);
+  return { token, shared: token !== null && [...sessionInstances.values()].includes(token) };
+}
+
+/** ORB-2544 - one token per account, credential and client name: every reconnect of that client resumes one session row. */
+export function stableClientInstance(input: { userEmail: string; credential?: { kind: string; id: string | null } | null; client?: string | null }): string | null {
+  if (!input.credential?.id) return null;
+  const client = (input.client ?? '').split('@')[0]!.trim().toLowerCase();
+  const key = createHash('sha256').update([input.userEmail.toLowerCase(), input.credential.kind, input.credential.id, client].join('\n')).digest('hex').slice(0, 16);
+  return `mcp-${key}`;
+}
+
+/** Precedence: explicit caller-supplied token > the stable token the transport bound to the MCP session (ORB-2544), else the
+ *  per-connection session id > per-process id (stdio). */
 export function mcpInstanceToken(explicit?: string, extra?: { sessionId?: string }): string {
-  return explicit ?? (extra?.sessionId ? `mcp-${extra.sessionId}` : MCP_PROCESS_INSTANCE);
+  return explicit ?? (extra?.sessionId ? (sessionInstances.get(extra.sessionId) ?? `mcp-${extra.sessionId}`) : MCP_PROCESS_INSTANCE);
 }
 
 /** ORB-2140 - the stdio process's own instance token, the one the inbox channel follows the stream with. */
