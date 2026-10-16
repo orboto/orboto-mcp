@@ -1,4 +1,4 @@
-import { TicketSpecStateSchema, type TicketSpecState } from './spec-schemas.js';
+import { TicketListSortSchema, TicketSpecStateSchema, type TicketListSort, type TicketSpecState } from './spec-schemas.js';
 /**
  * ORB-244 Phase B - `orboto_list_tickets`.
  *
@@ -22,18 +22,18 @@ interface TicketPage {
 export const listTicketsToolConfig = {
   title: 'List tickets',
   description:
-    'List tickets in a project, filtered by status category, milestone or assignee email. unscheduled=true = the backlog (no milestone yet). Up to 50 per call.',
+    'List a project\'s tickets by status category, milestone or assignee email. unscheduled=true = the backlog (no milestone yet). Up to 50 per call.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
+    projectKey: z.string().min(1).describe('Project key.'),
     specState: TicketSpecStateSchema.optional(),
     statusCategory: z
       .enum(['todo', 'in_progress', 'in_review', 'done', 'wont_fix'])
       .optional()
-      .describe('One workflow category. Omit for all.'),
+      .describe('One workflow category.'),
     open: z
       .boolean()
       .optional()
-      .describe('true = only todo, in_progress, in_review. Not with statusCategory.'),
+      .describe('true = todo, in_progress, in_review. Not with statusCategory.'),
     milestone: z
       .string()
       .optional()
@@ -41,16 +41,17 @@ export const listTicketsToolConfig = {
     unscheduled: z
       .boolean()
       .optional()
-      .describe('true = only tickets with no milestone. Not with `milestone`.'),
+      .describe('true = no milestone. Not with `milestone`.'),
     assigneeEmail: z
       .string()
       .optional()
-      .describe('Project-member email.'),
+      .describe('Member email.'),
     parentTicketKey: z
       .string()
       .optional()
-      .describe('Only children of this ticket - walks an epic.'),
-    limit: z.number().int().min(1).max(50).default(25).describe('Max rows to return.'),
+      .describe('Children of this ticket.'),
+    sort: TicketListSortSchema.optional().describe('Newest first; default updated.'),
+    limit: z.number().int().min(1).max(50).default(25).describe('Max rows.'),
     verbose: z.boolean().default(false).describe('true = full rows.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
@@ -66,6 +67,7 @@ export function makeListTicketsHandler(client: OrbotoClient) {
     open?: boolean;
     assigneeEmail?: string;
     parentTicketKey?: string;
+    sort?: TicketListSort;
     limit?: number;
     verbose?: boolean;
   }): Promise<CallToolResult> => {
@@ -79,6 +81,7 @@ export function makeListTicketsHandler(client: OrbotoClient) {
       throw new Error('Pass either `open` or `statusCategory`, not both.');
     }
     if (input.open) qs.set('open', 'true');
+    if (input.sort) qs.set('sort', input.sort);
     if (input.unscheduled && input.milestone) {
       throw new Error('Pass either `milestone` or `unscheduled: true`, not both.');
     }

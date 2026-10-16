@@ -57,6 +57,8 @@ afterEach(() => { vi.restoreAllMocks(); });
  * ORB-2542 added no named tool: the owner lookup rides `orboto_who` `for` and
  * the escape hatch; the route/forceTarget parameters fit after tightening the
  * agent_notify description.
+ * ORB-2546 gave `orboto_list_tickets` a described `sort` enum inside the
+ * ceiling: its parameter descriptions shrank to pay for it (full = 171,197).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

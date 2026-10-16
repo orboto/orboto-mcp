@@ -8,7 +8,9 @@
  * break, which is exactly what we want.
  */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { OrbotoClient } from '../orboto-client.js';
+import { TicketListSortSchema } from './spec-schemas.js';
 import { makeGetProjectHandler } from './get-project.js';
 import { makeListTicketsHandler } from './list-tickets.js';
 import { makeGetTicketHandler } from './get-ticket.js';
@@ -85,6 +87,24 @@ describe('orboto_list_tickets', () => {
     await makeListTicketsHandler(client)({ projectKey: 'ACME', unscheduled: true, statusCategory: 'todo' });
     expect(calls[1]).toContain('unscheduled=true');
     expect(calls[1]).toContain('statusCategory=todo');
+  });
+
+  it('passes sort=created and leaves the default order to the API (ORB-2546)', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: { items: [], nextCursor: null } },
+      { json: PROJ },
+      { json: { items: [], nextCursor: null } },
+    ]);
+    await makeListTicketsHandler(client)({ projectKey: 'ACME', sort: 'created' });
+    expect(calls[1]).toContain('sort=created');
+    await makeListTicketsHandler(client)({ projectKey: 'ACME' });
+    expect(calls[3]).not.toContain('sort=');
+  });
+
+  it('mirrors the shared TicketListSortSchema options (ORB-2546)', () => {
+    const shared = readFileSync(new URL('../../../../packages/shared-schema/src/tickets.ts', import.meta.url), 'utf8');
+    expect(shared).toContain(`TicketListSortSchema = z.enum(${JSON.stringify([...TicketListSortSchema.options]).replace(/"/g, "'").replace(/,/g, ', ')})`);
   });
 
   it('refuses unscheduled together with milestone', async () => {

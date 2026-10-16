@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 export const TicketSpecStateSchema = z.enum(['none', 'needs_spec', 'in_spec', 'ready']);
 export type TicketSpecState = z.infer<typeof TicketSpecStateSchema>;
+/** ORB-2546 - mirror of TicketListSortSchema in @orboto/shared-schema (the MCP package does not depend on it; drift test in phase-b-tools.test.ts). */
+export const TicketListSortSchema = z.enum(['updated', 'created']);
+export type TicketListSort = z.infer<typeof TicketListSortSchema>;
 export const ProjectSpecSettingsSchema = z.object({
   enabled: z.boolean().optional(),
   requiredTypes: z.array(z.enum(['epic', 'story', 'task', 'bug'])).optional(),
