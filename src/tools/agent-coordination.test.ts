@@ -252,6 +252,23 @@ describe('orboto_messages (ORB-1742 self-echo exclusion)', () => {
     expect(urls[0]).toContain('excludeRef=mcp-abc123');
     await handler({ includeOwnSends: true }, { sessionId: 'abc123' });
     expect(urls[1]).not.toContain('excludeRef');
+    expect(urls[1]).toContain('includeOwn=true');
+  });
+
+  it('ORB-2547: an own send renders as sent with the recipient session, its delivered/read state and the thread', async () => {
+    const party = (label: string, sessionId: string | null) => ({ userId: 'u', email: 'e', sessionId, role: null, label });
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => ({
+      ok: true, status: 200, statusText: 'OK',
+      json: async () => ({ sessionId: '11111111-1111-4111-8111-111111111111', messages: [
+        { id: '22222222-2222-4222-8222-222222222222', fromUserId: 'u', toUserId: 'v', from: party('me (11111111)', '11111111'), to: party('peer (44444444)', '44444444'), kind: 'complete', subject: 'done', payload: null, threadId: '33333333-3333-4333-8333-333333333333', projectKey: 'ALPHA', createdAt: '2026-10-16T10:00:00Z', deliveredAt: '2026-10-16T10:00:05Z', readAt: null, dismissed: null, own: true },
+      ] }),
+      text: async () => '',
+    } as unknown as Response));
+    const result = await makeAgentMessagesHandler(client)({ includeOwnSends: true }, { sessionId: 'abc123' });
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain('[sent] delivered 2026-10-16T10:00:05Z, unread [complete] [ALPHA] done (from me (11111111) to peer (44444444)');
+    expect(text).toContain('thread 33333333-3333-4333-8333-333333333333');
+    expect((result.structuredContent as { messages: Array<Record<string, unknown>> }).messages[0]).toMatchObject({ own: true, deliveredAt: '2026-10-16T10:00:05Z', threadId: '33333333-3333-4333-8333-333333333333' });
   });
 });
 

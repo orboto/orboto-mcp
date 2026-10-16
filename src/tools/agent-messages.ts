@@ -35,6 +35,7 @@ interface AgentMessage {
   dismissed: { reason: string; note: string | null; duplicateOf: string | null; createdAt: string } | null;
   excerpt?: string;
   payloadChars?: number;
+  own?: boolean;
 }
 
 interface InboxCounts { unread: number; olderThan7Days: number }
@@ -45,16 +46,16 @@ const UNREGISTERED_INBOX_HINT = 'Not registered: only account mail is listed. Re
 
 export const agentMessagesToolConfig = {
   title: 'Agent inbox and message work',
-  description: 'Your inbox as THIS session sees it. It holds mail to this session, account mail inside your declared scope, broadcasts; sibling-session mail and own sends stay out, all:true is the account view with every message in full (ORB-2136). By default it lists the newest 10 unread, newest first, each as a header plus the first 300 payload characters, then the line `N unread, M older than 7 days`; limit and since (ISO time or message id) narrow it (ORB-2502). Before orboto_session_start only account mail is listed; register to see mail addressed to your session (ORB-2347). messageWork carries durable work ownership - claim before executing. ackIds acks: it completes an unclaimed request; claimed work with open steps is refused until messageWork completes or blocks it. dismiss is the third answer: not_mine hides it here and tells the sender, obsolete/duplicate close it for the account (note or duplicateOf required). Never leave mail you read and judged. Reply via orboto_agent_notify with threadId (toSessionRef = from.sessionId reaches that instance).',
+  description: 'Your inbox as THIS session sees it. It holds mail to this session, account mail inside your declared scope, broadcasts; sibling-session mail and own sends stay out (includeOwnSends lists your sends with recipient session, delivered/read state, thread), all:true is the account view in full (ORB-2136). Default: the newest 10 unread, newest first, a header plus 300 payload characters each, then `N unread, M older than 7 days`; limit and since (ISO time or message id) narrow it. Before orboto_session_start only account mail is listed; register to see mail addressed to your session (ORB-2347). messageWork carries durable work ownership (mutation schema: orboto_api_search) - claim before executing. ackIds (message ids) acks: it completes an unclaimed request; claimed work with open steps is refused until messageWork completes or blocks it. dismiss: not_mine hides it here and tells the sender, obsolete/duplicate close it for the account (note or duplicateOf required). Never leave mail you read and judged. Reply via orboto_agent_notify with threadId (toSessionRef = from.sessionId).',
   inputSchema: z.object({
     messageWork: z.record(z.unknown()).optional()
-      .describe('Work envelope {messageId, mutation, cursor, limit, openOnly}; schema: orboto_api_search.'),
+      .describe('Work envelope {messageId, mutation, cursor, limit, openOnly}.'),
     all: z.boolean().default(false),
     limit: z.number().int().min(1).max(200).optional(),
     since: z.string().optional(),
     project: z.string().min(1).max(64).optional().describe('Key/UUID; includes unscoped mail.'),
     includeOwnSends: z.boolean().default(false),
-    ackIds: z.array(z.string().uuid()).max(200).optional().describe('Message ids to mark read.'),
+    ackIds: z.array(z.string().uuid()).max(200).optional(),
     dismiss: z.object({
       ids: z.array(z.string().uuid()).min(1).max(200),
       reason: z.enum(['not_mine', 'obsolete', 'duplicate']),
@@ -76,7 +77,9 @@ export const agentMessagesToolConfig = {
       threadId: z.string().nullable(),
       projectKey: z.string().nullable(),
       createdAt: z.string(),
+      deliveredAt: z.string().nullable().optional(),
       readAt: z.string().nullable(),
+      own: z.boolean().optional(),
       dismissed: z.object({
         reason: z.string(), note: z.string().nullable(), duplicateOf: z.string().nullable(), createdAt: z.string(),
       }).nullable(),
@@ -97,6 +100,12 @@ function compactLines(m: AgentMessage, header: string): string[] {
     ...(excerpt ? excerpt.replace(/\n+$/, '').split('\n').map((line) => `  ${line}`) : []),
     ...(rest > 0 ? [`  ... ${rest} more characters (all:true prints everything)`] : []),
   ];
+}
+
+/** ORB-2547 - an own send's state at the recipient. */
+function sentState(m: AgentMessage): string {
+  if (m.readAt) return `read ${m.readAt}`;
+  return m.deliveredAt ? `delivered ${m.deliveredAt}, unread` : 'not delivered yet';
 }
 
 export function makeAgentMessagesHandler(client: OrbotoClient) {
@@ -131,9 +140,10 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
     if (args.since) q.set('since', args.since);
     if (args.project) q.set('project', args.project);
     const instanceToken = mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined);
-    if (!args.includeOwnSends) q.set('excludeRef', instanceToken);
+    if (args.includeOwnSends) q.set('includeOwn', 'true');
+    else q.set('excludeRef', instanceToken);
     const { messages, sessionId, counts } = await client.get<{ messages: AgentMessage[]; sessionId?: string | null; counts?: InboxCounts }>(`/v1/agent/messages?${q.toString()}`, { instanceToken });
-    const header = (m: AgentMessage) => `[${m.kind}]${m.projectKey ? ` [${m.projectKey}]` : ''} ${m.subject} (from ${m.from?.label ?? m.fromUserId} to ${m.to?.label ?? m.toUserId}, ${m.createdAt}, id ${m.id}${m.threadId ? `, thread ${m.threadId}` : ''})`;
+    const header = (m: AgentMessage) => `${m.own ? `[sent] ${sentState(m)} ` : ''}[${m.kind}]${m.projectKey ? ` [${m.projectKey}]` : ''} ${m.subject} (from ${m.from?.label ?? m.fromUserId} to ${m.to?.label ?? m.toUserId}, ${m.createdAt}, id ${m.id}${m.threadId ? `, thread ${m.threadId}` : ''})`;
     const lines = messages.length === 0
       ? [acked > 0 ? `Acknowledged ${acked} message(s). Inbox empty.` : 'Inbox empty.']
       : messages.flatMap((m) => (compact ? compactLines(m, header(m)) : [`${header(m)}${m.payload ? ` payload: ${JSON.stringify(m.payload)}` : ''}`]));
@@ -154,6 +164,7 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
           id: m.id, fromUserId: m.fromUserId, from: m.from, to: m.to, kind: m.kind, subject: m.subject,
           payload: compact ? null : m.payload, threadId: m.threadId, projectKey: m.projectKey ?? null,
           createdAt: m.createdAt, readAt: m.readAt, dismissed: m.dismissed ?? null,
+          ...(m.own ? { own: true, deliveredAt: m.deliveredAt ?? null } : {}),
         })),
         acked,
         dismissed: dismissedCount,
