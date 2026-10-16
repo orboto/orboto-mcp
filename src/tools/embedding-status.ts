@@ -16,7 +16,7 @@ interface EmbeddingStatusResponse {
     doc: { embedded: number; total: number; embeddable: number };
     overall: { embedded: number; total: number; embeddable: number; pending: number; noContent: number };
   };
-  breaker: { tripped: boolean; trippedUntil: string | null; consecutiveFailures: number; lastTrippedReason: string | null };
+  breaker: { tripped: boolean; trippedUntil: string | null; consecutiveFailures: number; lastTrippedReason: string | null; interactive?: { tripped: boolean; trippedUntil: string | null; consecutiveFailures: number; lastTrippedReason: string | null } };
   billingGate: { gated: boolean; blockedAt: string | null; reason: string | null; source: 'signal' | 'fallback'; updatedAt: string } | null;
   spend: {
     month: string | null;
@@ -80,6 +80,9 @@ export function makeEmbeddingStatusHandler(client: OrbotoClient) {
       lines.push(
         `Circuit breaker: ${s.breaker.tripped ? `TRIPPED - ${s.breaker.lastTrippedReason ?? 'unknown reason'} (${s.breaker.consecutiveFailures} consecutive failures)` : 'ok'}`,
       );
+      if (s.breaker.interactive?.tripped) {
+        lines.push(`Query breaker: TRIPPED until ${s.breaker.interactive.trippedUntil ?? 'unknown'} - ${s.breaker.interactive.lastTrippedReason ?? 'unknown reason'}; search, ask-docs and duplicate checks serve full-text results until it closes.`);
+      }
       if (s.billingGate?.gated) {
         lines.push(
           `BILLING GATE: managed AI is paused for billing${s.billingGate.reason ? ` (${s.billingGate.reason})` : ''} since ${s.billingGate.blockedAt ?? 'unknown'}. The workspace admin resolves this in their orboto account; queued items embed automatically after the unblock.`,

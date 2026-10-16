@@ -10,6 +10,9 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 
+/** ORB-2543 - the line every search-shaped tool prints when the API flags `semanticDegraded`. */
+export const SEMANTIC_DEGRADED_LINE = 'semantic search unavailable, showing full-text results';
+
 export interface ProjectRow {
   spec?: import("./spec-schemas.js").ProjectSpecSettings;
   id: string;

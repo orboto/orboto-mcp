@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { trimSimilarEntries } from './similar-projection.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { resolveProjectByKey, resolveTicketByKey } from './shared.js';
+import { resolveProjectByKey, resolveTicketByKey, SEMANTIC_DEGRADED_LINE } from './shared.js';
 
 interface SimilarCandidate {
   id: string;
@@ -22,6 +22,7 @@ interface SimilarCandidate {
 interface SimilarResponse {
   candidates: SimilarCandidate[];
   mode: 'tsvector' | 'embedding';
+  semanticDegraded?: boolean;
 }
 
 export const checkSimilarToolConfig = {
@@ -74,7 +75,8 @@ export function makeCheckSimilarHandler(client: OrbotoClient) {
         ? `HIGH-SIMILARITY MATCH FOUND - review [${strong.ticketKey ?? strong.id.slice(0, 8)}] "${strong.title}" before creating; this may already be tracked.`
         : 'Possible related tickets - review the list and decide whether the new ticket adds distinct scope.';
 
-    const text = result.candidates.length === 0
+    const degradedNote = result.semanticDegraded ? `(${SEMANTIC_DEGRADED_LINE})\n` : '';
+    const text = degradedNote + (result.candidates.length === 0
       ? `${recommendation} (match mode: ${result.mode})`
       : [
           recommendation,
@@ -86,13 +88,14 @@ export function makeCheckSimilarHandler(client: OrbotoClient) {
             const rel = c.relation ? ` (related: ${c.relation})` : '';
             return `  - ${key}${status} (${score})${rel}: ${c.title}`;
           }),
-        ].join('\n');
+        ].join('\n'));
 
     return {
       content: [{ type: 'text', text }],
       structuredContent: {
         similar: trimSimilarEntries(result.candidates),
         mode: result.mode,
+        semanticDegraded: result.semanticDegraded ?? false,
         recommendation,
       },
     };

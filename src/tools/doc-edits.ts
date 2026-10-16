@@ -7,7 +7,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveDocId } from './docs.js';
-import { resolveProjectByKey } from './shared.js';
+import { resolveProjectByKey, SEMANTIC_DEGRADED_LINE } from './shared.js';
 
 interface DocSnippetHit {
   id: string;
@@ -26,6 +26,7 @@ interface DocSnippetHit {
 interface DocSnippetSearchResponse {
   items: DocSnippetHit[];
   total: number;
+  semanticDegraded?: boolean;
 }
 
 interface DocEditWindow {
@@ -149,10 +150,11 @@ export function makeSearchDocsHandler(client: OrbotoClient) {
     if (input.limit) qs.set('limit', String(input.limit));
 
     const res = await client.get<DocSnippetSearchResponse>(`/docs/search?${qs.toString()}`);
+    const degradedNote = res.semanticDegraded ? `(${SEMANTIC_DEGRADED_LINE})\n` : '';
     if (res.items.length === 0) {
       return {
-        content: [{ type: 'text', text: `No docs matched "${input.q}".` }],
-        structuredContent: { items: [], total: 0 },
+        content: [{ type: 'text', text: `${degradedNote}No docs matched "${input.q}".` }],
+        structuredContent: { items: [], total: 0, semanticDegraded: res.semanticDegraded ?? false },
       };
     }
     const lines = res.items.map((h) => {
@@ -161,7 +163,7 @@ export function makeSearchDocsHandler(client: OrbotoClient) {
       return `- ${h.title} (${h.docKey ?? h.id})${anchor}${where}\n    ${h.snippet.replace(/\s+/g, ' ').trim()}`;
     });
     return {
-      content: [{ type: 'text', text: lines.join('\n') }],
+      content: [{ type: 'text', text: degradedNote + lines.join('\n') }],
       structuredContent: {
         items: res.items.map((h) => ({
           id: h.id,
@@ -178,6 +180,7 @@ export function makeSearchDocsHandler(client: OrbotoClient) {
           url: h.url,
         })),
         total: res.total,
+        semanticDegraded: res.semanticDegraded ?? false,
       },
     };
   };

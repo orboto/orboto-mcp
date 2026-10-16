@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { resolveProjectByKey } from './shared.js';
+import { resolveProjectByKey, SEMANTIC_DEGRADED_LINE } from './shared.js';
 
 const SEARCH_TYPES = ['ticket', 'comment', 'doc', 'project', 'milestone', 'space', 'customer'] as const;
 type SearchType = typeof SEARCH_TYPES[number];
@@ -35,6 +35,8 @@ interface SearchResponse {
   /** ORB-1695 - which pass produced the hits: 'strict' AND-matching, or
    *  the 'relaxed' OR fallback + semantic recall that runs on 0 hits. */
   pass?: 'strict' | 'relaxed';
+  /** ORB-2543 - the query embedding timed out, failed or was skipped by the breaker. */
+  semanticDegraded?: boolean;
 }
 
 export const searchToolConfig = {
@@ -75,7 +77,8 @@ export function makeSearchHandler(client: OrbotoClient) {
     const relaxedNote = res.pass === 'relaxed'
       ? ' [relaxed pass: no row matched ALL terms - these matched some terms or the meaning]'
       : '';
-    const text = res.items.length === 0
+    const degradedNote = res.semanticDegraded ? `(${SEMANTIC_DEGRADED_LINE})\n` : '';
+    const text = degradedNote + (res.items.length === 0
       ? `No hits for "${input.query}".`
       : `Hits${headerHint}${relaxedNote}:\n\n` + res.items.map((h) => {
         const tag = h.type.toUpperCase();
@@ -83,7 +86,7 @@ export function makeSearchHandler(client: OrbotoClient) {
         const project = h.projectName && h.type !== 'project' ? ` · ${h.projectName}` : '';
         const excerpt = h.excerpt ? `\n  ${h.excerpt}` : '';
         return `- [${tag} ${ident}${project}] ${h.title}${excerpt}`;
-      }).join('\n\n');
+      }).join('\n\n'));
 
     return {
       content: [{ type: 'text', text }],
@@ -92,6 +95,7 @@ export function makeSearchHandler(client: OrbotoClient) {
         shown,
         hasMore,
         pass: res.pass ?? 'strict',
+        semanticDegraded: res.semanticDegraded ?? false,
         hits: res.items.map((h) => ({
           type: h.type,
           id: h.id, // ORB-1084 - full id, usable as write-tool input

@@ -9,6 +9,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { SEMANTIC_DEGRADED_LINE } from './shared.js';
 import { resolveDocId } from './docs.js';
 
 function text(t: string, structured?: Record<string, unknown>): CallToolResult {
@@ -51,9 +52,10 @@ export function makeWikiAskHandler(client: OrbotoClient) {
     const body: Record<string, unknown> = { question: input.question };
     if (input.spaceId) body.spaceId = input.spaceId;
     if (input.limit) body.limit = input.limit;
-    const res = await client.post<{ answer: string; citations: Array<{ index: number; title: string; link: string }>; mode: string }>(`/ai/ask-docs`, body);
+    const res = await client.post<{ answer: string; citations: Array<{ index: number; title: string; link: string }>; mode: string; semanticDegraded?: boolean }>(`/ai/ask-docs`, body);
     const cites = res.citations.map((c) => `[${c.index}] ${c.title} - ${c.link}`).join('\n');
-    return text(`${res.answer}\n\n${cites ? `Sources:\n${cites}` : ''}`.trim(), { answer: res.answer, citations: res.citations, mode: res.mode });
+    const degraded = res.semanticDegraded ? `\n\n(${SEMANTIC_DEGRADED_LINE})` : '';
+    return text(`${res.answer}\n\n${cites ? `Sources:\n${cites}` : ''}`.trim() + degraded, { answer: res.answer, citations: res.citations, mode: res.mode, semanticDegraded: res.semanticDegraded ?? false });
   };
 }
 

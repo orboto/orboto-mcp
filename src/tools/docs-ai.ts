@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { SEMANTIC_DEGRADED_LINE } from './shared.js';
 
 interface AskDocsCitation {
   index: number;
@@ -18,6 +19,8 @@ interface AskDocsResponse {
   mode: string;
   /** ORB-1999 - true when no claim could be tied to a retrieved doc: the answer is the fixed "not in the sources" phrase. */
   abstained?: boolean;
+  /** ORB-2543 - retrieval ran on keyword candidates only. */
+  semanticDegraded?: boolean;
 }
 
 interface IngestUrlResponse {
@@ -68,6 +71,7 @@ export function makeAskDocsHandler(client: OrbotoClient) {
     }
     if (res.abstained) lines.push('', '(abstained: no claim in the answer could be tied to a retrieved doc - treat as "not in the docs", do not guess)');
     lines.push('', `(retrieval mode: ${res.mode})`);
+    if (res.semanticDegraded) lines.push(`(${SEMANTIC_DEGRADED_LINE})`);
     return {
       content: [{ type: 'text', text: lines.join('\n') }],
       structuredContent: {
@@ -75,6 +79,7 @@ export function makeAskDocsHandler(client: OrbotoClient) {
         citations: res.citations,
         mode: res.mode,
         abstained: res.abstained ?? false,
+        semanticDegraded: res.semanticDegraded ?? false,
       },
     };
   };
