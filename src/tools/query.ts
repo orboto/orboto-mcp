@@ -17,7 +17,7 @@ export const queryToolConfig = {
   title: 'Run an OQL / JQL query',
   description:
     'Run a typed OQL (or Jira-shaped JQL) query against the workspace and return matching tickets. '
-    + 'OQL grammar: `field operator value [AND|OR ...] [ORDER BY ...] [LIMIT n]`. '
+    + 'OQL grammar: `[FIND tickets WHERE] field operator value [AND|OR ...] [ORDER BY ...] [LIMIT n]` (the frame is an optional alias). '
     + 'Supported fields: key, status, statusName, statusCategory, priority, type, assignee, reporter, reporterType, assigneeType, labels, milestone, version, project, isPrivate, dueDate, startDate, createdAt, updatedAt, closedAt, estimatedTimeMinutes, loggedMinutes, parentKey. '
     + 'reporterType / assigneeType are guest|internal - use `reporterType = guest OR assigneeType = guest` to pull up everything reported by or assigned to guests without listing each guest email. '
     + 'Operators: = != < <= > >= ~ !~ IN IS [NOT] NULL IS [NOT] EMPTY. '
