@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
+import { rethrowFullExportInProgress, runningFullExportId } from './backup.js';
 
 interface UserRow {
   id: string;
@@ -201,7 +202,7 @@ export function makeTriggerBackupHandler(client: OrbotoClient) {
     }
 
     const run = await client.post<BackupRun>(`/admin/backup/jobs/${job.id}/run`, {})
-      .catch(rewrite403('trigger_backup'));
+      .catch((err: unknown) => (runningFullExportId(err) ? rethrowFullExportInProgress(err) : rewrite403('trigger_backup')(err)));
 
     return {
       content: [{

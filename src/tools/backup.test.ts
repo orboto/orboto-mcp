@@ -76,6 +76,17 @@ describe('orboto_create_full_backup (ORB-1301 / async since ORB-1717)', () => {
     }
   });
 
+  it('names the running run instead of starting a second full export (ORB-2562)', async () => {
+    const refusal = { error: 'busy', errorKey: 'errors.backups.full_export_in_progress', errorParams: { runId: '6f0c1a52-3d4e-4b8a-9c71-2e5f8a9b0c1d' } };
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false, status: 409, statusText: 'Conflict', headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => refusal, text: async () => JSON.stringify(refusal),
+    } as unknown as Response);
+    await expect(makeCreateFullBackupHandler(client)())
+      .rejects.toThrow('A full export is already running (run 6f0c1a52-3d4e-4b8a-9c71-2e5f8a9b0c1d); nothing was started.');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it.each(['disk full', 'Backup source object is missing, unreadable or incomplete'])('a failed run surfaces %s instead of a partial ZIP', async (message) => {
     vi.useFakeTimers();
     const download = vi.spyOn(client, 'getBinary');

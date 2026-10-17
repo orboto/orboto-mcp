@@ -140,4 +140,18 @@ describe('orboto_trigger_backup', () => {
       makeTriggerBackupHandler(client)({ jobName: 'nightly' })
     ).rejects.toThrow(/super-admin/);
   });
+
+  it('names the running run when a full export is already in progress (ORB-2562)', async () => {
+    const refusal = { error: 'busy', errorKey: 'errors.backups.full_export_in_progress', errorParams: { runId: '6f0c1a52-3d4e-4b8a-9c71-2e5f8a9b0c1d' } };
+    const responses = [
+      { ok: true, status: 200, body: [{ id: 'j1', name: 'nightly', scope: 'full', schedule: null, isActive: true }] },
+      { ok: false, status: 409, body: refusal },
+    ];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      const r = responses.shift()!;
+      return { ok: r.ok, status: r.status, statusText: 'x', json: async () => r.body, text: async () => JSON.stringify(r.body) } as unknown as Response;
+    });
+    await expect(makeTriggerBackupHandler(client)({ jobName: 'nightly' }))
+      .rejects.toThrow('A full export is already running (run 6f0c1a52-3d4e-4b8a-9c71-2e5f8a9b0c1d); nothing was started.');
+  });
 });

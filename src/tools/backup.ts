@@ -9,7 +9,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbotoClient } from '../orboto-client.js';
+import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 
 interface BackupRun {
   id: string;
@@ -36,17 +36,39 @@ const seal = (run: BackupRun): string =>
 
 const mb = (n: number): string => `${Math.round((n / 1024 / 1024) * 10) / 10} MB`;
 
+/** ORB-2562 - the running run's id when the API refused a full export start with 409 errors.backups.full_export_in_progress. */
+export function runningFullExportId(err: unknown): string | null {
+  if (!(err instanceof OrbotoApiError) || err.status !== 409) return null;
+  try {
+    const body = JSON.parse(err.body) as { errorKey?: string; errorParams?: { runId?: unknown } };
+    if (body.errorKey !== 'errors.backups.full_export_in_progress') return null;
+    return typeof body.errorParams?.runId === 'string' ? body.errorParams.runId : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Rethrows a full-export refusal as a sentence that names the running run. */
+export function rethrowFullExportInProgress(err: unknown): never {
+  const runId = runningFullExportId(err);
+  if (runId) {
+    throw new Error(`A full export is already running (run ${runId}); nothing was started. Download that run with orboto_download_backup once orboto_list_backups shows it as success.`);
+  }
+  throw err as Error;
+}
+
 export const createFullBackupToolConfig = {
   title: 'Create + download a full workspace backup',
   description:
-    'Create an on-demand FULL workspace backup (database + storage) and return it as a base64 resource attachment - one call; a background run this tool polls, minutes on a large workspace. Rows and file references share one snapshot; a missing file fails the run, never a partial archive. With backup encryption on the attachment is the sealed archive, not a ZIP. Requires admin:backup:export; scheduled jobs use orboto_trigger_backup.',
+    'Create an on-demand FULL workspace backup (database + storage) and return it as a base64 resource attachment - one call; a background run this tool polls, minutes on a large workspace. Rows and file references share one snapshot; a missing file fails the run, never a partial archive. With backup encryption on the attachment is the sealed archive, not a ZIP. While another full export runs it starts nothing and names that run. Requires admin:backup:export; scheduled jobs use orboto_trigger_backup.',
   inputSchema: z.object({}).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeCreateFullBackupHandler(client: OrbotoClient) {
   return async (): Promise<CallToolResult> => {
-    const { runId, sealed } = await client.post<{ runId: string; sealed: boolean }>('/admin/backup/full', {});
+    const { runId, sealed } = await client.post<{ runId: string; sealed: boolean }>('/admin/backup/full', {})
+      .catch(rethrowFullExportInProgress);
     const t0 = Date.now();
     for (;;) {
       await new Promise((r) => setTimeout(r, 3000));
