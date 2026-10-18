@@ -122,6 +122,15 @@ export function makeAgentPresenceHandler(client: OrbotoClient) {
   };
 }
 
+/** ORB-2563 - mirror of AGENT_MESSAGE_PRIORITIES and the sender lines in @orboto/shared-schema agent-message-dedupe.ts (drift test in agent-coordination.test.ts). */
+export const NOTIFY_PRIORITIES = ['normal', 'urgent'] as const;
+export function repeatedSendNotice(repeatCount: number): string {
+  return `already delivered (sent ${repeatCount} times), not sent again`;
+}
+export function reminderSentNotice(reminderCount: number, repeatCount: number): string {
+  return `reminder ${reminderCount} sent (sent ${repeatCount} times)`;
+}
+
 /** ORB-2263 - mirror of AgentNotifyRoutedToSchema in @orboto/shared-schema (drift test in agent-coordination.test.ts). */
 export const NOTIFY_ROUTED_TO = ['session', 'scope', 'account'] as const;
 
@@ -135,6 +144,10 @@ interface NotifyResponse {
   queued?: boolean;
   hint?: string;
   ownerHint?: { ownerAddress: string; topic: string; target: string; routed: boolean; text: string };
+  deduplicated?: boolean;
+  repeatCount?: number;
+  reminded?: boolean;
+  reminderCount?: number;
 }
 
 interface NoRecipientBody {
@@ -166,10 +179,19 @@ export function ownerMismatchText(err: OrbotoApiError): string | null {
   return `not sent: ${text}. Send again with route: true to deliver it to ${p.owner ?? 'the owner'}, or forceTarget: true to keep the target.`;
 }
 
+/** ORB-2563 - the 429 `reminder_too_soon` as a tool error naming when the next reminder is allowed. */
+export function reminderTooSoonText(err: OrbotoApiError): string | null {
+  if (err.status !== 429) return null;
+  let body: { errorKey?: string; errorParams?: { messageId?: string; retryAfter?: number } };
+  try { body = JSON.parse(err.body); } catch { return null; }
+  if (body.errorKey !== 'errors.agents.reminder_too_soon') return null;
+  return `not sent: message ${body.errorParams?.messageId ?? '?'} was sent or reminded too recently; the next reminder is allowed in ${body.errorParams?.retryAfter ?? '?'} seconds.`;
+}
+
 export const agentNotifyToolConfig = {
   title: 'Notify an agent or user',
   description:
-    'Message an agent or user. `to` takes a role address integrator@KEY (every live session with that role on the project, any account), an account email or a session id; targetEmail names the account (with a role address it narrows to that account). kind: request|error = work inside the scope the recipient holds (request needs a target + outcome); info = information; complete = result (needs outcome). payload: free-form JSON; threadId links a reply to the message it answers. toSessionRef (instance short id, session ref or id) reaches ONE session of the account; project scopes an account message to sessions declared on it. A request no live session can receive is refused (no_recipient, naming the live sessions of the project; see orboto_who) unless queue: true holds it until a session declares the project. The answer names routedTo; routingNote "no session declared KEY" means nothing wakes - escalate. A request on a topic another role owns (orboto_who for) is refused; route: true sends it to the owner, forceTarget: true keeps the target. project is a key or UUID; senderRef defaults to this MCP session.',
+    'Message an agent or user. `to` takes a role address integrator@KEY (every live session with that role on the project, any account), an account email or a session id; targetEmail names the account (with a role address it narrows to that account). kind: request|error = work inside the scope the recipient holds (request needs a target + outcome); info = information; complete = result (needs outcome). payload: free-form JSON; threadId links a reply to the message it answers. toSessionRef (instance short id, session ref or id) reaches ONE session of the account; project scopes an account message to sessions declared on it. A request no live session can receive is refused (no_recipient, naming the live sessions of the project; see orboto_who) unless queue: true holds it until a session declares the project. The answer names routedTo; routingNote "no session declared KEY" means nothing wakes - escalate. A request on a topic another role owns (orboto_who for) is refused; route: true sends it to the owner, forceTarget: true keeps the target. project is a key or UUID; senderRef defaults to this MCP session. An identical send (same recipient, project, kind, subject, payload; no threadId, no attachments) within the dedupe window (default 24 h) is not delivered again: the text says so and names the existing message. remind: true is a deliberate reminder of it (notifies again, at most one per 15 min, faster is refused with retryAfter); urgent: true is never suppressed and counts as a reminder. Loops and retries never set remind or urgent.',
   inputSchema: z.object({
     targetEmail: z.string().email().optional(),
     to: z.string().min(3).max(200).optional(),
@@ -184,6 +206,8 @@ export const agentNotifyToolConfig = {
     toSessionRef: z.string().min(1).max(200).optional(),
     route: z.boolean().optional(),
     forceTarget: z.boolean().optional(),
+    remind: z.boolean().optional(),
+    urgent: z.boolean().optional(),
   }).shape,
   outputSchema: z.object({
     ok: z.literal(true),
@@ -257,15 +281,18 @@ export function makeAgentNotifyHandler(client: OrbotoClient) {
     toSessionRef?: string;
     route?: boolean;
     forceTarget?: boolean;
+    remind?: boolean;
+    urgent?: boolean;
   }, extra?: unknown): Promise<CallToolResult> => {
     const invalid = notifyDefinitionError(args);
     if (invalid) return { isError: true, content: [{ type: 'text', text: invalid }] };
     const senderRef = mcpInstanceToken(args.senderRef, extra as { sessionId?: string } | undefined);
     let res: NotifyResponse;
     try {
-      res = await client.post<NotifyResponse>('/v1/agent/notify', { ...args, senderRef, ownerCheck: 'refuse' }, { instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
+      const { urgent, ...rest } = args;
+      res = await client.post<NotifyResponse>('/v1/agent/notify', { ...rest, ...(urgent ? { priority: NOTIFY_PRIORITIES[1] } : {}), senderRef, ownerCheck: 'refuse' }, { instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
     } catch (err) {
-      const refused = err instanceof OrbotoApiError ? noRecipientText(err) ?? ownerMismatchText(err) : null;
+      const refused = err instanceof OrbotoApiError ? noRecipientText(err) ?? ownerMismatchText(err) ?? reminderTooSoonText(err) : null;
       if (refused) return { isError: true, content: [{ type: 'text', text: refused }] };
       throw err;
     }
@@ -274,6 +301,16 @@ export function makeAgentNotifyHandler(client: OrbotoClient) {
     const target = recipients.length > 1 ? recipients.join(', ') : res.toSessionId ? `${who} session ${res.toSessionId.slice(0, 8)}` : who;
     const routedTo = res.routedTo ?? (res.toSessionId ? 'session' : 'account');
     const note = res.routingNote ? ` - ${res.routingNote}` : '';
+    if (res.deduplicated) {
+      const repeats = res.repeatCount ?? 2;
+      const line = res.reminded ? reminderSentNotice(res.reminderCount ?? 1, repeats) : repeatedSendNotice(repeats);
+      return {
+        content: [{ type: 'text', text: `${line}: ${target} (message ${res.messageId})` }],
+        structuredContent: {
+          ok: true, messageId: res.messageId, toSessionId: res.toSessionId ?? null, routedTo,
+        },
+      };
+    }
     return {
       content: [{ type: 'text', text: `${res.queued ? 'queued for' : 'notified'} ${target} (message ${res.messageId}, routed to ${routedTo}${note})${res.ownerHint?.routed ? `\nrouted to the owner of "${res.ownerHint.topic}" instead of ${res.ownerHint.target}` : ''}${res.hint ? `\nhint: ${res.hint}` : ''}` }],
       structuredContent: {

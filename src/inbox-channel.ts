@@ -48,6 +48,15 @@ export interface InboxMessage {
   inSentThread?: boolean;
   /** ORB-2467 - count and total size of the attachments; names never reach the channel. */
   attachments?: { count: number; label: string };
+  /** ORB-2563 - reminders of this message; each one is a new wake, a replay of the same count is not. */
+  reminderCount?: number;
+  repeatCount?: number;
+  priority?: 'normal' | 'urgent';
+}
+
+/** ORB-2563 - what the channel dedupes on: the message and its reminder count. */
+export function wakeKey(m: Pick<InboxMessage, 'id' | 'reminderCount'>): string {
+  return m.reminderCount ? `${m.id}#${m.reminderCount}` : m.id;
 }
 
 /** ORB-2467 - `attachments: 1 archive, 12.4 MB (orboto messages --download <id>)`, or nothing. */
@@ -150,6 +159,7 @@ export function isForThisSession(m: InboxMessage): boolean {
 export function isImmediate(m: InboxMessage, now: number, digestMinutes: number): boolean {
   if (digestMinutes <= 0) return true;
   if (m.kind === 'request' || m.kind === 'error') return true;
+  if (m.priority === 'urgent' || (m.reminderCount ?? 0) > 0) return true;
   if (isForThisSession(m)) return true;
   if (waitedMinutes(m.createdAt, now) * 60_000 >= IMMEDIATE_AFTER_MS) return true;
   return ASK.test(`${m.subject} ${firstLine(m.payload)}`);
@@ -160,8 +170,9 @@ export function renderEvent(m: InboxMessage, now: number): ChannelEvent {
   const to = m.to?.label ?? 'you';
   const text = firstLine(m.payload);
   const body = text.length > CONTENT_CAP ? `${text.slice(0, CONTENT_CAP)} [... cut, read the rest with orboto_messages]` : text;
+  const marks = [m.priority === 'urgent' ? '[urgent]' : '', m.reminderCount ? `[reminder ${m.reminderCount}]` : ''].filter(Boolean).join(' ');
   const lines = [
-    `[${m.kind}] ${m.subject}`,
+    `${marks ? `${marks} ` : ''}[${m.kind}] ${m.subject}`,
     `from ${from} to ${to}${m.projectKey ? ` | project ${m.projectKey}` : ''} | id ${m.id}${m.threadId ? ` | thread ${m.threadId}` : ''}`,
   ];
   if (body) lines.push(body);
@@ -174,6 +185,8 @@ export function renderEvent(m: InboxMessage, now: number): ChannelEvent {
       id: m.id, kind: m.kind, project: m.projectKey ?? '',
       from: from, from_session: (m.from?.sessionId ?? '').slice(0, 8), to_session: (m.to?.sessionId ?? '').slice(0, 8),
       waited_min: String(waited),
+      ...(m.priority === 'urgent' ? { priority: 'urgent' } : {}),
+      ...(m.reminderCount ? { reminder: String(m.reminderCount) } : {}),
     },
   };
 }
@@ -237,8 +250,8 @@ export class InboxChannel {
   /** Feed one message as the stream would; exported for tests and for the digest policy. */
   async deliver(m: InboxMessage): Promise<void> {
     if (!m?.id) return;
-    if (this.seen.has(m.id)) { this.stats.duplicates += 1; return; }
-    this.remember(m.id);
+    if (this.seen.has(wakeKey(m))) { this.stats.duplicates += 1; return; }
+    this.remember(wakeKey(m));
     this.lastId = m.id;
     if (isImmediate(m, this.now(), this.digestMinutes)) {
       await this.emit(renderEvent(m, this.now()));

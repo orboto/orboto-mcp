@@ -8,10 +8,14 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { OrbotoClient } from '../orboto-client.js';
+import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
 import {
+  NOTIFY_PRIORITIES,
   NOTIFY_ROUTED_TO,
   agentNotifyToolConfig,
+  reminderSentNotice,
+  reminderTooSoonText,
+  repeatedSendNotice,
   makeAgentHeartbeatHandler,
   makeAgentPresenceHandler,
   makeAgentNotifyHandler,
@@ -378,5 +382,47 @@ describe('orboto_agent_notify role addresses (ORB-2264)', () => {
     expect(result.isError).toBe(true);
     expect(fetch).not.toHaveBeenCalled();
     expect(agentNotifyToolConfig.description).toContain('integrator@KEY');
+  });
+});
+
+describe('orboto_agent_notify dedupe and reminders (ORB-2563)', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('mirrors the priorities and sender lines of the shared schema', () => {
+    const shared = readFileSync(new URL('../../../../packages/shared-schema/src/agent-message-dedupe.ts', import.meta.url), 'utf8');
+    const match = shared.match(/AGENT_MESSAGE_PRIORITIES = \[([^\]]+)\]/);
+    expect(match![1].split(',').map((v) => v.trim().replace(/'/g, ''))).toEqual([...NOTIFY_PRIORITIES]);
+    expect(shared).toContain('`already delivered (sent ${repeatCount} times), not sent again`');
+    expect(shared).toContain('`reminder ${reminderCount} sent (sent ${repeatCount} times)`');
+    expect(repeatedSendNotice(3)).toBe('already delivered (sent 3 times), not sent again');
+    expect(reminderSentNotice(1, 4)).toBe('reminder 1 sent (sent 4 times)');
+    expect(agentNotifyToolConfig.description).toContain('remind: true');
+    expect(agentNotifyToolConfig.description).toContain('Loops and retries never set remind or urgent');
+  });
+
+  it('says a deduplicated send was not sent again, and a reminder that it notified again', async () => {
+    const answers = [
+      { ok: true, messageId: '00000000-0000-4000-8000-000000000001', toSessionId: null, routedTo: 'account', deduplicated: true, repeatCount: 8 },
+      { ok: true, messageId: '00000000-0000-4000-8000-000000000001', toSessionId: null, routedTo: 'account', deduplicated: true, repeatCount: 9, reminded: true, reminderCount: 1 },
+    ];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      const body = answers.shift();
+      return { ok: true, status: 200, statusText: 'OK', json: async () => body, text: async () => '' } as unknown as Response;
+    });
+    const handler = makeAgentNotifyHandler(client);
+    const silent = await handler({ targetEmail: 'bob@example.com', subject: 'hi' });
+    expect((silent.content[0] as { text: string }).text).toContain('already delivered (sent 8 times), not sent again');
+    expect(silent.structuredContent).toMatchObject({ messageId: '00000000-0000-4000-8000-000000000001' });
+    const reminder = await handler({ targetEmail: 'bob@example.com', subject: 'hi', remind: true, urgent: true });
+    expect((reminder.content[0] as { text: string }).text).toContain('reminder 1 sent (sent 9 times)');
+    const sent = JSON.parse(String((fetch as unknown as { mock: { calls: Array<[unknown, { body: string }]> } }).mock.calls[1]![1].body));
+    expect(sent).toMatchObject({ remind: true, priority: 'urgent' });
+    expect(sent).not.toHaveProperty('urgent');
+  });
+
+  it('turns the 429 reminder_too_soon into a tool error with the wait', () => {
+    const err = new OrbotoApiError(429, JSON.stringify({ errorKey: 'errors.agents.reminder_too_soon', errorParams: { messageId: 'm-1', retryAfter: 300 } }), 'http://x');
+    expect(reminderTooSoonText(err)).toContain('allowed in 300 seconds');
+    expect(reminderTooSoonText(new OrbotoApiError(409, '{}', 'http://x'))).toBeNull();
   });
 });

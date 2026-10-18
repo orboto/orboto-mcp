@@ -75,6 +75,25 @@ describe('renderEvent / isImmediate', () => {
 });
 
 describe('InboxChannel', () => {
+  it('ORB-2563 - a reminder of a seen message wakes again with its mark, a replay of the same reminder does not, urgent info skips the digest', async () => {
+    const { mcp, notification } = mockMcp();
+    const channel = new InboxChannel({ baseUrl: 'https://x.test', apiKey: 'orb_k', instanceToken: 'mcp-proc', mcp, log: () => {}, digestMinutes: 15 });
+    const noSession = { email: 'claude@orboto.io', sessionId: null, label: 'claude@orboto.io' };
+    const base = { kind: 'info', payload: { message: 'run done' }, createdAt: '2026-09-18 09:59:50+00', to: noSession };
+    await channel.deliver(msg({ ...base, id: 'urgent', priority: 'urgent' }));
+    await channel.deliver(msg({ ...base, id: 'plain' }));
+    await channel.deliver(msg({ ...base, id: 'plain', reminderCount: 1, repeatCount: 3 }));
+    await channel.deliver(msg({ ...base, id: 'plain', reminderCount: 1, repeatCount: 3 }));
+    expect(notification).toHaveBeenCalledTimes(2);
+    const events = notification.mock.calls.map((c) => (c[0] as { params: { content: string; meta: Record<string, string> } }).params);
+    expect(events[0]!.meta).toMatchObject({ id: 'urgent', priority: 'urgent' });
+    expect(events[0]!.content.startsWith('[urgent] [info]')).toBe(true);
+    expect(events[1]!.meta).toMatchObject({ id: 'plain', reminder: '1' });
+    expect(events[1]!.content.startsWith('[reminder 1] [info]')).toBe(true);
+    expect(channel.stats).toMatchObject({ delivered: 2, digested: 1, duplicates: 1 });
+    channel.close();
+  });
+
   it('ORB-2265 - a connected channel wakes at once for info addressed to its session and for a reply flagged as in its sent thread, and digests the account info', async () => {
     const { mcp, notification } = mockMcp();
     const mine = 'bbbbbbbb-0000-4000-8000-000000000000';

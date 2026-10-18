@@ -36,6 +36,19 @@ interface AgentMessage {
   excerpt?: string;
   payloadChars?: number;
   own?: boolean;
+  repeatCount?: number;
+  reminderCount?: number;
+  priority?: 'normal' | 'urgent';
+}
+
+/** ORB-2563 - `[urgent]`, `sent N times` and `reminder N` next to a message, the same words the CLI prints. */
+export function repeatMarks(m: Pick<AgentMessage, 'repeatCount' | 'reminderCount' | 'priority'>): string {
+  const marks = [
+    m.priority === 'urgent' ? 'urgent' : '',
+    m.repeatCount && m.repeatCount > 1 ? `sent ${m.repeatCount} times` : '',
+    m.reminderCount ? `reminder ${m.reminderCount}` : '',
+  ].filter(Boolean);
+  return marks.length ? ` [${marks.join(', ')}]` : '';
 }
 
 interface InboxCounts { unread: number; olderThan7Days: number }
@@ -143,7 +156,7 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
     if (args.includeOwnSends) q.set('includeOwn', 'true');
     else q.set('excludeRef', instanceToken);
     const { messages, sessionId, counts } = await client.get<{ messages: AgentMessage[]; sessionId?: string | null; counts?: InboxCounts }>(`/v1/agent/messages?${q.toString()}`, { instanceToken });
-    const header = (m: AgentMessage) => `${m.own ? `[sent] ${sentState(m)} ` : ''}[${m.kind}]${m.projectKey ? ` [${m.projectKey}]` : ''} ${m.subject} (from ${m.from?.label ?? m.fromUserId} to ${m.to?.label ?? m.toUserId}, ${m.createdAt}, id ${m.id}${m.threadId ? `, thread ${m.threadId}` : ''})`;
+    const header = (m: AgentMessage) => `${m.own ? `[sent] ${sentState(m)} ` : ''}[${m.kind}]${m.projectKey ? ` [${m.projectKey}]` : ''}${repeatMarks(m)} ${m.subject} (from ${m.from?.label ?? m.fromUserId} to ${m.to?.label ?? m.toUserId}, ${m.createdAt}, id ${m.id}${m.threadId ? `, thread ${m.threadId}` : ''})`;
     const lines = messages.length === 0
       ? [acked > 0 ? `Acknowledged ${acked} message(s). Inbox empty.` : 'Inbox empty.']
       : messages.flatMap((m) => (compact ? compactLines(m, header(m)) : [`${header(m)}${m.payload ? ` payload: ${JSON.stringify(m.payload)}` : ''}`]));

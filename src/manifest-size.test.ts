@@ -62,6 +62,9 @@ afterEach(() => { vi.restoreAllMocks(); });
  * ORB-2544 added no named tool: ending a session rides the escape hatch;
  * orboto_who `state` and the agent_presence redaction line fit after the
  * agent_presence summary shrank (full = 171,160).
+ * ORB-2563 gave `orboto_agent_notify` `remind` and `urgent` inside the
+ * ceiling: the docs `content` parameter description shrank to pay for it
+ * (full = 171,194).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
