@@ -40,7 +40,11 @@ export const sessionStartToolConfig = {
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
-interface SessionRegistration { sessionId: string; scope: AgentSessionScope | null; reconnects?: number; lastReconnectAt?: string | null }
+interface SessionRegistration {
+  sessionId: string; scope: AgentSessionScope | null; reconnects?: number; lastReconnectAt?: string | null;
+  /** ORB-2584 - whether mail wakes this session, the scope an earlier process left behind and the lines for both. */
+  wake?: string; scopeExpired?: unknown; notes?: string[];
+}
 
 interface Me { email?: string; fullName?: string; locale?: string; workspaceLocale?: string }
 interface Ticket {
@@ -323,7 +327,10 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
       };
     }
 
-    const toRegistration = (r: SessionRegistration | null) => (r && typeof r.sessionId === 'string' ? { sessionId: r.sessionId, scope: r.scope ?? null, reconnects: r.reconnects, lastReconnectAt: r.lastReconnectAt } : null);
+    const toRegistration = (r: SessionRegistration | null) => (r && typeof r.sessionId === 'string' ? {
+      sessionId: r.sessionId, scope: r.scope ?? null, reconnects: r.reconnects, lastReconnectAt: r.lastReconnectAt,
+      wake: r.wake, scopeExpired: r.scopeExpired ?? null, notes: Array.isArray(r.notes) ? r.notes.filter((n) => typeof n === 'string') : [],
+    } : null);
     const host = localSessionHost(extra as { sessionId?: string } | undefined);
     let registration = await client.post<SessionRegistration>('/v1/agent/heartbeat', { ...(input.scope !== undefined ? { scope: input.scope } : {}), ...(host ? { clientInfo: { host } } : {}) }, { instanceToken })
       .then(toRegistration)
@@ -450,6 +457,7 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
     const roleAddresses = registration?.scope?.role ? (registration.scope.projectKeys ?? []).map((k) => `${registration.scope!.role}@${k}`) : [];
     if (roleAddresses.length) lines.push(`Address form: peers reach this session and every other ${registration!.scope!.role} of the project with orboto_agent_notify { to: "${roleAddresses[0]}" } (${roleAddresses.join(', ')}); address a role, never a session id copied from a log.`);
     if (registration?.scope) lines.push(identityLine(registration));
+    for (const note of registration?.notes ?? []) lines.push(note);
     if (opts.channel) lines.push('', ...channelStartLines());
     if (pendingMessages.length > 0) {
       lines.push('', '## Agent messages - unread');
@@ -481,6 +489,7 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
         session: {
           ref: instanceToken, id: registration?.sessionId ?? null, scope: registration?.scope ?? null,
           reconnects: registration?.reconnects ?? 0, reconnectedAt: registration?.lastReconnectAt ?? null,
+          ...(registration?.wake ? { wake: registration.wake } : {}), scopeExpired: registration?.scopeExpired ?? null,
         },
         gitHealth: {
           unhealthy: gitHealthWithConnections

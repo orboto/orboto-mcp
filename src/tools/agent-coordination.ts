@@ -4,7 +4,7 @@
  * @see ORB-704, ORB-706
  */
 import { z } from 'zod';
-import { AgentInventoryEntrySchema, AgentInventoryKindSchema, type AgentInventoryEntry } from './agent-presence-schema.js';
+import { AGENT_WAKE_LABELS, AgentInventoryEntrySchema, type AgentSessionWake, AgentInventoryKindSchema, type AgentInventoryEntry } from './agent-presence-schema.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { mcpInstanceToken } from './shared.js';
@@ -15,6 +15,8 @@ interface HeartbeatResponse {
   sessionId: string;
   scope: AgentSessionScope | null;
   startedBy?: string | null;
+  wake?: AgentSessionWake;
+  notes?: string[];
 }
 
 export const agentHeartbeatToolConfig = {
@@ -59,9 +61,13 @@ export function makeAgentHeartbeatHandler(client: OrbotoClient) {
   ): Promise<CallToolResult> => {
     const res = await client.post<HeartbeatResponse>('/v1/agent/heartbeat', args, { instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
     const scope = res.scope ? ` scope=${JSON.stringify(res.scope)}` : '';
+    const notes = (res.notes ?? []).map((n) => `\n${n}`).join('');
     return {
-      content: [{ type: 'text', text: `heartbeat ack - sessionToken=${res.sessionToken.slice(0, 8)}… session ${res.sessionId.slice(0, 8)}${scope}` }],
-      structuredContent: { sessionToken: res.sessionToken, sessionId: res.sessionId, scope: res.scope ?? null, ...(res.startedBy !== undefined ? { startedBy: res.startedBy } : {}) },
+      content: [{ type: 'text', text: `heartbeat ack - sessionToken=${res.sessionToken.slice(0, 8)}… session ${res.sessionId.slice(0, 8)}${scope}${notes}` }],
+      structuredContent: {
+        sessionToken: res.sessionToken, sessionId: res.sessionId, scope: res.scope ?? null, ...(res.startedBy !== undefined ? { startedBy: res.startedBy } : {}),
+        ...(res.wake ? { wake: res.wake } : {}), ...(res.notes ? { notes: res.notes } : {}),
+      },
     };
   };
 }
@@ -80,10 +86,10 @@ export function originText(s: { origin?: SessionOrigin; state?: string }): strin
 export const agentPresenceToolConfig = {
   title: 'Workspace agent presence',
   description:
-    'Active agent instances. The orboto_who set: lane workers and reviewers, inbox, MCP and runner connections; rows carry kind (agent | human, by credential; isBot is its alias), actsAs, owner, projects, connections, lane, sessionId, userEmail, runtime (clientInfo.name), capabilities, status, current ticket, reconnects, origin (host, repo, pid, client, harness, credential) and state (live | quiet | orphaned | unknown_origin). Operators (admin:agents:read or admin:system:read) see the workspace, others their own sessions and those declared on their projects, a foreign row redacted (redacted: true, no pid, repo, machine, connections, inbox or owner). Check it before dispatching a sub-task. projectKey and kind filter client-side like `orboto agents --project KEY --bots|--humans`.',
+    'Active agent instances. The orboto_who set: lane workers and reviewers, inbox, MCP and runner connections; rows carry kind (agent | human by credential; alias isBot), actsAs, owner, projects, connections, wake (on_call: nothing wakes it), lane, sessionId, userEmail, runtime, capabilities, status, current ticket, reconnects, origin (host, repo, pid, client, harness, credential), state (live | quiet | orphaned | unknown_origin). Operators (admin:agents:read or admin:system:read) see the workspace, others their own sessions and those on their projects, a foreign row redacted (no pid, repo, machine, connections, inbox, owner). projectKey and kind filter client-side (`orboto agents --project KEY --bots|--humans`).',
   inputSchema: z.object({
-    projectKey: z.string().min(1).max(64).optional().describe('Keep only rows whose projects contain this project key (case-insensitive).'),
-    kind: AgentInventoryKindSchema.optional().describe('Keep only rows classified as agent or human by their credential.'),
+    projectKey: z.string().min(1).max(64).optional().describe('Only rows whose projects hold this key.'),
+    kind: AgentInventoryKindSchema.optional().describe('Only rows of this kind (by credential).'),
   }).shape,
   outputSchema: z.object({
     sessions: z.array(AgentInventoryEntrySchema),
@@ -112,7 +118,7 @@ export function makeAgentPresenceHandler(client: OrbotoClient) {
         const work = s.workingOnTicket
           ? ` · working on [${s.workingOnTicket.projectKey ?? '?'}] ${s.workingOnTicket.key ?? s.workingOnTicket.id} (${s.workingOnTicket.title})`
           : '';
-        lines.push(`- ${name} <${s.userEmail}> (${runtime}, instance ${s.sessionId}) - ${s.status}${originText(s)}${work}; owner: ${s.owner?.name ?? s.owner?.email ?? (s.actsAs ? `acts as ${s.actsAs.name ?? s.actsAs.email}` : s.kind === 'agent' ? 'unassigned' : 'self')}${s.lane ? `; lane: ${s.lane.name}` : ''}${s.projects.length ? `; projects: ${s.projects.map((p) => p.key).join(', ')}` : ''}${s.connections.length ? `; connections: ${s.connections.map((c) => c.type).join(', ')}` : ''}`);
+        lines.push(`- ${name} <${s.userEmail}> (${runtime}, instance ${s.sessionId}) - ${s.status}${originText(s)}${work}; owner: ${s.owner?.name ?? s.owner?.email ?? (s.actsAs ? `acts as ${s.actsAs.name ?? s.actsAs.email}` : s.kind === 'agent' ? 'unassigned' : 'self')}${s.lane ? `; lane: ${s.lane.name}` : ''}${s.projects.length ? `; projects: ${s.projects.map((p) => p.key).join(', ')}` : ''}${s.connections.length ? `; connections: ${s.connections.map((c) => c.type).join(', ')}` : ''}${s.wake ? `; ${AGENT_WAKE_LABELS[s.wake]}` : ''}`);
       }
     }
     return {
@@ -148,6 +154,7 @@ interface NotifyResponse {
   repeatCount?: number;
   reminded?: boolean;
   reminderCount?: number;
+  wakeable?: boolean;
 }
 
 interface NoRecipientBody {
@@ -319,6 +326,7 @@ export function makeAgentNotifyHandler(client: OrbotoClient) {
         ...(recipients.length ? { recipients } : {}),
         ...(res.queued ? { queued: true } : {}),
         ...(res.ownerHint?.routed ? { owner: res.ownerHint.ownerAddress } : {}),
+        ...(res.wakeable !== undefined ? { wakeable: res.wakeable } : {}),
       },
     };
   };

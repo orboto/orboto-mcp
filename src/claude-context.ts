@@ -60,8 +60,14 @@ export function readClaudeContext(dir: string, now = Date.now(), root = claudeCo
   return fresh.length === 1 ? fresh[0] : null;
 }
 
-/** ORB-2465 - the channel heartbeat's clientInfo: the wake channel, the host `--host` filters on, and the context report. */
-export function channelClientInfo(context: ClaudeContextReport | null, host: string = hostname()): Record<string, unknown> {
+/** ORB-2584 - the one heartbeat of a stdio server without a channel: its host and `toolServer`, so the API drops a `legacy` channel an older proxy of this row announced. */
+export function toolServerHeartbeat(host: string = hostname()): Record<string, unknown> {
   const value = host.trim().toLowerCase().slice(0, 200);
-  return { channel: 'claude-code', ...(value ? { host: value } : {}), ...(context ?? {}) };
+  return { toolServer: true, ...(value ? { host: value } : {}) };
+}
+
+/** ORB-2465 - the channel heartbeat's clientInfo: the wake channel, the host `--host` filters on, and the context report; ORB-2584 - the start that delivers the channel. */
+export function channelClientInfo(context: ClaudeContextReport | null, host: string = hostname(), start?: 'orboto-claude' | 'explicit' | 'legacy'): Record<string, unknown> {
+  const value = host.trim().toLowerCase().slice(0, 200);
+  return { channel: 'claude-code', ...(start ? { channelStart: start } : {}), ...(value ? { host: value } : {}), ...(context ?? {}) };
 }

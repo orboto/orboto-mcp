@@ -113,11 +113,11 @@ export const CHANNEL_START_COMMANDS = {
   resumeById: 'orboto claude --resume <session id>',
 } as const;
 
-/** The raw Claude Code form, for a machine without the orboto CLI. */
+/** The raw Claude Code form, for a machine without the orboto CLI; ORB-2584 - ORBOTO_MCP_CHANNEL=1 is the operator's marker that this start delivers the channel. */
 export const CHANNEL_START_COMMANDS_WITHOUT_CLI = {
-  fresh: `claude ${START_FLAG}`,
-  continueLatest: `claude ${START_FLAG} --continue`,
-  resumeById: `claude ${START_FLAG} --resume <session id>`,
+  fresh: `ORBOTO_MCP_CHANNEL=1 claude ${START_FLAG}`,
+  continueLatest: `ORBOTO_MCP_CHANNEL=1 claude ${START_FLAG} --continue`,
+  resumeById: `ORBOTO_MCP_CHANNEL=1 claude ${START_FLAG} --resume <session id>`,
 } as const;
 
 /** The `orboto_session_start` block of a stdio proxy whose channel is on. */

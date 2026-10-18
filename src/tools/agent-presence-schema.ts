@@ -11,6 +11,17 @@ const AgentAccountRefSchema = z.object({ id: z.string().uuid(), name: z.string()
 export const AgentInventoryKindSchema = z.enum(['agent', 'human']);
 export const AgentConnectionTypeSchema = z.enum(['api_key', 'oauth', 'lane', 'external_token', 'live_events', 'web', 'channel']);
 export const AgentInventoryConnectionSchema = z.object({ type: AgentConnectionTypeSchema, label: z.string() });
+/** ORB-2584 - mirror of AgentSessionWakeSchema in @orboto/shared-schema agent-session-wake.ts. */
+export const AgentSessionWakeSchema = z.enum(['channel', 'stream', 'lane', 'on_call']);
+export type AgentSessionWake = z.infer<typeof AgentSessionWakeSchema>;
+
+/** ORB-2584 - mirror of AGENT_WAKE_LABELS: what presence lines print for each wake. */
+export const AGENT_WAKE_LABELS: Record<AgentSessionWake, string> = {
+  channel: 'reachable by channel',
+  stream: 'reachable by inbox stream',
+  lane: 'reachable as a lane',
+  on_call: 'reads mail only on its own calls',
+};
 export const AgentInventoryProjectSchema = z.object({ id: z.string().uuid(), key: z.string(), name: z.string() });
 
 export const AgentInventoryEntrySchema = z.object({
@@ -28,6 +39,8 @@ export const AgentInventoryEntrySchema = z.object({
   lane: z.object({ id: z.string().uuid(), name: z.string(), role: z.string(), paused: z.boolean() }).nullable(),
   projects: z.array(AgentInventoryProjectSchema),
   connections: z.array(AgentInventoryConnectionSchema),
+  /** ORB-2584 - whether mail wakes the session (channel, stream, lane) or it reads mail only on its own calls (`on_call`). */
+  wake: AgentSessionWakeSchema.optional(),
   workingOnTicket: z.object({ id: z.string().uuid(), key: z.string().nullable(), title: z.string(), projectKey: z.string().nullable() }).nullable(),
   workSessions: z.array(z.object({
     ticketId: z.string().uuid(), ticketKey: z.string().nullable(), role: z.string(), leaseUntil: z.string(),

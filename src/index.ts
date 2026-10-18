@@ -57,7 +57,12 @@ async function main() {
       process.exit(1);
     }
 
-    const channel = (process.env.ORBOTO_MCP_CHANNEL ?? '1') !== '0';
+    const { channelStartFromEnv } = await import('./channel-start.js');
+    const channelStart = channelStartFromEnv({
+      ORBOTO_MCP_CHANNEL: process.env.ORBOTO_MCP_CHANNEL, ORBOTO_CLAUDE_CHANNEL: process.env.ORBOTO_CLAUDE_CHANNEL,
+      ORBOTO_ORIGIN: process.env.ORBOTO_ORIGIN, ORBOTO_MCP_CLI_OUTDATED: process.env.ORBOTO_MCP_CLI_OUTDATED,
+    });
+    const channel = channelStart !== null;
     const server = await buildOrbotoMcpServer({ ...clientConfig, channel, instanceToken: (await import('./tools/shared.js')).mcpProcessInstance() });
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
     const stdio = new StdioServerTransport();
@@ -76,7 +81,7 @@ async function main() {
       if (outdated) void inbox.deliverNotice(CLI_OUTDATED_NOTICE, outdated);
       const { readClaudeContext, channelClientInfo } = await import('./claude-context.js');
       const beat = () => {
-        preflightClient.post('/v1/agent/heartbeat', { clientInfo: channelClientInfo(readClaudeContext(process.cwd())) }, { instanceToken })
+        preflightClient.post('/v1/agent/heartbeat', { clientInfo: channelClientInfo(readClaudeContext(process.cwd()), undefined, channelStart ?? undefined) }, { instanceToken })
           .catch((err) => { console.error(`[orboto-mcp] channel heartbeat failed: ${(err as Error).message}`); });
       };
       beat();
@@ -86,6 +91,10 @@ async function main() {
       stdio.onclose = cleanup;
       const { endProbeSessionOnStdinEnd } = await import('./probe-session.js');
       endProbeSessionOnStdinEnd({ env: process.env, stdin: process.stdin, client: preflightClient, instanceToken, cleanup, exit: (code) => process.exit(code), settle: releaseCapacity });
+    } else {
+      const { toolServerHeartbeat } = await import('./claude-context.js');
+      preflightClient.post('/v1/agent/heartbeat', { clientInfo: toolServerHeartbeat() }, { instanceToken: (await import('./tools/shared.js')).mcpProcessInstance() })
+        .catch((err) => { console.error(`[orboto-mcp] heartbeat failed: ${(err as Error).message}`); });
     }
     return;
   }

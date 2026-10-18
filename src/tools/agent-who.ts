@@ -5,6 +5,7 @@ import type { OrbotoClient } from '../orboto-client.js';
 import { AgentSessionRoleSchema } from './agent-session-scope.js';
 import { ownerLine, type OwnerMatch } from './responsibilities.js';
 import { originText, type SessionOrigin } from './agent-coordination.js';
+import { AGENT_WAKE_LABELS, type AgentSessionWake } from './agent-presence-schema.js';
 
 interface WhoEntry {
   sessionId: string;
@@ -15,6 +16,7 @@ interface WhoEntry {
   addresses: string[];
   lastSeenAt: string;
   channel: { announced: string | null; online: boolean };
+  wake?: AgentSessionWake;
   currentTicket: { key: string | null; title: string } | null;
   status: string;
   host?: string | null;
@@ -39,7 +41,8 @@ export const agentWhoToolConfig = {
 /** One directory row as a line: address, account, session, projects, channel, ticket. */
 export function whoLine(s: WhoEntry): string {
   const address = s.addresses.join(', ') || (s.role ? `${s.role} (no project)` : 'no scope');
-  const channel = s.channel.announced ? `${s.channel.announced}${s.channel.online ? ' online' : ' offline'}` : 'no channel';
+  const announced = s.channel.announced ? `${s.channel.announced}${s.channel.online ? ' online' : ' offline'}` : 'no channel';
+  const channel = s.wake === 'channel' || !s.wake ? announced : AGENT_WAKE_LABELS[s.wake];
   const ticket = s.currentTicket ? `; on ${s.currentTicket.key ?? s.currentTicket.title}` : '';
   const host = s.origin ? originText(s) : s.host ? `, host ${s.host}` : '';
   const shared = s.sharedAddresses?.length ? `; also held by another live session: ${s.sharedAddresses.join(', ')}` : '';

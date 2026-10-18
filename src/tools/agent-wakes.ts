@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { AGENT_WAKE_LABELS, type AgentSessionWake } from './agent-presence-schema.js';
 
 interface WakeRow {
   id: string;
@@ -33,6 +34,8 @@ interface StatsEntry {
   medianLatencyMs: number | null;
   wrongWakeContextTokens: number;
   topRule: string | null;
+  /** ORB-2584 - how mail reaches the session now. */
+  wake?: AgentSessionWake;
 }
 
 export const agentWakesToolConfig = {
@@ -55,7 +58,8 @@ function statsLine(e: StatsEntry): string {
   const precision = e.precision === null ? 'unjudged' : `${Math.round(e.precision * 100)}%`;
   const tokens = e.wrongWakeContextTokens > 0 ? `, wrong wakes cost ${e.wrongWakeContextTokens} tokens` : '';
   const backlog = e.backlogSeen > 0 ? `, ${e.backlogSeen} backlog seen` : '';
-  return `- ${e.label}: ${e.wakes} wakes, precision ${precision}, median ${e.medianLatencyMs ?? '?'} ms, top rule ${e.topRule ?? '-'}${tokens}${backlog}`;
+  const wake = e.wake ? `, now ${AGENT_WAKE_LABELS[e.wake]}` : '';
+  return `- ${e.label}: ${e.wakes} wakes, precision ${precision}, median ${e.medianLatencyMs ?? '?'} ms, top rule ${e.topRule ?? '-'}${tokens}${backlog}${wake}`;
 }
 
 export function makeAgentWakesHandler(client: OrbotoClient) {

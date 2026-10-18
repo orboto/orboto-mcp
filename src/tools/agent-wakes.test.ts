@@ -30,6 +30,15 @@ describe('orboto_agent_wakes', () => {
     expect(text).toContain('Senders:\n- (none)');
   });
 
+  it('ORB-2584 - names how mail reaches each session now', async () => {
+    const { client } = clientReturning({
+      hours: 24,
+      sessions: [{ label: 'coordinator (aa11bb22)', wakes: 2, precision: null, medianLatencyMs: null, topRule: null, wrongWakeContextTokens: 0, backlogSeen: 0, wake: 'on_call' }],
+      senders: [],
+    });
+    expect(textOf(await makeAgentWakesHandler(client)({ stats: true }))).toContain('- coordinator (aa11bb22): 2 wakes, precision unjudged, median ? ms, top rule -, now reads mail only on its own calls');
+  });
+
   it('says so when nothing woke anyone', async () => {
     const { client } = clientReturning({ hours: 24, sessions: [], senders: [] });
     expect(textOf(await makeAgentWakesHandler(client)({ stats: true }))).toContain('- (no wakes)');
