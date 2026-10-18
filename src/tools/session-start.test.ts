@@ -206,6 +206,50 @@ describe('orboto_session_start - rules-hash ack (ORB-1607, ORB-2576)', () => {
   });
 });
 
+describe('orboto_session_start - knowledge layers and project facts (ORB-2575)', () => {
+  const FACTS_TEXT = '## Where knowledge lives\n- Rules: binding behaviour.\n\n## Project facts\n### ORB (project id proj-1): 1 of 3 facts\n- tech_stack/stack: Go and Postgres\n2 more: `orboto primer ORB`';
+  const facts = (text: string) => ({
+    source: 'session', unknown: [], text,
+    projects: [{ projectKey: 'ORB', projectId: 'proj-1', total: 3, facts: [{ category: 'tech_stack', key: 'stack', value: 'Go and Postgres', observed: false }] }],
+    workspace: { total: 0, facts: [] },
+  });
+  const base = {
+    '/users/me/assigned-tickets': { items: [] },
+    '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
+    '/agent-instructions': { instructions: 'RULE TEXT', rulesHash: 'h1' },
+    '/time/timer': {},
+  };
+
+  it('prints the layers and the facts right after the rules, and summarises the counts', async () => {
+    const calls = stubByPath({ ...base, '/project-facts': facts(FACTS_TEXT) });
+    const res = await makeSessionStartHandler(client)();
+    const text = (res.content[0] as { text: string }).text;
+    expect(calls).toContain('/project-facts');
+    expect(text).toContain(`RULE TEXT\n\n${FACTS_TEXT}\n\n## Your in-progress work`);
+    expect((res.structuredContent as { projectFacts: unknown }).projectFacts).toEqual({
+      source: 'session', projects: [{ projectKey: 'ORB', total: 3, shown: 1 }], workspace: { total: 0, shown: 0 }, unknown: [],
+    });
+  });
+
+  it('a long facts block is cut with a handle to the rest', async () => {
+    const long = `${FACTS_TEXT}\n${Array.from({ length: 80 }, (_, i) => `- other/fact-${i}: ${'v'.repeat(60)}`).join('\n')}`;
+    stubByPath({ ...base, '/project-facts': facts(long) });
+    const res = await makeSessionStartHandler(client)();
+    const text = (res.content[0] as { text: string }).text;
+    const handle = (res.structuredContent as { projectFacts: { handle: string } }).projectFacts.handle;
+    expect(handle).toBeTruthy();
+    expect(text).toContain(`orboto_response_expand { handle: "${handle}", path: "projectFacts" }`);
+    expect(text).not.toContain('fact-79');
+  });
+
+  it('an API without the block, or with a malformed one, leaves the section out', async () => {
+    stubByPath({ ...base, '/project-facts': { text: '## Project facts' } });
+    const res = await makeSessionStartHandler(client)();
+    expect((res.content[0] as { text: string }).text).not.toContain('## Project facts');
+    expect((res.structuredContent as { projectFacts?: unknown }).projectFacts).toBeUndefined();
+  });
+});
+
 describe('orboto_session_start - ticketKey bundle (ORB-1607)', () => {
   const bundleStubs = {
     '/projects/by-key/ORB': { id: 'proj-1', key: 'ORB', name: 'orboto' },

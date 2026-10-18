@@ -353,7 +353,7 @@ export function makePrimerFactSupersedeHandler(client: OrbotoClient) {
 export const primerFactVerifyToolConfig = {
   title: 'Verify an agent-observed primer fact',
   description:
-    'Promote an agent-observed fact to verified. Operator-only action; bots without project:edit cannot self-verify. Removes the (observed) marker from the rendered primer and stamps verifiedBy / verifiedAt.',
+    'Promote an agent-observed fact to verified. A person verifies: a bot account or an agent key gets 403 errors.primer_facts.verify_needs_person, so an agent proposes and never confirms. Removes the (observed) marker from the rendered primer and stamps verifiedBy / verifiedAt.',
   inputSchema: z.object({
     factId: z.string().min(1).describe('UUID of the fact to verify.'),
   }).shape,

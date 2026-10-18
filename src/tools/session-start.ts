@@ -27,7 +27,7 @@ export const sessionStartToolConfig = {
   description:
     'THE canonical way to LOAD the binding workspace rules you must follow as an agent. Run it FIRST in a session and AFTER every context compaction. Returns the rules in full (above the full-text bound: one title per rule plus every must-read rule in full, the rest via `rulesOnly: true`); a compact "unchanged" ack only on a repeat inside the same agent context. Also returns your in-progress tickets (LANDED, IDLE = a linked commit but no move for days: finished work never handed to review), your timer and unhealthy git connections. Not orboto_list_agent_instructions - that one edits rule blocks for admins. Registers this session (a heartbeat on its instance row), otherwise read-only. '
     + '**Parameters.** `rulesOnly: true` returns ONLY the complete rules text, never truncated. `projectId` adds that project\'s rules. `ticketKey` ("ACME-42") bundles that ticket\'s primer, detail, dependencies, checklists, git health and other agent sessions. `forceRules: true` returns the full text inline even above the bound or after an ack - use it whenever the rules are NOT in your context. `agentKind` (coding, orchestrator, reviewer, runner) and `modelTier` (frontier, standard, small) target rule blocks and per-tier text. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility; session.ref is what peers pass as toSessionRef (ORB-2136). '
-    + 'Also carries the Knowledge block (ORB-2225: the wiki index of your declared projects and the Operations wiki; ask with orboto_knowledge_ask before a person, file durable facts with orboto_knowledge_add) and the Responsibilities block (ORB-2542: who owns the topics of your projects, orboto_who before agent mail).',
+    + 'Also carries the Knowledge block (ORB-2225: the wiki index of your declared projects and the Operations wiki; ask with orboto_knowledge_ask before a person, file durable facts with orboto_knowledge_add) and the Responsibilities block (ORB-2542: who owns the topics of your projects, orboto_who before agent mail). Right after the rules come Where knowledge lives (ORB-2575: rules bind behaviour, project facts hold fixed decisions, the wiki the long tail; a decision goes to a fact proposal, orboto_primer_fact_add with observed: true) and the Project facts of your declared projects.',
   inputSchema: z.object({
     projectId: z.string().uuid().optional().describe('Also load this project\'s rules.'),
     ticketKey: z.string().min(3).optional().describe('Ticket key ("ACME-42") - bundles that ticket\'s full context.'),
@@ -214,6 +214,32 @@ async function buildTicketBundle(
   };
 }
 
+/** ORB-2575 - GET /project-facts: the rendered layers and facts blocks plus their counts. */
+interface ProjectFactsBlock {
+  source: string;
+  projects: Array<{ projectKey: string; total: number; facts: unknown[] }>;
+  workspace: { total: number; facts: unknown[] };
+  unknown: string[];
+  text: string;
+}
+
+/** ORB-2575 - the facts block stays small; the rest is one expand away, like the Knowledge block. */
+export const PROJECT_FACTS_BLOCK_CHARS = 3000;
+
+export function projectFactsLines(text: string, owner: object = PROCESS_OWNER): { lines: string[]; handle?: string } {
+  if (text.length <= PROJECT_FACTS_BLOCK_CHARS) return { lines: text.split('\n') };
+  const cut = text.slice(0, PROJECT_FACTS_BLOCK_CHARS);
+  const kept = cut.slice(0, Math.max(cut.lastIndexOf('\n'), 0));
+  const handle = storePayload('orboto_session_start', {
+    structuredContent: { projectFacts: text }, text,
+    omitted: [{ path: 'projectFacts', kind: 'string', omittedChars: text.length - kept.length }],
+  }, Date.now(), owner);
+  return {
+    handle,
+    lines: [...kept.split('\n'), `(Project facts cut at ${kept.length} of ${text.length} characters: orboto_response_expand { handle: "${handle}", path: "projectFacts" }, or orboto_get_project_primer.)`],
+  };
+}
+
 interface KnowledgeIndex {
   source: string;
   spaces: Array<{ spaceKey: string | null; spaceName: string; projectKey: string | null; pages: number; sources: number; openLintIssues: number; indexDoc: { key: string | null } | null }>;
@@ -306,7 +332,7 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
     if (input.scope === undefined && registration && !registration.scope && envProjectScope()) {
       registration = toRegistration(await declareEnvProjectScope(client, instanceToken) as SessionRegistration | null) ?? registration;
     }
-    const [me, rules, assigned, timer, inboxRaw, knowledge, owners] = await Promise.all([
+    const [me, rules, assigned, timer, inboxRaw, knowledge, owners, projectFacts] = await Promise.all([
       client.get<Me>('/users/me').catch(() => null),
       loadRequiredRules(client, rulesPath, rulesParams.get('knownRulesHash') ?? undefined),
       client.get<{ items?: Ticket[] } | Ticket[]>('/users/me/assigned-tickets?statuses=IN_PROGRESS,IN_REVIEW&limit=20').catch(() => ({ items: [] })),
@@ -319,6 +345,9 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
         .catch(() => null),
       client.get<{ text?: string; entries?: unknown[]; total?: number }>('/responsibilities/block', { instanceToken })
         .then((r) => (typeof r?.text === 'string' && r.text ? { text: r.text, scoped: Array.isArray(r.entries) ? r.entries.length : 0, total: r.total ?? 0 } : null))
+        .catch(() => null),
+      client.get<ProjectFactsBlock>('/project-facts', { instanceToken })
+        .then((r) => (typeof r?.text === 'string' && r.text.trim() && Array.isArray(r.projects) && Array.isArray(r.unknown) ? r : null))
         .catch(() => null),
     ]);
     const pendingMessages = inboxRaw.map((m) => ({ id: m.id, fromUserId: m.fromUserId, from: m.from?.label ?? m.fromUserId, kind: m.kind, subject: m.subject, createdAt: m.createdAt }));
@@ -388,6 +417,8 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
     } else {
       lines.push(rulesText || '(no workspace rules configured)');
     }
+    const factsBlock = projectFacts ? projectFactsLines(projectFacts.text.trim(), client) : null;
+    if (factsBlock) lines.push('', ...factsBlock.lines);
     lines.push('', '## Your in-progress work');
     if (tickets.length === 0) lines.push('No tickets currently assigned to you - claim or create one before you start coding.');
     else {
@@ -461,6 +492,15 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
           ),
         },
         ...(knowledge ? { knowledge: knowledgeSummary(knowledge, knowledgeBlock?.handle) } : {}),
+        ...(projectFacts ? {
+          projectFacts: {
+            source: projectFacts.source,
+            projects: projectFacts.projects.map((p) => ({ projectKey: p.projectKey, total: p.total, shown: Array.isArray(p.facts) ? p.facts.length : 0 })),
+            workspace: { total: projectFacts.workspace?.total ?? 0, shown: Array.isArray(projectFacts.workspace?.facts) ? projectFacts.workspace.facts.length : 0 },
+            unknown: projectFacts.unknown,
+            ...(factsBlock?.handle ? { handle: factsBlock.handle } : {}),
+          },
+        } : {}),
         ...(owners ? { responsibilities: { scoped: owners.scoped, total: owners.total } } : {}),
         ...(pendingMessages.length > 0 ? { pendingMessages } : {}),
         ...(bundle ? { ticketBundle: bundle.structured } : {}),
