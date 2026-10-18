@@ -39,14 +39,18 @@ interface AgentMessage {
   repeatCount?: number;
   reminderCount?: number;
   priority?: 'normal' | 'urgent';
+  escalationStep?: number;
 }
 
-/** ORB-2563 - `[urgent]`, `sent N times` and `reminder N` next to a message, the same words the CLI prints. */
-export function repeatMarks(m: Pick<AgentMessage, 'repeatCount' | 'reminderCount' | 'priority'>): string {
+const ESCALATED = ['', 'escalated: mail and channels', 'escalated: deputy'];
+
+/** ORB-2563 - `[urgent]`, `sent N times` and `reminder N` next to a message, the same words the CLI prints; ORB-2564 - the ladder step it reached. */
+export function repeatMarks(m: Pick<AgentMessage, 'repeatCount' | 'reminderCount' | 'priority' | 'escalationStep'>): string {
   const marks = [
     m.priority === 'urgent' ? 'urgent' : '',
     m.repeatCount && m.repeatCount > 1 ? `sent ${m.repeatCount} times` : '',
     m.reminderCount ? `reminder ${m.reminderCount}` : '',
+    ESCALATED[m.escalationStep ?? 0] ?? '',
   ].filter(Boolean);
   return marks.length ? ` [${marks.join(', ')}]` : '';
 }
@@ -141,9 +145,11 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
       feedbackSent = res.feedbackSent;
     }
     let acked = 0;
+    let escalationsStopped = 0;
     if (args.ackIds && args.ackIds.length > 0) {
-      const res = await client.post<{ acked: number }>('/v1/agent/messages/ack', { ids: args.ackIds, instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
+      const res = await client.post<{ acked: number; escalationsStopped?: number }>('/v1/agent/messages/ack', { ids: args.ackIds, instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
       acked = res.acked;
+      escalationsStopped = res.escalationsStopped ?? 0;
     }
     const compact = !args.all;
     const q = new URLSearchParams();
@@ -167,6 +173,7 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
     if (args.dismiss) {
       lines.unshift(`Dismissed ${dismissedCount} message(s) as ${args.dismiss.reason}${closedCount > 0 ? `, ${closedCount} closed for the account` : ''}${feedbackSent > 0 ? `, ${feedbackSent} sender(s) told about the misroute` : ''}.`);
     }
+    if (escalationsStopped > 0) lines.unshift(`Stopped the urgent escalation of ${escalationsStopped} message(s).`);
     if (sessionId) lines.push(`This session: ${sessionId.slice(0, 8)} (ref ${instanceToken}).`);
     else lines.push(UNREGISTERED_INBOX_HINT);
     return {

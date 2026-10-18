@@ -165,14 +165,20 @@ export function isImmediate(m: InboxMessage, now: number, digestMinutes: number)
   return ASK.test(`${m.subject} ${firstLine(m.payload)}`);
 }
 
+/** ORB-2564 - a person acknowledged a message this session sent: the event kind is `acknowledged`, so the sender stops reminding. */
+export function eventKind(m: Pick<InboxMessage, 'kind' | 'payload'>): string {
+  return m.payload?.type === 'acknowledged' ? 'acknowledged' : m.kind;
+}
+
 export function renderEvent(m: InboxMessage, now: number): ChannelEvent {
+  const kind = eventKind(m);
   const from = m.from?.label ?? m.fromUserId ?? 'unknown';
   const to = m.to?.label ?? 'you';
   const text = firstLine(m.payload);
   const body = text.length > CONTENT_CAP ? `${text.slice(0, CONTENT_CAP)} [... cut, read the rest with orboto_messages]` : text;
   const marks = [m.priority === 'urgent' ? '[urgent]' : '', m.reminderCount ? `[reminder ${m.reminderCount}]` : ''].filter(Boolean).join(' ');
   const lines = [
-    `${marks ? `${marks} ` : ''}[${m.kind}] ${m.subject}`,
+    `${marks ? `${marks} ` : ''}[${kind}] ${m.subject}`,
     `from ${from} to ${to}${m.projectKey ? ` | project ${m.projectKey}` : ''} | id ${m.id}${m.threadId ? ` | thread ${m.threadId}` : ''}`,
   ];
   if (body) lines.push(body);
@@ -182,7 +188,7 @@ export function renderEvent(m: InboxMessage, now: number): ChannelEvent {
   return {
     content: lines.join('\n'),
     meta: {
-      id: m.id, kind: m.kind, project: m.projectKey ?? '',
+      id: m.id, kind, project: m.projectKey ?? '',
       from: from, from_session: (m.from?.sessionId ?? '').slice(0, 8), to_session: (m.to?.sessionId ?? '').slice(0, 8),
       waited_min: String(waited),
       ...(m.priority === 'urgent' ? { priority: 'urgent' } : {}),
