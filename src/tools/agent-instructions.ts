@@ -15,6 +15,7 @@ interface BlockRow {
   title: string;
   body: string;
   enabled: boolean;
+  mustRead?: boolean;
   sortOrder: number;
   sizeWarning?: { chars: number; limit: number; hint: string };
 }
@@ -28,7 +29,7 @@ function excerptOf(body: string): string {
 }
 
 function renderBlock(b: BlockRow): string {
-  const flag = b.enabled ? '' : ' [disabled]';
+  const flag = (b.enabled ? '' : ' [disabled]') + (b.mustRead ? ' [must read]' : '');
   const kind = b.builtinKey ? `default:${b.builtinKey}` : 'custom';
   return `- ${b.title}${flag}  (${kind}, ${b.body.length} chars, id ${b.id})\n  ${excerptOf(b.body)}`;
 }
@@ -82,6 +83,7 @@ export function makeListAgentInstructionsHandler(client: OrbotoClient) {
           id: b.id,
           title: b.title,
           enabled: b.enabled,
+          ...(b.mustRead ? { mustRead: true } : {}),
           contentChars: b.body.length,
           ...(b.builtinKey ? { builtinKey: b.builtinKey } : {}),
         })),
@@ -103,16 +105,17 @@ export const createAgentInstructionToolConfig = {
     projectId: z.string().uuid().optional().describe('Required for scope=project.'),
     customerId: z.string().uuid().optional().describe('Required for scope=customer.'),
     enabled: z.boolean().optional(),
+    mustRead: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
-    allowOversize: z.boolean().optional().describe('Override the hard size-cap block (400*2 chars). Only after a call was blocked.'),
-    oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true - why this body genuinely needs the length. Audit-logged.'),
+    allowOversize: z.boolean().optional().describe('Override the hard size cap (800 chars) after a blocked call.'),
+    oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true: why the body needs the length (audit-logged).'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 export function makeCreateAgentInstructionHandler(client: OrbotoClient) {
   return async (input: {
-    title: string; body: string; scope?: string; projectId?: string; customerId?: string; enabled?: boolean; sortOrder?: number;
+    title: string; body: string; scope?: string; projectId?: string; customerId?: string; enabled?: boolean; mustRead?: boolean; sortOrder?: number;
     allowOversize?: boolean; oversizeReason?: string;
   }): Promise<CallToolResult> => {
     const { scope, projectId, customerId, ...body } = input;
@@ -139,16 +142,17 @@ export const updateAgentInstructionToolConfig = {
     title: z.string().min(1).max(120).optional(),
     body: z.string().min(1).max(8000).optional(),
     enabled: z.boolean().optional(),
+    mustRead: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
-    allowOversize: z.boolean().optional().describe('Override the hard size-cap block (400*2 chars). Only after a call was blocked.'),
-    oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true - why this body genuinely needs the length. Audit-logged.'),
+    allowOversize: z.boolean().optional().describe('Override the hard size cap (800 chars) after a blocked call.'),
+    oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true: why the body needs the length (audit-logged).'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeUpdateAgentInstructionHandler(client: OrbotoClient) {
   return async (input: {
-    id: string; title?: string; body?: string; enabled?: boolean; sortOrder?: number;
+    id: string; title?: string; body?: string; enabled?: boolean; mustRead?: boolean; sortOrder?: number;
     allowOversize?: boolean; oversizeReason?: string;
   }): Promise<CallToolResult> => {
     const { id, ...patch } = input;

@@ -5,8 +5,9 @@ export interface RulesResponse {
   requireSessionStart?: boolean;
   rulesHash: string;
   rulesUnchanged?: boolean;
-  rulesIndex?: Array<{ title: string; chars: number }>;
+  rulesIndex?: Array<{ title: string; chars: number; mustRead?: boolean; body?: string }>;
   rulesChars?: number;
+  rulesDelivery?: 'full' | 'index';
 }
 
 /** Fixed diagnostics only: neither rule text nor upstream bodies belong in logs. */

@@ -11,10 +11,12 @@ import { OrbotoClient } from '../orboto-client.js';
 import { makeSessionStartHandler } from './session-start.js';
 import { _forgetDeclaredScopes, rememberedScope } from '../session-scope-memory.js';
 import { CHANNEL_START_COMMANDS, CHANNEL_START_COMMANDS_WITHOUT_CLI } from '../inbox-channel.js';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { ORBOTO_HOOK_EVENTS, agentContextKey } from '../agent-context.js';
 import { makeResponseExpandHandler } from './response-expand.js';
 import { applyResponseBudget, budgetFor, DEFAULT_BUDGET_CHARS } from '../response-budget.js';
-import { hostname } from 'node:os';
+import { hostname, tmpdir } from 'node:os';
 import { localSessionHost } from './shared.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -131,8 +133,8 @@ describe('orboto_session_start (ORB-1093)', () => {
   });
 });
 
-describe('orboto_session_start - rules-hash ack (ORB-1607)', () => {
-  it('sends no knownRulesHash on the first call, then passes the received hash back on the second', async () => {
+describe('orboto_session_start - rules-hash ack (ORB-1607, ORB-2576)', () => {
+  it('sends no knownRulesHash on the first call, then passes the received hash back inside the same agent context', async () => {
     const calls: string[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const u = new URL(url.toString());
@@ -153,7 +155,8 @@ describe('orboto_session_start - rules-hash ack (ORB-1607)', () => {
       return { ok: true, status: 200, statusText: 'OK', json: async () => (key ? fallback[key] : {}), text: async () => '' } as unknown as Response;
     });
 
-    const handler = makeSessionStartHandler(client);
+    let context = 'claude-code sess-a 2026-10-18T10:00:00Z';
+    const handler = makeSessionStartHandler(client, { agentContext: () => context });
 
     const first = await handler();
     const firstCall = calls.find((c) => c.startsWith('/agent-instructions'));
@@ -169,13 +172,25 @@ describe('orboto_session_start - rules-hash ack (ORB-1607)', () => {
     const secondCall = calls.find((c) => c.startsWith('/agent-instructions'));
     expect(secondCall).toBe('/agent-instructions?knownRulesHash=abc123def456');
     const secondText = (second.content[0] as { text: string }).text;
-    expect(secondText).toContain('Unchanged since this connection last delivered them');
+    expect(secondText).toContain('Unchanged since this agent context received them in full');
     expect(secondText).toContain('forceRules=true');
     expect(secondText).not.toContain('keep following what you already loaded');
     expect(secondText).not.toContain('claim -> commit -> close');
     const secondStructured = second.structuredContent as { rulesHash: string | null; rulesUnchanged: boolean };
     expect(secondStructured.rulesHash).toBe('abc123def456');
     expect(secondStructured.rulesUnchanged).toBe(true);
+
+    calls.length = 0;
+    context = 'claude-code sess-a 2026-10-18T11:00:00Z';
+    const afterCompaction = await handler();
+    expect(calls.find((c) => c.startsWith('/agent-instructions'))).toBe('/agent-instructions');
+    expect((afterCompaction.content[0] as { text: string }).text).toContain('claim -> commit -> close');
+
+    calls.length = 0;
+    context = '';
+    await handler();
+    await handler();
+    expect(calls.filter((c) => c.startsWith('/agent-instructions'))).toEqual(['/agent-instructions', '/agent-instructions']);
   });
 
   it('a fresh handler (new connection) starts with no cached hash again', async () => {
@@ -293,9 +308,29 @@ describe('orboto_session_start - context cost (ORB-1697)', () => {
     expect(text).not.toContain('forceRules=true');
   });
 
-  it('without forceRules the ack path is still used - the saving is not lost', async () => {
+  it('ORB-2576 - a subagent inside a running session gets the rules in full', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orboto-mcp-subagent-'));
+    mkdirSync(join(dir, '.claude'), { recursive: true });
+    writeFileSync(join(dir, '.claude', 'settings.local.json'), JSON.stringify({ hooks: Object.fromEntries(ORBOTO_HOOK_EVENTS.map((e) => [e, [{ hooks: [{ type: 'command', command: 'orboto claude-hook' }] }]])) }));
+    const turn = (extra: Record<string, unknown>) => {
+      mkdirSync(join(dir, '.orboto', 'claude-turn'), { recursive: true });
+      writeFileSync(join(dir, '.orboto', 'claude-turn', 'sess-a.json'), JSON.stringify({ sessionId: 'sess-a', cwd: dir, state: 'idle', contextStartedAt: '2026-10-18T10:00:00Z', ...extra }));
+    };
+    const env = { CLAUDE_CODE_SESSION_ID: 'sess-a' };
     const calls = stubByPath(rulesStub);
-    const handler = makeSessionStartHandler(client);
+    const handler = makeSessionStartHandler(client, { agentContext: () => agentContextKey(env, dir) });
+    turn({});
+    await handler();
+    turn({ activeSubagents: ['agent-1'], contextStartedAt: '2026-10-18T10:05:00Z' });
+    calls.length = 0;
+    const inSubagent = await handler();
+    expect(calls.find((c) => c.startsWith('/agent-instructions'))).toBe('/agent-instructions');
+    expect((inSubagent.content[0] as { text: string }).text).toContain('THE FULL RULE TEXT');
+  });
+
+  it('without forceRules the ack path is still used inside one agent context - the saving is not lost', async () => {
+    const calls = stubByPath(rulesStub);
+    const handler = makeSessionStartHandler(client, { agentContext: () => 'claude-code sess-a 2026-10-18T10:00:00Z' });
     await handler();
     calls.length = 0;
     await handler();
@@ -464,7 +499,7 @@ describe('ORB-1818 - rules index instead of the full rule text', () => {
   const RULES_TEXT = BLOCK_TITLES.map((t, i) => `${t}\n${'x'.repeat(650)}${i}`).join('\n\n');
   const RULES_INDEX = BLOCK_TITLES.map((title) => ({ title, chars: 651 }));
 
-  const rulesFull = { instructions: RULES_TEXT, rulesHash: 'hash1818aaaa', rulesIndex: RULES_INDEX, rulesChars: RULES_TEXT.length };
+  const rulesFull = { instructions: RULES_TEXT, rulesHash: 'hash1818aaaa', rulesIndex: RULES_INDEX, rulesChars: RULES_TEXT.length, rulesDelivery: 'index' };
 
   function stubDigest(rules: unknown) {
     return stubByPath({
@@ -533,9 +568,9 @@ describe('ORB-1818 - rules index instead of the full rule text', () => {
   });
 
   it('an acked hash returns neither the text NOR the index', async () => {
-    const handler = makeSessionStartHandler(client);
+    const handler = makeSessionStartHandler(client, { agentContext: () => 'claude-code sess-a 2026-10-18T10:00:00Z' });
     stubDigest(rulesFull);
-    await handler();
+    await handler({ forceRules: true });
     vi.restoreAllMocks();
     stubDigest({ rulesHash: 'hash1818aaaa', rulesUnchanged: true });
     const second = await handler();
@@ -544,7 +579,7 @@ describe('ORB-1818 - rules index instead of the full rule text', () => {
     expect(structured.rulesIndex).toBeUndefined();
     expect(structured.rules).toBe('');
     const text = (second.content[0] as { text: string }).text;
-    expect(text).toContain('Unchanged since this connection last delivered them');
+    expect(text).toContain('Unchanged since this agent context received them in full');
     expect(text).toContain('rulesOnly=true');
     expect(text).not.toContain('Rule block number 1');
   });
@@ -588,6 +623,34 @@ describe('ORB-1818 - rules index instead of the full rule text', () => {
     const calls = stubDigest(rulesFull);
     await handler({ rulesOnly: true });
     expect(calls[0]).toBe('/agent-instructions');
+  });
+
+  it('ORB-2576 - a set under the bound comes in full even with an index', async () => {
+    stubDigest({ ...rulesFull, rulesDelivery: 'full' });
+    const res = await makeSessionStartHandler(client)();
+    expect((res.structuredContent as { rulesDelivery: string }).rulesDelivery).toBe('full');
+    expect((res.content[0] as { text: string }).text).toContain(RULES_TEXT);
+  });
+
+  it('ORB-2576 - above the bound every must-read rule comes in full after the titles', async () => {
+    const index = RULES_INDEX.map((e, i) => (i === 1 ? { ...e, mustRead: true, body: 'MUST READ BODY' } : e));
+    stubDigest({ ...rulesFull, rulesIndex: index });
+    const res = await makeSessionStartHandler(client)();
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('so the titles are printed and the 1 must-read rule(s) in full.');
+    expect(text).toContain(`2. ${BLOCK_TITLES[1]} (must read, in full below)`);
+    expect(text).toContain(`### Must read: ${BLOCK_TITLES[1]}\nMUST READ BODY`);
+    expect((res.structuredContent as { mustRead: string[] }).mustRead).toEqual([BLOCK_TITLES[1]]);
+  });
+
+  it('ORB-2576 - an index delivery is no receipt: the next start in the same context sends no known hash', async () => {
+    const handler = makeSessionStartHandler(client, { agentContext: () => 'claude-code sess-a 2026-10-18T10:00:00Z' });
+    stubDigest(rulesFull);
+    await handler();
+    vi.restoreAllMocks();
+    const calls = stubDigest(rulesFull);
+    await handler();
+    expect(calls.find((c) => c.startsWith('/agent-instructions'))).toBe('/agent-instructions');
   });
 
   it('an API too old to send an index still delivers the full rules inline', async () => {

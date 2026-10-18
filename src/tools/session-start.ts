@@ -20,13 +20,14 @@ import { channelStartLines } from '../inbox-channel.js';
 import { rememberDeclaredScope } from '../session-scope-memory.js';
 import { declareEnvProjectScope, envProjectScope } from '../project-scope.js';
 import { agentHeadText } from '../agent-head.js';
+import { agentContextKey } from '../agent-context.js';
 
 export const sessionStartToolConfig = {
   title: 'Load the rules you must follow + re-orient',
   description:
-    'THE canonical way to LOAD the binding workspace rules you must follow as an agent. Run it as your FIRST action in a session and immediately AFTER any context compaction. Returns a one-line-per-rule INDEX of the binding working-rules plus their hash (or a compact "unchanged" ack on a repeat call within the same connection) - read the index, then call this tool again with `rulesOnly: true` to read the full text of the rules whenever you do not already hold that exact hash, and expand before acting on any rule whose title touches what you are about to do. Also returns your in-progress tickets - each flagged LANDED, IDLE when it has a linked commit but has not moved for days, i.e. finished work you never handed to review - your running timer, and a warning if a project\'s git connection looks unhealthy (commit ingestion may be stalled). Pass `ticketKey` to also get a one-shot bundle for that ticket: project primer, the full ticket with dependencies + checklists, that project\'s git health, and any other agent sessions currently on it - replacing several separate calls. (Do NOT use orboto_list_agent_instructions to read the rules - that tool MANAGES/edits rule blocks for admins; this one is what you read to know how to work.) Registers this session (a heartbeat on its instance row) and is otherwise read-only. '
-    + '**Parameters.** `rulesOnly: true` returns ONLY the complete rules text (nothing else) and is never truncated - the cheapest way to read the rules the index listed. `projectId` adds that project\'s rules on top of the workspace + personal ones. `ticketKey` ("ACME-42") bundles that ticket\'s primer, full detail, dependencies, checklists, git health and other active agent sessions into the same response. `forceRules: true` returns the full rules text inline with the rest of the digest even when this connection already delivered them - use it whenever the rules are NOT in your context right now: after a compaction, a /clear, or a fresh agent taking over an existing connection. `agentKind` (coding, orchestrator, reviewer, runner) and `modelTier` (frontier, standard, small) are your self-declared classification; rule blocks and per-tier rule text are targeted by them. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility; the returned session.ref is what peers pass as toSessionRef (ORB-2136). '
-    + 'The digest also carries the Knowledge block (ORB-2225): the wiki index of your declared projects and of the Operations wiki, their latest log entries and open lint issues; ask the wiki with orboto_knowledge_ask before asking a person, file durable facts with orboto_knowledge_add. It also carries the Responsibilities block (ORB-2542): who owns the topics of your declared projects, looked up with orboto_who for before you send agent mail.',
+    'THE canonical way to LOAD the binding workspace rules you must follow as an agent. Run it FIRST in a session and AFTER every context compaction. Returns the rules in full (above the full-text bound: one title per rule plus every must-read rule in full, the rest via `rulesOnly: true`); a compact "unchanged" ack only on a repeat inside the same agent context. Also returns your in-progress tickets (LANDED, IDLE = a linked commit but no move for days: finished work never handed to review), your timer and unhealthy git connections. Not orboto_list_agent_instructions - that one edits rule blocks for admins. Registers this session (a heartbeat on its instance row), otherwise read-only. '
+    + '**Parameters.** `rulesOnly: true` returns ONLY the complete rules text, never truncated. `projectId` adds that project\'s rules. `ticketKey` ("ACME-42") bundles that ticket\'s primer, detail, dependencies, checklists, git health and other agent sessions. `forceRules: true` returns the full text inline even above the bound or after an ack - use it whenever the rules are NOT in your context. `agentKind` (coding, orchestrator, reviewer, runner) and `modelTier` (frontier, standard, small) target rule blocks and per-tier text. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility; session.ref is what peers pass as toSessionRef (ORB-2136). '
+    + 'Also carries the Knowledge block (ORB-2225: the wiki index of your declared projects and the Operations wiki; ask with orboto_knowledge_ask before a person, file durable facts with orboto_knowledge_add) and the Responsibilities block (ORB-2542: who owns the topics of your projects, orboto_who before agent mail).',
   inputSchema: z.object({
     projectId: z.string().uuid().optional().describe('Also load this project\'s rules.'),
     ticketKey: z.string().min(3).optional().describe('Ticket key ("ACME-42") - bundles that ticket\'s full context.'),
@@ -253,8 +254,9 @@ export function identityLine(registration: Pick<SessionRegistration, 'reconnects
   return `This scope stays with this session across reconnects and restarts; declare it again only to change it.${kept}`;
 }
 
-export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: boolean } = {}) {
-  let lastKnownRulesHash: string | undefined;
+export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: boolean; agentContext?: () => string } = {}) {
+  const currentContext = opts.agentContext ?? (() => agentContextKey());
+  let delivered: { context: string; hash: string } | undefined;
 
   return async (
     input: { projectId?: string; ticketKey?: string; forceRules?: boolean; rulesOnly?: boolean; agentKind?: string; modelTier?: string; scope?: AgentSessionScope | null } = {},
@@ -265,13 +267,14 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
     if (input.projectId) rulesParams.set('projectId', input.projectId);
     applyAgentProfile(rulesParams, { agentKind: input.agentKind, modelTier: input.modelTier });
     const wantsFullRules = input.forceRules === true || input.rulesOnly === true;
-    if (lastKnownRulesHash && !wantsFullRules) rulesParams.set('knownRulesHash', lastKnownRulesHash);
+    const context = currentContext();
+    if (context && delivered?.context === context && !wantsFullRules) rulesParams.set('knownRulesHash', delivered.hash);
     const rulesQs = rulesParams.toString();
     const rulesPath = rulesQs ? `/agent-instructions?${rulesQs}` : '/agent-instructions';
 
     if (input.rulesOnly) {
       const rules = await loadRequiredRules(client, rulesPath);
-      if (rules.rulesHash) lastKnownRulesHash = rules.rulesHash;
+      if (context && rules.rulesHash) delivered = { context, hash: rules.rulesHash };
       const text = rules.instructions ?? '';
       return {
         _meta: { [PROTECT_TEXT_META]: true },
@@ -354,21 +357,21 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
     if (me) lines.push(`You are ${me.fullName ?? me.email}${me.email ? ` (${me.email})` : ''}.`);
     if (me?.workspaceLocale || me?.locale) lines.push(`Write tickets / comments / docs in: ${me.workspaceLocale ?? me.locale}.`);
     const rulesText = rules.instructions ?? '';
-    const rulesIndex = Array.isArray(rules.rulesIndex)
-      ? rules.rulesIndex.map((e) => e?.title).filter((t): t is string => typeof t === 'string' && t.length > 0)
-      : [];
-    const deliverIndex = !rules.rulesUnchanged && input.forceRules !== true && rulesIndex.length > 0 && rulesText.length > 0;
+    const indexEntries = Array.isArray(rules.rulesIndex) ? rules.rulesIndex.filter((e) => typeof e?.title === 'string' && e.title.length > 0) : [];
+    const rulesIndex = indexEntries.map((e) => e.title);
+    const mustRead = indexEntries.filter((e) => e.mustRead === true && typeof e.body === 'string' && e.body.trim().length > 0);
+    const deliverIndex = !rules.rulesUnchanged && input.forceRules !== true && rules.rulesDelivery === 'index' && rulesIndex.length > 0 && rulesText.length > 0;
     const deliverFull = !rules.rulesUnchanged && !deliverIndex && rulesText.length > 0;
     const rulesChars = rules.rulesChars ?? rulesText.length;
     const HOW_TO_READ_RULES =
       'Call orboto_session_start { rulesOnly: true } for the complete rule text (one call, never truncated). '
-      + 'Do that whenever you do not already hold this exact rulesHash - after a compaction, a /clear, or as a fresh agent.';
+      + 'Do that whenever you do not already hold this exact rulesHash.';
     let rulesHandle: string | undefined;
     lines.push('', '## Working rules - follow these');
     if (rules.rulesUnchanged) {
       lines.push(
-        `Unchanged since this connection last delivered them (hash ${rules.rulesHash}), so they were left out to save context.`,
-        'If the rules are NOT in your context right now - after a compaction, a /clear, or because you are a fresh agent on an existing connection - call this tool again with rulesOnly=true (rules alone) or forceRules=true (rules plus this digest) and read them in full. Do not proceed on a half-remembered rule set.',
+        `Unchanged since this agent context received them in full (hash ${rules.rulesHash}), so they were left out to save context.`,
+        'If the rules are NOT in your context right now, call this tool again with rulesOnly=true (rules alone) or forceRules=true (rules plus this digest) and read them in full. Do not proceed on a half-remembered rule set.',
       );
     } else if (deliverIndex) {
       rulesHandle = storePayload('orboto_session_start', {
@@ -377,10 +380,11 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
         omitted: [{ path: 'rules', kind: 'string', omittedChars: rulesText.length }],
       }, Date.now(), client);
       lines.push(
-        `${rulesIndex.length} rule(s) bind you (${rulesChars} characters, hash ${rules.rulesHash}). Titles only - the full text is NOT in this response.`,
+        `${rulesIndex.length} rule(s) bind you (${rulesChars} characters, hash ${rules.rulesHash}). The set is above the full-text bound, so the titles are printed and the ${mustRead.length} must-read rule(s) in full.`,
         `${HOW_TO_READ_RULES} Read any rule below whose title touches what you are about to do BEFORE you do it. (orboto_response_expand { handle: "${rulesHandle}", path: "rules" } serves the same text from this process for 15 minutes.)`,
-        ...rulesIndex.map((title, i) => `${i + 1}. ${title}`),
+        ...indexEntries.map((e, i) => `${i + 1}. ${e.title}${mustRead.includes(e) ? ' (must read, in full below)' : ''}`),
       );
+      for (const e of mustRead) lines.push('', `### Must read: ${e.title}`, String(e.body).trim());
     } else {
       lines.push(rulesText || '(no workspace rules configured)');
     }
@@ -432,7 +436,7 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
         rulesUnchanged: rules.rulesUnchanged === true,
         rulesDelivery: rules.rulesUnchanged ? 'ack' : deliverIndex ? 'index' : 'full',
         ...(deliverIndex
-          ? { rulesIndex, rulesChars, rulesHandle, rulesHowToRead: HOW_TO_READ_RULES }
+          ? { rulesIndex, rulesChars, rulesHandle, rulesHowToRead: HOW_TO_READ_RULES, mustRead: mustRead.map((e) => e.title) }
           : {}),
         ...(rules.rulesUnchanged ? { rulesHowToRead: HOW_TO_READ_RULES } : {}),
         inProgress: scopedTickets.map((t) => ({
@@ -462,7 +466,7 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
         ...(bundle ? { ticketBundle: bundle.structured } : {}),
       },
     };
-    lastKnownRulesHash = rules.rulesHash;
+    if (context && deliverFull && rules.rulesHash) delivered = { context, hash: rules.rulesHash };
     return result;
   };
 }
