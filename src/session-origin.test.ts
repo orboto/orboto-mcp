@@ -8,7 +8,7 @@ import { mkdtempSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHttpServer, type McpServerInternals, type McpSessionStore } from './http-transport.js';
-import { formatOrigin, machineId, repoBasename, shortHost, stdioOrigin } from './session-origin.js';
+import { formatOrigin, machineId, repoBasename, shortHost, stdioHarness, stdioOrigin } from './session-origin.js';
 import { bindSessionInstance, mcpInstanceToken, releaseSessionInstance, stableClientInstance } from './tools/shared.js';
 import { InboxChannel, SESSION_ENDED_NOTICE } from './inbox-channel.js';
 
@@ -22,6 +22,18 @@ describe('ORB-2544 - the origin header', () => {
     expect(params.get('pid')).toBe('99');
     expect(params.get('harness')).toBe('claude-code');
     expect(params.get('client')).toBe('orboto-mcp');
+  });
+
+  it('ORB-2571 - a stdio proxy names the harness orboto <harness> started and its model, else the harness markers', () => {
+    expect(stdioHarness({ ORBOTO_HARNESS: 'kimi', CLAUDECODE: '1' })).toBe('kimi');
+    expect(stdioHarness({ ORBOTO_HARNESS: 'antigravity' })).toBe('agy');
+    expect(stdioHarness({ GEMINI_CLI: '1' })).toBe('gemini');
+    expect(stdioHarness({ CODEX_SESSION_ID: 's' })).toBe('codex');
+    expect(stdioHarness({})).toBe('mcp-stdio');
+    const params = new URLSearchParams(stdioOrigin({ ORBOTO_HARNESS: 'agy', ORBOTO_MODEL: 'gemini-4-argon' }));
+    expect(params.get('harness')).toBe('agy');
+    expect(params.get('model')).toBe('gemini-4-argon');
+    expect(new URLSearchParams(stdioOrigin({ ORBOTO_MODEL: 'has spaces' })).has('model')).toBe(false);
   });
 
   it('reduces the host to its first label and a checkout to the repository basename', () => {

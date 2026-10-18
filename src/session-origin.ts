@@ -13,12 +13,24 @@ import { VERSION } from './version.js';
 
 export interface McpOrigin {
   host?: string | null; machineId?: string | null; repo?: string | null; pid?: number | null;
-  startedAt?: string | null; client?: string | null; clientVersion?: string | null; harness?: string | null;
+  startedAt?: string | null; client?: string | null; clientVersion?: string | null; harness?: string | null; model?: string | null;
 }
 
 const KEYS: Array<[string, keyof McpOrigin]> = [
-  ['host', 'host'], ['machine', 'machineId'], ['repo', 'repo'], ['pid', 'pid'], ['start', 'startedAt'], ['client', 'client'], ['version', 'clientVersion'], ['harness', 'harness'],
+  ['host', 'host'], ['machine', 'machineId'], ['repo', 'repo'], ['pid', 'pid'], ['start', 'startedAt'], ['client', 'client'], ['version', 'clientVersion'], ['harness', 'harness'], ['model', 'model'],
 ];
+
+const WRAPPED_HARNESSES: Record<string, string> = { claude: 'claude-code', 'claude-code': 'claude-code', codex: 'codex', gemini: 'gemini', kimi: 'kimi', agy: 'agy', antigravity: 'agy' };
+
+/** ORB-2571 - the harness that started a stdio proxy: the one `orboto <harness>` named, else the markers a harness sets. */
+export function stdioHarness(env: NodeJS.ProcessEnv = process.env): string {
+  const wrapped = WRAPPED_HARNESSES[(env.ORBOTO_HARNESS ?? '').trim().toLowerCase()];
+  if (wrapped) return wrapped;
+  if (env.CLAUDECODE) return 'claude-code';
+  if (env.CODEX_THREAD_ID || env.CODEX_SESSION_ID) return 'codex';
+  if (env.GEMINI_CLI) return 'gemini';
+  return 'mcp-stdio';
+}
 
 /** The header value; empty fields are left out. */
 export function formatOrigin(origin: McpOrigin): string {
@@ -81,7 +93,8 @@ export function stdioOrigin(env: NodeJS.ProcessEnv = process.env): string {
   return formatOrigin({
     host: shortHost(), machineId: machineId(), repo: repoBasename(), pid: process.ppid || null,
     client: 'orboto-mcp', clientVersion: VERSION,
-    harness: env.CLAUDECODE ? 'claude-code' : env.CODEX_THREAD_ID || env.CODEX_SESSION_ID ? 'codex' : 'mcp-stdio',
+    harness: stdioHarness(env),
+    model: /^[\x21-\x7e]{1,80}$/.test((env.ORBOTO_MODEL ?? '').trim()) ? env.ORBOTO_MODEL!.trim() : null,
   });
 }
 
