@@ -102,6 +102,86 @@ describe('tools/query', () => {
   });
 });
 
+import { metricsToolName } from '../tail-labels.js';
+import { parseRetryAfter } from '../orboto-client.js';
+import { QUERY_RETRY } from './query.js';
+
+function rateLimited(retryAfter: string | null, errorParams: Record<string, unknown> = {}) {
+  return {
+    ok: false, status: 429, statusText: 'Too Many Requests',
+    headers: new Headers(retryAfter === null ? {} : { 'retry-after': retryAfter }),
+    text: async () => JSON.stringify({ error: 'Rate limit exceeded', errorKey: 'errors.common.rate_limited', errorParams }),
+  } as unknown as Response;
+}
+
+function ok(json: unknown) {
+  return { ok: true, status: 200, statusText: 'OK', headers: new Headers(), json: async () => json } as unknown as Response;
+}
+
+describe('tools/query - 429 and Retry-After (ORB-2581)', () => {
+  const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_test' });
+
+  it('waits the Retry-After seconds and retries until the query answers', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(rateLimited('3'))
+      .mockResolvedValueOnce(ok({ items: [], nextCursor: null }));
+    const sleep = vi.fn(async () => {});
+    const result = await makeQueryHandler(client, sleep)({ oql: 'project = ORB' });
+    expect(sleep).toHaveBeenCalledWith(3000);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0]).toEqual({ type: 'text', text: 'No tickets matched.' });
+  });
+
+  it('stops after the bounded retries and answers with the retry hint', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(rateLimited('5', { retryAfterSeconds: 5, limitPerMinute: 60 }));
+    const sleep = vi.fn(async () => {});
+    const result = await makeQueryHandler(client, sleep)({ oql: 'project = ORB' });
+    expect(fetchSpy).toHaveBeenCalledTimes(QUERY_RETRY.maxRetries + 1);
+    expect(sleep).toHaveBeenCalledTimes(QUERY_RETRY.maxRetries);
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toContain('Retry after 5 seconds');
+    expect(result.structuredContent).toEqual({ rateLimited: true, retryAfterSeconds: 5, limitPerMinute: 60, attempts: QUERY_RETRY.maxRetries + 1 });
+  });
+
+  it('never waits longer than the cap: a long Retry-After answers at once', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(rateLimited(String(QUERY_RETRY.maxWaitSeconds + 1)));
+    const sleep = vi.fn(async () => {});
+    const result = await makeQueryHandler(client, sleep)({ oql: 'project = ORB' });
+    expect(sleep).not.toHaveBeenCalled();
+    expect(result.structuredContent).toMatchObject({ rateLimited: true, retryAfterSeconds: QUERY_RETRY.maxWaitSeconds + 1, attempts: 1 });
+  });
+
+  it('reads the wait from errorParams when a proxy dropped the header', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(rateLimited(null, { retryAfterSeconds: 7 }))
+      .mockResolvedValueOnce(ok({ items: [], nextCursor: null }));
+    const sleep = vi.fn(async () => {});
+    await makeQueryHandler(client, sleep)({ oql: 'project = ORB' });
+    expect(sleep).toHaveBeenCalledWith(7000);
+  });
+
+  it('passes every other error through unchanged', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false, status: 400, statusText: 'Bad Request', headers: new Headers(), text: async () => '{"errorKey":"errors.oql.parse"}',
+    } as unknown as Response);
+    await expect(makeQueryHandler(client, vi.fn(async () => {}))({ oql: '((' })).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('parses delta-seconds and HTTP dates', () => {
+    expect(parseRetryAfter('12')).toBe(12);
+    expect(parseRetryAfter(null)).toBeNull();
+    expect(parseRetryAfter('soon')).toBeNull();
+    expect(parseRetryAfter(new Date(Date.UTC(2026, 9, 18, 12, 0, 30)).toUTCString(), Date.UTC(2026, 9, 18, 12, 0, 0))).toBe(30);
+  });
+
+  it('labels the query limit tail routes for metrics', () => {
+    const id = '00000000-0000-4000-8000-000000000000';
+    expect(metricsToolName('orboto_api_call', { method: 'GET', path: `/admin/agents/identities/${id}/query-rate-limit` })).toBe('orboto_agent_query_rate_limit');
+    expect(metricsToolName('orboto_api_call', { method: 'PUT', path: `/admin/agents/identities/${id}/query-rate-limit` })).toBe('orboto_agent_query_rate_limit');
+  });
+});
+
 import { agentTicketListRow } from './shared.js';
 
 describe('agentTicketListRow (ORB-1699)', () => {

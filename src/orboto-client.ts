@@ -32,11 +32,21 @@ export interface OrbotoClientConfig {
   instanceToken?: string;
 }
 
+/** ORB-2581 - the seconds a `Retry-After` header asks for (delta-seconds or an HTTP date); null when absent or unreadable. */
+export function parseRetryAfter(value: string | null | undefined, now = Date.now()): number | null {
+  if (value == null || value.trim() === '') return null;
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) return Number(trimmed);
+  const at = Date.parse(trimmed);
+  return Number.isNaN(at) ? null : Math.max(0, Math.ceil((at - now) / 1000));
+}
+
 export class OrbotoApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly body: string,
     public readonly url: string,
+    public readonly retryAfterSeconds: number | null = null,
   ) {
     super(`orboto API ${status}: ${body || '(empty body)'}`);
     this.name = 'OrbotoApiError';
@@ -115,7 +125,7 @@ export class OrbotoClient {
     this.pendingAgentMail = mail ? Number(mail) || 0 : 0;
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new OrbotoApiError(res.status, body, url);
+      throw new OrbotoApiError(res.status, body, url, parseRetryAfter(res.headers?.get?.('retry-after')));
     }
     return res;
   }
