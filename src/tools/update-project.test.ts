@@ -37,6 +37,17 @@ const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey:
 const PROJ = { id: 'p1', key: 'ACME', name: 'Acme', description: null, status: 'active' };
 
 describe('orboto_update_project', () => {
+  it('ORB-2569 records and clears the no-lane decision, string or null', async () => {
+    const calls = stub([{ json: PROJ }, { json: { ...PROJ, noLaneReason: 'Bots work interactively' } }, { json: PROJ }, { json: { ...PROJ, noLaneReason: null } }]);
+    const handler = makeUpdateProjectHandler(client);
+    const set = await handler({ projectKey: 'ACME', patch: { noLaneReason: 'Bots work interactively' } });
+    expect(calls[1]).toMatchObject({ method: 'PATCH', body: { noLaneReason: 'Bots work interactively' } });
+    expect(set.structuredContent).toMatchObject({ noLaneReason: 'Bots work interactively' });
+    const cleared = await handler({ projectKey: 'ACME', patch: { noLaneReason: null } });
+    expect(calls[3]).toMatchObject({ body: { noLaneReason: null } });
+    expect(cleared.structuredContent).toMatchObject({ noLaneReason: null });
+  });
+
   it('PATCHes only the supplied fields', async () => {
     const calls = stub([
       { json: PROJ },

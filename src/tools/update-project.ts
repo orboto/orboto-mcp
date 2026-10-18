@@ -19,7 +19,7 @@ type LocaleCode = (typeof LOCALE_CODES)[number];
 export const updateProjectToolConfig = {
   title: 'Update a project\'s metadata',
   description:
-    'Patch a project (`name`, `description`, `key`, `status`, `branchTemplate`, `customerId`, `language`). At least one field must be set. Use `status: "archived"` or `"closed"` to take a project out of active rotation. Renaming the `key` also rewrites every ticket\'s `PROJ-N` reference - handle with care. `language` sets the project\'s expected ticket language (one of the 18 supported locales); pass null to inherit the workspace language.',
+    'Patch a project; set at least one field. `status` archived or closed leaves rotation. A `key` rename rewrites `PROJ-N` references. `language` null inherits. `noLaneReason`: no headless lane needed (bots work interactively); null clears.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Current project key.'),
     patch: z.object({
@@ -34,6 +34,7 @@ export const updateProjectToolConfig = {
         .describe('Customer UUID; null detaches.'),
       language: z.enum(LOCALE_CODES).nullable().optional()
         .describe('Content language; null inherits workspace.'),
+      noLaneReason: z.string().nullable().optional(),
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -51,6 +52,7 @@ export function makeUpdateProjectHandler(client: OrbotoClient) {
       branchTemplate?: string | null;
       customerId?: string | null;
       language?: LocaleCode | null;
+      noLaneReason?: string | null;
     };
   }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, projectKey);
@@ -68,6 +70,7 @@ export function makeUpdateProjectHandler(client: OrbotoClient) {
         description: updated.description,
         status: updated.status,
         language: updated.language ?? null,
+        noLaneReason: updated.noLaneReason ?? null,
         spec: updated.spec,
       },
     };

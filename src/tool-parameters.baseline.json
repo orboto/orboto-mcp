@@ -2188,6 +2188,7 @@
       "patch.key",
       "patch.language",
       "patch.name",
+      "patch.noLaneReason",
       "patch.status",
       "projectKey"
     ],

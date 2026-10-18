@@ -29,6 +29,7 @@ export interface ProjectRow {
   description: string | null;
   status: string;
   language?: string | null;
+  noLaneReason?: string | null;
   raciEnabled?: boolean;
   customerId?: string | null;
   internal?: boolean;
