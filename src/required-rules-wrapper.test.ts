@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { hermeticHome, hermeticSpawnEnv } from './test/hermetic-cli-env.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const cleanup: Array<() => Promise<void>> = [];
@@ -35,7 +36,7 @@ async function fixture() {
   await writeFile(guard, `const original = globalThis.fetch; globalThis.fetch = (input, init) => { if (new URL(input).origin !== ${JSON.stringify(origin)}) throw new Error('Fixture refused a nonlocal request'); return original(input, init); };`);
   const run = (args = ['session-start', '--force-rules']) => new Promise<{ code: number | null; out: string; err: string }>((ok, no) => {
     const child = spawn(process.execPath, ['--import', guard, join(dir, 'skills/orboto/scripts/orboto.mjs'), ...args], {
-      cwd: dir, env: { ...process.env, ORBOTO_PROFILE: '', ORBOTO_BASE_URL: `http://127.0.0.1:${address.port}`, ORBOTO_TOKEN: 'orb_fixture', ORBOTO_DAEMON: '', ORBOTO_AGENT_SESSION: 'fixture' },
+      cwd: dir, env: hermeticSpawnEnv({ home: hermeticHome('mcp-wrapper'), baseUrl: `http://127.0.0.1:${address.port}`, token: 'orb_fixture', env: { ORBOTO_DAEMON: '', ORBOTO_AGENT_SESSION: 'fixture' } }),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let out = '', err = '';

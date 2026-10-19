@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { childWindow, ciWindow } from '../test/ci-window.js';
+import { hermeticHome, hermeticSpawnEnv } from '../test/hermetic-cli-env.js';
 
 it('real wrapper preserves piped diff text and version-prefixed check/record values', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'orboto-1964-verify-temp-'));
@@ -31,7 +32,7 @@ it('real wrapper preserves piped diff text and version-prefixed check/record val
     await writeFile(guard, `const original = globalThis.fetch; globalThis.fetch = (input, init) => { if (new URL(input).origin !== ${JSON.stringify(origin)}) throw new Error('Fixture refused nonlocal request'); return original(input, init); };`);
     const run = (args: string[], stdin = '') => new Promise<string>((ok, no) => {
       const child = spawn(process.execPath, ['--import', guard, join(dir, 'skills/orboto/scripts/orboto.mjs'), ...args], {
-        cwd: dir, env: { ...process.env, ORBOTO_PROFILE: '', ORBOTO_BASE_URL: origin, ORBOTO_TOKEN: 'orb_fixture', ORBOTO_DAEMON: '', ORBOTO_AGENT_SESSION: 'fixture' },
+        cwd: dir, env: hermeticSpawnEnv({ home: hermeticHome('mcp-wrapper'), baseUrl: origin, token: 'orb_fixture', env: { ORBOTO_DAEMON: '', ORBOTO_AGENT_SESSION: 'fixture' } }),
         timeout: childWindow(),
       });
       let out = '', err = '';

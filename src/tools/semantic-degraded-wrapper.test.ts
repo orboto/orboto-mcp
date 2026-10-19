@@ -9,6 +9,7 @@ import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { childWindow, ciWindow } from '../test/ci-window.js';
+import { hermeticHome, hermeticSpawnEnv } from '../test/hermetic-cli-env.js';
 
 const LINE = 'semantic search unavailable, showing full-text results';
 
@@ -37,7 +38,7 @@ it('search, search-docs, ask-docs and check-similar print the degraded line on s
     await writeFile(guard, `const original = globalThis.fetch; globalThis.fetch = (input, init) => { if (new URL(input).origin !== ${JSON.stringify(origin)}) throw new Error('Fixture refused nonlocal request'); return original(input, init); };`);
     const run = (args: string[]) => new Promise<{ out: string; err: string }>((ok, no) => {
       const child = spawn(process.execPath, ['--import', guard, join(dir, 'skills/orboto/scripts/orboto.mjs'), ...args], {
-        cwd: dir, env: { ...process.env, ORBOTO_PROFILE: '', ORBOTO_BASE_URL: origin, ORBOTO_TOKEN: 'orb_fixture', ORBOTO_DAEMON: '', ORBOTO_AGENT_SESSION: 'fixture' },
+        cwd: dir, env: hermeticSpawnEnv({ home: hermeticHome('mcp-wrapper'), baseUrl: origin, token: 'orb_fixture', env: { ORBOTO_DAEMON: '', ORBOTO_AGENT_SESSION: 'fixture' } }),
         timeout: childWindow(),
       });
       let out = '', err = '';
