@@ -18,6 +18,8 @@ const SRC = dirname(fileURLToPath(import.meta.url));
 const pkg = createRequire(import.meta.url)('../package.json') as { version: string };
 
 const ALLOWED = new Set(['version.ts']);
+/** ORB-2584 - the channel-start cut-over is a protocol version pinned to shared-schema by channel-start.test.ts, not the package version. */
+const ALLOWED_LINES = [/^export const CHANNEL_START_CUTOVER_VERSION = '\d+\.\d+\.\d+';$/];
 
 function walk(dir: string, acc: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
@@ -42,7 +44,7 @@ describe('ORB-1173 - version literal guard', () => {
     for (const file of walk(SRC)) {
       const text = readFileSync(file, 'utf8');
       text.split('\n').forEach((line, i) => {
-        if (semverLiteral.test(line)) offenders.push(`${file.replace(SRC, 'src')}:${i + 1}: ${line.trim()}`);
+        if (semverLiteral.test(line) && !ALLOWED_LINES.some((allowed) => allowed.test(line.trim()))) offenders.push(`${file.replace(SRC, 'src')}:${i + 1}: ${line.trim()}`);
       });
     }
     expect(offenders, `Hardcoded version literal(s) found - read VERSION from version.ts instead:\n${offenders.join('\n')}`).toEqual([]);
