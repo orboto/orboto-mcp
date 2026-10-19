@@ -170,9 +170,13 @@ export function noRecipientText(err: OrbotoApiError): string | null {
   if (body.errorKey !== 'errors.agents.no_recipient') return null;
   const p = body.errorParams ?? {};
   const live = (p.liveSessions ?? []).map((s) => `${s.addresses[0] ?? s.email} (${s.email}, ${s.shortId})`);
+  const ways = 'a role address in `to` (integrator@KEY), `toSessionRef` with an instance short id, or `queue: true` with `project` to keep it until a session declares the project';
+  if (p.reason === 'ambiguous_account') {
+    return `not sent: ${p.address ?? 'that account'} has ${live.length} live sessions you may address and a request needs one of them. Sessions: ${live.join('; ')}. Send again with \`toSessionRef\` set to the instance short id of one, or address a role (${ways}).`;
+  }
   return `not sent: no live session can receive a request to ${p.address ?? '?'} (${p.reason ?? 'no_recipient'}). `
-    + (live.length ? `Live sessions: ${live.join('; ')}. ` : 'No live session declared the project. ')
-    + 'Address one of them, or send again with queue: true and project to keep it until a session declares the project.';
+    + (live.length ? `Live sessions: ${live.join('; ')}. ` : 'No live session answers there. ')
+    + `Ways on: ${ways}.`;
 }
 
 /** ORB-2542 - the 409 `owner_mismatch` as a tool error naming the owner and both ways on. */
@@ -198,14 +202,15 @@ export function reminderTooSoonText(err: OrbotoApiError): string | null {
 export const agentNotifyToolConfig = {
   title: 'Notify an agent or user',
   description:
-    'Message an agent or user. `to` takes a role address integrator@KEY (every live session with that role on the project, any account), an account email or a session id; targetEmail names the account (with a role address it narrows to that account). kind: request|error = work inside the scope the recipient holds (request needs a target + outcome); info = information; complete = result (needs outcome). payload: free-form JSON; threadId links a reply to the message it answers. toSessionRef (instance short id, session ref or id) reaches ONE session of the account; project scopes an account message to sessions declared on it. A request no live session can receive is refused (no_recipient, naming the live sessions of the project; see orboto_who) unless queue: true holds it until a session declares the project. The answer names routedTo; routingNote "no session declared KEY" means nothing wakes - escalate. A request on a topic another role owns (orboto_who for) is refused; route: true sends it to the owner, forceTarget: true keeps the target. project is a key or UUID; senderRef defaults to this MCP session. An identical send (same recipient, project, kind, subject, payload; no threadId, no attachments) within the dedupe window (default 24 h) is not delivered again: the text says so and names the existing message. remind: true is a deliberate reminder of it (notifies again, at most one per 15 min, faster is refused with retryAfter); urgent: true is never suppressed and counts as a reminder. Loops and retries never set remind or urgent.',
+    'Message an agent or user. `to` takes a role address integrator@KEY (every live session with that role on the project, any account), an account email or a session id; targetEmail names the account (with a role address it narrows to that account). kind: request|error = work inside the scope the recipient holds (request needs a target + outcome); info = information; complete = result (needs outcome). outcome: one sentence, 10 to 1000 characters; body: the plain text of the message (any length, lands in payload.body; payload may carry other JSON); threadId links a reply to the message it answers. toSessionRef (instance short id, session ref or id) reaches ONE session of the account; project scopes an account message to sessions declared on it. A request to an account email without project or toSessionRef goes to its one live session, with several it is refused listing them (pick one with toSessionRef). A request no live session can receive is refused (no_recipient, naming the live sessions of the project; see orboto_who) unless queue: true holds it until a session declares the project. The answer names routedTo; routingNote "no session declared KEY" means nothing wakes - escalate. A request on a topic another role owns (orboto_who for) is refused; route: true sends it to the owner, forceTarget: true keeps the target. project is a key or UUID; senderRef defaults to this MCP session. An identical send (same recipient, project, kind, subject, payload; no threadId, no attachments) within the dedupe window (default 24 h) is not delivered again: the text says so and names the existing message. remind: true is a deliberate reminder of it (notifies again, at most one per 15 min, faster is refused with retryAfter); urgent: true is never suppressed and counts as a reminder. Loops and retries never set remind or urgent.',
   inputSchema: z.object({
     targetEmail: z.string().email().optional(),
     to: z.string().min(3).max(200).optional(),
     queue: z.boolean().optional(),
     kind: z.enum(['info', 'request', 'complete', 'error']).default('info'),
     subject: z.string().min(1).max(200),
-    outcome: z.string().min(10).max(1000).optional(),
+    outcome: z.string().optional(),
+    body: z.string().optional(),
     payload: z.record(z.string(), z.unknown()).optional(),
     threadId: z.string().uuid().optional(),
     project: z.string().min(1).max(64).optional(),
@@ -260,16 +265,38 @@ export function makeAgentBroadcastHandler(client: OrbotoClient) {
   };
 }
 
-/** ORB-2223 - the message-kind definition this versioned sender enforces; the API only warns. */
-export function notifyDefinitionError(args: { kind?: string; outcome?: string; project?: string; toSessionRef?: string; to?: string; targetEmail?: string }): string | null {
+export const NOTIFY_OUTCOME_MIN = 10;
+export const NOTIFY_OUTCOME_MAX = 1000;
+export const NOTIFY_BODY_MAX_BYTES = 900 * 1024;
+
+/** ORB-2555 - a complete example call for a kind, the answer to every refusal. */
+export function notifyExample(kind: string, to?: string): string {
+  const target = to ?? 'integrator@KEY';
+  switch (kind) {
+    case 'request': return `orboto_agent_notify { to: "${target}", kind: "request", subject: "<one line>", outcome: "<what must be true when it is done>", body: "<details, any length>" }`;
+    case 'complete': return `orboto_agent_notify { to: "${target}", kind: "complete", subject: "<one line>", outcome: "<what is now true>", threadId: "<message id answered>" }`;
+    case 'error': return `orboto_agent_notify { to: "${target}", kind: "error", subject: "<one line>", body: "<what failed and what you tried>" }`;
+    default: return `orboto_agent_notify { to: "${target}", kind: "info", subject: "<one line>", body: "<text>" }`;
+  }
+}
+
+/** ORB-2223 - the message-kind definition this versioned sender enforces; the API only warns. ORB-2555 - every refusal names the flag and carries a complete example. */
+export function notifyDefinitionError(args: { kind?: string; outcome?: string; body?: string; payload?: Record<string, unknown>; to?: string; targetEmail?: string }): string | null {
   const kind = args.kind ?? 'info';
-  if (!args.to && !args.targetEmail) return 'Invalid arguments: name a recipient - `to` (integrator@KEY, an email or a session id) or `targetEmail`.';
-  if ((kind === 'request' || kind === 'complete') && !args.outcome?.trim()) {
-    return `Invalid arguments: \`outcome\` is required for a ${kind} - the outcome sentence (what must be true when it is done, or what was delivered).`;
+  const example = (text: string) => `Invalid arguments: ${text} Example: ${notifyExample(kind, args.to)}`;
+  if (!args.to && !args.targetEmail) return example('name a recipient - `to` (integrator@KEY, an email or a session id) or `targetEmail`.');
+  const outcome = args.outcome?.trim() ?? '';
+  if ((kind === 'request' || kind === 'complete') && !outcome) {
+    return example(`\`outcome\` is required for a ${kind} - the outcome sentence (what must be true when it is done, or what was delivered), ${NOTIFY_OUTCOME_MIN} to ${NOTIFY_OUTCOME_MAX} characters.`);
   }
-  if (kind === 'request' && !args.project && !args.toSessionRef && !(args.to && !args.to.includes('.'))) {
-    return 'Invalid arguments: a request needs a target - a role address in `to` (integrator@KEY), `project` (key or UUID) or `toSessionRef`.';
+  if (outcome && outcome.length < NOTIFY_OUTCOME_MIN) return example(`\`outcome\` has ${outcome.length} characters, at least ${NOTIFY_OUTCOME_MIN} are needed.`);
+  if (outcome.length > NOTIFY_OUTCOME_MAX) {
+    return example(`\`outcome\` has ${outcome.length} characters, at most ${NOTIFY_OUTCOME_MAX} are allowed: keep the outcome to one sentence and put the long text into \`body\` (any length, it lands in payload.body).`);
   }
+  if (args.body !== undefined && !args.body.trim()) return example('`body` is empty - give the text or leave it out.');
+  if (args.body !== undefined && args.payload && 'body' in args.payload) return example('`body` and `payload.body` are both set - use one of them.');
+  const bodyBytes = args.body === undefined ? 0 : Buffer.byteLength(args.body.replace(/[\r\n]+$/, ''));
+  if (bodyBytes > NOTIFY_BODY_MAX_BYTES) return example(`\`body\` has ${bodyBytes} bytes, at most ${NOTIFY_BODY_MAX_BYTES} (900 KiB) are allowed: split it into several messages or attach a file with the CLI.`);
   return null;
 }
 
@@ -281,6 +308,7 @@ export function makeAgentNotifyHandler(client: OrbotoClient) {
     kind?: 'info' | 'request' | 'complete' | 'error';
     subject: string;
     outcome?: string;
+    body?: string;
     payload?: Record<string, unknown>;
     threadId?: string;
     project?: string;
@@ -296,8 +324,9 @@ export function makeAgentNotifyHandler(client: OrbotoClient) {
     const senderRef = mcpInstanceToken(args.senderRef, extra as { sessionId?: string } | undefined);
     let res: NotifyResponse;
     try {
-      const { urgent, ...rest } = args;
-      res = await client.post<NotifyResponse>('/v1/agent/notify', { ...rest, ...(urgent ? { priority: NOTIFY_PRIORITIES[1] } : {}), senderRef, ownerCheck: 'refuse' }, { instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
+      const { urgent, body, ...rest } = args;
+      const payload = body !== undefined ? { ...(rest.payload ?? {}), body: body.replace(/[\r\n]+$/, '') } : rest.payload;
+      res = await client.post<NotifyResponse>('/v1/agent/notify', { ...rest, ...(payload ? { payload } : {}), ...(urgent ? { priority: NOTIFY_PRIORITIES[1] } : {}), senderRef, ownerCheck: 'refuse' }, { instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
     } catch (err) {
       const refused = err instanceof OrbotoApiError ? noRecipientText(err) ?? ownerMismatchText(err) ?? reminderTooSoonText(err) : null;
       if (refused) return { isError: true, content: [{ type: 'text', text: refused }] };

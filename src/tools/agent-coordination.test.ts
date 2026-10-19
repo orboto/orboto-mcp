@@ -162,11 +162,14 @@ describe('orboto_agent_notify', () => {
     const refused = await handler({ targetEmail: 'bob@example.com', kind: 'request', subject: 'Please review ORB-42' });
     expect(refused.isError).toBe(true);
     expect((refused.content[0] as { text: string }).text).toContain('`outcome` is required for a request');
-    const noTarget = await handler({ targetEmail: 'bob@example.com', kind: 'request', subject: 'Please review ORB-42', outcome: 'ORB-42 has a review verdict' });
-    expect((noTarget.content[0] as { text: string }).text).toContain('`project` (key or UUID) or `toSessionRef`');
     const noOutcome = await handler({ targetEmail: 'bob@example.com', kind: 'complete', subject: 'Done' });
     expect((noOutcome.content[0] as { text: string }).text).toContain('`outcome` is required for a complete');
     expect(capturedBody).toHaveLength(0);
+
+    const bareEmail = await handler({ targetEmail: 'bob@example.com', kind: 'request', subject: 'Please review ORB-42', outcome: 'ORB-42 has a review verdict' });
+    expect(bareEmail.isError).toBeUndefined();
+    expect(capturedBody).toHaveLength(1);
+    capturedBody.length = 0;
 
     const result = await handler({
       targetEmail: 'bob@example.com',
@@ -382,6 +385,91 @@ describe('orboto_agent_notify role addresses (ORB-2264)', () => {
     expect(result.isError).toBe(true);
     expect(fetch).not.toHaveBeenCalled();
     expect(agentNotifyToolConfig.description).toContain('integrator@KEY');
+  });
+});
+
+describe('orboto_agent_notify body and refusals (ORB-2555)', () => {
+  const sentBodies = () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      bodies.push(JSON.parse(String((init as RequestInit).body)));
+      return { ok: true, status: 200, statusText: 'OK', text: async () => '', json: async () => ({ ok: true, messageId: '00000000-0000-4000-8000-000000000001', toSessionId: null, routedTo: 'account' }) } as unknown as Response;
+    });
+    return bodies;
+  };
+
+  it('maps body into payload.body next to other payload keys and carries text beyond the outcome cap', async () => {
+    const bodies = sentBodies();
+    const long = 'detail line\n'.repeat(400);
+    await makeAgentNotifyHandler(client)({ to: 'worker@ORB', kind: 'complete', subject: 'report', outcome: 'the report is delivered in full', body: long, payload: { ticketKey: 'ORB-1' } });
+    expect(bodies[0]!.payload).toEqual({ ticketKey: 'ORB-1', body: long.trimEnd() });
+    expect(bodies[0]!.body).toBeUndefined();
+    await makeAgentNotifyHandler(client)({ to: 'worker@ORB', subject: 'plain', body: 'text' });
+    expect(bodies[1]!.payload).toEqual({ body: 'text' });
+  });
+
+  it('trims trailing newlines of the body and counts its limit in bytes like the CLI', async () => {
+    const bodies = sentBodies();
+    const handler = makeAgentNotifyHandler(client);
+    await handler({ to: 'worker@ORB', subject: 's', body: 'text\r\n\n' });
+    expect(bodies[0]!.payload).toEqual({ body: 'text' });
+    const tooBig = await handler({ to: 'worker@ORB', subject: 's', body: 'ä'.repeat(500 * 1024) });
+    expect((tooBig.content[0] as { text: string }).text).toContain('bytes, at most 921600 (900 KiB)');
+    expect(bodies).toHaveLength(1);
+  });
+
+  it('refuses an outcome over 1000 characters with the remedy and a complete example, sending nothing', async () => {
+    const bodies = sentBodies();
+    const result = await makeAgentNotifyHandler(client)({ to: 'integrator@ORB', kind: 'complete', subject: 'report', outcome: 'x'.repeat(1001) });
+    expect(result.isError).toBe(true);
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain('`outcome` has 1001 characters, at most 1000');
+    expect(text).toContain('put the long text into `body`');
+    expect(text).toContain('Example: orboto_agent_notify { to: "integrator@ORB", kind: "complete"');
+    expect(bodies).toHaveLength(0);
+  });
+
+  it('names the missing field with an example per kind', async () => {
+    const bodies = sentBodies();
+    const handler = makeAgentNotifyHandler(client);
+    const text = async (args: Parameters<typeof handler>[0]) => ((await handler(args)).content[0] as { text: string }).text;
+    expect(await text({ to: 'integrator@ORB', kind: 'request', subject: 's' })).toContain('outcome: "<what must be true when it is done>", body: "<details, any length>"');
+    expect(await text({ to: 'integrator@ORB', kind: 'error', subject: 's', outcome: 'short' })).toContain('`outcome` has 5 characters, at least 10');
+    expect(await text({ to: 'integrator@ORB', subject: 's', body: '  ' })).toContain('`body` is empty');
+    expect(await text({ to: 'integrator@ORB', subject: 's', body: 'x', payload: { body: 'y' } })).toContain('`body` and `payload.body` are both set');
+    expect(await text({ subject: 's' })).toContain('Example: orboto_agent_notify { to: "integrator@KEY", kind: "info"');
+    expect(bodies).toHaveLength(0);
+  });
+
+  it('turns the ambiguous account 409 into a tool error listing the sessions and asking for toSessionRef', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => ({
+      ok: false, status: 409, statusText: 'Conflict', json: async () => ({}),
+      text: async () => JSON.stringify({
+        errorKey: 'errors.agents.no_recipient',
+        errorParams: { address: 'claude@orboto.io', reason: 'ambiguous_account', liveSessions: [
+          { shortId: 'f072e1c5', email: 'claude@orboto.io', addresses: ['worker@ORB'] }, { shortId: 'a072e1c5', email: 'claude@orboto.io', addresses: ['review@ORB'] },
+        ] },
+      }),
+    } as unknown as Response));
+    const result = await makeAgentNotifyHandler(client)({ targetEmail: 'claude@orboto.io', kind: 'request', subject: 's', outcome: 'ORB-1 is reviewed with findings' });
+    const text = (result.content[0] as { text: string }).text;
+    expect(result.isError).toBe(true);
+    expect(text).toContain('has 2 live sessions');
+    expect(text).toContain('worker@ORB (claude@orboto.io, f072e1c5)');
+    expect(text).toContain('`toSessionRef`');
+    expect(text).toContain('integrator@KEY');
+  });
+
+  it('names every way on when the account has no live session', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => ({
+      ok: false, status: 409, statusText: 'Conflict', json: async () => ({}),
+      text: async () => JSON.stringify({ errorKey: 'errors.agents.no_recipient', errorParams: { address: 'claude@orboto.io', reason: 'no_recipient', project: null, liveSessions: [] } }),
+    } as unknown as Response));
+    const result = await makeAgentNotifyHandler(client)({ targetEmail: 'claude@orboto.io', kind: 'request', subject: 's', outcome: 'ORB-1 is reviewed with findings' });
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain('a role address in `to` (integrator@KEY)');
+    expect(text).toContain('`toSessionRef`');
+    expect(text).toContain('`queue: true` with `project`');
   });
 });
 
