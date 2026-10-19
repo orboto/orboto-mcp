@@ -44,6 +44,8 @@ interface SessionRegistration {
   sessionId: string; scope: AgentSessionScope | null; reconnects?: number; lastReconnectAt?: string | null;
   /** ORB-2584 - whether mail wakes this session, the scope an earlier process left behind and the lines for both. */
   wake?: string; scopeExpired?: unknown; notes?: string[];
+  /** ORB-2593 - the scope the earlier process of the same conversation declared and this one carries on. */
+  scopeContinued?: unknown;
 }
 
 interface Me { email?: string; fullName?: string; locale?: string; workspaceLocale?: string }
@@ -329,7 +331,7 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
 
     const toRegistration = (r: SessionRegistration | null) => (r && typeof r.sessionId === 'string' ? {
       sessionId: r.sessionId, scope: r.scope ?? null, reconnects: r.reconnects, lastReconnectAt: r.lastReconnectAt,
-      wake: r.wake, scopeExpired: r.scopeExpired ?? null, notes: Array.isArray(r.notes) ? r.notes.filter((n) => typeof n === 'string') : [],
+      wake: r.wake, scopeExpired: r.scopeExpired ?? null, scopeContinued: r.scopeContinued ?? null, notes: Array.isArray(r.notes) ? r.notes.filter((n) => typeof n === 'string') : [],
     } : null);
     const host = localSessionHost(extra as { sessionId?: string } | undefined);
     let registration = await client.post<SessionRegistration>('/v1/agent/heartbeat', { ...(input.scope !== undefined ? { scope: input.scope } : {}), ...(host ? { clientInfo: { host } } : {}) }, { instanceToken })
@@ -490,6 +492,7 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
           ref: instanceToken, id: registration?.sessionId ?? null, scope: registration?.scope ?? null,
           reconnects: registration?.reconnects ?? 0, reconnectedAt: registration?.lastReconnectAt ?? null,
           ...(registration?.wake ? { wake: registration.wake } : {}), scopeExpired: registration?.scopeExpired ?? null,
+          scopeContinued: registration?.scopeContinued ?? null,
         },
         gitHealth: {
           unhealthy: gitHealthWithConnections

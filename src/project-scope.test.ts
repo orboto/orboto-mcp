@@ -46,7 +46,7 @@ describe('ORB-2224 - ORBOTO_PROJECT_KEY', () => {
     await declareEnvProjectScope(client, 'agent-abc', 'ACME');
     expect(client.calls).toEqual([
       { method: 'GET', path: '/v1/agent/session', instanceToken: 'agent-abc' },
-      { method: 'POST', path: '/v1/agent/heartbeat', body: { scope: { role: 'worker', projectKeys: ['ACME'] } }, instanceToken: 'agent-abc' },
+      { method: 'POST', path: '/v1/agent/heartbeat', body: { scope: { role: 'worker', projectKeys: ['ACME'] }, scopeDefault: true }, instanceToken: 'agent-abc' },
     ]);
     expect(rememberedScope('agent-abc')).toEqual({ role: 'worker', projectKeys: ['ACME'] });
   });
@@ -85,7 +85,7 @@ describe('ORB-2224 - ORBOTO_PROJECT_KEY', () => {
     });
     const client = new OrbotoClient({ baseUrl: 'http://api.test', apiKey: 'k' });
     const res = await makeSessionStartHandler(client)({}, { sessionId: 'scope1' });
-    expect(beats).toEqual([{}, { scope: { role: 'worker', projectKeys: ['ACME'] } }]);
+    expect(beats).toEqual([{}, { scope: { role: 'worker', projectKeys: ['ACME'] }, scopeDefault: true }]);
     expect((res.content[0] as { text: string }).text).toContain('projects ACME');
     expect(rememberedScope('mcp-scope1')).toEqual({ role: 'worker', projectKeys: ['ACME'] });
   });
@@ -107,7 +107,7 @@ describe('ORB-2448 - ORBOTO_SESSION_ROLE', () => {
     expect(envProjectScope(undefined, 'lead')).toBeNull();
     const client = fakeClient({ sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: null });
     await declareEnvProjectScope(client, 'agent-control', undefined, 'coordinator');
-    expect(client.calls[1]).toEqual({ method: 'POST', path: '/v1/agent/heartbeat', body: { scope: { role: 'coordinator' } }, instanceToken: 'agent-control' });
+    expect(client.calls[1]).toEqual({ method: 'POST', path: '/v1/agent/heartbeat', body: { scope: { role: 'coordinator' }, scopeDefault: true }, instanceToken: 'agent-control' });
     expect(rememberedScope('agent-control')).toEqual({ role: 'coordinator' });
   });
 
@@ -131,7 +131,29 @@ describe('ORB-2448 - ORBOTO_SESSION_ROLE', () => {
     });
     const client = new OrbotoClient({ baseUrl: 'http://api.test', apiKey: 'k' });
     await makeSessionStartHandler(client)({}, { sessionId: 'control1' });
-    expect(beats).toEqual([{}, { scope: { role: 'coordinator' } }]);
+    expect(beats).toEqual([{}, { scope: { role: 'coordinator' }, scopeDefault: true }]);
     expect(rememberedScope('mcp-control1')).toEqual({ role: 'coordinator' });
+  });
+});
+
+describe('ORB-2593 - a picker-pending orboto claude start', () => {
+  it('declares no default scope while the supervisor waits for the picked conversation, and declares it once the pick resolved', async () => {
+    const { mkdtempSync, writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { supervisorScopePending } = await import('./project-scope.js');
+    const dir = mkdtempSync(join(tmpdir(), 'orboto-supervisor-'));
+    const env = { ORBOTO_CLAUDE_SUPERVISOR_DIR: dir, ORBOTO_LAUNCHER_PID: '4000' };
+    writeFileSync(join(dir, 'state.json'), JSON.stringify({ pid: 4000, scopePending: true }));
+    expect(supervisorScopePending(env)).toBe(true);
+    expect(supervisorScopePending({ ...env, ORBOTO_LAUNCHER_PID: '4001' })).toBe(false);
+    const pending = fakeClient({ sessionId: 'x', scope: null });
+    expect(await declareEnvProjectScope(pending, 'agent-abc', 'ACME', undefined, supervisorScopePending(env))).toBeNull();
+    expect(pending.calls).toEqual([]);
+
+    writeFileSync(join(dir, 'state.json'), JSON.stringify({ pid: 4000 }));
+    const resolved = fakeClient({ sessionId: 'x', scope: null });
+    await declareEnvProjectScope(resolved, 'agent-abc', 'ACME', undefined, supervisorScopePending(env));
+    expect(resolved.calls.filter((c) => c.method === 'POST')).toEqual([{ method: 'POST', path: '/v1/agent/heartbeat', body: { scope: { role: 'worker', projectKeys: ['ACME'] }, scopeDefault: true }, instanceToken: 'agent-abc' }]);
   });
 });

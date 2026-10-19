@@ -24,6 +24,11 @@ describe('ORB-2544 - the origin header', () => {
     expect(params.get('client')).toBe('orboto-mcp');
   });
 
+  it('ORB-2593 - the handed origin keeps the launch, the channel server verdict, the conversation and the checkout', () => {
+    const params = new URLSearchParams(stdioOrigin({ ORBOTO_ORIGIN: 'pid=99&harness=claude-code&launch=orboto-claude&server=running&conv=conv-1111&checkout=0123456789abcdef' }));
+    expect([params.get('launch'), params.get('server'), params.get('conv'), params.get('checkout')]).toEqual(['orboto-claude', 'running', 'conv-1111', '0123456789abcdef']);
+  });
+
   it('ORB-2571 - a stdio proxy names the harness orboto <harness> started and its model, else the harness markers', () => {
     expect(stdioHarness({ ORBOTO_HARNESS: 'kimi', CLAUDECODE: '1' })).toBe('kimi');
     expect(stdioHarness({ ORBOTO_HARNESS: 'antigravity' })).toBe('agy');

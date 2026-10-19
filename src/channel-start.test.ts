@@ -75,7 +75,7 @@ describe('ORB-2584 - the channel needs a channel-enabled start', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const path = new URL(url.toString()).pathname;
       const map: Record<string, unknown> = {
-        '/v1/agent/heartbeat': { sessionToken: 'mcp-x', sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: null, wake: 'on_call', scopeExpired: { scope: { role: 'coordinator' }, pid: 4100, startedAt: null, forPid: 5200, expiredAt: 'now' }, notes },
+        '/v1/agent/heartbeat': { sessionToken: 'mcp-x', sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: null, wake: 'on_call', scopeExpired: { scope: { role: 'coordinator' }, pid: 4100, startedAt: null, forPid: 5200, expiredAt: 'now' }, scopeContinued: { scope: { role: 'lead' }, pid: 4100, startedAt: null, forPid: 5200, conversation: 'conv-1', continuedAt: 'now' }, notes },
         '/users/me': { email: 'dev@example.invalid', fullName: 'Dev' },
         '/agent-instructions': { instructions: 'rules', rulesHash: 'h' },
       };
@@ -85,6 +85,6 @@ describe('ORB-2584 - the channel needs a channel-enabled start', () => {
     const res = await makeSessionStartHandler(new OrbotoClient({ baseUrl: 'https://orboto.example.invalid', apiKey: 'orb_x' }))({}, { sessionId: 'x' });
     const text = (res.content[0] as { text: string }).text;
     for (const note of notes) expect(text).toContain(note);
-    expect(res.structuredContent).toMatchObject({ session: { wake: 'on_call', scopeExpired: { scope: { role: 'coordinator' } } } });
+    expect(res.structuredContent).toMatchObject({ session: { wake: 'on_call', scopeExpired: { scope: { role: 'coordinator' } }, scopeContinued: { conversation: 'conv-1' } } });
   });
 });

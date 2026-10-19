@@ -6,6 +6,8 @@
  * a control session without a project instead (ORB-2448).
  */
 import type { AgentSessionScope } from './tools/agent-session-scope.js';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { rememberDeclaredScope } from './session-scope-memory.js';
 
 /** Must stay equal to ProjectKeyEnv in cli/internal/cmd/project_scope.go (drift test). */
@@ -39,15 +41,29 @@ interface ScopeClient {
 
 interface SessionRow { sessionId?: string; scope?: AgentSessionScope | null }
 
-/** Declares the environment's project on the session row unless the row already carries a scope; answers the row. */
+/** ORB-2593 - true while the `orboto claude` supervisor of this session waits for the conversation a bare `--resume` picks: no default scope is declared before it. */
+export function supervisorScopePending(env: NodeJS.ProcessEnv = process.env): boolean {
+  const dir = (env.ORBOTO_CLAUDE_SUPERVISOR_DIR ?? '').trim();
+  const launcher = Number((env.ORBOTO_LAUNCHER_PID ?? '').trim());
+  if (!dir || !Number.isInteger(launcher) || launcher <= 1) return false;
+  try {
+    const state = JSON.parse(readFileSync(join(dir, 'state.json'), 'utf8')) as { pid?: number; scopePending?: boolean };
+    return state.pid === launcher && state.scopePending === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Declares the environment's project on the session row unless the row already carries a scope or the supervisor waits for a picked conversation; answers the row. */
 export async function declareEnvProjectScope(
   client: ScopeClient, instanceToken: string, raw: string | undefined = process.env.ORBOTO_PROJECT_KEY, role: string | undefined = process.env.ORBOTO_SESSION_ROLE,
+  pending: boolean = supervisorScopePending(),
 ): Promise<SessionRow | null> {
   const scope = envProjectScope(raw, role);
-  if (!scope) return null;
+  if (!scope || pending) return null;
   const current = await client.get<SessionRow>('/v1/agent/session', { instanceToken }).catch(() => null);
   if (current && scopeDeclared(current.scope)) return current;
-  const row = await client.post<SessionRow>('/v1/agent/heartbeat', { scope }, { instanceToken }).catch(() => null);
+  const row = await client.post<SessionRow>('/v1/agent/heartbeat', { scope, scopeDefault: true }, { instanceToken }).catch(() => null);
   if (row && typeof row.sessionId === 'string') rememberDeclaredScope(instanceToken, row.scope ?? scope);
   return row;
 }
