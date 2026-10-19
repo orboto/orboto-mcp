@@ -59,11 +59,14 @@ interface InboxCounts { unread: number; olderThan7Days: number }
 
 interface DismissInput { ids: string[]; reason: 'not_mine' | 'obsolete' | 'duplicate'; note?: string; duplicateOf?: string }
 
+/** ORB-2548 - the compact page an MCP inbox read returns by default, sized so it fits the 4,000-character budget. */
+export const COMPACT_PAGE_LIMIT = 4;
+
 const UNREGISTERED_INBOX_HINT = 'Not registered: only account mail is listed. Register with orboto_session_start to see the mail addressed to your session.';
 
 export const agentMessagesToolConfig = {
   title: 'Agent inbox and message work',
-  description: 'Your inbox as THIS session sees it. It holds mail to this session, account mail inside your declared scope, broadcasts; sibling-session mail and own sends stay out (includeOwnSends lists your sends with recipient session, delivered/read state, thread), all:true is the account view in full (ORB-2136). Default: the newest 10 unread, newest first, a header plus 300 payload characters each, then `N unread, M older than 7 days`; limit and since (ISO time or message id) narrow it. Before orboto_session_start only account mail is listed; register to see mail addressed to your session (ORB-2347). messageWork carries durable work ownership (mutation schema: orboto_api_search) - claim before executing. ackIds (message ids) acks: it completes an unclaimed request; claimed work with open steps is refused until messageWork completes or blocks it. dismiss: not_mine hides it here and tells the sender, obsolete/duplicate close it for the account (note or duplicateOf required). Never leave mail you read and judged. Reply via orboto_agent_notify with threadId (toSessionRef = from.sessionId).',
+  description: 'Your inbox as THIS session sees it. It holds mail to this session, account mail inside your declared scope, broadcasts; sibling-session mail and own sends stay out (includeOwnSends lists your sends with recipient session, delivered/read state, thread), all:true is the account view in full (ORB-2136). Default: the newest 4 unread, newest first, a header plus 300 payload characters each, then `N unread, M older than 7 days`; limit and since (ISO time or message id) narrow it. Server-side filters (ORB-2548): direction sent (only your sends, any read state), threadId (that message and its answers), kind; nextCursor continues the page (cursor). Before orboto_session_start only account mail is listed; register to see mail addressed to your session (ORB-2347). messageWork carries durable work ownership (mutation schema: orboto_api_search) - claim before executing. ackIds (message ids) acks: it completes an unclaimed request; claimed work with open steps is refused until messageWork completes or blocks it. dismiss: not_mine hides it here and tells the sender, obsolete/duplicate close it for the account (note or duplicateOf required). Never leave mail you read and judged. Reply via orboto_agent_notify with threadId (toSessionRef = from.sessionId).',
   inputSchema: z.object({
     messageWork: z.record(z.unknown()).optional()
       .describe('Work envelope {messageId, mutation, cursor, limit, openOnly}.'),
@@ -72,6 +75,10 @@ export const agentMessagesToolConfig = {
     since: z.string().optional(),
     project: z.string().min(1).max(64).optional().describe('Key/UUID; includes unscoped mail.'),
     includeOwnSends: z.boolean().default(false),
+    direction: z.enum(['received', 'sent']).optional(),
+    threadId: z.string().uuid().optional(),
+    kind: z.enum(['request', 'error', 'info', 'complete']).optional(),
+    cursor: z.string().max(500).optional(),
     ackIds: z.array(z.string().uuid()).max(200).optional(),
     dismiss: z.object({
       ids: z.array(z.string().uuid()).min(1).max(200),
@@ -104,6 +111,7 @@ export const agentMessagesToolConfig = {
     acked: z.number().int(),
     dismissed: z.number().int().optional(),
     closed: z.number().int().optional(),
+    nextCursor: z.string().nullable().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
 };
@@ -126,7 +134,7 @@ function sentState(m: AgentMessage): string {
 }
 
 export function makeAgentMessagesHandler(client: OrbotoClient) {
-  return async (args: { all?: boolean; limit?: number; since?: string; project?: string; includeOwnSends?: boolean; ackIds?: string[]; dismiss?: DismissInput; messageWork?: Parameters<ReturnType<typeof makeAgentMessageWorkHandler>>[0] }, extra?: unknown): Promise<CallToolResult> => {
+  return async (args: { all?: boolean; limit?: number; since?: string; project?: string; includeOwnSends?: boolean; direction?: 'received' | 'sent'; threadId?: string; kind?: string; cursor?: string; ackIds?: string[]; dismiss?: DismissInput; messageWork?: Parameters<ReturnType<typeof makeAgentMessageWorkHandler>>[0] }, extra?: unknown): Promise<CallToolResult> => {
     if (args.messageWork) {
       if (args.ackIds?.length) throw new Error('Use a separate explicit ACK call.');
       const result = await makeAgentMessageWorkHandler(client)(args.messageWork, extra as { sessionId?: string } | undefined);
@@ -154,22 +162,28 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
     const compact = !args.all;
     const q = new URLSearchParams();
     if (args.all) q.set('all', 'true');
-    q.set('limit', String(args.limit ?? (compact ? 10 : 50)));
+    q.set('limit', String(args.limit ?? (compact ? COMPACT_PAGE_LIMIT : 50)));
     if (compact) q.set('compact', 'true');
     if (args.since) q.set('since', args.since);
     if (args.project) q.set('project', args.project);
+    if (args.direction) q.set('direction', args.direction);
+    if (args.threadId) q.set('threadId', args.threadId);
+    if (args.kind) q.set('kind', args.kind);
+    if (args.cursor) q.set('cursor', args.cursor);
     const instanceToken = mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined);
     if (args.includeOwnSends) q.set('includeOwn', 'true');
-    else q.set('excludeRef', instanceToken);
-    const { messages, sessionId, counts } = await client.get<{ messages: AgentMessage[]; sessionId?: string | null; counts?: InboxCounts }>(`/v1/agent/messages?${q.toString()}`, { instanceToken });
+    else if (args.direction !== 'sent') q.set('excludeRef', instanceToken);
+    const { messages, sessionId, counts, nextCursor } = await client.get<{ messages: AgentMessage[]; sessionId?: string | null; counts?: InboxCounts; nextCursor?: string | null }>(`/v1/agent/messages?${q.toString()}`, { instanceToken });
     const header = (m: AgentMessage) => `${m.own ? `[sent] ${sentState(m)} ` : ''}[${m.kind}]${m.projectKey ? ` [${m.projectKey}]` : ''}${repeatMarks(m)} ${m.subject} (from ${m.from?.label ?? m.fromUserId} to ${m.to?.label ?? m.toUserId}, ${m.createdAt}, id ${m.id}${m.threadId ? `, thread ${m.threadId}` : ''})`;
     const lines = messages.length === 0
       ? [acked > 0 ? `Acknowledged ${acked} message(s). Inbox empty.` : 'Inbox empty.']
       : messages.flatMap((m) => (compact ? compactLines(m, header(m)) : [`${header(m)}${m.payload ? ` payload: ${JSON.stringify(m.payload)}` : ''}`]));
+    if (messages.length === 0 && args.direction === 'sent') lines[0] = 'Nothing sent matches.';
     if (messages.length > 0) {
       lines.push(`Acknowledge with ackIds once handled; reply via orboto_agent_notify with threadId (toSessionRef = the sender's instance short id reaches that session only).`);
     }
     if (compact && counts) lines.push(`${counts.unread} unread, ${counts.olderThan7Days} older than 7 days (all, limit N, since)`);
+    if (nextCursor) lines.push(`More messages: call again with cursor "${nextCursor}".`);
     if (args.dismiss) {
       lines.unshift(`Dismissed ${dismissedCount} message(s) as ${args.dismiss.reason}${closedCount > 0 ? `, ${closedCount} closed for the account` : ''}${feedbackSent > 0 ? `, ${feedbackSent} sender(s) told about the misroute` : ''}.`);
     }
@@ -189,6 +203,7 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
         acked,
         dismissed: dismissedCount,
         closed: closedCount,
+        nextCursor: nextCursor ?? null,
       },
     };
   };

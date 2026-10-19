@@ -21,9 +21,17 @@ describe('orboto_who', () => {
       return { ok: true, status: 200, statusText: 'OK', text: async () => '', json: async () => ({ sessions: [entry] }) } as unknown as Response;
     });
     const result = await makeAgentWhoHandler(client)({ project: 'ORB', role: 'integrator' });
-    expect(urls[0]).toBe('https://orboto.example.com/v1/agent/who?project=ORB&role=integrator');
+    expect(urls[0]).toBe('https://orboto.example.com/v1/agent/who?project=ORB&role=integrator&limit=4');
     expect((result.content[0] as { text: string }).text).toContain('integrator@ORB - claude@orboto.io session f072e1c5, working, claude-code online');
     expect(result.structuredContent).toMatchObject({ sessions: [expect.objectContaining({ shortId: 'f072e1c5' })] });
+  });
+
+  it('ORB-2548: a project that is unknown or not visible answers in one line instead of a raw 404', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => ({ ok: false, status: 404, statusText: 'Not Found', headers: new Headers(), text: async () => '{"errorKey":"errors.agents.message_project_not_found"}', json: async () => ({}) } as unknown as Response));
+    const result = await makeAgentWhoHandler(client)({ project: 'gone' });
+    expect(result.isError).toBeUndefined();
+    expect((result.content[0] as { text: string }).text).toBe('Project "GONE" is unknown or not visible to you - no session is listed for it.');
+    expect(result.structuredContent).toEqual({ sessions: [], nextCursor: null });
   });
 
   it('says a request would be refused when nobody matches, and is read-only', async () => {
@@ -48,6 +56,6 @@ describe('orboto_who', () => {
       return { ok: true, status: 200, statusText: 'OK', text: async () => '', json: async () => ({ sessions: [] }) } as unknown as Response;
     });
     await makeAgentWhoHandler(client)({ state: 'unknown_origin' });
-    expect(urls[0]).toBe('https://orboto.example.com/v1/agent/who?state=unknown_origin');
+    expect(urls[0]).toBe('https://orboto.example.com/v1/agent/who?state=unknown_origin&limit=4');
   });
 });

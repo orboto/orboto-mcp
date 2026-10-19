@@ -1,5 +1,5 @@
 /**
- * ORB-2502 - orboto_messages lists the newest 10 unread compactly with the exact count; all:true keeps every message in full.
+ * ORB-2502 - orboto_messages lists the newest 4 unread compactly (10 before ORB-2548) with the exact count; all:true keeps every message in full.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';
@@ -27,11 +27,11 @@ function stubInbox(urls: string[]) {
 }
 
 describe('ORB-2502 - the compact inbox on MCP', () => {
-  it('asks for the newest 10 compactly, prints the excerpt and the count, and leaves the payload out of the structured answer', async () => {
+  it('asks for the newest 4 compactly, prints the excerpt and the count, and leaves the payload out of the structured answer', async () => {
     const urls: string[] = [];
     stubInbox(urls);
     const result = await makeAgentMessagesHandler(client)({ since: '2026-09-30T00:00:00Z' }, { sessionId: 'abc' });
-    expect(urls[0]).toContain('limit=10');
+    expect(urls[0]).toContain('limit=4');
     expect(urls[0]).toContain('compact=true');
     expect(urls[0]).toContain('since=2026-09-30T00%3A00%3A00Z');
     const text = (result.content[0] as { text: string }).text;

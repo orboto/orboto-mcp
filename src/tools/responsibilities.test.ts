@@ -59,7 +59,7 @@ describe('orboto_who for', () => {
     const urls: string[] = [];
     respond(200, { sessions: [], owner: match }, urls);
     const result = await makeAgentWhoHandler(client)({ for: 'unity asset' });
-    expect(urls[0]).toBe('https://orboto.example.com/v1/agent/who?for=unity+asset');
+    expect(urls[0]).toBe('https://orboto.example.com/v1/agent/who?for=unity+asset&limit=4');
     const text = (result.content[0] as { text: string }).text;
     expect(text).toContain('Owner:\n- worker@GAMES');
     expect(text).toContain('No live session answers to worker@GAMES - send with queue: true and project GAMES');

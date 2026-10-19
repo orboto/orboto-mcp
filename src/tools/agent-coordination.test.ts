@@ -96,7 +96,7 @@ describe('orboto_agent_presence', () => {
     expect(text).toContain('2 active session(s)');
     expect(text).toContain('Alice <alice@x.test> (claude-code, instance 00000000-0000-0000-0000-000000000010) - working · working on [ORB] ORB-42');
     expect(text).toContain('bot@x.test <bot@x.test> (dispatcher-daemon, instance 00000000-0000-0000-0000-000000000011) - idle [orphaned] on build-host sample-repo pid 4242 claude-code orboto-cli 1.2.3; owner: Alice');
-    expect(vi.mocked(fetch).mock.calls[0][0]).toBe('https://orboto.example.com/v1/agent/who?include=inventory');
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe('https://orboto.example.com/v1/agent/who?include=inventory&limit=4');
     expect((result.structuredContent as { sessions: unknown[] }).sessions).toHaveLength(2);
   });
 
@@ -113,34 +113,60 @@ describe('orboto_agent_presence', () => {
     { userId: '00000000-0000-0000-0000-000000000001', userEmail: 'alice@x.test', userFullName: 'Alice', kind: 'agent', isBot: true, actsAs: { id: '00000000-0000-0000-0000-000000000001', name: 'Alice', email: 'alice@x.test' }, owner: null, autonomyPaused: false, lane: null, projects: [], connections: [{ type: 'oauth', label: 'claude.ai' }], workSessions: [], sessionId: '00000000-0000-0000-0000-000000000012', status: 'idle', workingOnTicket: null, capabilities: [], clientInfo: {}, lastSeenAt: new Date().toISOString(), createdAt: new Date().toISOString() },
   ];
 
-  it('filters by projectKey (case-insensitive, projects only) and kind on the client side (ORB-2135)', async () => {
+  it('ORB-2548: sends every filter to the one presence read, projectKey as project, four rows a page by default', async () => {
     const handler = makeAgentPresenceHandler(client);
-    const ids = async (args: { projectKey?: string; kind?: 'agent' | 'human' }) => {
-      stub([{ json: { sessions: [], inventory: presenceRows() } }]);
-      const result = await handler(args);
-      expect(vi.mocked(fetch).mock.calls.at(-1)?.[0]).toBe('https://orboto.example.com/v1/agent/who?include=inventory');
-      return (result.structuredContent as { sessions: Array<{ sessionId: string }> }).sessions.map((s) => s.sessionId.slice(-2));
+    const url = async (args: Parameters<typeof handler>[0]) => {
+      stub([{ json: { sessions: [], inventory: [] } }]);
+      await handler(args);
+      return String(vi.mocked(fetch).mock.calls.at(-1)?.[0]);
     };
-    expect(await ids({})).toEqual(['10', '11', '12']);
-    expect(await ids({ kind: 'agent' })).toEqual(['11', '12']);
-    expect(await ids({ kind: 'human' })).toEqual(['10']);
-    expect(await ids({ projectKey: 'acme' })).toEqual(['11']);
-    expect(await ids({ projectKey: 'ORB', kind: 'human' })).toEqual(['10']);
-    expect(await ids({ projectKey: 'NONE' })).toEqual([]);
+    expect(await url({})).toBe('https://orboto.example.com/v1/agent/who?include=inventory&limit=4');
+    expect(await url({ projectKey: 'acme', kind: 'agent' })).toBe('https://orboto.example.com/v1/agent/who?include=inventory&project=acme&kind=agent&limit=4');
+    expect(await url({ email: 'w@x.test', sessionId: 'c785946f', role: 'worker', wake: 'on_call', state: 'live', limit: 2, cursor: 'next-1' }))
+      .toBe('https://orboto.example.com/v1/agent/who?include=inventory&role=worker&state=live&email=w%40x.test&sessionId=c785946f&wake=on_call&cursor=next-1&limit=2');
   });
 
-  it('says when a filter matched nothing but the workspace is not empty', async () => {
-    stub([{ json: { sessions: [], inventory: presenceRows() } }]);
+  it('ORB-2548: a projectKey that is unknown or not visible answers in one line instead of a raw 404', async () => {
+    stub([{ ok: false, status: 404, json: { errorKey: 'errors.agents.message_project_not_found' } }]);
+    const result = await makeAgentPresenceHandler(client)({ projectKey: 'nope' });
+    expect(result.isError).toBeUndefined();
+    expect((result.content[0] as { text: string }).text).toBe('Project "NOPE" is unknown or not visible to you - no session is listed for it.');
+    expect(result.structuredContent).toEqual({ sessions: [], nextCursor: null });
+    stub([{ ok: false, status: 404, json: {} }]);
+    await expect(makeAgentPresenceHandler(client)({ email: 'x@y.test' })).rejects.toThrow();
+  });
+
+  it('says when a filter matched nothing', async () => {
+    stub([{ json: { sessions: [], inventory: [] } }]);
     const result = await makeAgentPresenceHandler(client)({ projectKey: 'NONE' });
-    expect((result.content[0] as { text: string }).text).toBe('No active agent sessions match the filter (3 active in the workspace).');
+    expect((result.content[0] as { text: string }).text).toBe('No active agent session matches the filter.');
   });
 
-  it('renders acts-as, lane, projects and connection types on each line', async () => {
-    stub([{ json: { sessions: [], inventory: presenceRows() } }]);
-    const text = ((await makeAgentPresenceHandler(client)({ kind: 'agent' })).content[0] as { text: string }).text;
-    expect(text).toContain('2 active session(s)');
-    expect(text).toContain('owner: Alice; lane: worker-1; projects: ACME, ORB; connections: lane, live_events');
+  it('renders acts-as, lane, scope, projects and connection types on each line and returns the compact row', async () => {
+    const rows = presenceRows().filter((row) => row.kind === 'agent').map((row, i) => (i === 0 ? { ...row, scope: { role: 'worker', projectKeys: ['ACME'] }, wake: 'channel' } : row));
+    stub([{ json: { sessions: [], inventory: rows, nextCursor: 'cursor-2' } }]);
+    const result = await makeAgentPresenceHandler(client)({ kind: 'agent' });
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain('2 active session(s) on this page');
+    expect(text).toContain('owner: Alice; lane: worker-1; scope: worker on ACME; projects: ACME, ORB; connections: lane, live_events; reachable by channel');
     expect(text).toContain('owner: acts as Alice; connections: oauth');
+    expect(text).toContain('More sessions: call again with cursor "cursor-2"');
+    const structured = result.structuredContent as { sessions: Array<Record<string, unknown>>; nextCursor: string | null };
+    expect(structured.nextCursor).toBe('cursor-2');
+    expect(structured.sessions[0]).toEqual({
+      sessionId: '00000000-0000-0000-0000-000000000011', userEmail: 'worker@x.test', userFullName: null, kind: 'agent', owner: 'Alice',
+      status: 'idle', lane: 'worker-1', scope: { role: 'worker', projectKeys: ['ACME'] }, memberProjects: 2, connections: ['lane', 'live_events'],
+      wake: 'channel', origin: null, workingOn: null, lastSeenAt: rows[0]!.lastSeenAt,
+    });
+    expect(structured.sessions[1]).toMatchObject({ owner: 'acts as Alice', memberProjects: 0, connections: ['oauth'] });
+  });
+
+  it('names the member count instead of listing more than eight projects', async () => {
+    const many = Array.from({ length: 99 }, (_, i) => ({ id: '00000000-0000-0000-0000-000000000030', key: `P${i}`, name: `Project ${i}` }));
+    stub([{ json: { sessions: [], inventory: [{ ...presenceRows()[1], projects: many }] } }]);
+    const text = ((await makeAgentPresenceHandler(client)({})).content[0] as { text: string }).text;
+    expect(text).toContain('; member of 99 projects;');
+    expect(text).not.toContain('P98');
   });
 });
 
@@ -293,6 +319,23 @@ describe('ORB-2136 - session addressing', () => {
     expect(seen[0].headers['x-orboto-agent-session']).toBe('mcp-abc123');
     expect((result.content[0] as { text: string }).text).toContain('bob@example.com session cbb52195');
     expect(result.structuredContent).toMatchObject({ toSessionId: 'cbb52195-0000-4000-8000-000000000000' });
+  });
+
+  it('ORB-2548: toSessionRef alone is a recipient - sent without to or targetEmail, the answer names the session', async () => {
+    const seen: Array<Record<string, unknown>> = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      seen.push(JSON.parse((init?.body as string) ?? '{}'));
+      return { ok: true, status: 200, statusText: 'OK', json: async () => ({ ok: true, messageId: '00000000-0000-4000-8000-000000000000', toSessionId: 'cbb52195-0000-4000-8000-000000000000', routedTo: 'session' }), text: async () => '' } as unknown as Response;
+    });
+    const result = await makeAgentNotifyHandler(client)({ subject: 'hi', toSessionRef: 'cbb52195' }, { sessionId: 'abc123' });
+    expect(result.isError).toBeUndefined();
+    expect(seen[0]).toMatchObject({ toSessionRef: 'cbb52195', subject: 'hi' });
+    expect(seen[0]).not.toHaveProperty('to');
+    expect((result.content[0] as { text: string }).text).toContain('notified session cbb52195 (message');
+    vi.restoreAllMocks();
+    const none = await makeAgentNotifyHandler(client)({ subject: 'hi' });
+    expect(none.isError).toBe(true);
+    expect((none.content[0] as { text: string }).text).toContain('`toSessionRef` (a session id or its short id)');
   });
 
   it('orboto_messages identifies this session on the fetch and renders sender and receiver identities', async () => {
