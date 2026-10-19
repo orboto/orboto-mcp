@@ -8,6 +8,7 @@ import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { childWindow, ciWindow } from '../test/ci-window.js';
 
 const LINE = 'semantic search unavailable, showing full-text results';
 
@@ -37,7 +38,7 @@ it('search, search-docs, ask-docs and check-similar print the degraded line on s
     const run = (args: string[]) => new Promise<{ out: string; err: string }>((ok, no) => {
       const child = spawn(process.execPath, ['--import', guard, join(dir, 'skills/orboto/scripts/orboto.mjs'), ...args], {
         cwd: dir, env: { ...process.env, ORBOTO_PROFILE: '', ORBOTO_BASE_URL: origin, ORBOTO_TOKEN: 'orb_fixture', ORBOTO_DAEMON: '', ORBOTO_AGENT_SESSION: 'fixture' },
-        timeout: 20_000,
+        timeout: childWindow(),
       });
       let out = '', err = '';
       child.stdout.on('data', (chunk: Buffer) => { out += chunk.toString(); });
@@ -56,4 +57,4 @@ it('search, search-docs, ask-docs and check-similar print the degraded line on s
     if (server.listening) await new Promise<void>((ok, no) => server.close((err) => err ? no(err) : ok()));
     await rm(dir, { recursive: true, force: true });
   }
-}, 60_000);
+}, ciWindow(60_000));

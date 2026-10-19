@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { childWindow, ciWindow } from '../test/ci-window.js';
 
 it('real wrapper preserves piped diff text and version-prefixed check/record values', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'orboto-1964-verify-temp-'));
@@ -31,7 +32,7 @@ it('real wrapper preserves piped diff text and version-prefixed check/record val
     const run = (args: string[], stdin = '') => new Promise<string>((ok, no) => {
       const child = spawn(process.execPath, ['--import', guard, join(dir, 'skills/orboto/scripts/orboto.mjs'), ...args], {
         cwd: dir, env: { ...process.env, ORBOTO_PROFILE: '', ORBOTO_BASE_URL: origin, ORBOTO_TOKEN: 'orb_fixture', ORBOTO_DAEMON: '', ORBOTO_AGENT_SESSION: 'fixture' },
-        timeout: 20_000,
+        timeout: childWindow(),
       });
       let out = '', err = '';
       child.stdout.on('data', (chunk: Buffer) => { out += chunk.toString(); });
@@ -52,4 +53,4 @@ it('real wrapper preserves piped diff text and version-prefixed check/record val
     if (server.listening) await new Promise<void>((ok, no) => server.close((err) => err ? no(err) : ok()));
     await rm(dir, { recursive: true, force: true });
   }
-}, 60_000);
+}, ciWindow(60_000));

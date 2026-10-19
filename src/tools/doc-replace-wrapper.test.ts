@@ -9,6 +9,7 @@ import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { childWindow, ciWindow } from '../test/ci-window.js';
 
 const DOC = 'd0c00000-2222-4222-8222-222222222222';
 const REV = 'bbbbbbbb-0000-4000-8000-000000000000';
@@ -40,7 +41,7 @@ it('doc edit appends by default, --replace names the replaced revision, doc rest
     const run = (args: string[]) => new Promise<{ code: number | null; out: string; err: string }>((ok, no) => {
       const child = spawn(process.execPath, ['--import', guard, join(dir, 'skills/orboto/scripts/orboto.mjs'), ...args], {
         cwd: dir, env: { ...process.env, ORBOTO_PROFILE: '', ORBOTO_BASE_URL: origin, ORBOTO_TOKEN: 'orb_fixture', ORBOTO_DAEMON: '', ORBOTO_AGENT_SESSION: 'fixture' },
-        timeout: 20_000,
+        timeout: childWindow(),
       });
       let out = '', err = '';
       child.stdout.on('data', (chunk: Buffer) => { out += chunk.toString(); });
@@ -74,4 +75,4 @@ it('doc edit appends by default, --replace names the replaced revision, doc rest
     if (server.listening) await new Promise<void>((ok, no) => server.close((err) => err ? no(err) : ok()));
     await rm(dir, { recursive: true, force: true });
   }
-}, 60_000);
+}, ciWindow(60_000));
