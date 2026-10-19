@@ -207,7 +207,7 @@ describe('orboto_session_start - rules-hash ack (ORB-1607, ORB-2576)', () => {
 });
 
 describe('orboto_session_start - knowledge layers and project facts (ORB-2575)', () => {
-  const FACTS_TEXT = '## Where knowledge lives\n- Rules: binding behaviour.\n\n## Project facts\n### ORB (project id proj-1): 1 of 3 facts\n- tech_stack/stack: Go and Postgres\n2 more: `orboto primer ORB`';
+  const FACTS_TEXT = '## Where knowledge lives\n- Rules: binding behaviour.\n\n## Project facts\n### ORB: 1 of 3 facts\n- tech_stack/stack: Go and Postgres\n2 more: `orboto primer ORB`';
   const facts = (text: string) => ({
     source: 'session', unknown: [], text,
     projects: [{ projectKey: 'ORB', projectId: 'proj-1', total: 3, facts: [{ category: 'tech_stack', key: 'stack', value: 'Go and Postgres', observed: false }] }],

@@ -152,7 +152,7 @@ export function makePrimerFactListHandler(client: OrbotoClient) {
 export const primerFactAddToolConfig = {
   title: 'Record a new project primer fact',
   description:
-    'Record a new structured fact about the project that future AI agents should see at session start. Use when you learn something during work that is missing from the primer (a library version, a convention, a deployment quirk, an architecture decision). Note: the auto-generated primer does NOT automatically include CLAUDE.md / AGENTS.md content unless the operator configured repo briefings and the API host can read those files from disk - most deployments cannot. Treat key conventions documented in CLAUDE.md / AGENTS.md as fair game to record here so they survive cross-deployment. Set observed=true when you are recording from a bot/agent context - the fact will land as agent_observed and require operator verification before losing the (observed) marker.'
+    'Record a new structured fact about the project that future AI agents should see at session start. Use when you learn something during work that is missing from the primer (a library version, a convention, a deployment quirk, an architecture decision). Note: the auto-generated primer does NOT automatically include CLAUDE.md / AGENTS.md content unless the operator configured repo briefings and the API host can read those files from disk - most deployments cannot. Treat key conventions documented in CLAUDE.md / AGENTS.md as fair game to record here so they survive cross-deployment. Set observed=true when you are recording from a bot/agent context - the fact will land as agent_observed and require a person to verify it before it loses the (observed) marker (CLI: orboto primer-fact add <KEY> --category <c> --key <k> --value "<v>" --observed).'
     + FACT_WRITING_CONTRACT,
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key, e.g. "ORB". Case-insensitive.'),
@@ -166,7 +166,7 @@ export const primerFactAddToolConfig = {
       'Human-readable Markdown body, 1-3 sentences typically. Include a version number, a path, or a command where relevant.',
     ),
     observed: z.boolean().default(false).describe(
-      'True = source is agent_observed (needs operator verification). False = manual entry by operator. Bots without project:edit get coerced to agent_observed server-side regardless.',
+      'True = source is agent_observed (needs operator verification). False = manual entry by operator. A bot account or an agent key is always coerced to agent_observed server-side, whatever is sent.',
     ),
     allowOversize: z.boolean().optional().describe('Override the hard size-cap block (300*2 chars). Only after a call was blocked.'),
     oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true - why this value genuinely needs the length. Audit-logged.'),
@@ -230,7 +230,7 @@ export function makePrimerFactAddHandler(client: OrbotoClient) {
 export const primerFactUpdateToolConfig = {
   title: 'Update an existing primer fact',
   description:
-    'Update an existing fact. Use this when the value has changed (e.g. version bumped) or you are renaming the key. Bumps last_verified_at automatically when the value changes; pure renames leave it untouched. To replace a fact while preserving history, use orboto_primer_fact_supersede instead.'
+    'Update an existing fact. Use this when the value has changed (e.g. version bumped) or you are renaming the key. Bumps last_verified_at automatically when the value changes; pure renames leave it untouched. To replace a fact while preserving history, use orboto_primer_fact_supersede instead. A person decides: a bot account or an agent key gets 403 errors.primer_facts.update_needs_person and proposes a corrected fact with orboto_primer_fact_add (observed) instead.'
     + FACT_WRITING_CONTRACT,
   inputSchema: z.object({
     factId: z.string().min(1).describe('UUID of the fact to update. Read it from orboto_primer_fact_list output.'),
@@ -296,7 +296,7 @@ export function makePrimerFactUpdateHandler(client: OrbotoClient) {
 export const primerFactSupersedeToolConfig = {
   title: 'Replace a primer fact while preserving history',
   description:
-    'Replace a fact with a corrected version, preserving the old one in history (linked via superseded_by_id). Use when you discover a previously recorded fact was wrong; do not just delete it. The old row gets a tombstoned key suffix so the partial unique index does not collide; the new row starts unverified and needs operator verification before losing the (observed) marker.'
+    'Replace a fact with a corrected version, preserving the old one in history (linked via superseded_by_id). Use when you discover a previously recorded fact was wrong; do not just delete it. The old row gets a tombstoned key suffix so the partial unique index does not collide; the new row starts unverified and needs a person to verify it before it loses the (observed) marker. A person decides: a bot account or an agent key gets 403 errors.primer_facts.supersede_needs_person and proposes the corrected fact with orboto_primer_fact_add (observed) instead.'
     + FACT_WRITING_CONTRACT,
   inputSchema: z.object({
     oldFactId: z.string().min(1).describe('UUID of the fact being replaced.'),
@@ -353,7 +353,7 @@ export function makePrimerFactSupersedeHandler(client: OrbotoClient) {
 export const primerFactVerifyToolConfig = {
   title: 'Verify an agent-observed primer fact',
   description:
-    'Promote an agent-observed fact to verified. A person verifies: a bot account or an agent key gets 403 errors.primer_facts.verify_needs_person, so an agent proposes and never confirms. Removes the (observed) marker from the rendered primer and stamps verifiedBy / verifiedAt.',
+    'Promote an agent-observed fact to verified. A person verifies: a bot account or an agent key gets 403 errors.primer_facts.verify_needs_person, so an agent proposes and never confirms (CLI: orboto primer-fact verify). Removes the (observed) marker from the rendered primer and stamps verifiedBy / verifiedAt.',
   inputSchema: z.object({
     factId: z.string().min(1).describe('UUID of the fact to verify.'),
   }).shape,
@@ -384,7 +384,7 @@ export function makePrimerFactVerifyHandler(client: OrbotoClient) {
 export const primerFactDeleteToolConfig = {
   title: 'Delete a primer fact',
   description:
-    'Hard-delete a fact. Prefer orboto_primer_fact_supersede when the fact is being replaced; only delete when the fact was wrong from the start or no longer relevant. Writes an audit-log entry; the row itself is gone (no soft-delete).',
+    'Hard-delete a fact. Prefer orboto_primer_fact_supersede when the fact is being replaced; only delete when the fact was wrong from the start or no longer relevant. Writes an audit-log entry; the row itself is gone (no soft-delete). Deleting an unverified agent-observed fact is the Reject of the review queue. A person decides: a bot account or an agent key gets 403 errors.primer_facts.reject_needs_person (observed proposal) or errors.primer_facts.delete_needs_person (CLI: orboto primer-fact reject).',
   inputSchema: z.object({
     factId: z.string().min(1).describe('UUID of the fact to delete.'),
     reason: z.string().max(500).optional().describe(
