@@ -46,7 +46,7 @@ describe('ORB-2224 - ORBOTO_PROJECT_KEY', () => {
     await declareEnvProjectScope(client, 'agent-abc', 'ACME');
     expect(client.calls).toEqual([
       { method: 'GET', path: '/v1/agent/session', instanceToken: 'agent-abc' },
-      { method: 'POST', path: '/v1/agent/heartbeat', body: { scope: { role: 'worker', projectKeys: ['ACME'] }, scopeDefault: true }, instanceToken: 'agent-abc' },
+      { method: 'POST', path: '/v1/agent/heartbeat', body: { scope: { role: 'worker', projectKeys: ['ACME'] }, scopeDefault: true, start: true }, instanceToken: 'agent-abc' },
     ]);
     expect(rememberedScope('agent-abc')).toEqual({ role: 'worker', projectKeys: ['ACME'] });
   });
@@ -66,7 +66,7 @@ describe('ORB-2224 - ORBOTO_PROJECT_KEY', () => {
     expect(none.calls).toEqual([]);
   });
 
-  it('orboto_session_start without a scope declares the environment project on a row that has none', async () => {
+  it('orboto_session_start without a scope sends the environment project as fallbackScope and declares it itself on an instance that ignores it', async () => {
     vi.stubEnv(PROJECT_KEY_ENV, 'acme');
     const beats: unknown[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
@@ -85,7 +85,7 @@ describe('ORB-2224 - ORBOTO_PROJECT_KEY', () => {
     });
     const client = new OrbotoClient({ baseUrl: 'http://api.test', apiKey: 'k' });
     const res = await makeSessionStartHandler(client)({}, { sessionId: 'scope1' });
-    expect(beats).toEqual([{}, { scope: { role: 'worker', projectKeys: ['ACME'] }, scopeDefault: true }]);
+    expect(beats).toEqual([{ start: true, fallbackScope: { role: 'worker', projectKeys: ['ACME'] } }, { scope: { role: 'worker', projectKeys: ['ACME'] }, scopeDefault: true, start: true }]);
     expect((res.content[0] as { text: string }).text).toContain('projects ACME');
     expect(rememberedScope('mcp-scope1')).toEqual({ role: 'worker', projectKeys: ['ACME'] });
   });
@@ -107,11 +107,11 @@ describe('ORB-2448 - ORBOTO_SESSION_ROLE', () => {
     expect(envProjectScope(undefined, 'lead')).toBeNull();
     const client = fakeClient({ sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: null });
     await declareEnvProjectScope(client, 'agent-control', undefined, 'coordinator');
-    expect(client.calls[1]).toEqual({ method: 'POST', path: '/v1/agent/heartbeat', body: { scope: { role: 'coordinator' }, scopeDefault: true }, instanceToken: 'agent-control' });
+    expect(client.calls[1]).toEqual({ method: 'POST', path: '/v1/agent/heartbeat', body: { scope: { role: 'coordinator' }, scopeDefault: true, start: true }, instanceToken: 'agent-control' });
     expect(rememberedScope('agent-control')).toEqual({ role: 'coordinator' });
   });
 
-  it('orboto_session_start without a scope declares the control session the environment names', async () => {
+  it('orboto_session_start without a scope sends the control session the environment names as fallbackScope in its one start beat', async () => {
     vi.stubEnv(SESSION_ROLE_ENV, 'coordinator');
     vi.stubEnv(PROJECT_KEY_ENV, 'ACME');
     const beats: unknown[] = [];
@@ -121,7 +121,7 @@ describe('ORB-2448 - ORBOTO_SESSION_ROLE', () => {
       if (u.pathname === '/v1/agent/heartbeat') {
         const sent = init?.body ? JSON.parse(init.body as string) : {};
         beats.push(sent);
-        body = { sessionToken: 'x', sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: sent.scope ?? null };
+        body = { sessionToken: 'x', sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: sent.scope ?? sent.fallbackScope ?? null };
       } else if (u.pathname === '/v1/agent/session') {
         body = { sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: null };
       } else if (u.pathname === '/agent-instructions') {
@@ -131,7 +131,7 @@ describe('ORB-2448 - ORBOTO_SESSION_ROLE', () => {
     });
     const client = new OrbotoClient({ baseUrl: 'http://api.test', apiKey: 'k' });
     await makeSessionStartHandler(client)({}, { sessionId: 'control1' });
-    expect(beats).toEqual([{}, { scope: { role: 'coordinator' }, scopeDefault: true }]);
+    expect(beats).toEqual([{ start: true, fallbackScope: { role: 'coordinator' } }]);
     expect(rememberedScope('mcp-control1')).toEqual({ role: 'coordinator' });
   });
 });
@@ -154,6 +154,6 @@ describe('ORB-2593 - a picker-pending orboto claude start', () => {
     writeFileSync(join(dir, 'state.json'), JSON.stringify({ pid: 4000 }));
     const resolved = fakeClient({ sessionId: 'x', scope: null });
     await declareEnvProjectScope(resolved, 'agent-abc', 'ACME', undefined, supervisorScopePending(env));
-    expect(resolved.calls.filter((c) => c.method === 'POST')).toEqual([{ method: 'POST', path: '/v1/agent/heartbeat', body: { scope: { role: 'worker', projectKeys: ['ACME'] }, scopeDefault: true }, instanceToken: 'agent-abc' }]);
+    expect(resolved.calls.filter((c) => c.method === 'POST')).toEqual([{ method: 'POST', path: '/v1/agent/heartbeat', body: { scope: { role: 'worker', projectKeys: ['ACME'] }, scopeDefault: true, start: true }, instanceToken: 'agent-abc' }]);
   });
 });

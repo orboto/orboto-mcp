@@ -11,14 +11,15 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { resolveTicketByKey, type TicketRow , applyAgentProfile, mcpInstanceToken, localSessionHost } from './shared.js';
+import { resolveTicketByKey, type TicketRow , applyAgentProfile, mcpInstanceToken, localSessionHost, presenceRefusal, exitedPredecessor } from './shared.js';
+import { machineId, shortHost } from '../session-origin.js';
 import { AgentSessionScopeSchema, type AgentSessionScope } from './agent-session-scope.js';
 import { PROCESS_OWNER, PROTECT_TEXT_META, storePayload } from '../response-budget.js';
 import { loadRequiredRules } from '../required-rules.js';
 import { GIT_HEALTH_REASON_TEXT } from './git-health-reasons.js';
 import { channelStartLines } from '../inbox-channel.js';
 import { rememberDeclaredScope } from '../session-scope-memory.js';
-import { declareEnvProjectScope, envProjectScope } from '../project-scope.js';
+import { declareEnvProjectScope, envProjectScope, supervisorScopePending } from '../project-scope.js';
 import { agentHeadText } from '../agent-head.js';
 import { agentContextKey } from '../agent-context.js';
 
@@ -26,16 +27,17 @@ export const sessionStartToolConfig = {
   title: 'Load the rules you must follow + re-orient',
   description:
     'THE canonical way to LOAD the binding workspace rules you must follow as an agent. Run it FIRST in a session and AFTER every context compaction. Returns the rules in full (above the full-text bound: one title per rule plus every must-read rule in full, the rest via `rulesOnly: true`); a compact "unchanged" ack only on a repeat inside the same agent context. Also returns your in-progress tickets (LANDED, IDLE = a linked commit but no move for days: finished work never handed to review), your timer and unhealthy git connections. Not orboto_list_agent_instructions - that one edits rule blocks for admins. Registers this session (a heartbeat on its instance row), otherwise read-only. '
-    + '**Parameters.** `rulesOnly: true` returns ONLY the complete rules text, never truncated. `projectId` adds that project\'s rules. `ticketKey` ("ACME-42") bundles that ticket\'s primer, detail, dependencies, checklists, git health and other agent sessions. `forceRules: true` returns the full text inline even above the bound or after an ack - use it whenever the rules are NOT in your context. `agentKind` (coding, orchestrator, reviewer, runner) and `modelTier` (frontier, standard, small) target rule blocks and per-tier text. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility; session.ref is what peers pass as toSessionRef (ORB-2136). '
+    + '**Parameters.** `rulesOnly: true` returns ONLY the complete rules text, never truncated. `projectId` adds that project\'s rules. `ticketKey` ("ACME-42") bundles that ticket\'s primer, detail, dependencies, checklists, git health and other agent sessions. `forceRules: true` returns the full text inline even above the bound or after an ack - use it whenever the rules are NOT in your context. `agentKind` (coding, orchestrator, reviewer, runner) and `modelTier` (frontier, standard, small) target rule blocks and per-tier text. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility; session.ref is what peers pass as toSessionRef (ORB-2136). `previous` (adopt | end) answers a second-start refusal (ORB-2553). '
     + 'Also carries the Knowledge block (ORB-2225: the wiki index of your declared projects and the Operations wiki; ask with orboto_knowledge_ask before a person, file durable facts with orboto_knowledge_add) and the Responsibilities block (ORB-2542: who owns the topics of your projects, orboto_who before agent mail). Right after the rules come Where knowledge lives (ORB-2575: rules bind behaviour, project facts hold fixed decisions, the wiki the long tail; a decision goes to a fact proposal, orboto_primer_fact_add with observed: true) and the Project facts of your declared projects.',
   inputSchema: z.object({
-    projectId: z.string().uuid().optional().describe('Also load this project\'s rules.'),
-    ticketKey: z.string().min(3).optional().describe('Ticket key ("ACME-42") - bundles that ticket\'s full context.'),
-    forceRules: z.boolean().optional().describe('Always return the full rules; set it when you do not hold them.'),
-    rulesOnly: z.boolean().optional().describe('Return ONLY the complete rules text.'),
-    agentKind: z.string().min(1).max(32).optional().describe('coding | orchestrator | reviewer | runner.'),
-    modelTier: z.string().min(1).max(32).optional().describe('frontier | standard | small.'),
+    projectId: z.string().uuid().optional(),
+    ticketKey: z.string().min(3).optional(),
+    forceRules: z.boolean().optional(),
+    rulesOnly: z.boolean().optional(),
+    agentKind: z.string().min(1).max(32).optional(),
+    modelTier: z.string().min(1).max(32).optional(),
     scope: AgentSessionScopeSchema.optional(),
+    previous: z.enum(['adopt', 'end']).optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -46,6 +48,8 @@ interface SessionRegistration {
   wake?: string; scopeExpired?: unknown; notes?: string[];
   /** ORB-2593 - the scope the earlier process of the same conversation declared and this one carries on. */
   scopeContinued?: unknown;
+  /** ORB-2553 - what a start with `previous` did to the session it ran into. */
+  takeover?: { action: 'adopted' | 'ended'; shortId: string; movedMessages: number; movedLeases: string[]; releasedTickets: string[] };
 }
 
 interface Me { email?: string; fullName?: string; locale?: string; workspaceLocale?: string }
@@ -280,6 +284,12 @@ function knowledgeSummary(index: KnowledgeIndex, handle: string | undefined): Re
 }
 
 /** ORB-2209 - a declared scope stays with the instance token; the agent declares it once per terminal. */
+/** ORB-2553 - what the start did to the session it ran into. */
+export function takeoverLine(t: NonNullable<SessionRegistration['takeover']>): string {
+  if (t.action === 'ended') return `Ended the previous session ${t.shortId} in this repository${t.releasedTickets.length ? `; its leases on ${t.releasedTickets.join(', ')} are released` : ''}.`;
+  return `Adopted session ${t.shortId}: ${t.movedMessages} unread message(s)${t.movedLeases.length ? ` and the leases on ${t.movedLeases.join(', ')}` : ''} moved here, it is ended.`;
+}
+
 export function identityLine(registration: Pick<SessionRegistration, 'reconnects' | 'lastReconnectAt'>): string {
   const count = registration.reconnects ?? 0;
   const kept = count > 0 ? ` It survived ${count} reconnect(s), the last at ${registration.lastReconnectAt ?? 'an unknown time'}.` : '';
@@ -291,7 +301,7 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
   let delivered: { context: string; hash: string } | undefined;
 
   return async (
-    input: { projectId?: string; ticketKey?: string; forceRules?: boolean; rulesOnly?: boolean; agentKind?: string; modelTier?: string; scope?: AgentSessionScope | null } = {},
+    input: { projectId?: string; ticketKey?: string; forceRules?: boolean; rulesOnly?: boolean; agentKind?: string; modelTier?: string; scope?: AgentSessionScope | null; previous?: 'adopt' | 'end' } = {},
     extra?: unknown,
   ): Promise<CallToolResult> => {
     const instanceToken = mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined);
@@ -332,14 +342,30 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
     const toRegistration = (r: SessionRegistration | null) => (r && typeof r.sessionId === 'string' ? {
       sessionId: r.sessionId, scope: r.scope ?? null, reconnects: r.reconnects, lastReconnectAt: r.lastReconnectAt,
       wake: r.wake, scopeExpired: r.scopeExpired ?? null, scopeContinued: r.scopeContinued ?? null, notes: Array.isArray(r.notes) ? r.notes.filter((n) => typeof n === 'string') : [],
+      ...(r.takeover ? { takeover: r.takeover } : {}),
     } : null);
+    let refusal: string | null = null;
+    const refused = (err: unknown) => { refusal = presenceRefusal(err)?.message ?? refusal; return null; };
     const host = localSessionHost(extra as { sessionId?: string } | undefined);
-    let registration = await client.post<SessionRegistration>('/v1/agent/heartbeat', { ...(input.scope !== undefined ? { scope: input.scope } : {}), ...(host ? { clientInfo: { host } } : {}) }, { instanceToken })
-      .then(toRegistration)
-      .catch(() => null);
-    if (input.scope !== undefined && registration) rememberDeclaredScope(instanceToken, registration.scope);
-    if (input.scope === undefined && registration && !registration.scope && envProjectScope()) {
-      registration = toRegistration(await declareEnvProjectScope(client, instanceToken) as SessionRegistration | null) ?? registration;
+    const fallbackScope = input.scope === undefined && !supervisorScopePending() ? envProjectScope() : null;
+    const startBody = {
+      start: true, ...(input.previous ? { previous: input.previous } : {}), ...(input.scope !== undefined ? { scope: input.scope } : {}),
+      ...(fallbackScope ? { fallbackScope } : {}), ...(host ? { clientInfo: { host } } : {}),
+    };
+    const beat = (body: Record<string, unknown>) => client.post<SessionRegistration>('/v1/agent/heartbeat', body, { instanceToken }).then(toRegistration);
+    let exitedLine: string | null = null;
+    let registration = await beat(startBody).catch(async (err: unknown) => {
+      const dead = exitedPredecessor(presenceRefusal(err), { machine: machineId(), host: shortHost() });
+      if (!dead) return refused(err);
+      const again = await beat({ ...startBody, previous: 'end' }).catch(refused);
+      if (again) exitedLine = dead.line;
+      return again;
+    });
+    if ((input.scope !== undefined || fallbackScope) && registration?.scope) rememberDeclaredScope(instanceToken, registration.scope);
+    if (fallbackScope && registration && !registration.scope) {
+      const declared = await declareEnvProjectScope(client, instanceToken) as (SessionRegistration & { refusal?: string }) | null;
+      if (declared?.refusal) refusal = declared.refusal;
+      registration = toRegistration(declared) ?? (declared?.refusal ? null : registration);
     }
     const [me, rules, assigned, timer, inboxRaw, knowledge, owners, projectFacts] = await Promise.all([
       client.get<Me>('/users/me').catch(() => null),
@@ -455,7 +481,10 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
       : registration
         ? 'no scope declared - this session lists every account-addressed message; pass scope: { projectKeys, role } to narrow it'
         : 'registration failed - only account mail is listed; retry orboto_session_start or check mcp:use';
-    lines.push(`ref ${instanceToken}${registration ? `, instance ${registration.sessionId.slice(0, 8)}` : ''}. ${scopeText}. Peers reach exactly this session with orboto_agent_notify { toSessionRef: "${registration ? registration.sessionId.slice(0, 8) : instanceToken}" }.`);
+    if (refusal) lines.push(`ref ${instanceToken}. Not registered: ${refusal}`, 'With MCP: pass scope: { role, projectKeys } and, for another live session in this repository, previous: "adopt" or "end".');
+    else lines.push(`ref ${instanceToken}${registration ? `, instance ${registration.sessionId.slice(0, 8)}` : ''}. ${scopeText}. Peers reach exactly this session with orboto_agent_notify { toSessionRef: "${registration ? registration.sessionId.slice(0, 8) : instanceToken}" }.`);
+    if (exitedLine) lines.push(exitedLine);
+    else if (registration?.takeover) lines.push(takeoverLine(registration.takeover));
     const roleAddresses = registration?.scope?.role ? (registration.scope.projectKeys ?? []).map((k) => `${registration.scope!.role}@${k}`) : [];
     if (roleAddresses.length) lines.push(`Address form: peers reach this session and every other ${registration!.scope!.role} of the project with orboto_agent_notify { to: "${roleAddresses[0]}" } (${roleAddresses.join(', ')}); address a role, never a session id copied from a log.`);
     if (registration?.scope) lines.push(identityLine(registration));
@@ -493,6 +522,8 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
           reconnects: registration?.reconnects ?? 0, reconnectedAt: registration?.lastReconnectAt ?? null,
           ...(registration?.wake ? { wake: registration.wake } : {}), scopeExpired: registration?.scopeExpired ?? null,
           scopeContinued: registration?.scopeContinued ?? null,
+          ...(refusal ? { refused: refusal } : {}),
+          ...(registration?.takeover ? { takeover: registration.takeover } : {}),
         },
         gitHealth: {
           unhealthy: gitHealthWithConnections

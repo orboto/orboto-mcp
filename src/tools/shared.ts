@@ -8,6 +8,7 @@
  * the key→UUID resolution in one place.
  */
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { readFileSync } from 'node:fs';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 
 /** ORB-2543 - the line every search-shaped tool prints when the API flags `semanticDegraded`. */
@@ -281,6 +282,49 @@ export function applyAgentProfile(params: URLSearchParams, explicit?: { agentKin
   const tier = explicit?.modelTier ?? env.modelTier;
   if (kind) params.set('agentKind', kind);
   if (tier) params.set('modelTier', tier);
+}
+
+/** ORB-2553 - a heartbeat the instance refused: no presence scope (422) or a second start in the repository (409), with the server's sentence and parameters. */
+export interface PresenceRefusal { key: 'errors.agents.scope_required' | 'errors.agents.session_exists'; message: string; params: Record<string, unknown> }
+
+export function presenceRefusal(err: unknown): PresenceRefusal | null {
+  if (!(err instanceof OrbotoApiError) || (err.status !== 409 && err.status !== 422)) return null;
+  let parsed: { error?: string; errorKey?: string; errorParams?: Record<string, unknown> } = {};
+  try { parsed = JSON.parse(err.body) as typeof parsed; } catch { return null; }
+  if (parsed.errorKey !== 'errors.agents.scope_required' && parsed.errorKey !== 'errors.agents.session_exists') return null;
+  const notes = Array.isArray(parsed.errorParams?.notes) ? (parsed.errorParams!.notes as unknown[]).filter((n): n is string => typeof n === 'string') : [];
+  return { key: parsed.errorKey, message: [parsed.error ?? parsed.errorKey, ...notes].join('\n'), params: parsed.errorParams ?? {} };
+}
+
+/** True while pid belongs to a running process: signal 0 answers ESRCH for none, and an exited zombie on Linux counts as gone. */
+export function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ESRCH') return false;
+  }
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+    return stat[stat.lastIndexOf(')') + 2] !== 'Z';
+  } catch {
+    return true;
+  }
+}
+
+/** Every identifier both sides name must match, machine id and host alike, so containers of one image or cloned VMs never count as one machine. */
+export function sameMachine(theirMachine: string | null, ourMachine: string | null, theirHost: string | null, ourHost: string | null): boolean {
+  const machines = Boolean(theirMachine && ourMachine);
+  const hosts = Boolean(theirHost && ourHost);
+  return (machines || hosts) && (!machines || theirMachine === ourMachine) && (!hosts || theirHost === ourHost);
+}
+
+/** ORB-2553 - the session a second-start refusal names when it runs on this machine under a pid that no longer runs; null otherwise. */
+export function exitedPredecessor(refusal: PresenceRefusal | null, local: { machine: string | null; host: string | null }, alive: (pid: number) => boolean = processAlive): { shortId: string; pid: number; line: string } | null {
+  if (refusal?.key !== 'errors.agents.session_exists') return null;
+  const p = refusal.params as { pid?: unknown; machineId?: unknown; host?: unknown; shortId?: unknown };
+  const same = sameMachine(typeof p.machineId === 'string' ? p.machineId : null, local.machine, typeof p.host === 'string' ? p.host : null, local.host);
+  if (typeof p.pid !== 'number' || !Number.isInteger(p.pid) || p.pid <= 1 || !same || typeof p.shortId !== 'string' || alive(p.pid)) return null;
+  return { shortId: p.shortId, pid: p.pid, line: `previous session ${p.shortId} (pid ${p.pid}) has exited, ended it` };
 }
 
 interface SizeWarningLike { chars: number; limit: number; hint: string }

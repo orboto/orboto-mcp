@@ -39,7 +39,8 @@ interface ScopeClient {
   post<T>(path: string, body: unknown, opts?: { instanceToken?: string }): Promise<T>;
 }
 
-interface SessionRow { sessionId?: string; scope?: AgentSessionScope | null }
+/** ORB-2553 - `refusal` is the instance's sentence when the declaration was refused (another live session in this repository). */
+interface SessionRow { sessionId?: string; scope?: AgentSessionScope | null; refusal?: string }
 
 /** ORB-2593 - true while the `orboto claude` supervisor of this session waits for the conversation a bare `--resume` picks: no default scope is declared before it. */
 export function supervisorScopePending(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -63,7 +64,20 @@ export async function declareEnvProjectScope(
   if (!scope || pending) return null;
   const current = await client.get<SessionRow>('/v1/agent/session', { instanceToken }).catch(() => null);
   if (current && scopeDeclared(current.scope)) return current;
-  const row = await client.post<SessionRow>('/v1/agent/heartbeat', { scope, scopeDefault: true }, { instanceToken }).catch(() => null);
+  const declaration = { scope, scopeDefault: true, start: true };
+  const row: SessionRow | null = await client.post<SessionRow>('/v1/agent/heartbeat', declaration, { instanceToken })
+    .catch(async (err: unknown): Promise<SessionRow | null> => {
+      const { exitedPredecessor, presenceRefusal } = await import('./tools/shared.js');
+      const { machineId, shortHost } = await import('./session-origin.js');
+      const refused = presenceRefusal(err);
+      const dead = exitedPredecessor(refused, { machine: machineId(), host: shortHost() });
+      if (dead) {
+        const again = await client.post<SessionRow>('/v1/agent/heartbeat', { ...declaration, previous: 'end' }, { instanceToken }).catch(() => null);
+        if (again) console.error(`[orboto-mcp] ${dead.line}`);
+        return again;
+      }
+      return refused ? { refusal: refused.message } : null;
+    });
   if (row && typeof row.sessionId === 'string') rememberDeclaredScope(instanceToken, row.scope ?? scope);
   return row;
 }

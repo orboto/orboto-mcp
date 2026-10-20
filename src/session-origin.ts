@@ -6,7 +6,7 @@
  */
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { VERSION } from './version.js';
@@ -14,10 +14,11 @@ import { VERSION } from './version.js';
 export interface McpOrigin {
   host?: string | null; machineId?: string | null; repo?: string | null; pid?: number | null;
   startedAt?: string | null; client?: string | null; clientVersion?: string | null; harness?: string | null; model?: string | null;
+  checkout?: string | null;
 }
 
 const KEYS: Array<[string, keyof McpOrigin]> = [
-  ['host', 'host'], ['machine', 'machineId'], ['repo', 'repo'], ['pid', 'pid'], ['start', 'startedAt'], ['client', 'client'], ['version', 'clientVersion'], ['harness', 'harness'], ['model', 'model'],
+  ['host', 'host'], ['machine', 'machineId'], ['repo', 'repo'], ['pid', 'pid'], ['start', 'startedAt'], ['client', 'client'], ['version', 'clientVersion'], ['harness', 'harness'], ['model', 'model'], ['checkout', 'checkout'],
 ];
 
 const WRAPPED_HARNESSES: Record<string, string> = { claude: 'claude-code', 'claude-code': 'claude-code', codex: 'codex', gemini: 'gemini', kimi: 'kimi', agy: 'agy', antigravity: 'agy' };
@@ -60,6 +61,20 @@ export function repoBasename(cwd: string = process.cwd()): string | null {
   return basename(cwd) || null;
 }
 
+/** ORB-2553 - the hashed working tree the directory sits in (a linked worktree is its own), the same value the CLI sends; never a path. */
+export function checkoutHash(cwd: string = process.cwd()): string {
+  let root = cwd;
+  for (let dir = cwd, i = 0; i < 40; i += 1) {
+    if (existsSync(join(dir, '.git'))) { root = dir; break; }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  let physical = root;
+  try { physical = realpathSync(root); } catch { /* an unreadable path hashes as given */ }
+  return createHash('sha256').update(physical).digest('hex').slice(0, 16);
+}
+
 let machine: string | null | undefined;
 
 /** A hashed stable machine id (the platform UUID on macOS, /etc/machine-id elsewhere); null when none is readable. */
@@ -91,7 +106,7 @@ export function stdioOrigin(env: NodeJS.ProcessEnv = process.env): string {
     return params.toString();
   }
   return formatOrigin({
-    host: shortHost(), machineId: machineId(), repo: repoBasename(), pid: process.ppid || null,
+    host: shortHost(), machineId: machineId(), repo: repoBasename(), checkout: checkoutHash(), pid: process.ppid || null,
     client: 'orboto-mcp', clientVersion: VERSION,
     harness: stdioHarness(env),
     model: /^[\x21-\x7e]{1,80}$/.test((env.ORBOTO_MODEL ?? '').trim()) ? env.ORBOTO_MODEL!.trim() : null,

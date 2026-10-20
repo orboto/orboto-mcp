@@ -726,7 +726,7 @@ describe('ORB-2136 - session scope and ref', () => {
     const res = await makeSessionStartHandler(client)({ scope: { role: 'integrator', projectKeys: ['orb'] } }, { sessionId: 'abc123' });
     const beat = seen.find((c) => c.path === '/v1/agent/heartbeat');
     expect(beat?.headers['x-orboto-agent-session']).toBe('mcp-abc123');
-    expect(beat?.body).toEqual({ scope: { role: 'integrator', projectKeys: ['orb'] } });
+    expect(beat?.body).toEqual({ start: true, scope: { role: 'integrator', projectKeys: ['orb'] } });
     expect(seen.find((c) => c.path.startsWith('/v1/agent/messages'))?.headers['x-orboto-agent-session']).toBe('mcp-abc123');
     const text = (res.content[0] as { text: string }).text;
     expect(text).toContain('ref mcp-abc123, instance cbb52195. role integrator; projects ORB');
@@ -765,12 +765,12 @@ describe('ORB-2136 - session scope and ref', () => {
       return { ok: true, status: 200, statusText: 'OK', json: async () => body, text: async () => '' } as unknown as Response;
     });
     await makeSessionStartHandler(client)({});
-    expect(seen.find((c) => c.path === '/v1/agent/heartbeat')?.body).toEqual({ clientInfo: { host: hostname().trim().toLowerCase() } });
+    expect(seen.find((c) => c.path === '/v1/agent/heartbeat')?.body).toEqual({ start: true, clientInfo: { host: hostname().trim().toLowerCase() } });
     expect(localSessionHost({ sessionId: 'http-1' }, 'server')).toBeUndefined();
     expect(localSessionHost(undefined, ' Mac-A ')).toBe('mac-a');
   });
 
-  it('without a scope the heartbeat body stays empty and the digest says no scope is declared', async () => {
+  it('without a scope the heartbeat body carries only the start and the digest says no scope is declared', async () => {
     const seen: Array<{ path: string; body: unknown }> = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
       const u = new URL(url.toString());
@@ -781,7 +781,7 @@ describe('ORB-2136 - session scope and ref', () => {
       return { ok: true, status: 200, statusText: 'OK', json: async () => body, text: async () => '' } as unknown as Response;
     });
     const res = await makeSessionStartHandler(client)({}, { sessionId: 'abc123' });
-    expect(seen.find((c) => c.path === '/v1/agent/heartbeat')?.body).toEqual({});
+    expect(seen.find((c) => c.path === '/v1/agent/heartbeat')?.body).toEqual({ start: true });
     expect((res.content[0] as { text: string }).text).toContain('no scope declared');
   });
 

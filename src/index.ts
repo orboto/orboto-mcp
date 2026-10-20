@@ -74,15 +74,24 @@ async function main() {
       const { mcpProcessInstance } = await import('./tools/shared.js');
       const instanceToken = mcpProcessInstance();
       const { declareEnvProjectScope } = await import('./project-scope.js');
-      await declareEnvProjectScope(preflightClient, instanceToken);
+      const declared = await declareEnvProjectScope(preflightClient, instanceToken);
       const inbox = new InboxChannel({ ...clientConfig, instanceToken, mcp: server, digestMinutes: digestMinutesFromEnv(process.env.ORBOTO_MCP_CHANNEL_DIGEST_MINUTES) });
       inbox.start();
+      if (declared?.refusal) void inbox.deliverNotice('session_exists', declared.refusal);
       const outdated = cliOutdatedNotice(process.env.ORBOTO_MCP_CLI_OUTDATED);
       if (outdated) void inbox.deliverNotice(CLI_OUTDATED_NOTICE, outdated);
       const { readClaudeContext, channelClientInfo } = await import('./claude-context.js');
+      const { presenceRefusal } = await import('./tools/shared.js');
+      let refusalLogged = false;
       const beat = () => {
         preflightClient.post('/v1/agent/heartbeat', { clientInfo: channelClientInfo(readClaudeContext(process.cwd()), undefined, channelStart ?? undefined) }, { instanceToken })
-          .catch((err) => { console.error(`[orboto-mcp] channel heartbeat failed: ${(err as Error).message}`); });
+          .then(() => { refusalLogged = false; })
+          .catch((err) => {
+            const refused = presenceRefusal(err);
+            if (refused && refusalLogged) return;
+            refusalLogged = Boolean(refused);
+            console.error(`[orboto-mcp] channel heartbeat ${refused ? 'refused' : 'failed'}: ${refused?.message ?? (err as Error).message}`);
+          });
       };
       beat();
       const beats = setInterval(beat, 60_000);

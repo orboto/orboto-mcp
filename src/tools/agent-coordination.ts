@@ -10,7 +10,7 @@ import {
 import { AgentPresenceRowSchema, type AgentPresenceRow } from './agent-presence-row.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
-import { mcpInstanceToken } from './shared.js';
+import { mcpInstanceToken, presenceRefusal } from './shared.js';
 import { AgentSessionRoleSchema, AgentSessionScopeSchema, type AgentSessionScope } from './agent-session-scope.js';
 
 interface HeartbeatResponse {
@@ -62,7 +62,14 @@ export function makeAgentHeartbeatHandler(client: OrbotoClient) {
     },
     extra?: unknown,
   ): Promise<CallToolResult> => {
-    const res = await client.post<HeartbeatResponse>('/v1/agent/heartbeat', args, { instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
+    let res: HeartbeatResponse;
+    try {
+      res = await client.post<HeartbeatResponse>('/v1/agent/heartbeat', args, { instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
+    } catch (err) {
+      const refused = presenceRefusal(err);
+      if (!refused) throw err;
+      return { content: [{ type: 'text', text: `heartbeat refused (ORB-2553) - ${refused.message}` }], isError: true };
+    }
     const scope = res.scope ? ` scope=${JSON.stringify(res.scope)}` : '';
     const notes = (res.notes ?? []).map((n) => `\n${n}`).join('');
     return {
