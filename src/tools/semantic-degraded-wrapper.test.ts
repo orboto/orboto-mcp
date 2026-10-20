@@ -48,7 +48,7 @@ it('search, search-docs, ask-docs and check-similar print the degraded line on s
       child.on('close', (code) => code === 0 ? ok({ out, err }) : no(new Error(`Wrapper exit ${code}: ${err}`)));
       child.stdin.end('');
     });
-    for (const args of [['search', 'frobnicator'], ['search-docs', 'frobnicator'], ['ask-docs', 'how to restart'], ['check-similar', 'ORB', 'Frobnicator jams']]) {
+    for (const args of [['search', 'frobnicator'], ['search-docs', 'frobnicator'], ['ask-docs', 'how to restart'], ['check-similar', 'ORB', 'Frobnicator jams'], ['ticket', 'check-similar', 'ORB', 'Frobnicator jams']]) {
       const { out, err } = await run(args);
       expect(err, args.join(' ')).toContain(LINE);
       expect(out, args.join(' ')).not.toContain(LINE);
