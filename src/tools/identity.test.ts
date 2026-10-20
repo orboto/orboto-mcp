@@ -42,8 +42,19 @@ describe('orboto_whoami', () => {
       isBot: true,
       workspaceLocale: 'en',
       actingAuthorizedBy: null,
+      agentSession: null,
     });
     expect((res.content[0] as { text: string }).text).toContain('agent-e@orboto.io');
+  });
+
+  it('ORB-2550 - names the session the connection writes under, and a session another live process owns', async () => {
+    const session = { id: '0b0c3a1e-7f73-4c55-8a4e-1d0f0f0f0f0f', label: 'mcp-stdio#0b0c3a1e', harness: 'claude-code', pid: 4242, foreign: false };
+    stub([{ json: { id: 'u5', email: 'agent@orboto.io', isBot: true, agentSession: session } }, { json: { id: 'u5', email: 'agent@orboto.io', isBot: true, agentSession: { ...session, foreign: true } } }]);
+    const own = await makeWhoamiHandler(client)();
+    expect(own.structuredContent).toMatchObject({ agentSession: session });
+    expect((own.content[0] as { text: string }).text).toContain(`session: ${session.id} (mcp-stdio#0b0c3a1e)`);
+    const foreign = await makeWhoamiHandler(client)();
+    expect((foreign.content[0] as { text: string }).text).toContain('owned by claude-code pid 4242, another process: writes carry no session, timers and work sessions are refused; give this process an instance token of its own (ORBOTO_AGENT_SESSION=<own value>)'); expect((foreign.content[0] as { text: string }).text).toContain('after a restart of the same harness, orboto session-start registers the row again');
   });
 
   it('surfaces workspaceLocale in the text output when present (ORB-989)', async () => {

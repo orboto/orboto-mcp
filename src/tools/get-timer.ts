@@ -18,12 +18,17 @@ interface ActiveTimer {
   projectId?: string;
   /** ORB-2137 - the row was matched by the single-active-timer fallback because this instance's lane was empty. */
   laneFallback?: boolean;
+  agentSessionId?: string | null;
+  /** ORB-2550 - who runs the timer and in which agent session. */
+  userEmail?: string | null;
+  userFullName?: string | null;
+  agentSessionLabel?: string | null;
 }
 
 export const getTimerToolConfig = {
   title: 'Get current timer',
   description:
-    'Return the caller\'s currently-running stopwatch (or null if no timer is active). The lane is resolved from this session\'s instance token, so a timer started by `orboto_claim` / `orboto_timer_start` in the same checkout reads back (ORB-2137); `laneFallback: true` means the timer was matched as the account\'s only running one because this instance\'s lane was empty - another instance started it.',
+    'Return the caller\'s currently-running stopwatch (or null if no timer is active). The lane is resolved from this session\'s instance token, so a timer started by `orboto_claim` / `orboto_timer_start` in the same checkout reads back (ORB-2137); `laneFallback: true` means the timer was matched as the account\'s only running one because this instance\'s lane was empty - another instance started it. The answer names who runs the timer and its agent session (ORB-2550); the fallback never takes the timer of a session another harness process owns (409 `errors.time.timer_of_other_session` on stop).',
   inputSchema: z.object({}).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -50,6 +55,7 @@ export function makeGetTimerHandler(client: OrbotoClient) {
       `Timer ${isPaused ? 'paused' : 'running'} on ${ticketLabel}`,
       `Elapsed: ${minutes} min (${totalSeconds}s total)`,
       `Started: ${timer.startedAt}`,
+      `Owner: ${timer.userFullName ?? timer.userEmail ?? timer.userId}${timer.agentSessionLabel ? `, session ${timer.agentSessionLabel}` : ', no agent session'}`,
       isPaused ? `Paused: ${timer.pausedAt}` : null,
       timer.laneFallback ? 'Matched via the single-active-timer fallback - another instance started it.' : null,
       timer.description ? `Note: ${timer.description}` : null,
@@ -69,6 +75,10 @@ export function makeGetTimerHandler(client: OrbotoClient) {
           totalSeconds,
           paused: isPaused,
           laneFallback: timer.laneFallback === true,
+          userId: timer.userId,
+          userEmail: timer.userEmail ?? null,
+          agentSessionId: timer.agentSessionId ?? null,
+          agentSessionLabel: timer.agentSessionLabel ?? null,
         },
       },
     };

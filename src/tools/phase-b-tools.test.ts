@@ -674,4 +674,12 @@ describe('orboto_get_timer', () => {
     expect(sc.timer.paused).toBe(false);
     expect(sc.timer.ticketTitle).toBe('Bug');
   });
+
+  it('ORB-2550 - names who runs the timer and in which agent session', async () => {
+    const startedAt = new Date().toISOString();
+    stub([{ json: { id: 'tm2', userId: 'u1', ticketId: 't1', startedAt, pausedAt: null, accumulatedSeconds: 0, description: null, userEmail: 'claude@orboto.io', userFullName: 'Claude Agent', agentSessionId: 's-1', agentSessionLabel: 'claude-code#0b0c3a1e' } }]);
+    const res = await makeGetTimerHandler(client)();
+    expect((res.content[0] as { text: string }).text).toContain('Owner: Claude Agent, session claude-code#0b0c3a1e');
+    expect(res.structuredContent).toMatchObject({ timer: { userId: 'u1', userEmail: 'claude@orboto.io', agentSessionId: 's-1', agentSessionLabel: 'claude-code#0b0c3a1e' } });
+  });
 });
