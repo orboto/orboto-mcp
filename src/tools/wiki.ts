@@ -208,27 +208,35 @@ export function makeWikiFlagStaleHandler(client: OrbotoClient) {
   };
 }
 
+/** ORB-2611 - the wait or run time of a queued run, and its stall. */
+function queuedNote(r: { status: string; createdAt: string; queuedAt?: string | null; startedAt?: string | null; ageSeconds?: number | null; stalled?: boolean }): string {
+  if (r.status !== 'queued') return '';
+  const waited = r.startedAt ? (Date.parse(r.startedAt) - Date.parse(r.queuedAt ?? r.createdAt)) / 1000 : 0;
+  const minutes = Math.max(1, Math.round(Math.max(0, (r.ageSeconds ?? 0) - waited) / 60));
+  return ` (${r.startedAt ? 'running' : 'waiting'} ${minutes} min${r.stalled ? ', stalled' : ''})`;
+}
+
 export const wikiRunsToolConfig = {
   title: 'Wiki ingest runs',
-  description: 'List the ingest runs of a wiki space (status failed shows each error) or retry a failed run.',
+  description: 'List the ingest runs of a wiki space (queued shows the wait and a stall, failed each error) or retry a failed or stalled run.',
   inputSchema: z.object({
     spaceId: z.string().min(1),
     action: z.enum(['list', 'retry']).optional(),
     runId: z.string().uuid().optional(),
-    status: z.enum(['pending_review', 'applied', 'failed', 'skipped']).optional(),
+    status: z.enum(['pending_review', 'applied', 'failed', 'skipped', 'queued']).optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 export function makeWikiRunsHandler(client: OrbotoClient) {
   return async (input: { spaceId: string; action?: 'list' | 'retry'; runId?: string; status?: string }): Promise<CallToolResult> => {
     if (input.action === 'retry') {
-      if (!input.runId) return { isError: true, content: [{ type: 'text', text: 'action retry needs the runId of a failed run (action list, status failed).' }] };
+      if (!input.runId) return { isError: true, content: [{ type: 'text', text: 'action retry needs the runId of a failed or stalled run (action list, status failed or queued).' }] };
       const res = await client.post<{ runId: string; status: string; queued: boolean; error: string | null }>(`/spaces/${encodeURIComponent(input.spaceId)}/llm-wiki/ingest-runs/${input.runId}/retry`, {});
       return text(res.queued ? `Run ${res.runId} is queued for the ingest worker again.` : `Run ${res.runId} ran again: ${res.status}${res.error ? ` - ${res.error}` : ''}.`, res);
     }
     const qs = input.status ? `?status=${input.status}` : '';
-    const res = await client.get<{ runs: Array<{ id: string; sourceKey: string | null; sourceTitle: string; status: string; error: string | null; droppedOps?: DroppedOp[]; createdAt: string }> }>(`/spaces/${encodeURIComponent(input.spaceId)}/llm-wiki/ingest-runs${qs}`);
-    const lines = res.runs.map((r) => `- ${r.id} ${r.status} ${r.sourceKey ?? ''} "${r.sourceTitle}" ${r.createdAt}${r.droppedOps?.length ? ` (ops dropped: ${r.droppedOps.length})` : ''}${r.error ? ` - ${r.error}` : ''}`);
+    const res = await client.get<{ runs: Array<{ id: string; sourceKey: string | null; sourceTitle: string; status: string; error: string | null; droppedOps?: DroppedOp[]; createdAt: string; queuedAt?: string | null; startedAt?: string | null; ageSeconds?: number | null; stalled?: boolean }> }>(`/spaces/${encodeURIComponent(input.spaceId)}/llm-wiki/ingest-runs${qs}`);
+    const lines = res.runs.map((r) => `- ${r.id} ${r.status}${queuedNote(r)} ${r.sourceKey ?? ''} "${r.sourceTitle}" ${r.createdAt}${r.droppedOps?.length ? ` (ops dropped: ${r.droppedOps.length})` : ''}${r.error ? ` - ${r.error}` : ''}`);
     return text(lines.length ? lines.join('\n') : 'No ingest runs.', res);
   };
 }

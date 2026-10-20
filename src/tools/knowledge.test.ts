@@ -104,4 +104,16 @@ describe('ORB-2225 orboto_wiki_runs', () => {
     const handler = makeWikiRunsHandler({ get, post: vi.fn() } as unknown as OrbotoClient);
     expect(textOf(await handler({ spaceId: 'ACME-S1' }))).toContain('r2 applied ACME-D10 "Deploy notes" 2026-09-27T09:00:00Z (ops dropped: 1)');
   });
+
+  it('ORB-2611 - a queued run says how long it waits or runs and whether it stalled', async () => {
+    const get = vi.fn().mockResolvedValue({ runs: [
+      { id: 'r3', sourceKey: 'ACME-D11', sourceTitle: 'AGENTS.md study', status: 'queued', error: null, createdAt: '2026-10-20T15:53:33Z', startedAt: null, ageSeconds: 1260, stalled: true },
+      { id: 'r4', sourceKey: 'ACME-D12', sourceTitle: 'Context rules', status: 'queued', error: null, createdAt: '2026-10-20T15:53:33Z', queuedAt: '2026-10-20T15:53:33Z', startedAt: '2026-10-20T16:03:33Z', ageSeconds: 780, stalled: false },
+    ] });
+    const handler = makeWikiRunsHandler({ get, post: vi.fn() } as unknown as OrbotoClient);
+    const text = textOf(await handler({ spaceId: 'ACME-S1', status: 'queued' }));
+    expect(get).toHaveBeenCalledWith('/spaces/ACME-S1/llm-wiki/ingest-runs?status=queued');
+    expect(text).toContain('r3 queued (waiting 21 min, stalled) ACME-D11');
+    expect(text).toContain('r4 queued (running 3 min) ACME-D12');
+  });
 });
