@@ -112,7 +112,7 @@ function makeToggleHandler(client: OrbotoClient, completed: boolean) {
 const toggleInputSchema = z.object({
   ticketKey: z.string().min(3),
   item: z.union([
-    z.number().int().min(1).describe('1-based index, global across all checklists on this ticket'),
+    z.number().int().min(1).describe('1-based index across all checklists'),
     z.string().describe('Item UUID - for callers that already have it'),
   ]),
 }).shape;
@@ -232,7 +232,7 @@ export const updateCheckToolConfig = {
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     item: z.union([
-      z.number().int().min(1).describe('1-based index, global across all checklists on this ticket'),
+      z.number().int().min(1).describe('1-based index across all checklists'),
       z.string().describe('Item UUID - for callers that already have it'),
     ]),
     content: z.string().min(1).max(2000).optional().describe('New item text.'),

@@ -789,7 +789,7 @@ export const setMilestoneToolConfig = {
     'Move a ticket onto a different milestone (or off all milestones with milestone=null/undefined). Resolves the milestone by key (e.g. "ORB-M3"), name, OR UUID within the ticket\'s project (including closed/archived). If two milestones share a name, pass the key or UUID - an ambiguous name is rejected, not silently guessed.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    milestone: z.string().nullable().optional().describe('Milestone key (e.g. "ORB-M3"), name, or UUID. Pass the key/UUID when the name is ambiguous. Pass null to remove from any milestone.'),
+    milestone: z.string().nullable().optional().describe('Milestone key ("ORB-M3"), name or UUID (key when the name is ambiguous); null removes it.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -919,7 +919,7 @@ export function makeRemoveTicketDependencyHandler(client: OrbotoClient) {
 export const listTicketDependenciesToolConfig = {
   title: 'List a ticket\'s dependencies',
   description:
-    'Show both directions of a ticket\'s dependency graph: `blockedBy` (must finish first) and `blocks` (waiting on this one). ORB-1614: an edge to a ticket you cannot read comes back as an opaque stub (no title/key/status - just whether it is still open); `external` marks another project.',
+    'Both directions of a ticket\'s dependencies: `blockedBy` (finish first) and `blocks` (waiting on it). ORB-1614: an edge to a ticket you cannot read comes back as an opaque stub (no title/key/status - just whether it is still open); `external` marks another project.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
   }).shape,

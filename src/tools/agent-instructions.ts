@@ -20,6 +20,8 @@ interface BlockRow {
   sizeWarning?: { chars: number; limit: number; hint: string };
 }
 
+const AGENTS_PROPOSE = ' Agents propose shared rules with orboto_rule_propose (403 errors.agent_rules.write_needs_person).';
+
 const RULE_WRITING_CONTRACT =
   ' Rule: title = one imperative sentence; body <= 400 chars, Rule / Why / How, no long examples, nothing another block says.';
 
@@ -97,7 +99,7 @@ export const createAgentInstructionToolConfig = {
   title: 'Add a custom coding-agent rule block',
   description:
     'Create a custom rule block at a scope (workspace, customer, project or personal). Workspace reaches every agent (admin:ai:write), customer every project of one customer (customer:write), project one project (project:edit), personal only you. For scope=customer pass customerId; for scope=project pass projectId.'
-    + RULE_WRITING_CONTRACT,
+    + AGENTS_PROPOSE + RULE_WRITING_CONTRACT,
   inputSchema: z.object({
     title: z.string().min(1).max(120),
     body: z.string().min(1).max(8000).describe('The rule text the agent should follow.'),
@@ -136,7 +138,7 @@ export const updateAgentInstructionToolConfig = {
   title: 'Edit / toggle / reorder a coding-agent rule block',
   description:
     'Patch a rule block: title, body, enabled (toggle a rule on/off), or sortOrder. Works on default AND custom blocks (defaults keep their builtinKey and can be reset later). Needs admin:ai:write.'
-    + RULE_WRITING_CONTRACT,
+    + AGENTS_PROPOSE + RULE_WRITING_CONTRACT,
   inputSchema: z.object({
     id: z.string().uuid(),
     title: z.string().min(1).max(120).optional(),
@@ -172,7 +174,7 @@ export function makeUpdateAgentInstructionHandler(client: OrbotoClient) {
 export const resetAgentInstructionToolConfig = {
   title: 'Reset a default rule block to its shipped text',
   description:
-    'Restore a seeded DEFAULT rule block (one with a builtinKey) to the text orboto ships. No-op for custom blocks. Needs admin:ai:write.',
+    'Restore a seeded DEFAULT rule block (one with a builtinKey) to the text orboto ships. No-op for custom blocks. Needs admin:ai:write.' + AGENTS_PROPOSE,
   inputSchema: z.object({ id: z.string().uuid() }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
@@ -187,7 +189,7 @@ export function makeResetAgentInstructionHandler(client: OrbotoClient) {
 export const deleteAgentInstructionToolConfig = {
   title: 'Delete a custom coding-agent rule block',
   description:
-    'Delete a CUSTOM rule block. Default (builtin) blocks cannot be deleted - disable them via update instead. Needs admin:ai:write.',
+    'Delete a CUSTOM rule block. Default (builtin) blocks cannot be deleted - disable them via update instead. Needs admin:ai:write.' + AGENTS_PROPOSE,
   inputSchema: z.object({ id: z.string().uuid() }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };

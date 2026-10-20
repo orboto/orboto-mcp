@@ -65,6 +65,9 @@ afterEach(() => { vi.restoreAllMocks(); });
  * ORB-2563 gave `orboto_agent_notify` `remind` and `urgent` inside the
  * ceiling: the docs `content` parameter description shrank to pay for it
  * (full = 171,194).
+ * ORB-2579 added the four rule proposal tools to the full tier after
+ * tightening repeated parameter descriptions (doc ids, bulk selectors,
+ * work-session leases, primer facts) by 3.0k (full = 169,607).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

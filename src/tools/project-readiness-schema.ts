@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const ProjectReadinessStatusSchema = z.enum(['ok', 'missing', 'n/a']);
 export const ProjectReadinessItemIdSchema = z.enum(['project_record', 'human_manager', 'milestones', 'git_connection', 'doc_primer', 'instructions', 'tech_stack', 'commands', 'lane_assignment', 'acceptance', 'spec_settings', 'sentry_intake']);
-const ProjectReadinessFixSchema = z.object({ method: z.string(), route: z.string(), mcpTool: z.string(), cliCommand: z.string(), settingsPath: z.string() });
+const ProjectReadinessFixSchema = z.object({ method: z.string(), route: z.string(), mcpTool: z.string(), cliCommand: z.string(), settingsPath: z.string(), note: z.string().optional() });
 export const ProjectReadinessItemSchema = z.object({
   id: ProjectReadinessItemIdSchema,
   status: ProjectReadinessStatusSchema,

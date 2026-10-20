@@ -19,8 +19,9 @@ import { applyResponseBudget, budgetFor, DEFAULT_BUDGET_CHARS } from '../respons
 import { hostname, tmpdir } from 'node:os';
 import { localSessionHost } from './shared.js';
 
-beforeEach(() => { vi.restoreAllMocks(); });
-afterEach(() => { vi.restoreAllMocks(); });
+/** An `orboto claude` or `orboto connect` session exports its checkout project and role; the digest must not inherit them here. */
+beforeEach(() => { vi.restoreAllMocks(); vi.stubEnv('ORBOTO_PROJECT_KEY', ''); vi.stubEnv('ORBOTO_SESSION_ROLE', ''); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 function stubByPath(map: Record<string, unknown>) {
   const calls: string[] = [];

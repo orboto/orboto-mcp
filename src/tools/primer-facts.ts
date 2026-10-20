@@ -157,19 +157,19 @@ export const primerFactAddToolConfig = {
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key, e.g. "ORB". Case-insensitive.'),
     category: PrimerFactCategoryEnum.describe(
-      'Category bucket. Pick the closest fit; categories are fixed. Use "non_functional" to capture an explicit non-functional requirement (performance / security / DSGVO / operations / i18n) - the key names the sub-area, the value is the requirement; these render verbatim in the requirements-spec NFR chapter. Use "glossary" for a term/definition pair - these render only in the requirements-spec glossary chapter.',
+      'Fixed category. non_functional: an NFR (key = area, value = requirement, rendered in the spec NFR chapter); glossary: a term/definition (spec glossary only).',
     ),
     key: z.string().min(1).max(120).describe(
-      'Short machine-readable identifier, e.g. "package-manager", "node-version", "css-framework". Lowercase + dashes preferred.',
+      'Short id, lowercase-dashed, e.g. "node-version".',
     ),
     value: z.string().min(1).max(8000).describe(
-      'Human-readable Markdown body, 1-3 sentences typically. Include a version number, a path, or a command where relevant.',
+      'Markdown, 1-3 sentences; name versions, paths, commands.',
     ),
     observed: z.boolean().default(false).describe(
-      'True = source is agent_observed (needs operator verification). False = manual entry by operator. A bot account or an agent key is always coerced to agent_observed server-side, whatever is sent.',
+      'True files agent_observed (a person verifies); a bot or agent key is always agent_observed.',
     ),
-    allowOversize: z.boolean().optional().describe('Override the hard size-cap block (300*2 chars). Only after a call was blocked.'),
-    oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true - why this value genuinely needs the length. Audit-logged.'),
+    allowOversize: z.boolean().optional().describe('Override the 600-char hard cap after a blocked call.'),
+    oversizeReason: z.string().min(10).max(500).optional().describe('With allowOversize: why it needs the length (audited).'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -237,8 +237,8 @@ export const primerFactUpdateToolConfig = {
     value: z.string().min(1).max(8000).optional().describe('New Markdown body.'),
     category: PrimerFactCategoryEnum.optional().describe('New category.'),
     key: z.string().min(1).max(120).optional().describe('New key.'),
-    allowOversize: z.boolean().optional().describe('Override the hard size-cap block (300*2 chars). Only after a call was blocked.'),
-    oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true - why this value genuinely needs the length. Audit-logged.'),
+    allowOversize: z.boolean().optional().describe('Override the 600-char hard cap after a blocked call.'),
+    oversizeReason: z.string().min(10).max(500).optional().describe('With allowOversize: why it needs the length (audited).'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -303,8 +303,8 @@ export const primerFactSupersedeToolConfig = {
     category: PrimerFactCategoryEnum.describe('Category of the new fact (usually unchanged).'),
     key: z.string().min(1).max(120).describe('Key of the new fact (usually unchanged).'),
     value: z.string().min(1).max(8000).describe('Corrected Markdown body.'),
-    allowOversize: z.boolean().optional().describe('Override the hard size-cap block (300*2 chars). Only after a call was blocked.'),
-    oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true - why this value genuinely needs the length. Audit-logged.'),
+    allowOversize: z.boolean().optional().describe('Override the 600-char hard cap after a blocked call.'),
+    oversizeReason: z.string().min(10).max(500).optional().describe('With allowOversize: why it needs the length (audited).'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };

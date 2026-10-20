@@ -31,6 +31,10 @@ import {
   deleteAgentInstructionToolConfig, makeDeleteAgentInstructionHandler,
 } from './tools/agent-instructions.js';
 import {
+  ruleProposeToolConfig, makeRuleProposeHandler, ruleProposalsToolConfig, makeRuleProposalsHandler,
+  ruleProposalAcceptToolConfig, makeRuleProposalAcceptHandler, ruleProposalRejectToolConfig, makeRuleProposalRejectHandler,
+} from './tools/rule-proposals.js';
+import {
   agentHeartbeatToolConfig, makeAgentHeartbeatHandler,
   agentPresenceToolConfig, makeAgentPresenceHandler,
   agentNotifyToolConfig, makeAgentNotifyHandler,
@@ -415,6 +419,10 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_update_agent_instruction', updateAgentInstructionToolConfig, makeUpdateAgentInstructionHandler(client));
   reg('orboto_reset_agent_instruction', resetAgentInstructionToolConfig, makeResetAgentInstructionHandler(client));
   reg('orboto_delete_agent_instruction', deleteAgentInstructionToolConfig, makeDeleteAgentInstructionHandler(client));
+  reg('orboto_rule_propose', ruleProposeToolConfig, makeRuleProposeHandler(client));
+  reg('orboto_rule_proposals', ruleProposalsToolConfig, makeRuleProposalsHandler(client));
+  reg('orboto_rule_proposal_accept', ruleProposalAcceptToolConfig, makeRuleProposalAcceptHandler(client));
+  reg('orboto_rule_proposal_reject', ruleProposalRejectToolConfig, makeRuleProposalRejectHandler(client));
   reg('orboto_agent_heartbeat', agentHeartbeatToolConfig, makeAgentHeartbeatHandler(client));
   reg('orboto_agent_presence', agentPresenceToolConfig, makeAgentPresenceHandler(client));
   reg('orboto_who', agentWhoToolConfig, makeAgentWhoHandler(client));

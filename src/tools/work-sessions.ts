@@ -63,19 +63,19 @@ export const workStartToolConfig = {
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key like "ACME-42".'),
     role: z.enum(['implementation', 'review', 'preflight', 'integration', 'spec']).optional()
-      .describe('Default implementation; other roles attach without reassignment. Spec prepares build orders; bots need the spec tag.'),
+      .describe('Default implementation; others attach without reassignment; spec needs the bot spec tag.'),
     leaseSeconds: z.number().int().min(60).max(86_400).optional()
-      .describe('How long the lease should hold without renewal. Default 900 (15 min).'),
+      .describe('Lease without renewal, default 900 (15 min).'),
     override: z.boolean().optional().describe("Bypass the spec gate; reason required. Never epics."),
     reason: z.string().trim().min(1).max(2000).optional(),
     takeover: z.boolean().optional()
-      .describe('Displace the current holder of this (ticket, role) lease. Their session is cancelled and their tracked time booked.'),
+      .describe('Displace the lease holder; their session is cancelled, their time booked.'),
     startTimer: z.boolean().optional()
-      .describe('Defaults to true for `implementation`, false for the attach-only roles.'),
+      .describe('Default true for implementation, false otherwise.'),
     agentSessionToken: z.string().optional()
-      .describe('Stable per-agent-instance token. Omit to use this MCP connection\'s own instance id.'),
+      .describe('Agent instance token; default this connection\'s.'),
     resourceClaims: z.array(z.object(ResourceClaimShape)).max(50).optional()
-      .describe('ORB-1610 - resource claims to acquire alongside the lease. Same semantics as orboto_work_session_start\'s resourceClaims.'),
+      .describe('Resource claims with the lease, as in orboto_work_session_start.'),
     onConflict: z.enum(['reject', 'queue']).optional()
       .describe('Only matters when `resourceClaims` is set. Default `reject`.'),
   }).shape,
@@ -263,19 +263,19 @@ export const workSessionStartToolConfig = {
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key like "ACME-42".'),
     role: z.enum(['implementation', 'review', 'preflight', 'integration', 'spec']).optional()
-      .describe('Default implementation; other roles attach without reassignment. Spec prepares build orders; bots need the spec tag.'),
+      .describe('Default implementation; others attach without reassignment; spec needs the bot spec tag.'),
     leaseSeconds: z.number().int().min(60).max(86_400).optional()
-      .describe('How long the lease should hold without renewal. Default 900 (15 min).'),
+      .describe('Lease without renewal, default 900 (15 min).'),
     override: z.boolean().optional().describe("Bypass the spec gate; reason required. Never epics."),
     reason: z.string().trim().min(1).max(2000).optional(),
     takeover: z.boolean().optional()
-      .describe('Displace the current holder of this (ticket, role) lease. Their session is cancelled and their tracked time booked.'),
+      .describe('Displace the lease holder; their session is cancelled, their time booked.'),
     startTimer: z.boolean().optional()
-      .describe('Defaults to true for `implementation`, false for the attach-only roles.'),
+      .describe('Default true for implementation, false otherwise.'),
     agentSessionToken: z.string().optional()
-      .describe('Stable per-agent-instance token. Omit to use this MCP connection\'s own instance id.'),
+      .describe('Agent instance token; default this connection\'s.'),
     resourceClaims: z.array(z.object(ResourceClaimShape)).max(50).optional()
-      .describe('Atomic resource claims: path values are repo-relative globs, named values are exact ids. Overlapping writes conflict across the workspace; reads never conflict.'),
+      .describe('Atomic claims: path = repo-relative glob, named = exact id; overlapping writes conflict, reads never.'),
     onConflict: z.enum(['reject', 'queue']).optional()
       .describe('reject rolls back a new session on claim conflict; queue keeps it with waiting claims, promoted when conflicts clear.'),
   }).shape,
@@ -394,7 +394,7 @@ export const workSessionFinishToolConfig = {
   inputSchema: z.object({
     sessionId: z.string().uuid().describe('The id returned by orboto_work_session_start.'),
     outcome: z.enum(['finished', 'cancelled']).optional()
-      .describe('`finished` (default) = the work completed. `cancelled` = abandoned attempt; time is still booked, history stays honest.'),
+      .describe('`finished` (default) or `cancelled` (abandoned; time is still booked).'),
     commitSha: z.string().optional().describe('The commit this session produced, when it produced one.'),
     verification: z.object({
       reviewOfSessionId: z.string().uuid().optional().describe('Exact independent implementation work session this review examined.'),
@@ -580,7 +580,7 @@ export const workSessionClaimsAddToolConfig = {
   inputSchema: z.object({
     sessionId: z.string().uuid().describe('The id returned by orboto_work_session_start.'),
     claims: z.array(z.object(ResourceClaimShape)).min(1).max(50)
-      .describe('Claims to add. `kind: "path"` = glob relative to the repo root. `kind: "named"` = exact-match exclusive resource id.'),
+      .describe('Claims to add: path = repo-relative glob, named = exclusive exact id.'),
     onConflict: z.enum(['reject', 'queue']).optional().describe('Default `reject`.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -634,7 +634,7 @@ export function makeWorkSessionClaimsAddHandler(client: OrbotoClient) {
 export const workSessionClaimsReleaseToolConfig = {
   title: 'Release resource claims from a live work session',
   description:
-    'ORB-1610 - drop resource claims (or all) from a session you hold, WITHOUT finishing it or touching the ticket lease/timer. Releasing a granted write claim immediately runs a grant pass, so the earliest queued waiter for that resource is promoted as part of this call - useful once you know you are done touching a subtree but are not done with the ticket. Omit `claims` to release everything the session holds.',
+    'Drop resource claims (or all) from your session without finishing it or touching lease and timer. Releasing a granted write claim immediately runs a grant pass, so the earliest queued waiter for that resource is promoted as part of this call - useful once you know you are done touching a subtree but are not done with the ticket. Omit `claims` to release everything the session holds.',
   inputSchema: z.object({
     sessionId: z.string().uuid().describe('The id returned by orboto_work_session_start.'),
     claims: z.array(z.object({ kind: z.enum(['path', 'named']), value: z.string().min(1).max(500) })).optional()

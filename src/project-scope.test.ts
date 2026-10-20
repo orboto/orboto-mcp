@@ -20,7 +20,7 @@ function fakeClient(row: unknown) {
   };
 }
 
-beforeEach(() => { _forgetDeclaredScopes(); });
+beforeEach(() => { _forgetDeclaredScopes(); vi.stubEnv(PROJECT_KEY_ENV, ''); vi.stubEnv(SESSION_ROLE_ENV, ''); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe('ORB-2224 - ORBOTO_PROJECT_KEY', () => {

@@ -51,21 +51,21 @@ export const workNextToolConfig = {
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME") or UUID.'),
     agentTag: z.string().min(1).max(64).optional()
-      .describe('ORB-1772 - preferred routing tag: `agent:<tag>` tickets rank first, foreign `agent:*` last but eligible. Lowercased; often the model or fleet lane name.'),
+      .describe('Routing tag: `agent:<tag>` tickets first, foreign `agent:*` last but eligible.'),
     role: z.enum(['implementation', 'review', 'preflight', 'integration', 'spec']).optional()
       .describe('Default `implementation`; reserves only a ticket whose (ticket, role) lease is free.'),
     leaseSeconds: z.number().int().min(60).max(86_400).optional()
-      .describe('How long the lease should hold without renewal. Default 900 (15 min).'),
+      .describe('Lease without renewal, default 900 (15 min).'),
     startTimer: z.boolean().optional()
-      .describe('Defaults to true for `implementation`, false for the attach-only roles.'),
+      .describe('Default true for implementation, false otherwise.'),
     agentSessionToken: z.string().optional()
-      .describe('Stable per-agent-instance token. Omit to use this MCP connection\'s own instance id.'),
+      .describe('Agent instance token; default this connection\'s.'),
     resourceClaims: z.array(z.object(ResourceClaimShape)).max(50).optional()
       .describe('ORB-1610 - claims to acquire with the reservation; a ticket under a conflicting granted write claim is skipped.'),
     onConflict: z.enum(['reject', 'queue']).optional()
       .describe('Only matters when `resourceClaims` is set on the WINNING candidate. Default `reject`.'),
     peek: z.boolean().optional()
-      .describe('ORB-1930 - "is there work for me?" without reserving: the same candidate walk, no lease, timer or lane quota; returns `candidate` or the empty reason.'),
+      .describe('Look without reserving (no lease, timer or quota); returns `candidate` or the empty reason.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };

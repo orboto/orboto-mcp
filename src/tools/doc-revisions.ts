@@ -38,7 +38,7 @@ export const listDocRevisionsToolConfig = {
   description:
     'Return saved revisions for a doc page, newest-first. Each row carries the revision id, title at snapshot time, editor user id, and editedAt timestamp; the body content is NOT in this list (use orboto_get_doc_revision to fetch one). Cursor-paged - pass `cursor` to walk older pages.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
     limit: z.number().int().min(1).max(100).optional().describe('Page size. Defaults to API default (25).'),
     cursor: z.string().optional().describe('Opaque cursor from a previous call\'s nextCursor.'),
   }).shape,
@@ -90,7 +90,7 @@ export const getDocRevisionToolConfig = {
   description:
     'Return the full content + title of one saved revision. Use this to diff against the current doc before deciding whether to restore.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
     revisionId: z.string().uuid(),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
@@ -124,7 +124,7 @@ export const restoreDocRevisionToolConfig = {
   description:
     'Roll back the doc to the saved revision. The API snapshots the CURRENT body to a fresh revision row first, so the restore itself is also undoable. Returns the post-restore doc state.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
     revisionId: z.string().uuid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },

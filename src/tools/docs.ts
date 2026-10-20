@@ -205,7 +205,7 @@ export const updateDocSpaceToolConfig = {
     description: z.string().nullish(),
     icon: z.string().nullish(),
     isPublic: z.boolean().optional().describe('DEPRECATED - use guestsVisible.'),
-    visibility: z.enum(['workspace', 'project_members', 'restricted']).optional().describe('Space-level read gate: workspace = every internal member, project_members = project members whose role grants doc:view (project spaces only), restricted = standalone allowlist. Requires manage rights.'),
+    visibility: z.enum(['workspace', 'project_members', 'restricted']).optional().describe('Read gate: workspace = every internal member, project_members = members with doc:view (project spaces), restricted = allowlist. Needs manage rights.'),
     guestsVisible: z.boolean().optional().describe('Explicit guest (external user) opt-in. Requires manage rights.'),
     memberIds: z.array(z.string().uuid()).optional().describe('Replaces the restricted-space allowlist. Requires manage rights.'),
     slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional(),
@@ -334,7 +334,7 @@ export const createDocToolConfig = {
   inputSchema: z.object({
     spaceId: z.string().min(1).describe('Target doc space - key (e.g. ORB-S1), name, or UUID. Discover via orboto_list_doc_spaces.'),
     title: z.string().min(1).max(255),
-    content: z.string().optional().describe('Markdown body (CommonMark + GFM). Empty or omitted: a blank page. Images are inline elements; status pills use `:badge[LABEL]{tone=success}` (neutral/info/success/warning/danger/accent, unknown = neutral, label <= 24 chars).'),
+    content: z.string().optional().describe('Markdown (GFM); omitted: a blank page. Pills: `:badge[LABEL]{tone=success}` (neutral/info/success/warning/danger/accent, unknown = neutral, label <= 24 chars).'),
     parentDocId: z.string().uuid().nullable().optional().describe('Nest under another doc.'),
     visibility: z.enum(['public', 'workspace', 'members', 'specific']).optional().describe('Defaults to "workspace".'),
     icon: z.string().nullish().describe('Single emoji shown in the tree.'),
@@ -374,9 +374,9 @@ export const updateDocToolConfig = {
   description:
     'Patch a doc; content is appended unless replace. ORB-2468: title, visibility, parent and icon are set as given; content goes in as a new section (identical content twice is a no-op); replace: true replaces the whole page and the answer names the revision holding the previous body plus its restore command. Every body or title change snapshots a revision; orboto_restore_doc_revision rolls back. For one passage or section use orboto_edit_doc.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
     title: z.string().min(1).max(255).optional(),
-    content: z.string().optional().describe('Markdown to append (with replace: the whole body). Images are inline elements; status pills use `:badge[LABEL]{tone=success}` (neutral/info/success/warning/danger/accent, unknown reads as neutral, label <= 24 chars).'),
+    content: z.string().optional().describe('Markdown to append (with replace: the whole body). Pills: `:badge[LABEL]{tone=success}` (neutral/info/success/warning/danger/accent, unknown = neutral, label <= 24 chars).'),
     replace: z.boolean().optional(),
     parentDocId: z.string().uuid().nullable().optional(),
     visibility: z.enum(['public', 'workspace', 'members', 'specific']).optional(),
@@ -430,7 +430,7 @@ export const deleteDocToolConfig = {
   description:
     'DESTRUCTIVE - removes the page from the tree. Revisions are NOT auto-cascaded; the API keeps them so an admin could in principle resurrect from history, but the page itself is gone from listings. System-generated primer docs refuse deletion (the regenerator re-creates them). Returns success silently; 404 is also silent (idempotent).',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
@@ -451,9 +451,9 @@ export const moveDocToolConfig = {
   description:
     'Reparent a doc, change its sort order, or move it into a different space. All three target fields are optional but at least one must be supplied. Distinct from orboto_update_doc\'s parentDocId because the API endpoint emits a different WS event for the tree-rebuild path connected clients care about.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or human-readable doc key (ORB-D12 / DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
     parentDocId: z.string().uuid().nullable().optional().describe('null = top-level; UUID = nest under that doc.'),
-    spaceId: z.string().uuid().optional().describe('Move into a different space. Caller must be member of both; the parent must live in the target space, and without parentDocId the doc lands at the top level.'),
+    spaceId: z.string().uuid().optional().describe('Target space (member of both); the parent must be in it, else the doc lands at the top level.'),
     sortOrder: z.number().int().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },

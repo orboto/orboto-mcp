@@ -22,12 +22,12 @@ const CATEGORY_TO_LEGACY: Record<StatusCategory, string> = {
 interface MemberRow { userId: string; user: { email: string } }
 
 const TICKET_KEY_ARRAY = z.array(z.string().min(3)).min(1).max(200).optional()
-  .describe('Ticket keys, e.g. ["ACME-1"]; at most 200. Give ticketKeys or query.');
+  .describe('Ticket keys, at most 200; or give query.');
 /** ORB-2054 - the target set can be an OQL query instead of a key list. */
 const QUERY_SOURCE = z.string().min(1).max(8000).optional()
-  .describe('OQL selecting the tickets instead of ticketKeys (orboto_query grammar, your ACL); at most 200 matches.');
+  .describe('OQL instead of ticketKeys (your ACL), at most 200 matches.');
 const QUERY_PROJECT = z.string().optional()
-  .describe('Project key that scopes `query` (prepended as project = KEY).');
+  .describe('Project key scoping `query`.');
 /** Matches per call the MCP loop will process; above that the server-side bulk route is the right tool. */
 export const BULK_QUERY_MAX = 200;
 
