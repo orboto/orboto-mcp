@@ -39,7 +39,7 @@ interface BulkTimeEntryResult {
 export const timerStartToolConfig = {
   title: 'Start a timer on a ticket',
   description:
-    'Start the user\'s stopwatch on a ticket. If a timer is already running on a different ticket, pass replace=true to auto-stop the previous one (its elapsed time is committed to time_entries before the new timer begins). Description becomes the time entry\'s note when this timer eventually stops.',
+    'Start the user\'s stopwatch on a ticket. If a timer is already running on a different ticket, pass replace=true to auto-stop the previous one (its elapsed time is committed to time_entries before the new timer begins). Description becomes the time entry\'s note when this timer eventually stops. Needs time:log on the ticket\'s project (403 errors.time.log_permission_required) and a ticket you can read (404).',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     description: z.string().optional().describe('Note for the time entry; set at start, not at stop.'),
@@ -84,7 +84,7 @@ export function makeTimerStartHandler(client: OrbotoClient) {
 export const timerStopToolConfig = {
   title: 'Stop the running timer',
   description:
-    'Stop the user\'s stopwatch. The API commits a time_entries row using the description set at start (or pause/resume), then deletes the active-timer record. Returns the duration in minutes.',
+    'Stop the user\'s stopwatch. The API commits a time_entries row using the description set at start (or pause/resume), then deletes the active-timer record. Returns the duration in minutes; bookingRefused: true means the timer ran but booked nothing because you can no longer read the ticket or lost time:log on its project.',
   inputSchema: z.object({}).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -92,11 +92,17 @@ export const timerStopToolConfig = {
 export function makeTimerStopHandler(client: OrbotoClient) {
   return async (): Promise<CallToolResult> => {
     try {
-      const res = await client.post<{ durationMinutes: number; stopped?: boolean; laneFallback?: boolean }>('/time/timer/stop', {});
+      const res = await client.post<{ durationMinutes: number; stopped?: boolean; laneFallback?: boolean; bookingRefused?: boolean }>('/time/timer/stop', {});
       if (res.stopped === false) {
         return {
           content: [{ type: 'text', text: 'No active timer to stop.' }],
           structuredContent: { durationMinutes: 0, alreadyStopped: true },
+        };
+      }
+      if (res.bookingRefused) {
+        return {
+          content: [{ type: 'text', text: 'Timer stopped - nothing booked: you can no longer read the ticket or lost time:log on its project.' }],
+          structuredContent: { durationMinutes: 0, bookingRefused: true },
         };
       }
       return {

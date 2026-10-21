@@ -86,6 +86,13 @@ describe('orboto_timer_stop', () => {
     const sc = res.structuredContent as { alreadyStopped: boolean };
     expect(sc.alreadyStopped).toBe(true);
   });
+
+  it('ORB-2632 - says nothing was booked when the API refused the booking', async () => {
+    stub([{ json: { durationMinutes: 0, stopped: true, laneFallback: false, bookingRefused: true } }]);
+    const res = await makeTimerStopHandler(client)();
+    expect(res.structuredContent).toEqual({ durationMinutes: 0, bookingRefused: true });
+    expect((res.content[0] as { text: string }).text).toContain('nothing booked');
+  });
 });
 
 describe('orboto_log_time', () => {
