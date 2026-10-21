@@ -29,7 +29,9 @@ export const apiCallToolConfig = {
     + 'Find the endpoint + its schema with `orboto_api_search` first. Runs with YOUR permissions '
     + 'only (the API enforces them server-side); the response is an envelope carrying the inner '
     + 'HTTP status + body verbatim, so react to a 403/404/422 as data. Auth/OAuth/setup/webhook '
-    + 'paths are blocked at the proxy. Prefer named tools when one exists - they are more ergonomic.',
+    + 'paths are blocked at the proxy. Over an OAuth connection, API keys, OAuth clients, sign-in factors and passwords '
+    + 'need the web login (403 errors.auth.oauth_credential_route_refused). '
+    + 'Prefer named tools when one exists - they are more ergonomic.',
   inputSchema: z.object({
     method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
     path: z.string().min(1).max(500)
