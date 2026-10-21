@@ -294,6 +294,16 @@ export class InboxChannel {
     await this.emit({ content, meta: { kind: 'notice', notice } });
   }
 
+  /** ORB-2641 - follow the session this process joined: the stream reconnects under its token and replays that session's unread mail, also what is older than the last id this process saw. */
+  switchInstance(token: string): void {
+    if (!token || token === this.opts.instanceToken) return;
+    this.opts = { ...this.opts, instanceToken: token };
+    this.lastId = null;
+    this.since = JOINED_REPLAY_SINCE;
+    this.log(`joined the session of this process under its token; the inbox stream reconnects`);
+    try { this.abort.abort(); } catch { /* ignore */ }
+  }
+
   /** ORB-2209 - the id and scope the server resumed; never a channel event. */
   applySession(session: ChannelSession): void {
     this.session = session;
@@ -400,6 +410,9 @@ export class InboxChannel {
     }
   }
 }
+
+/** ORB-2641 - the replay anchor after joining another session: its whole unread backlog, deduplicated by message id. */
+export const JOINED_REPLAY_SINCE = '2020-01-01T00:00:00.000Z';
 
 /** ORB-2175 - the notice name the stale-CLI finding is delivered under. */
 export const CLI_OUTDATED_NOTICE = 'cli_outdated';

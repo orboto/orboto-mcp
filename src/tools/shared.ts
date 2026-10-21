@@ -221,7 +221,26 @@ export function checkoutInstanceToken(env: NodeJS.ProcessEnv = process.env, host
   return explicit || `agent-${createHash('sha256').update(`${host}:${cwd}`).digest('hex').slice(0, 12)}`;
 }
 
-const MCP_PROCESS_INSTANCE = checkoutInstanceToken();
+let MCP_PROCESS_INSTANCE = checkoutInstanceToken();
+
+/** ORB-2641 - the process joins the session its harness process already declared under another token: every later call acts under that token. */
+export function adoptProcessInstance(token: string): void {
+  if (/^[\x21-\x7e]{1,200}$/.test(token)) MCP_PROCESS_INSTANCE = token;
+}
+
+/** ORB-2641 - a heartbeat answer that names the session of this process (`joined`): the process continues under its token; returns that token, or null when nothing changed. */
+export function adoptJoined(res: { joined?: { instanceToken?: string } } | null | undefined): string | null {
+  const token = res?.joined?.instanceToken;
+  if (!token || token === MCP_PROCESS_INSTANCE) return null;
+  adoptProcessInstance(token);
+  return MCP_PROCESS_INSTANCE === token ? token : null;
+}
+
+/** ORB-2641 - the one heartbeat of a stdio server without a channel: it says so, and joins the session of its process when the answer names one. */
+export async function beatAsToolServer(client: { post<T>(path: string, body: unknown, options?: { instanceToken?: string }): Promise<T> }, clientInfo: Record<string, unknown>): Promise<string | null> {
+  const res = await client.post<{ joined?: { instanceToken?: string } }>('/v1/agent/heartbeat', { clientInfo }, { instanceToken: MCP_PROCESS_INSTANCE });
+  return adoptJoined(res);
+}
 
 /** ORB-2465 - the machine a stdio proxy runs on, lower-cased, as `agent-broadcast live --host` matches it; an HTTP connection (per-connection session id) runs on the server, so it reports none. */
 export function localSessionHost(extra?: { sessionId?: string }, host: string = hostname()): string | undefined {

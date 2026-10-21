@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { CHANNEL_CAPABILITY, CHANNEL_INSTRUCTIONS, CHANNEL_METHOD, CLI_OUTDATED_NOTICE, InboxChannel, RESTART_REQUESTED_NOTICE, cliOutdatedNotice, digestMinutesFromEnv, isImmediate, renderEvent, scopeHintWithKey, type InboxMessage } from './inbox-channel.js';
+import { CHANNEL_CAPABILITY, CHANNEL_INSTRUCTIONS, CHANNEL_METHOD, CLI_OUTDATED_NOTICE, InboxChannel, JOINED_REPLAY_SINCE, RESTART_REQUESTED_NOTICE, cliOutdatedNotice, digestMinutesFromEnv, isImmediate, renderEvent, scopeHintWithKey, type InboxMessage } from './inbox-channel.js';
 import { buildOrbotoMcpServer } from './server.js';
 import { _forgetDeclaredScopes, rememberDeclaredScope, rememberedScope } from './session-scope-memory.js';
 
@@ -314,3 +314,56 @@ describe('server capability', () => {
     await off.client.close(); await off.server.close();
   });
 });
+
+describe('ORB-2641 - a proxy that joins the session of its process', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('reconnects the inbox stream under the joined token, and every later call of the process acts under it', async () => {
+    const { mcp } = mockMcp();
+    const held = (_url: unknown, init: { signal: AbortSignal }) => new Promise<Response>((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+    });
+    const fetchFn = vi.fn().mockImplementation(held);
+    const channel = new InboxChannel({ baseUrl: 'https://x.test', apiKey: 'orb_k', instanceToken: 'agent-checkout', mcp, fetchFn, log: () => {}, digestMinutes: 0 });
+    channel.start();
+    await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1));
+    channel.switchInstance('agent-checkout');
+    channel.switchInstance('agent-checkout-ns');
+    await vi.advanceTimersByTimeAsync(2_000);
+    await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2));
+    expect(fetchFn.mock.calls[0][1].headers['x-orboto-agent-session']).toBe('agent-checkout');
+    expect(fetchFn.mock.calls[1][1].headers['x-orboto-agent-session']).toBe('agent-checkout-ns');
+    expect(String(fetchFn.mock.calls[1][0])).toContain(`since=${encodeURIComponent(JOINED_REPLAY_SINCE)}`);
+    channel.close();
+    const { adoptProcessInstance, mcpProcessInstance, mcpInstanceToken } = await import('./tools/shared.js');
+    const before = mcpProcessInstance();
+    adoptProcessInstance('bad token with spaces');
+    expect(mcpProcessInstance()).toBe(before);
+    adoptProcessInstance('agent-checkout-ns');
+    expect(mcpProcessInstance()).toBe('agent-checkout-ns');
+    expect(mcpInstanceToken()).toBe('agent-checkout-ns');
+    adoptProcessInstance(before);
+  });
+});
+
+describe('ORB-2641 - a server without a channel joins the session of its process too', () => {
+  it('its one tool-server beat adopts the joined token, and an answer without one changes nothing', async () => {
+    const { beatAsToolServer, mcpProcessInstance, adoptProcessInstance } = await import('./tools/shared.js');
+    const before = mcpProcessInstance();
+    const seen: Array<{ body: unknown; token?: string }> = [];
+    const client = (joined?: string) => ({
+      post: async <T,>(_path: string, body: unknown, options?: { instanceToken?: string }): Promise<T> => {
+        seen.push({ body, token: options?.instanceToken });
+        return (joined ? { sessionId: 's', joined: { sessionId: 's', shortId: 's', instanceToken: joined } } : { sessionId: 's' }) as T;
+      },
+    });
+    expect(await beatAsToolServer(client(), { toolServer: true })).toBeNull();
+    expect(mcpProcessInstance()).toBe(before);
+    expect(await beatAsToolServer(client('agent-cli-declared'), { toolServer: true })).toBe('agent-cli-declared');
+    expect(mcpProcessInstance()).toBe('agent-cli-declared');
+    expect(seen).toEqual([{ body: { clientInfo: { toolServer: true } }, token: before }, { body: { clientInfo: { toolServer: true } }, token: before }]);
+    adoptProcessInstance(before);
+  });
+});
+

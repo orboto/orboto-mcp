@@ -71,8 +71,8 @@ async function main() {
     const releaseCapacity = releaseCapacityOnStdinEnd(process.stdin, preflightClient, (await import('./tools/shared.js')).mcpProcessInstance());
     if (channel) {
       const { InboxChannel, digestMinutesFromEnv, cliOutdatedNotice, CLI_OUTDATED_NOTICE } = await import('./inbox-channel.js');
-      const { mcpProcessInstance } = await import('./tools/shared.js');
-      const instanceToken = mcpProcessInstance();
+      const { mcpProcessInstance, adoptJoined } = await import('./tools/shared.js');
+      let instanceToken = mcpProcessInstance();
       const { declareEnvProjectScope } = await import('./project-scope.js');
       const declared = await declareEnvProjectScope(preflightClient, instanceToken);
       const inbox = new InboxChannel({ ...clientConfig, instanceToken, mcp: server, digestMinutes: digestMinutesFromEnv(process.env.ORBOTO_MCP_CHANNEL_DIGEST_MINUTES) });
@@ -84,8 +84,15 @@ async function main() {
       const { presenceRefusal } = await import('./tools/shared.js');
       let refusalLogged = false;
       const beat = () => {
-        preflightClient.post('/v1/agent/heartbeat', { clientInfo: channelClientInfo(readClaudeContext(process.cwd()), undefined, channelStart ?? undefined) }, { instanceToken })
-          .then(() => { refusalLogged = false; })
+        preflightClient.post<{ joined?: { instanceToken?: string } }>('/v1/agent/heartbeat', { clientInfo: channelClientInfo(readClaudeContext(process.cwd()), undefined, channelStart ?? undefined) }, { instanceToken })
+          .then((res) => {
+            refusalLogged = false;
+            const joined = adoptJoined(res);
+            if (joined) {
+              instanceToken = joined;
+              inbox.switchInstance(joined);
+            }
+          })
           .catch((err) => {
             const refused = presenceRefusal(err);
             if (refused && refusalLogged) return;
@@ -102,7 +109,8 @@ async function main() {
       endProbeSessionOnStdinEnd({ env: process.env, stdin: process.stdin, client: preflightClient, instanceToken, cleanup, exit: (code) => process.exit(code), settle: releaseCapacity });
     } else {
       const { toolServerHeartbeat } = await import('./claude-context.js');
-      preflightClient.post('/v1/agent/heartbeat', { clientInfo: toolServerHeartbeat() }, { instanceToken: (await import('./tools/shared.js')).mcpProcessInstance() })
+      const { beatAsToolServer } = await import('./tools/shared.js');
+      beatAsToolServer(preflightClient, toolServerHeartbeat())
         .catch((err) => { console.error(`[orboto-mcp] heartbeat failed: ${(err as Error).message}`); });
     }
     return;
