@@ -27,7 +27,7 @@ export const sessionStartToolConfig = {
   title: 'Load the rules you must follow + re-orient',
   description:
     'THE canonical way to LOAD the binding workspace rules you must follow as an agent. Run it FIRST in a session and AFTER every context compaction. Returns the rules in full (above the full-text bound: one title per rule plus every must-read rule in full, the rest via `rulesOnly: true`); a compact "unchanged" ack only on a repeat inside the same agent context. Also returns your in-progress tickets (LANDED, IDLE = a linked commit but no move for days: finished work never handed to review), your timer and unhealthy git connections. Not orboto_list_agent_instructions - that one edits rule blocks for admins. Registers this session (a heartbeat on its instance row), otherwise read-only. '
-    + '**Parameters.** `rulesOnly: true` returns ONLY the complete rules text, never truncated. `projectId` adds that project\'s rules. `ticketKey` ("ACME-42") bundles that ticket\'s primer, detail, dependencies, checklists, git health and other agent sessions. `forceRules: true` returns the full text inline even above the bound or after an ack - use it whenever the rules are NOT in your context. `agentKind` (coding, orchestrator, reviewer, runner) and `modelTier` (frontier, standard, small) target rule blocks and per-tier text. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility; session.ref is what peers pass as toSessionRef (ORB-2136). `previous` (adopt | end) answers a second-start refusal (ORB-2553). '
+    + '**Parameters.** `rulesOnly: true` returns ONLY the complete rules text, never truncated. `projectId` adds that project\'s rules. `ticketKey` ("ACME-42") bundles that ticket\'s primer, detail, dependencies, checklists, git health and other agent sessions. `forceRules: true` returns the full text inline even above the bound or after an ack - use it whenever the rules are NOT in your context. `agentKind` (coding, orchestrator, reviewer, runner) and `modelTier` (frontier, standard, small) target rule blocks and per-tier text. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility; session.ref is what peers pass as toSessionRef (ORB-2136). `previous` (adopt | end) answers a second-start refusal (ORB-2553); it comes only when the scope overlaps another live session of the account in this checkout (the keys in errorParams.overlap) - a scope that shares no project or ticket with it runs beside it (ORB-2639). '
     + 'Also carries the Knowledge block (ORB-2225: the wiki index of your declared projects and the Operations wiki; ask with orboto_knowledge_ask before a person, file durable facts with orboto_knowledge_add) and the Responsibilities block (ORB-2542: who owns the topics of your projects, orboto_who before agent mail). Right after the rules come Where knowledge lives (ORB-2575: rules bind behaviour, project facts hold fixed decisions, the wiki the long tail; a decision goes to a fact proposal, orboto_primer_fact_add with observed: true) and the Project facts of your declared projects.',
   inputSchema: z.object({
     projectId: z.string().uuid().optional(),
@@ -50,6 +50,8 @@ interface SessionRegistration {
   scopeContinued?: unknown;
   /** ORB-2553 - what a start with `previous` did to the session it ran into. */
   takeover?: { action: 'adopted' | 'ended'; shortId: string; movedMessages: number; movedLeases: string[]; releasedTickets: string[] };
+  /** ORB-2639 - every overlapping session the start took over. */
+  takeovers?: Array<{ action: 'adopted' | 'ended'; shortId: string; movedMessages: number; movedLeases: string[]; releasedTickets: string[] }>;
 }
 
 interface Me { email?: string; fullName?: string; locale?: string; workspaceLocale?: string }
@@ -284,6 +286,12 @@ function knowledgeSummary(index: KnowledgeIndex, handle: string | undefined): Re
 }
 
 /** ORB-2209 - a declared scope stays with the instance token; the agent declares it once per terminal. */
+/** ORB-2639 - what `previous` replaces: the session the refusal names, and every further overlapping one by short id. */
+export function overlappingTarget(alsoOverlapping: string): string {
+  const ids = alsoOverlapping.split(/[\s,]+/).filter(Boolean);
+  return ids.length ? `it and ${ids.length} more: ${ids.join(', ')} - all of them` : 'it';
+}
+
 /** ORB-2553 - what the start did to the session it ran into. */
 export function takeoverLine(t: NonNullable<SessionRegistration['takeover']>): string {
   if (t.action === 'ended') return `Ended the previous session ${t.shortId} in this repository${t.releasedTickets.length ? `; its leases on ${t.releasedTickets.join(', ')} are released` : ''}.`;
@@ -343,9 +351,16 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
       sessionId: r.sessionId, scope: r.scope ?? null, reconnects: r.reconnects, lastReconnectAt: r.lastReconnectAt,
       wake: r.wake, scopeExpired: r.scopeExpired ?? null, scopeContinued: r.scopeContinued ?? null, notes: Array.isArray(r.notes) ? r.notes.filter((n) => typeof n === 'string') : [],
       ...(r.takeover ? { takeover: r.takeover } : {}),
+      ...(r.takeovers?.length ? { takeovers: r.takeovers } : {}),
     } : null);
     let refusal: string | null = null;
-    const refused = (err: unknown) => { refusal = presenceRefusal(err)?.message ?? refusal; return null; };
+    let alsoOverlapping = '';
+    const refused = (err: unknown) => {
+      const found = presenceRefusal(err);
+      refusal = found?.message ?? refusal;
+      if (found && typeof found.params.alsoOverlapping === 'string') alsoOverlapping = found.params.alsoOverlapping.trim();
+      return null;
+    };
     const host = localSessionHost(extra as { sessionId?: string } | undefined);
     const fallbackScope = input.scope === undefined && !supervisorScopePending() ? envProjectScope() : null;
     const startBody = {
@@ -481,9 +496,10 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
       : registration
         ? 'no scope declared - this session lists every account-addressed message; pass scope: { projectKeys, role } to narrow it'
         : 'registration failed - only account mail is listed; retry orboto_session_start or check mcp:use';
-    if (refusal) lines.push(`ref ${instanceToken}. Not registered: ${refusal}`, 'With MCP: pass scope: { role, projectKeys } and, for another live session in this repository, previous: "adopt" or "end".');
+    if (refusal) lines.push(`ref ${instanceToken}. Not registered: ${refusal}`, `With MCP: pass scope: { role, projectKeys }; another live session in this repository whose scope overlaps runs beside this one once the scope shares none of its keys, or pass previous: "adopt" or "end" to replace ${overlappingTarget(alsoOverlapping)}.`);
     else lines.push(`ref ${instanceToken}${registration ? `, instance ${registration.sessionId.slice(0, 8)}` : ''}. ${scopeText}. Peers reach exactly this session with orboto_agent_notify { toSessionRef: "${registration ? registration.sessionId.slice(0, 8) : instanceToken}" }.`);
     if (exitedLine) lines.push(exitedLine);
+    else if (registration?.takeovers?.length) lines.push(...registration.takeovers.map(takeoverLine));
     else if (registration?.takeover) lines.push(takeoverLine(registration.takeover));
     const roleAddresses = registration?.scope?.role ? (registration.scope.projectKeys ?? []).map((k) => `${registration.scope!.role}@${k}`) : [];
     if (roleAddresses.length) lines.push(`Address form: peers reach this session and every other ${registration!.scope!.role} of the project with orboto_agent_notify { to: "${roleAddresses[0]}" } (${roleAddresses.join(', ')}); address a role, never a session id copied from a log.`);
@@ -524,6 +540,7 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
           scopeContinued: registration?.scopeContinued ?? null,
           ...(refusal ? { refused: refusal } : {}),
           ...(registration?.takeover ? { takeover: registration.takeover } : {}),
+          ...(registration?.takeovers?.length ? { takeovers: registration.takeovers } : {}),
         },
         gitHealth: {
           unhealthy: gitHealthWithConnections

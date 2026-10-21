@@ -19,9 +19,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const SESSION_EXISTS = {
-  error: 'Another live session of this account runs in sample-repo on build-host: 0123abcd (claude-code, 42 min, ORB-7). Start again with --adopt to take over its scope, mail and leases, or with --end-previous to end it.',
+  error: 'Another live session of this account runs in sample-repo on build-host with an overlapping scope (ORB): 0123abcd (claude-code, 42 min, ORB-7). Start with a scope that shares none of these keys to run both side by side, or again with --adopt to take over the scope, mail and leases of every overlapping session (0123abcd, 4567ef01, 89ab0123), or with --end-previous to end them.',
   errorKey: 'errors.agents.session_exists',
-  errorParams: { sessionId: '0123abcd-0000-4000-8000-000000000000', shortId: '0123abcd', ageMinutes: 42, ticket: 'ORB-7', host: 'build-host', repo: 'sample-repo', harness: 'claude-code', role: 'integrator', projects: 'ORB' },
+  errorParams: { sessionId: '0123abcd-0000-4000-8000-000000000000', shortId: '0123abcd', ageMinutes: 42, ticket: 'ORB-7', host: 'build-host', repo: 'sample-repo', harness: 'claude-code', role: 'integrator', projects: 'ORB', overlap: 'ORB', sessionIds: '0123abcd, 4567ef01, 89ab0123', alsoOverlapping: '4567ef01, 89ab0123' },
 };
 const SCOPE_REQUIRED = { error: 'This session declares no scope', errorKey: 'errors.agents.scope_required', errorParams: { command: 'orboto session-start --role <role> --scope-projects <KEY>', notes: ['Not carried over: the earlier scope.'] } };
 
@@ -62,7 +62,9 @@ describe('ORB-2553 - the refusal on the MCP side', () => {
     const res = await makeSessionStartHandler(client)({ scope: { role: 'integrator', projectKeys: ['ORB'] }, previous: 'adopt' }, { sessionId: 'ps1' });
     expect(seen.find((c) => c.path === '/v1/agent/heartbeat')?.body).toEqual({ start: true, previous: 'adopt', scope: { role: 'integrator', projectKeys: ['ORB'] } });
     const text = (res.content[0] as { text: string }).text;
-    expect(text).toContain('Not registered: Another live session of this account runs in sample-repo on build-host: 0123abcd');
+    expect(text).toContain('Not registered: Another live session of this account runs in sample-repo on build-host with an overlapping scope (ORB): 0123abcd');
+    expect(text).toContain('once the scope shares none of its keys');
+    expect(text).toContain('to replace it and 2 more: 4567ef01, 89ab0123 - all of them');
     expect(text).toContain('previous: "adopt" or "end"');
     expect(text).not.toContain('Peers reach exactly this session');
     expect((res.structuredContent as { session: { refused?: string } }).session.refused).toContain('0123abcd');
@@ -76,6 +78,18 @@ describe('ORB-2553 - the refusal on the MCP side', () => {
     const res = await makeSessionStartHandler(client)({ previous: 'adopt' }, { sessionId: 'ps2' });
     expect((res.content[0] as { text: string }).text).toContain('Adopted session 0123abcd: 2 unread message(s) and the leases on ORB-7 moved here, it is ended.');
     expect(takeoverLine({ action: 'ended', shortId: 'abcd0123', movedMessages: 0, movedLeases: [], releasedTickets: ['ORB-9'] })).toBe('Ended the previous session abcd0123 in this repository; its leases on ORB-9 are released.');
+  });
+
+  it('ORB-2639 - a start that took over several overlapping sessions names each', async () => {
+    const seen: Seen = [];
+    const one = { action: 'ended', sessionId: '0123abcd-0000-4000-8000-000000000000', shortId: '0123abcd', movedMessages: 0, movedLeases: [], releasedTickets: [] };
+    const two = { ...one, sessionId: '4567ef01-0000-4000-8000-000000000000', shortId: '4567ef01', releasedTickets: ['IMG-57'] };
+    stub({ status: 200, body: { sessionToken: 'mcp-ps3', sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: { role: 'lead', projectKeys: ['WEB', 'IMG'] }, takeover: one, takeovers: [one, two] } }, seen);
+    const client = new OrbotoClient({ baseUrl: 'http://api.test', apiKey: 'orb_k' });
+    const res = await makeSessionStartHandler(client)({ previous: 'end' }, { sessionId: 'ps3' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Ended the previous session 0123abcd in this repository.');
+    expect(text).toContain('Ended the previous session 4567ef01 in this repository; its leases on IMG-57 are released.');
   });
 
   it('the proxy declares the checkout project as a start and hands back the refusal', async () => {
