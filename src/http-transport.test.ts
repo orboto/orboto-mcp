@@ -23,7 +23,7 @@ afterEach(() => { server?.close(); server = null; });
 
 async function start(): Promise<string> {
   server = createHttpServer({ baseUrl: 'http://api.invalid' });
-  await new Promise<void>((resolve) => server!.listen(0, resolve));
+  await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
   const { port } = server!.address() as AddressInfo;
   return `http://127.0.0.1:${port}`;
 }
@@ -253,10 +253,10 @@ describe('ORB-1353 - persisted-session resilience (transport, fake api)', () => 
     fake = fakeApi(),
   ): Promise<{ base: string; internals: McpServerInternals }> {
     api = fake.api;
-    await new Promise<void>((r) => api!.listen(0, r));
+    await new Promise<void>((r) => api!.listen(0, '127.0.0.1', r));
     const { port: apiPort } = api!.address() as AddressInfo;
     server = createHttpServer({ baseUrl: `http://127.0.0.1:${apiPort}`, sessionStore: store });
-    await new Promise<void>((r) => server!.listen(0, r));
+    await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r));
     const { port } = server!.address() as AddressInfo;
     const internals = (server as unknown as { __mcp: McpServerInternals }).__mcp;
     return { base: `http://127.0.0.1:${port}`, internals };
@@ -374,10 +374,10 @@ describe('ORB-1470 - per-session bearer follows the client\'s token rotation', (
     fake = fakeApi(),
   ): Promise<{ base: string; internals: McpServerInternals; state: ReturnType<typeof fakeApi>['state'] }> {
     api = fake.api;
-    await new Promise<void>((r) => api!.listen(0, r));
+    await new Promise<void>((r) => api!.listen(0, '127.0.0.1', r));
     const { port: apiPort } = api!.address() as AddressInfo;
     server = createHttpServer({ baseUrl: `http://127.0.0.1:${apiPort}`, sessionStore: store });
-    await new Promise<void>((r) => server!.listen(0, r));
+    await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r));
     const { port } = server!.address() as AddressInfo;
     const internals = (server as unknown as { __mcp: McpServerInternals }).__mcp;
     return { base: `http://127.0.0.1:${port}`, internals, state: fake.state };

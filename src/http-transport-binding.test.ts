@@ -75,10 +75,10 @@ const store: McpSessionStore = {
 
 async function start(limits?: Partial<SessionLimits>): Promise<string> {
   api = fakeApiPerUser();
-  await new Promise<void>((r) => api!.listen(0, r));
+  await new Promise<void>((r) => api!.listen(0, '127.0.0.1', r));
   const { port: apiPort } = api!.address() as AddressInfo;
   server = createHttpServer({ baseUrl: `http://127.0.0.1:${apiPort}`, sessionStore: store, limits });
-  await new Promise<void>((r) => server!.listen(0, r));
+  await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r));
   const { port } = server!.address() as AddressInfo;
   return `http://127.0.0.1:${port}`;
 }
