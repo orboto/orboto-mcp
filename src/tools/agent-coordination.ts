@@ -31,7 +31,7 @@ export const agentHeartbeatToolConfig = {
     scope: AgentSessionScopeSchema.optional(),
     status: z.enum(['idle', 'working', 'blocked']).optional(),
     workingOnTicketId: z.string().uuid().nullable().optional(),
-    capabilities: z.array(z.string()).optional(),
+    capabilities: z.array(z.string()).max(200).optional(),
     clientInfo: z.object({
       name: z.string().optional(),
       version: z.string().optional(),

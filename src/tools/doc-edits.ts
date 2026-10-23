@@ -229,7 +229,7 @@ export const editDocSectionToolConfig = {
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or human-readable key (ORB-D12 / DOC-5). Find via orboto_search_docs.'),
     sectionOps: z.array(z.object({
-      headingPath: z.array(z.string().min(1)).min(1).describe('Ordered heading breadcrumb, top-down. Exact + case-sensitive.'),
+      headingPath: z.array(z.string().min(1)).min(1).max(20).describe('Ordered heading breadcrumb, top-down. Exact + case-sensitive.'),
       op: z.enum(['replace', 'append', 'insertAfter']).describe('replace body / append to body / insert directly below the heading line.'),
       content: z.string().describe('New markdown content for the op.'),
     })).min(1).max(100).describe('Applied sequentially after any string edits.'),

@@ -79,8 +79,8 @@ export const scheduleTicketSessionToolConfig = {
     title: z.string().optional(),
     location: z.string().optional().describe('Free text - Zoom URL, room name, "remote".'),
     notes: z.string().optional(),
-    attendeeUserIds: z.array(z.string().uuid()).optional().describe('orboto attendee user UUIDs.'),
-    externalEmails: z.array(z.string().email()).optional().describe('External (non-orboto) guest emails.'),
+    attendeeUserIds: z.array(z.string().uuid()).max(500).optional().describe('orboto attendee user UUIDs.'),
+    externalEmails: z.array(z.string().email()).max(500).optional().describe('External (non-orboto) guest emails.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };

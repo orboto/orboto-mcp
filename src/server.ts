@@ -3,6 +3,7 @@
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { VERSION } from './version.js';
+import { assertZodCollectionBounds, installZodCollectionBounds } from './zod-bounds.js';
 import { SubscribeRequestSchema, UnsubscribeRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoClient, type OrbotoClientConfig } from './orboto-client.js';
 import { registerOrbotoResources } from './resources.js';
@@ -357,6 +358,8 @@ export function assembleInstructions(head: string, workingRules: string, budget 
 }
 
 export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<McpServer> {
+  installZodCollectionBounds();
+  assertZodCollectionBounds();
   const client = new OrbotoClient(opts);
   const toolset = resolveToolset(opts.toolset, process.env.ORBOTO_MCP_TOOLSET);
 

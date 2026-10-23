@@ -7,7 +7,7 @@ export const TicketListSortSchema = z.enum(['updated', 'created']);
 export type TicketListSort = z.infer<typeof TicketListSortSchema>;
 export const ProjectSpecSettingsSchema = z.object({
   enabled: z.boolean().optional(),
-  requiredTypes: z.array(z.enum(['epic', 'story', 'task', 'bug'])).optional(),
+  requiredTypes: z.array(z.enum(['epic', 'story', 'task', 'bug'])).max(20).optional(),
   releaseBy: z.enum(['agent', 'author']).optional(),
 }).strict();
 export type ProjectSpecSettings = z.infer<typeof ProjectSpecSettingsSchema>;

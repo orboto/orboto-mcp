@@ -9,6 +9,7 @@
  * instead of surfacing as an opaque tool failure.
  */
 import { z } from 'zod';
+import { boundedRecord } from '../zod-bounds.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { mcpInstanceToken } from './shared.js';
@@ -36,7 +37,7 @@ export const apiCallToolConfig = {
     method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
     path: z.string().min(1).max(500)
       .describe('Route path, e.g. "/projects/<uuid>/milestones". No query string.'),
-    query: z.record(z.union([z.string(), z.number(), z.boolean(), z.array(z.string())])).optional()
+    query: boundedRecord(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string()).max(200)]), 100).optional()
       .describe('Query parameters as an object.'),
     body: z.union([z.record(z.unknown()), z.array(z.unknown()), z.string(), z.number(), z.boolean()]).optional()
       .describe('JSON body - a real object/array, not a stringified one.'),
