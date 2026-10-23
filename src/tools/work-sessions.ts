@@ -637,7 +637,7 @@ export const workSessionClaimsReleaseToolConfig = {
     'Drop resource claims (or all) from your session without finishing it or touching lease and timer. Releasing a granted write claim immediately runs a grant pass, so the earliest queued waiter for that resource is promoted as part of this call - useful once you know you are done touching a subtree but are not done with the ticket. Omit `claims` to release everything the session holds.',
   inputSchema: z.object({
     sessionId: z.string().uuid().describe('The id returned by orboto_work_session_start.'),
-    claims: z.array(z.object({ kind: z.enum(['path', 'named']), value: z.string().min(1).max(500) })).optional()
+    claims: z.array(z.object({ kind: z.enum(['path', 'named']), value: z.string().min(1).max(500) })).max(500).optional()
       .describe('Which claims to release, matched by kind+value. Omit to release ALL claims on this session.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },

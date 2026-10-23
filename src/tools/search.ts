@@ -45,7 +45,7 @@ export const searchToolConfig = {
     'Search tickets, comments and docs; `types` adds projects, milestones, spaces, customers. Content matches full text, jump types match key and name; `types` defaults to ticket, comment, doc. Honours the caller\'s visibility - private tickets and internal comments never appear unless the caller can already see them. Recall (ORB-1695): when the strict all-terms pass finds nothing, the server automatically retries with an OR-relaxed pass plus semantic (embedding) recall - the response\'s `pass` field says which pass produced the hits, and relaxed-pass hits deserve a skeptical read (they matched SOME terms or only the meaning, not all terms). Still prefer a single distinctive STABLE token (file/component/error-string fragment like "AdminCodesPage") and search the SYMPTOM, not your intended fix.',
   inputSchema: z.object({
     query: z.string().min(1).describe('Search terms, e.g. "queue worker retry".'),
-    types: z.array(z.enum(SEARCH_TYPES)).optional(),
+    types: z.array(z.enum(SEARCH_TYPES)).max(20).optional(),
     projectKey: z.string().optional().describe('Restrict to one project.'),
     limit: z.number().int().min(1).max(50).default(15),
   }).shape,

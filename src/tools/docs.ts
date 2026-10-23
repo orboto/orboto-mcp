@@ -207,7 +207,7 @@ export const updateDocSpaceToolConfig = {
     isPublic: z.boolean().optional().describe('DEPRECATED - use guestsVisible.'),
     visibility: z.enum(['workspace', 'project_members', 'restricted']).optional().describe('Read gate: workspace = every internal member, project_members = members with doc:view (project spaces), restricted = allowlist. Needs manage rights.'),
     guestsVisible: z.boolean().optional().describe('Explicit guest (external user) opt-in. Requires manage rights.'),
-    memberIds: z.array(z.string().uuid()).optional().describe('Replaces the restricted-space allowlist. Requires manage rights.'),
+    memberIds: z.array(z.string().uuid()).max(5000).optional().describe('Replaces the restricted-space allowlist. Requires manage rights.'),
     slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
