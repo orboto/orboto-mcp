@@ -50,14 +50,28 @@ describe('resolveToolset / toolInToolset - channel', () => {
 });
 
 describe('ORB-2210 - the channel toolset', () => {
-  it('starts, answers initialize, registers no tool, prompt or resource, and fetches no rules at connect', async () => {
+  it('starts, answers initialize, offers no tool, prompt or resource, and fetches no rules at connect', async () => {
     const { server, client, fetchSpy } = await connectChannelServer();
     expect(client.getServerVersion()?.name).toBe('orboto');
-    expect(client.getServerCapabilities()?.tools).toBeUndefined();
-    expect(client.getServerCapabilities()?.prompts).toBeUndefined();
-    expect(client.getServerCapabilities()?.resources).toBeUndefined();
+    expect(client.getServerCapabilities()?.tools).toEqual({});
+    expect(client.getServerCapabilities()?.prompts).toEqual({});
+    expect(client.getServerCapabilities()?.resources).toEqual({});
     expect(client.getServerCapabilities()?.experimental).toHaveProperty(CHANNEL_CAPABILITY);
+    expect((await client.listTools()).tools).toEqual([]);
+    expect((await client.listPrompts()).prompts).toEqual([]);
+    expect((await client.listResources()).resources).toEqual([]);
+    expect((await client.listResourceTemplates()).resourceTemplates).toEqual([]);
     expect(fetchSpy).not.toHaveBeenCalled();
+    await client.close(); await server.close();
+  });
+
+  it('ORB-2669 - a name nothing registered keeps the not-found answers of the other toolsets', async () => {
+    const { server, client } = await connectChannelServer();
+    const result = await client.callTool({ name: 'orboto_get_ticket', arguments: {} });
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([{ type: 'text', text: 'MCP error -32602: Tool orboto_get_ticket not found' }]);
+    await expect(client.getPrompt({ name: 'plan-sprint' })).rejects.toMatchObject({ code: -32602 });
+    await expect(client.readResource({ uri: 'orboto://rules' })).rejects.toMatchObject({ code: -32602 });
     await client.close(); await server.close();
   });
 

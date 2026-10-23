@@ -7,6 +7,7 @@ import { SubscribeRequestSchema, UnsubscribeRequestSchema } from '@modelcontextp
 import { OrbotoClient, type OrbotoClientConfig } from './orboto-client.js';
 import { registerOrbotoResources } from './resources.js';
 import { registerOrbotoPrompts } from './prompts.js';
+import { EMPTY_SURFACE_CAPABILITIES, registerEmptySurfaces } from './empty-surfaces.js';
 import { registerWithMetrics } from './with-metrics.js';
 import { CHANNEL_TOOLSET_INSTRUCTIONS, CHANNEL_TOOLSET_WAKE_INSTRUCTIONS, resolveToolset, toolInToolset, type Toolset } from './toolset.js';
 import { createNudgeState } from './session-nudge.js';
@@ -379,7 +380,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
     { name: 'orboto', version: VERSION },
     {
       capabilities: {
-        ...(toolset === 'channel' ? {} : { resources: { subscribe: true, listChanged: true } }),
+        ...(toolset === 'channel' ? EMPTY_SURFACE_CAPABILITIES : { resources: { subscribe: true, listChanged: true } }),
         ...(opts.channel ? { experimental: { [CHANNEL_CAPABILITY]: {} } } : {}),
       },
       instructions: toolset === 'channel'
@@ -609,7 +610,10 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_admin_agent_drift_list', listAgentDriftToolConfig, makeListAgentDriftHandler(client));
   reg('orboto_admin_agent_drift_resolve', resolveAgentDriftToolConfig, makeResolveAgentDriftHandler(client));
 
-  if (toolset === 'channel') return server;
+  if (toolset === 'channel') {
+    registerEmptySurfaces(server);
+    return server;
+  }
   registerOrbotoResources(server, client);
   registerOrbotoPrompts(server);
 
