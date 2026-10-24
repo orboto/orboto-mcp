@@ -197,6 +197,10 @@ import {
   downloadBackupToolConfig, makeDownloadBackupHandler,
 } from './tools/backup.js';
 import {
+  importNumberingToolConfig, makeImportNumberingHandler,
+  importApplyToolConfig, makeImportApplyHandler,
+} from './tools/import-numbering.js';
+import {
   primerFactListToolConfig, makePrimerFactListHandler,
   primerFactAddToolConfig, makePrimerFactAddHandler,
   primerFactUpdateToolConfig, makePrimerFactUpdateHandler,
@@ -557,6 +561,8 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_create_full_backup', createFullBackupToolConfig, makeCreateFullBackupHandler(client));
   reg('orboto_list_backups', listBackupsToolConfig, makeListBackupsHandler(client));
   reg('orboto_download_backup', downloadBackupToolConfig, makeDownloadBackupHandler(client));
+  reg('orboto_import_numbering', importNumberingToolConfig, makeImportNumberingHandler(client));
+  reg('orboto_import_apply', importApplyToolConfig, makeImportApplyHandler(client));
 
   reg('orboto_primer_fact_list', primerFactListToolConfig, makePrimerFactListHandler(client));
   reg('orboto_primer_fact_add', primerFactAddToolConfig, makePrimerFactAddHandler(client));

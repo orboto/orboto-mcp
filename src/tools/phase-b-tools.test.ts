@@ -357,6 +357,31 @@ describe('orboto_get_ticket', () => {
     expect(sc.waitingForGitIngestion).toBe(true);
   });
 
+  it('ORB-2676: an imported ticket shows its source system and key; a native ticket shows no Source line', async () => {
+    const row = { id: 't1', projectId: 'p1', ticketKey: 'ACME-280', title: 'Imported', status: 'TODO', statusName: 'To Do', statusCategory: 'todo', type: 'task', priority: 'normal' };
+    stub([
+      { json: PROJ },
+      { json: { ...row, gitActivityCount: 0, parentTicketId: null } },
+      { json: { ...row, sourceSystem: 'jira', sourceKey: 'PROJ-280', sourceId: '10280' } },
+      NO_CHILDREN,
+      { json: [] },
+    ]);
+    const imported = await makeGetTicketHandler(client)({ ticketKey: 'ACME-280' });
+    expect((imported.content[0] as { text: string }).text).toContain('Source: jira PROJ-280');
+    expect((imported.structuredContent as { source: unknown }).source).toEqual({ system: 'jira', key: 'PROJ-280', id: '10280' });
+
+    stub([
+      { json: PROJ },
+      { json: { ...row, gitActivityCount: 0, parentTicketId: null } },
+      { json: { ...row, sourceSystem: null, sourceKey: null, sourceId: null } },
+      NO_CHILDREN,
+      { json: [] },
+    ]);
+    const native = await makeGetTicketHandler(client)({ ticketKey: 'ACME-280' });
+    expect((native.content[0] as { text: string }).text).not.toContain('Source:');
+    expect((native.structuredContent as Record<string, unknown>).source).toBeUndefined();
+  });
+
   it('include: ["checklistItems"] reads effectiveCompleted (not done) + surfaces linked-ticket suffix', async () => {
     stub([
       { json: PROJ },
