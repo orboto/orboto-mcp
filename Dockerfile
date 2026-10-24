@@ -28,7 +28,7 @@ COPY apps/mcp/tsconfig.json ./apps/mcp/tsconfig.json
 # Build shared-schema first (workspace dep), then rewrite its package.json
 # so prod node resolves dist/* - identical hack to the API Dockerfile.
 RUN pnpm --filter @orboto/shared-schema build
-RUN node -e "const p=require('./packages/shared-schema/package.json'); p.main='./dist/index.js'; p.types='./dist/index.d.ts'; p.files=['dist']; require('fs').writeFileSync('./packages/shared-schema/package.json', JSON.stringify(p, null, 2));"
+RUN node -e "const p=require('./packages/shared-schema/package.json'); p.main='./dist/index.js'; p.types='./dist/index.d.ts'; p.files=['dist','!dist/tsconfig.tsbuildinfo']; require('fs').writeFileSync('./packages/shared-schema/package.json', JSON.stringify(p, null, 2));"
 
 RUN NODE_OPTIONS=--max-old-space-size=1024 pnpm --filter @orboto/mcp build
 
