@@ -52,6 +52,9 @@ export async function resolveProjectByKey(
 
 export interface TicketRow {
   branchName?: string | null;
+  sourceSystem?: string | null;
+  sourceKey?: string | null;
+  sourceId?: string | null;
   specReleasedBy?: string | null;
   specReleasedByFullName?: string | null;
   specReleasedAt?: string | null;
