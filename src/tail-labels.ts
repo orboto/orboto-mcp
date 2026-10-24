@@ -45,6 +45,8 @@ export const TAIL_LABELS: readonly TailLabel[] = [
   { method: 'GET', path: /^\/admin\/agents\/transfers$/, label: 'orboto_agent_transfers' },
   { method: 'DELETE', path: new RegExp(`^/admin/agents/transfers/${SEG}$`), label: 'orboto_agent_transfers' },
   { method: 'GET', path: new RegExp(`^/admin/agents/identities/${SEG}/query-rate-limit$`), label: 'orboto_agent_query_rate_limit' },
+  { method: 'POST', path: new RegExp(`^/projects/${SEG}/change-key$`), label: 'orboto_project_change_key' },
+  { method: 'GET', path: new RegExp(`^/projects/${SEG}/change-key/check$`), label: 'orboto_project_change_key' },
   { method: 'PUT', path: new RegExp(`^/admin/agents/identities/${SEG}/query-rate-limit$`), label: 'orboto_agent_query_rate_limit' },
 ];
 
