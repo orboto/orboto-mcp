@@ -61,7 +61,7 @@ export function eventToUris(event: BridgeEvent): string[] {
     return uris;
   }
 
-  if (event.type === 'project:bulk-activity' || event.type === 'member:joined' || event.type === 'member:removed') {
+  if (event.type === 'project:bulk-activity' || event.type === 'project:key-changed' || event.type === 'member:joined' || event.type === 'member:removed') {
     return event.projectId ? [`orboto://project/${event.projectId}`] : [];
   }
 
