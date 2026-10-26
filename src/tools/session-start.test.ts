@@ -19,8 +19,11 @@ import { applyResponseBudget, budgetFor, DEFAULT_BUDGET_CHARS } from '../respons
 import { hostname, tmpdir } from 'node:os';
 import { localSessionHost } from './shared.js';
 
+const checkout = vi.hoisted(() => ({ repository: null as null | { owner: string; name: string; host?: string } }));
+vi.mock('../checkout-repository.js', () => ({ checkoutRepository: () => checkout.repository }));
+
 /** An `orboto claude` or `orboto connect` session exports its checkout project and role; the digest must not inherit them here. */
-beforeEach(() => { vi.restoreAllMocks(); vi.stubEnv('ORBOTO_PROJECT_KEY', ''); vi.stubEnv('ORBOTO_SESSION_ROLE', ''); });
+beforeEach(() => { vi.restoreAllMocks(); vi.stubEnv('ORBOTO_PROJECT_KEY', ''); vi.stubEnv('ORBOTO_SESSION_ROLE', ''); checkout.repository = null; });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 function stubByPath(map: Record<string, unknown>) {
@@ -755,6 +758,36 @@ describe('ORB-2136 - session scope and ref', () => {
     expect(rememberedScope('mcp-keep1')).toEqual({ role: 'worker', projectKeys: ['ORB'] });
   });
 
+  it('ORB-2684 - a stdio start sends the checkout repository; one project it maps to is declared as the worker scope and printed, none leaves the hint', async () => {
+    checkout.repository = { owner: 'SilentFuture', name: 'game-repo', host: 'git.example.org' };
+    const beats: unknown[] = [];
+    let mapped = ['MSC'];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const u = new URL(url.toString());
+      const sent = init?.body ? JSON.parse(init.body as string) as { scope?: unknown } : undefined;
+      if (u.pathname === '/v1/agent/heartbeat') beats.push(sent);
+      const body = u.pathname === '/v1/agent/heartbeat'
+        ? { sessionToken: 'x', sessionId: 'cbb52195-0000-4000-8000-000000000000', scope: sent?.scope ?? null, checkoutProjectKeys: mapped,
+          inbox: { view: mapped.length ? 'checkout' : 'addressed_only', projectKeys: mapped, hint: 'This session declared no scope, so it gets only mail addressed to it.' } }
+        : u.pathname === '/agent-instructions' ? { instructions: 'rules here', rulesHash: 'fixture' } : {};
+      return { ok: true, status: 200, statusText: 'OK', json: async () => body, text: async () => '' } as unknown as Response;
+    });
+    const declared = ((await makeSessionStartHandler(client)({})).content[0] as { text: string }).text;
+    expect(beats).toEqual([
+      { start: true, clientInfo: { host: hostname().trim().toLowerCase() }, repository: checkout.repository },
+      { start: true, scope: { role: 'worker', projectKeys: ['MSC'] }, scopeDefault: true, repository: checkout.repository },
+    ]);
+    expect(declared).toContain('role worker; projects MSC');
+    expect(declared).toContain("Scope inferred from the checkout's origin remote SilentFuture/game-repo");
+
+    beats.length = 0;
+    mapped = [];
+    const unmapped = ((await makeSessionStartHandler(client)({ forceRules: true })).content[0] as { text: string }).text;
+    expect(beats).toHaveLength(1);
+    expect(unmapped).toContain('no scope declared - This session declared no scope, so it gets only mail addressed to it.');
+    expect(unmapped).not.toContain('inferred from');
+  });
+
   it('ORB-2465 - a stdio session reports its host on the heartbeat; an HTTP connection reports none', async () => {
     const seen: Array<{ path: string; body: unknown }> = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
@@ -828,7 +861,7 @@ describe('ORB-2347 - an unregistered caller is told it sees account mail only', 
       '/agent-instructions': { instructions: 'rules', rulesHash: 'h2' },
     });
     const registered = (await makeSessionStartHandler(client)({ forceRules: true })).content[0] as { text: string };
-    expect(registered.text).toContain('lists every account-addressed message');
+    expect(registered.text).toContain('no scope declared - this session gets only mail addressed to it');
     expect(registered.text).not.toContain('not registered');
   });
 });

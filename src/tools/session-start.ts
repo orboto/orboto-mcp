@@ -13,20 +13,21 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { resolveTicketByKey, type TicketRow , applyAgentProfile, mcpInstanceToken, localSessionHost, presenceRefusal, exitedPredecessor } from './shared.js';
 import { machineId, shortHost } from '../session-origin.js';
-import { AgentSessionScopeSchema, type AgentSessionScope } from './agent-session-scope.js';
+import { AgentSessionScopeInputSchema, type AgentSessionScope } from './agent-session-scope.js';
 import { PROCESS_OWNER, PROTECT_TEXT_META, storePayload } from '../response-budget.js';
 import { loadRequiredRules } from '../required-rules.js';
 import { GIT_HEALTH_REASON_TEXT } from './git-health-reasons.js';
 import { channelStartLines } from '../inbox-channel.js';
 import { rememberDeclaredScope } from '../session-scope-memory.js';
 import { declareEnvProjectScope, envProjectScope, supervisorScopePending } from '../project-scope.js';
+import { checkoutRepository } from '../checkout-repository.js';
 import { agentHeadText } from '../agent-head.js';
 import { agentContextKey } from '../agent-context.js';
 
 export const sessionStartToolConfig = {
-  title: 'Load the rules you must follow + re-orient',
+  title: 'Load the rules + re-orient',
   description:
-    'THE canonical way to LOAD the binding workspace rules you must follow as an agent. Run it FIRST in a session and AFTER every context compaction. Returns the rules in full (above the full-text bound: one title per rule plus every must-read rule in full, the rest via `rulesOnly: true`); a compact "unchanged" ack only on a repeat inside the same agent context. Also returns your in-progress tickets (LANDED, IDLE = a linked commit but no move for days: finished work never handed to review), your timer and unhealthy git connections. Not orboto_list_agent_instructions - that one edits rule blocks for admins. Registers this session (a heartbeat on its instance row), otherwise read-only. '
+    'THE canonical way to LOAD the binding workspace rules you must follow. Run it FIRST in a session and AFTER every context compaction. Returns the rules in full (above the full-text bound: one title per rule plus every must-read rule in full, the rest via `rulesOnly: true`); a compact "unchanged" ack only on a repeat inside the same agent context. Also returns your in-progress tickets (LANDED, IDLE = a linked commit but no move for days: finished work never handed to review), your timer and unhealthy git connections. Not orboto_list_agent_instructions - that one edits rule blocks for admins. Registers this session (a heartbeat on its instance row), otherwise read-only. '
     + '**Parameters.** `rulesOnly: true` returns ONLY the complete rules text, never truncated. `projectId` adds that project\'s rules. `ticketKey` ("ACME-42") bundles that ticket\'s primer, detail, dependencies, checklists, git health and other agent sessions. `forceRules: true` returns the full text inline even above the bound or after an ack - use it whenever the rules are NOT in your context. `agentKind` (coding, orchestrator, reviewer, runner) and `modelTier` (frontier, standard, small) target rule blocks and per-tier text. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility; session.ref is what peers pass as toSessionRef (ORB-2136). `previous` (adopt | end) answers a second-start refusal (ORB-2553); it comes only when the scope overlaps another live session of the account in this checkout (the keys in errorParams.overlap) - a scope that shares no project or ticket with it runs beside it (ORB-2639). '
     + 'Also carries the Knowledge block (ORB-2225: the wiki index of your declared projects and the Operations wiki; ask with orboto_knowledge_ask before a person, file durable facts with orboto_knowledge_add) and the Responsibilities block (ORB-2542: who owns the topics of your projects, orboto_who before agent mail). Right after the rules come Where knowledge lives (ORB-2575: rules bind behaviour, project facts hold fixed decisions, the wiki the long tail; a decision goes to a fact proposal, orboto_primer_fact_add with observed: true) and the Project facts of your declared projects.',
   inputSchema: z.object({
@@ -36,7 +37,7 @@ export const sessionStartToolConfig = {
     rulesOnly: z.boolean().optional(),
     agentKind: z.string().min(1).max(32).optional(),
     modelTier: z.string().min(1).max(32).optional(),
-    scope: AgentSessionScopeSchema.optional(),
+    scope: AgentSessionScopeInputSchema.optional(),
     previous: z.enum(['adopt', 'end']).optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -52,6 +53,9 @@ interface SessionRegistration {
   takeover?: { action: 'adopted' | 'ended'; shortId: string; movedMessages: number; movedLeases: string[]; releasedTickets: string[] };
   /** ORB-2639 - every overlapping session the start took over. */
   takeovers?: Array<{ action: 'adopted' | 'ended'; shortId: string; movedMessages: number; movedLeases: string[]; releasedTickets: string[] }>;
+  /** ORB-2684 - the projects the checkout maps to and what the inbox holds after the beat. */
+  checkoutProjectKeys?: string[];
+  inbox?: { view: string; projectKeys: string[]; hint: string | null };
 }
 
 interface Me { email?: string; fullName?: string; locale?: string; workspaceLocale?: string }
@@ -352,6 +356,8 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
       wake: r.wake, scopeExpired: r.scopeExpired ?? null, scopeContinued: r.scopeContinued ?? null, notes: Array.isArray(r.notes) ? r.notes.filter((n) => typeof n === 'string') : [],
       ...(r.takeover ? { takeover: r.takeover } : {}),
       ...(r.takeovers?.length ? { takeovers: r.takeovers } : {}),
+      checkoutProjectKeys: Array.isArray(r.checkoutProjectKeys) ? r.checkoutProjectKeys : [],
+      ...(r.inbox ? { inbox: r.inbox } : {}),
     } : null);
     let refusal: string | null = null;
     let alsoOverlapping = '';
@@ -362,10 +368,12 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
       return null;
     };
     const host = localSessionHost(extra as { sessionId?: string } | undefined);
-    const fallbackScope = input.scope === undefined && !supervisorScopePending() ? envProjectScope() : null;
+    const pending = supervisorScopePending();
+    const fallbackScope = input.scope === undefined && !pending ? envProjectScope() : null;
+    const repository = pending || !host ? null : checkoutRepository();
     const startBody = {
       start: true, ...(input.previous ? { previous: input.previous } : {}), ...(input.scope !== undefined ? { scope: input.scope } : {}),
-      ...(fallbackScope ? { fallbackScope } : {}), ...(host ? { clientInfo: { host } } : {}),
+      ...(fallbackScope ? { fallbackScope } : {}), ...(host ? { clientInfo: { host } } : {}), ...(repository ? { repository } : {}),
     };
     const beat = (body: Record<string, unknown>) => client.post<SessionRegistration>('/v1/agent/heartbeat', body, { instanceToken }).then(toRegistration);
     let exitedLine: string | null = null;
@@ -381,6 +389,16 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
       const declared = await declareEnvProjectScope(client, instanceToken) as (SessionRegistration & { refusal?: string }) | null;
       if (declared?.refusal) refusal = declared.refusal;
       registration = toRegistration(declared) ?? (declared?.refusal ? null : registration);
+    }
+    let inferredFrom: string | null = null;
+    const inferred = input.scope === undefined && !fallbackScope && registration && !registration.scope && registration.checkoutProjectKeys.length === 1 ? registration.checkoutProjectKeys[0] : null;
+    if (inferred) {
+      const declared = await beat({ start: true, scope: { role: 'worker', projectKeys: [inferred] }, scopeDefault: true, ...(repository ? { repository } : {}) }).catch(refused);
+      if (declared?.scope) {
+        registration = declared;
+        rememberDeclaredScope(instanceToken, declared.scope);
+        inferredFrom = `inferred from the checkout's origin remote ${repository ? `${repository.owner}/${repository.name}` : ''}`.trim();
+      }
     }
     const [me, rules, assigned, timer, inboxRaw, knowledge, owners, projectFacts] = await Promise.all([
       client.get<Me>('/users/me').catch(() => null),
@@ -494,10 +512,11 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
     const scopeText = registration?.scope
       ? [registration.scope.role ? `role ${registration.scope.role}` : null, registration.scope.projectKeys?.length ? `projects ${registration.scope.projectKeys.join(', ')}` : null, registration.scope.ticketKeys?.length ? `tickets ${registration.scope.ticketKeys.join(', ')}` : null].filter(Boolean).join('; ')
       : registration
-        ? 'no scope declared - this session lists every account-addressed message; pass scope: { projectKeys, role } to narrow it'
+        ? `no scope declared - ${registration.inbox?.hint ?? 'this session gets only mail addressed to it, broadcasts and mail of its checkout\'s project'} With MCP: pass scope: { role, projectKeys }`
         : 'registration failed - only account mail is listed; retry orboto_session_start or check mcp:use';
     if (refusal) lines.push(`ref ${instanceToken}. Not registered: ${refusal}`, `With MCP: pass scope: { role, projectKeys }; another live session in this repository whose scope overlaps runs beside this one once the scope shares none of its keys, or pass previous: "adopt" or "end" to replace ${overlappingTarget(alsoOverlapping)}.`);
     else lines.push(`ref ${instanceToken}${registration ? `, instance ${registration.sessionId.slice(0, 8)}` : ''}. ${scopeText}. Peers reach exactly this session with orboto_agent_notify { toSessionRef: "${registration ? registration.sessionId.slice(0, 8) : instanceToken}" }.`);
+    if (inferredFrom) lines.push(`Scope ${inferredFrom}; pass scope: { role, projectKeys } to declare another.`);
     if (exitedLine) lines.push(exitedLine);
     else if (registration?.takeovers?.length) lines.push(...registration.takeovers.map(takeoverLine));
     else if (registration?.takeover) lines.push(takeoverLine(registration.takeover));

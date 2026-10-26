@@ -57,6 +57,16 @@ export function repeatMarks(m: Pick<AgentMessage, 'repeatCount' | 'reminderCount
 
 interface InboxCounts { unread: number; olderThan7Days: number }
 
+/** ORB-2684 - what the session's inbox holds, as GET /v1/agent/messages reports it. */
+interface InboxView { view: string; projectKeys: string[]; hint: string | null }
+
+/** ORB-2684 - the line a session without declared keys reads under its inbox; nothing for a declared or explicit view. */
+export function inboxViewLine(inbox: InboxView | undefined): string | null {
+  if (!inbox?.hint) return null;
+  const holds = inbox.view === 'checkout' && inbox.projectKeys.length ? `mail addressed to it, broadcasts and mail of ${inbox.projectKeys.join(', ')} (its checkout)` : 'mail addressed to it and broadcasts';
+  return `Inbox view: ${inbox.view} - this session lists ${holds}. ${inbox.hint}`;
+}
+
 interface DismissInput { ids: string[]; reason: 'not_mine' | 'obsolete' | 'duplicate'; note?: string; duplicateOf?: string }
 
 /** ORB-2548 - the compact page an MCP inbox read returns by default, sized so it fits the 4,000-character budget. */
@@ -173,7 +183,7 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
     const instanceToken = mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined);
     if (args.includeOwnSends) q.set('includeOwn', 'true');
     else if (args.direction !== 'sent') q.set('excludeRef', instanceToken);
-    const { messages, sessionId, counts, nextCursor } = await client.get<{ messages: AgentMessage[]; sessionId?: string | null; counts?: InboxCounts; nextCursor?: string | null }>(`/v1/agent/messages?${q.toString()}`, { instanceToken });
+    const { messages, sessionId, counts, nextCursor, inbox } = await client.get<{ messages: AgentMessage[]; sessionId?: string | null; counts?: InboxCounts; nextCursor?: string | null; inbox?: InboxView }>(`/v1/agent/messages?${q.toString()}`, { instanceToken });
     const header = (m: AgentMessage) => `${m.own ? `[sent] ${sentState(m)} ` : ''}[${m.kind}]${m.projectKey ? ` [${m.projectKey}]` : ''}${repeatMarks(m)} ${m.subject} (from ${m.from?.label ?? m.fromUserId} to ${m.to?.label ?? m.toUserId}, ${m.createdAt}, id ${m.id}${m.threadId ? `, thread ${m.threadId}` : ''})`;
     const lines = messages.length === 0
       ? [acked > 0 ? `Acknowledged ${acked} message(s). Inbox empty.` : 'Inbox empty.']
@@ -190,6 +200,8 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
     if (escalationsStopped > 0) lines.unshift(`Stopped the urgent escalation of ${escalationsStopped} message(s).`);
     if (sessionId) lines.push(`This session: ${sessionId.slice(0, 8)} (ref ${instanceToken}).`);
     else lines.push(UNREGISTERED_INBOX_HINT);
+    const view = inboxViewLine(inbox);
+    if (view) lines.push(view);
     return {
       content: [{ type: 'text', text: lines.join('\n') }],
       structuredContent: {
@@ -204,6 +216,7 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
         dismissed: dismissedCount,
         closed: closedCount,
         nextCursor: nextCursor ?? null,
+        ...(inbox ? { inbox } : {}),
       },
     };
   };

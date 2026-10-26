@@ -240,8 +240,8 @@ export function adoptJoined(res: { joined?: { instanceToken?: string } } | null 
 }
 
 /** ORB-2641 - the one heartbeat of a stdio server without a channel: it says so, and joins the session of its process when the answer names one. */
-export async function beatAsToolServer(client: { post<T>(path: string, body: unknown, options?: { instanceToken?: string }): Promise<T> }, clientInfo: Record<string, unknown>): Promise<string | null> {
-  const res = await client.post<{ joined?: { instanceToken?: string } }>('/v1/agent/heartbeat', { clientInfo }, { instanceToken: MCP_PROCESS_INSTANCE });
+export async function beatAsToolServer(client: { post<T>(path: string, body: unknown, options?: { instanceToken?: string }): Promise<T> }, clientInfo: Record<string, unknown>, repository?: { owner: string; name: string; host?: string } | null): Promise<string | null> {
+  const res = await client.post<{ joined?: { instanceToken?: string } }>('/v1/agent/heartbeat', { clientInfo, ...(repository ? { repository } : {}) }, { instanceToken: MCP_PROCESS_INSTANCE });
   return adoptJoined(res);
 }
 

@@ -68,6 +68,10 @@ afterEach(() => { vi.restoreAllMocks(); });
  * ORB-2579 added the four rule proposal tools to the full tier after
  * tightening repeated parameter descriptions (doc ids, bulk selectors,
  * work-session leases, primer facts) by 3.0k (full = 169,607).
+ * ORB-2684 gave the scope input of `orboto_session_start` and
+ * `orboto_agent_heartbeat` the `account` boolean (+58) inside the ceiling:
+ * both titles and the session_start summary shrank to pay for it
+ * (full = 171,194).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

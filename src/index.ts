@@ -82,9 +82,11 @@ async function main() {
       if (outdated) void inbox.deliverNotice(CLI_OUTDATED_NOTICE, outdated);
       const { readClaudeContext, channelClientInfo } = await import('./claude-context.js');
       const { presenceRefusal } = await import('./tools/shared.js');
+      const { checkoutRepository } = await import('./checkout-repository.js');
+      const repository = checkoutRepository();
       let refusalLogged = false;
       const beat = () => {
-        preflightClient.post<{ joined?: { instanceToken?: string } }>('/v1/agent/heartbeat', { clientInfo: channelClientInfo(readClaudeContext(process.cwd()), undefined, channelStart ?? undefined) }, { instanceToken })
+        preflightClient.post<{ joined?: { instanceToken?: string } }>('/v1/agent/heartbeat', { clientInfo: channelClientInfo(readClaudeContext(process.cwd()), undefined, channelStart ?? undefined), ...(repository ? { repository } : {}) }, { instanceToken })
           .then((res) => {
             refusalLogged = false;
             const joined = adoptJoined(res);
@@ -110,7 +112,8 @@ async function main() {
     } else {
       const { toolServerHeartbeat } = await import('./claude-context.js');
       const { beatAsToolServer } = await import('./tools/shared.js');
-      beatAsToolServer(preflightClient, toolServerHeartbeat())
+      const { checkoutRepository } = await import('./checkout-repository.js');
+      beatAsToolServer(preflightClient, toolServerHeartbeat(), checkoutRepository())
         .catch((err) => { console.error(`[orboto-mcp] heartbeat failed: ${(err as Error).message}`); });
     }
     return;

@@ -7,4 +7,6 @@ export const AgentSessionScopeSchema = z.object({
   ticketKeys: z.array(z.string()).max(200).optional(),
   role: AgentSessionRoleSchema.optional(),
 });
-export type AgentSessionScope = z.infer<typeof AgentSessionScopeSchema>;
+/** ORB-2684 - the declarable scope: `account` is the explicit account view of an integrator or a coordinator. */
+export const AgentSessionScopeInputSchema = AgentSessionScopeSchema.extend({ account: z.boolean().optional() });
+export type AgentSessionScope = z.infer<typeof AgentSessionScopeInputSchema>;
