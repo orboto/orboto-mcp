@@ -11,7 +11,7 @@ import { AgentPresenceRowSchema, type AgentPresenceRow } from './agent-presence-
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { mcpInstanceToken, presenceRefusal } from './shared.js';
-import { AgentSessionRoleSchema, AgentSessionScopeSchema, type AgentSessionScope } from './agent-session-scope.js';
+import { AgentSessionRoleSchema, AgentSessionScopeInputSchema, AgentSessionScopeSchema, type AgentSessionScope } from './agent-session-scope.js';
 
 interface HeartbeatResponse {
   sessionToken: string;
@@ -23,12 +23,12 @@ interface HeartbeatResponse {
 }
 
 export const agentHeartbeatToolConfig = {
-  title: 'Agent heartbeat (Multi-Agent Coordination)',
+  title: 'Agent heartbeat',
   description:
-    'Register or refresh this agent\'s presence with status detail. A live connection already counts as online (an open MCP event stream, `orboto messages --follow`, the agent WebSocket) - the heartbeat adds status: idle (default) | working (+workingOnTicketId) | blocked, capabilities (free-form strings for operator filters) and clientInfo.name (the runtime), and is the only presence path for turn-based clients without a standing connection. Rows older than 90 s count as offline; persist the returned sessionToken and send it on later heartbeats. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility (ORB-2136); an empty object clears it. `startedBy`: starter session id, same account.',
+    'Register or refresh this agent\'s presence with status detail. A live connection already counts as online (an open MCP event stream, `orboto messages --follow`, the agent WebSocket) - the heartbeat adds status: idle (default) | working (+workingOnTicketId) | blocked, capabilities (free-form strings for operator filters) and clientInfo.name (the runtime), and is the only presence path for turn-based clients without a standing connection. Rows older than 90 s count as offline; persist the returned sessionToken and send it on later heartbeats. `scope` { projectKeys, ticketKeys, role } declares this session\'s responsibility (ORB-2136); an empty object clears it; `account: true` = account view. `startedBy`: starter session id, same account.',
   inputSchema: z.object({
     sessionToken: z.string().nullable().optional(),
-    scope: AgentSessionScopeSchema.optional(),
+    scope: AgentSessionScopeInputSchema.optional(),
     status: z.enum(['idle', 'working', 'blocked']).optional(),
     workingOnTicketId: z.string().uuid().nullable().optional(),
     capabilities: z.array(z.string()).max(200).optional(),
@@ -162,7 +162,7 @@ function presenceLine(s: PresenceRow): string {
   const work = s.workingOnTicket ? ` · working on [${s.workingOnTicket.projectKey ?? '?'}] ${s.workingOnTicket.key ?? s.workingOnTicket.id} (${s.workingOnTicket.title})` : '';
   const owner = s.owner?.name ?? s.owner?.email ?? (s.actsAs ? `acts as ${s.actsAs.name ?? s.actsAs.email}` : s.kind === 'agent' ? 'unassigned' : 'self');
   const declared = s.scope?.projectKeys ?? [];
-  const scope = s.scope?.role || declared.length ? `; scope: ${s.scope?.role ?? 'no role'}${declared.length ? ` on ${declared.join(', ')}` : ''}` : '';
+  const scope = s.scope?.role || declared.length ? `; scope: ${s.scope?.role ?? 'no role'}${declared.length ? ` on ${declared.join(', ')}` : ''}${(s.scope as AgentSessionScope | null | undefined)?.account ? ' (account view)' : ''}` : '';
   const keys = s.projects.map((p) => p.key);
   const projects = keys.length === 0 ? '' : keys.length <= 8 ? `; projects: ${keys.join(', ')}` : `; member of ${keys.length} projects`;
   const connections = s.connections.length ? `; connections: ${[...new Set(s.connections.map((c) => c.type))].join(', ')}` : '';
