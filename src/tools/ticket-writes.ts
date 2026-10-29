@@ -473,26 +473,47 @@ export function makeUpdateTicketHandler(client: OrbotoClient) {
 export const moveTicketToolConfig = {
   title: 'Move a ticket between status categories',
   description:
-    'Move a ticket to a new status category - todo / in_progress / in_review / done / wont_fix. The API picks the project\'s first status with that category. Caller must have `ticket:change_status`. **Summary warning (ORB-1332):** moving to `in_review` or `done` without having just posted a summary comment returns a non-blocking `summaryWarning` - the move still succeeds, but you should post what changed, the commit SHA, and how to verify. Use `orboto_close_ticket` with a `comment` (or comment first, then move) to avoid it. **Delivery-mode warning (ORB-1608/1642):** moving to `done` on an `implementation`/`docs` ticket with zero linked commits returns a non-blocking `deliveryModeWarning` - UNLESS the project has no git connection at all, in which case it\'s omitted (a link isn\'t possible there). Code `no_commit_linked` means the connection looks healthy - link a commit, or change deliveryMode via `orboto_update_ticket` if the work genuinely is not commit-shaped. Code `git_delivery_failing` means the connection itself looks unhealthy - a commit may already exist and just hasn\'t arrived; check the connection before assuming none was made.',
+    'Move a ticket to a status category - todo / in_progress / in_review / done / wont_fix. The API picks the project\'s first status with it. Needs `ticket:change_status`. Moving to `in_review` or `done` without a just-posted summary comment returns a non-blocking `summaryWarning` (ORB-1332): post what changed, the commit SHA and how to verify; `orboto_close_ticket` with a `comment` avoids it. Moving an `implementation`/`docs` ticket to `done` with zero linked commits returns a non-blocking `deliveryModeWarning` (ORB-1608/1642), omitted without a git connection; its codes are explained on `orboto_close_ticket`. **Timer (ORB-2687):** `in_review`, `done` and `wont_fix` stop and book your own running timer on the ticket (a close also finishes your work sessions); `keepTimer: true` keeps them.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     statusCategory: z.enum(STATUS_CATEGORIES),
+    keepTimer: z.boolean().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
+interface CloseTimerFields { timerStopped?: boolean; timerMinutes?: number; workSessionsFinished?: number; timerKept?: boolean; timerRefused?: string }
+
+function timerLine(r: CloseTimerFields): string | null {
+  if (r.timerKept) return 'Timer kept running (keepTimer).';
+  if (r.timerRefused) return `Timer not stopped: ${r.timerRefused}.`;
+  if (r.timerStopped) return `Timer stopped: ${r.timerMinutes ?? 0} min booked${r.workSessionsFinished ? `, ${r.workSessionsFinished} work session(s) finished` : ''}.`;
+  return null;
+}
+
+function timerStructured(r: CloseTimerFields) {
+  return {
+    timerStopped: r.timerStopped ?? false,
+    timerMinutes: r.timerMinutes ?? 0,
+    ...(r.workSessionsFinished ? { workSessionsFinished: r.workSessionsFinished } : {}),
+    ...(r.timerKept ? { timerKept: true } : {}),
+    ...(r.timerRefused ? { timerRefused: r.timerRefused } : {}),
+  };
+}
+
 export function makeMoveTicketHandler(client: OrbotoClient) {
-  return async ({ ticketKey, statusCategory }: {
-    ticketKey: string; statusCategory: StatusCategory;
+  return async ({ ticketKey, statusCategory, keepTimer }: {
+    ticketKey: string; statusCategory: StatusCategory; keepTimer?: boolean;
   }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
-    const updated = await client.patch<TicketRow & { summaryWarning?: SummaryWarning; deliveryModeWarning?: DeliveryModeWarning }>(
+    const updated = await client.patch<TicketRow & CloseTimerFields & { summaryWarning?: SummaryWarning; deliveryModeWarning?: DeliveryModeWarning }>(
       `/projects/${ticket.projectId}/tickets/${ticket.id}`,
-      { status: CATEGORY_TO_LEGACY[statusCategory] },
+      { status: CATEGORY_TO_LEGACY[statusCategory], ...(keepTimer ? { keepTimer: true } : {}) },
     );
+    const timer = timerLine(updated);
     return withDeliveryModeWarning(withSummaryWarning({
-      content: [{ type: 'text', text: ticketSummaryText('Moved', updated) }],
-      structuredContent: ticketStructured(updated),
+      content: [{ type: 'text', text: [ticketSummaryText('Moved', updated), ...(timer ? [timer] : [])].join('\n') }],
+      structuredContent: { ...ticketStructured(updated), ...(updated.timerStopped === undefined ? {} : timerStructured(updated)) },
     }, updated.summaryWarning), updated.deliveryModeWarning);
   };
 }
@@ -500,29 +521,31 @@ export function makeMoveTicketHandler(client: OrbotoClient) {
 export const closeTicketToolConfig = {
   title: 'Close a ticket',
   description:
-    'Move a ticket to `done` and optionally post a closing comment in one call. Closing more than ~3 tickets? Use `orboto_bulk_close_tickets` instead. Convenience wrapper around `orboto_move_ticket` + `orboto_comment` so the model doesn\'t need to chain two writes. Passing a `comment` is the recommended way to close - it doubles as the transition summary and suppresses the ORB-1332 `summaryWarning`. Closing with no comment (and none posted in the last few minutes) returns a non-blocking `summaryWarning`; the close still succeeds. **Delivery-mode warning (ORB-1608/1642):** on an `implementation`/`docs` ticket, closing with zero linked commits returns a non-blocking `deliveryModeWarning` too - UNLESS the project has no git connection at all, in which case it\'s omitted. `no_commit_linked` = healthy connection, link a commit or change deliveryMode via `orboto_update_ticket`. `git_delivery_failing` = the connection itself looks unhealthy - check it before assuming no commit was made.',
+    'Move a ticket to `done`, optionally posting a closing comment first. More than ~3 tickets? Use `orboto_bulk_close_tickets`. A `comment` doubles as the transition summary and suppresses the ORB-1332 `summaryWarning` (no comment and none in the last few minutes returns it, non-blocking). **Timer (ORB-2687):** the close stops and books your own running timer and finishes your own work sessions on the ticket (answers `timerStopped`, `timerMinutes`); `keepTimer: true` keeps both. Other users\' and sessions\' timers are never touched. **Delivery-mode warning (ORB-1608/1642):** an `implementation`/`docs` ticket closed with zero linked commits returns a non-blocking `deliveryModeWarning`, omitted when the project has no git connection. `no_commit_linked` = healthy connection, link a commit or change deliveryMode via `orboto_update_ticket`; `git_delivery_failing` = the connection looks unhealthy, check it first.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    comment: z.string().min(1).optional().describe('Closing comment; doubles as the transition summary.'),
+    comment: z.string().min(1).optional().describe('Transition summary.'),
+    keepTimer: z.boolean().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeCloseTicketHandler(client: OrbotoClient) {
-  return async ({ ticketKey, comment }: {
-    ticketKey: string; comment?: string;
+  return async ({ ticketKey, comment, keepTimer }: {
+    ticketKey: string; comment?: string; keepTimer?: boolean;
   }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
     if (comment) {
       await client.post(`/tickets/${ticket.id}/comments`, { content: comment });
     }
-    const updated = await client.patch<TicketRow & { summaryWarning?: SummaryWarning; deliveryModeWarning?: DeliveryModeWarning }>(
+    const updated = await client.patch<TicketRow & CloseTimerFields & { summaryWarning?: SummaryWarning; deliveryModeWarning?: DeliveryModeWarning }>(
       `/projects/${ticket.projectId}/tickets/${ticket.id}`,
-      { status: 'DONE' },
+      { status: 'DONE', ...(keepTimer ? { keepTimer: true } : {}) },
     );
+    const timer = timerLine(updated);
     return withDeliveryModeWarning(withSummaryWarning({
-      content: [{ type: 'text', text: ticketSummaryText('Closed', updated) }],
-      structuredContent: ticketStructured(updated),
+      content: [{ type: 'text', text: [ticketSummaryText('Closed', updated), ...(timer ? [timer] : [])].join('\n') }],
+      structuredContent: { ...ticketStructured(updated), ...timerStructured(updated) },
     }, updated.summaryWarning), updated.deliveryModeWarning);
   };
 }

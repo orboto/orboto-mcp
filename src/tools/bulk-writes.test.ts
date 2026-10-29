@@ -154,6 +154,22 @@ describe('orboto_bulk_move_tickets', () => {
   });
 });
 
+describe('orboto_bulk_move_tickets keepTimer (ORB-2687)', () => {
+  it('sends keepTimer with every status PATCH and omits it by default', async () => {
+    const calls = stub([
+      ...resolveOK(1),
+      { json: ticket(1) },
+      ...resolveOK(2),
+      { json: ticket(2) },
+    ]);
+    await makeBulkMoveTicketsHandler(client)({ ticketKeys: ['ACME-1'], statusCategory: 'done', keepTimer: true });
+    await makeBulkMoveTicketsHandler(client)({ ticketKeys: ['ACME-2'], statusCategory: 'done' });
+    const patches = calls.filter((c) => c.method === 'PATCH');
+    expect(patches[0].body).toEqual({ status: 'DONE', keepTimer: true });
+    expect(patches[1].body).toEqual({ status: 'DONE' });
+  });
+});
+
 describe('orboto_bulk_close_tickets', () => {
   it('POSTs comment before PATCH when comment is set', async () => {
     const calls = stub([
@@ -170,6 +186,20 @@ describe('orboto_bulk_close_tickets', () => {
     expect(commentCall).toBeDefined();
     expect(patchCall?.body).toEqual({ status: 'DONE' });
     expect(calls.indexOf(commentCall!)).toBeLessThan(calls.indexOf(patchCall!));
+  });
+
+  it('ORB-2687 - keepTimer is sent with every close PATCH and omitted by default', async () => {
+    const calls = stub([
+      ...resolveOK(1),
+      { json: { ...ticket(1), status: 'DONE' } },
+      ...resolveOK(2),
+      { json: { ...ticket(2), status: 'DONE' } },
+    ]);
+    await makeBulkCloseTicketsHandler(client)({ ticketKeys: ['ACME-1'], keepTimer: true });
+    await makeBulkCloseTicketsHandler(client)({ ticketKeys: ['ACME-2'] });
+    const patches = calls.filter((c) => c.method === 'PATCH');
+    expect(patches[0].body).toEqual({ status: 'DONE', keepTimer: true });
+    expect(patches[1].body).toEqual({ status: 'DONE' });
   });
 
   it('without comment, only PATCHes status=DONE', async () => {

@@ -26,6 +26,7 @@ function describeBookedBy(bookedBy: string | null | undefined): string | null {
     case 'transition': return 'by the status transition';
     case 'lane_stop': return 'by an earlier timer stop';
     case 'expiry': return 'by the lease expiring';
+    case 'idle_cap': return 'by the idle cap at the last heartbeat';
     default: return null;
   }
 }

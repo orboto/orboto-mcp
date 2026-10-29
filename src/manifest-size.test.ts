@@ -72,6 +72,10 @@ afterEach(() => { vi.restoreAllMocks(); });
  * `orboto_agent_heartbeat` the `account` boolean (+58) inside the ceiling:
  * both titles and the session_start summary shrank to pay for it
  * (full = 171,194).
+ * ORB-2687 gave `orboto_close_ticket`, `orboto_move_ticket`,
+ * `orboto_bulk_move_tickets` and `orboto_bulk_close_tickets` `keepTimer`
+ * inside the ceiling: their first sentences, comment parameters and the
+ * shared bulk selector descriptions shrank to pay for it (full = 171,141).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

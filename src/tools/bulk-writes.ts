@@ -22,10 +22,10 @@ const CATEGORY_TO_LEGACY: Record<StatusCategory, string> = {
 interface MemberRow { userId: string; user: { email: string } }
 
 const TICKET_KEY_ARRAY = z.array(z.string().min(3)).min(1).max(200).optional()
-  .describe('Ticket keys, at most 200; or give query.');
+  .describe('Ticket keys (max 200), or query.');
 /** ORB-2054 - the target set can be an OQL query instead of a key list. */
 const QUERY_SOURCE = z.string().min(1).max(8000).optional()
-  .describe('OQL instead of ticketKeys (your ACL), at most 200 matches.');
+  .describe('OQL instead of ticketKeys (your ACL), max 200 matches.');
 const QUERY_PROJECT = z.string().optional()
   .describe('Project key scoping `query`.');
 /** Matches per call the MCP loop will process; above that the server-side bulk route is the right tool. */
@@ -165,22 +165,23 @@ export function makeBulkPatchTicketsHandler(client: OrbotoClient) {
 export const bulkMoveTicketsToolConfig = {
   title: 'Move many tickets to a status category',
   description:
-    'Move every ticket in `ticketKeys` (or `query` selects) to the same status category (todo/in_progress/in_review/done/wont_fix). Each ticket lands on its own project\'s first status with that category. Returns the per-ticket outcome.',
+    'Move every ticket in `ticketKeys` (or `query` selects) to the same status category (todo/in_progress/in_review/done/wont_fix), each onto its project\'s first status with that category. A move to in_review, done or wont_fix stops your own timer on the ticket; `keepTimer` keeps it. Returns the per-ticket outcome.',
   inputSchema: z.object({
     ticketKeys: TICKET_KEY_ARRAY,
     query: QUERY_SOURCE,
     projectKey: QUERY_PROJECT,
     statusCategory: z.enum(STATUS_CATEGORIES),
+    keepTimer: z.boolean().optional(),
     dryRun: z.boolean().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeBulkMoveTicketsHandler(client: OrbotoClient) {
-  return async ({ ticketKeys, query, projectKey, statusCategory, dryRun }: {
+  return async ({ ticketKeys, query, projectKey, statusCategory, keepTimer, dryRun }: {
     ticketKeys?: string[];
     query?: string;
-    projectKey?: string; statusCategory: StatusCategory; dryRun?: boolean;
+    projectKey?: string; statusCategory: StatusCategory; keepTimer?: boolean; dryRun?: boolean;
   }): Promise<CallToolResult> => {
     const outcome = emptyOutcome(dryRun === true);
     const resolved = await resolveBatch(client, await targetKeys(client, { ticketKeys, query, projectKey }), outcome);
@@ -188,7 +189,7 @@ export function makeBulkMoveTicketsHandler(client: OrbotoClient) {
     for (const [k, t] of resolved) {
       if (dryRun) { outcome.skipped.push(k); continue; }
       try {
-        await client.patch(`/projects/${t.projectId}/tickets/${t.id}`, { status: legacy });
+        await client.patch(`/projects/${t.projectId}/tickets/${t.id}`, { status: legacy, ...(keepTimer ? { keepTimer: true } : {}) });
         outcome.successful.push(k);
       } catch (err) {
         outcome.failed.push({ ticketKey: k, error: errMessage(err) });
@@ -199,24 +200,25 @@ export function makeBulkMoveTicketsHandler(client: OrbotoClient) {
 }
 
 export const bulkCloseTicketsToolConfig = {
-  title: 'Close many tickets (optionally with a shared comment)',
+  title: 'Close many tickets (optional shared comment)',
   description:
-    'For every ticket in `ticketKeys` (or `query` selects): optionally post the same `comment` first, then move to `done`. Mirrors `orboto.mjs bulk-close`. Comment-first ordering means the close note lands in the audit trail even if the status PATCH 403s.',
+    'Close every ticket in `ticketKeys` (or `query` selects), optionally posting one shared `comment` first. Mirrors `orboto.mjs bulk-close`. Comment-first ordering means the close note lands in the audit trail even if the status PATCH 403s. Each close stops your own timer and work sessions on the ticket (ORB-2687); `keepTimer` keeps them.',
   inputSchema: z.object({
     ticketKeys: TICKET_KEY_ARRAY,
     query: QUERY_SOURCE,
     projectKey: QUERY_PROJECT,
-    comment: z.string().min(1).optional().describe('Optional shared closing comment posted on each ticket before its status move.'),
+    comment: z.string().min(1).optional().describe('Shared closing comment, posted first.'),
+    keepTimer: z.boolean().optional(),
     dryRun: z.boolean().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
 };
 
 export function makeBulkCloseTicketsHandler(client: OrbotoClient) {
-  return async ({ ticketKeys, query, projectKey, comment, dryRun }: {
+  return async ({ ticketKeys, query, projectKey, comment, keepTimer, dryRun }: {
     ticketKeys?: string[];
     query?: string;
-    projectKey?: string; comment?: string; dryRun?: boolean;
+    projectKey?: string; comment?: string; keepTimer?: boolean; dryRun?: boolean;
   }): Promise<CallToolResult> => {
     const outcome = emptyOutcome(dryRun === true);
     const resolved = await resolveBatch(client, await targetKeys(client, { ticketKeys, query, projectKey }), outcome);
@@ -226,7 +228,7 @@ export function makeBulkCloseTicketsHandler(client: OrbotoClient) {
         if (comment) {
           await client.post(`/tickets/${t.id}/comments`, { content: comment });
         }
-        await client.patch(`/projects/${t.projectId}/tickets/${t.id}`, { status: 'DONE' });
+        await client.patch(`/projects/${t.projectId}/tickets/${t.id}`, { status: 'DONE', ...(keepTimer ? { keepTimer: true } : {}) });
         outcome.successful.push(k);
       } catch (err) {
         outcome.failed.push({ ticketKey: k, error: errMessage(err) });

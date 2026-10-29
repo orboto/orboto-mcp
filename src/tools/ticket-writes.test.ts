@@ -406,6 +406,36 @@ describe('orboto_move_ticket', () => {
     expect(calls[2].body).toEqual({ status: 'IN_PROGRESS' });
   });
 
+  it('ORB-2687 - keepTimer is sent with a move and the timer the server stopped is reported', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: { ...TICKET, status: 'IN_REVIEW', statusName: 'In Review', statusCategory: 'in_review', timerStopped: false, timerMinutes: 0, timerKept: true } },
+      { json: PROJ },
+      { json: TICKET },
+      { json: { ...TICKET, status: 'IN_REVIEW', statusName: 'In Review', statusCategory: 'in_review', timerStopped: true, timerMinutes: 12 } },
+    ]);
+    const kept = await makeMoveTicketHandler(client)({ ticketKey: 'ACME-1', statusCategory: 'in_review', keepTimer: true });
+    expect(calls[2].body).toEqual({ status: 'IN_REVIEW', keepTimer: true });
+    expect((kept.content[0] as { text: string }).text).toContain('Timer kept running (keepTimer).');
+    expect(kept.structuredContent).toMatchObject({ timerStopped: false, timerKept: true });
+
+    const stopped = await makeMoveTicketHandler(client)({ ticketKey: 'ACME-1', statusCategory: 'in_review' });
+    expect(calls[5].body).toEqual({ status: 'IN_REVIEW' });
+    expect((stopped.content[0] as { text: string }).text).toContain('Timer stopped: 12 min booked.');
+    expect(stopped.structuredContent).toMatchObject({ timerStopped: true, timerMinutes: 12 });
+  });
+
+  it('ORB-2687 - a move that answers no timer fields adds none to the structured content', async () => {
+    stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: { ...TICKET, status: 'IN_PROGRESS', statusName: 'In Progress', statusCategory: 'in_progress' } },
+    ]);
+    const res = await makeMoveTicketHandler(client)({ ticketKey: 'ACME-1', statusCategory: 'in_progress' });
+    expect(res.structuredContent).not.toHaveProperty('timerStopped');
+  });
+
   it('surfaces summaryWarning from the move response in content + structuredContent (ORB-1332)', async () => {
     stub([
       { json: PROJ },
@@ -477,6 +507,29 @@ describe('orboto_close_ticket', () => {
     const res = await makeCloseTicketHandler(client)({ ticketKey: 'ACME-1' });
     expect((res.content[0] as { text: string }).text).toContain('without a summary comment');
     expect((res.structuredContent as { summaryWarning?: { code: string } }).summaryWarning?.code).toBe('missing_transition_summary');
+  });
+
+  it('ORB-2687 - reports the timer the server close stopped and the minutes it booked', async () => {
+    stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: { ...TICKET, status: 'DONE', statusName: 'Done', statusCategory: 'done', timerStopped: true, timerMinutes: 82, workSessionsFinished: 1 } },
+    ]);
+    const res = await makeCloseTicketHandler(client)({ ticketKey: 'ACME-1' });
+    expect((res.content[0] as { text: string }).text).toContain('Timer stopped: 82 min booked, 1 work session(s) finished.');
+    expect(res.structuredContent).toMatchObject({ timerStopped: true, timerMinutes: 82, workSessionsFinished: 1 });
+  });
+
+  it('ORB-2687 - keepTimer is sent to the server and the kept timer is named', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: { ...TICKET, status: 'DONE', statusName: 'Done', statusCategory: 'done', timerStopped: false, timerMinutes: 0, timerKept: true } },
+    ]);
+    const res = await makeCloseTicketHandler(client)({ ticketKey: 'ACME-1', keepTimer: true });
+    expect(calls[2].body).toEqual({ status: 'DONE', keepTimer: true });
+    expect((res.content[0] as { text: string }).text).toContain('Timer kept running (keepTimer).');
+    expect(res.structuredContent).toMatchObject({ timerStopped: false, timerKept: true });
   });
 });
 
