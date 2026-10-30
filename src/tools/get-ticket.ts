@@ -104,7 +104,7 @@ export function makeGetTicketHandler(client: OrbotoClient) {
         ? client.get<TicketSummaryRow>(`/projects/${ticket.projectId}/tickets/${parentId}`).catch(swallow404<TicketSummaryRow | null>(null))
         : Promise.resolve(null),
       client.get<CursorPage<TicketSummaryRow>>(
-        `/projects/${ticket.projectId}/tickets?parentTicketId=${ticket.id}&limit=50`,
+        `/projects/${ticket.projectId}/tickets?parentTicketId=${ticket.id}&includeClosedMilestones=true&limit=50`,
       ).catch(swallow404<CursorPage<TicketSummaryRow>>({ items: [], nextCursor: null })),
       client.get<AttachmentRow[]>(`/tickets/${ticket.id}/attachments`).catch(swallow404<AttachmentRow[]>([])),
       inc.has('comments') ? fetchThread(client, ticket.id) : Promise.resolve([] as CommentRow[]),

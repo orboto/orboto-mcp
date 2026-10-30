@@ -76,6 +76,9 @@ afterEach(() => { vi.restoreAllMocks(); });
  * `orboto_bulk_move_tickets` and `orboto_bulk_close_tickets` `keepTimer`
  * inside the ceiling: their first sentences, comment parameters and the
  * shared bulk selector descriptions shrank to pay for it (full = 171,141).
+ * ORB-2711 gave `orboto_list_tickets` `includeClosedMilestones` inside the
+ * ceiling: the parameter carries no description (the answer names the hidden
+ * count and the parameter) and the first sentence shrank (full = 171,171).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

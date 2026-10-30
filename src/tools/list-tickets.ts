@@ -17,12 +17,13 @@ import { resolveMilestoneByNameOrId } from './milestones.js';
 interface TicketPage {
   items: TicketRow[];
   nextCursor: string | null;
+  hiddenByClosedMilestones?: number;
 }
 
 export const listTicketsToolConfig = {
   title: 'List tickets',
   description:
-    'List a project\'s tickets by status category, milestone or assignee email. unscheduled=true = the backlog (no milestone yet). Up to 50 per call.',
+    'List a project\'s tickets by status, milestone or assignee. unscheduled=true = the backlog (no milestone yet). Tickets in completed or archived milestones are left out unless includeClosedMilestones=true; the answer says how many. Up to 50 per call.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key.'),
     specState: TicketSpecStateSchema.optional(),
@@ -50,6 +51,7 @@ export const listTicketsToolConfig = {
       .string()
       .optional()
       .describe('Children of this ticket.'),
+    includeClosedMilestones: z.boolean().optional(),
     sort: TicketListSortSchema.optional().describe('Newest first; default updated.'),
     limit: z.number().int().min(1).max(50).default(25).describe('Max rows.'),
     verbose: z.boolean().default(false).describe('true = full rows.'),
@@ -64,6 +66,7 @@ export function makeListTicketsHandler(client: OrbotoClient) {
     statusCategory?: 'todo' | 'in_progress' | 'in_review' | 'done' | 'wont_fix';
     milestone?: string;
     unscheduled?: boolean;
+    includeClosedMilestones?: boolean;
     open?: boolean;
     assigneeEmail?: string;
     parentTicketKey?: string;
@@ -86,6 +89,7 @@ export function makeListTicketsHandler(client: OrbotoClient) {
       throw new Error('Pass either `milestone` or `unscheduled: true`, not both.');
     }
     if (input.unscheduled) qs.set('unscheduled', 'true');
+    if (input.includeClosedMilestones) qs.set('includeClosedMilestones', 'true');
     if (input.milestone) {
       const m = await resolveMilestoneByNameOrId(client, project.id, input.milestone);
       qs.set('milestoneId', m.id);
@@ -114,13 +118,18 @@ export function makeListTicketsHandler(client: OrbotoClient) {
     const moreHint = page.nextCursor
       ? `\n\n(${page.items.length} shown; more exist - narrow the filters to see them.)`
       : '';
+    const hidden = page.hiddenByClosedMilestones ?? 0;
+    const hiddenHint = hidden > 0
+      ? `\n\n(${hidden} more in completed or archived milestones - pass includeClosedMilestones: true to list them.)`
+      : '';
 
     return {
-      content: [{ type: 'text', text: text + moreHint }],
+      content: [{ type: 'text', text: text + moreHint + hiddenHint }],
       structuredContent: {
         project: { key: project.key },
         count: page.items.length,
         hasMore: !!page.nextCursor,
+        ...(hidden > 0 ? { hiddenByClosedMilestones: hidden } : {}),
         tickets: page.items.map((t) => agentTicketListRow(t, input.verbose ?? false)),
       },
     };

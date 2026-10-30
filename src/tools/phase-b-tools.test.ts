@@ -107,6 +107,34 @@ describe('orboto_list_tickets', () => {
     expect(shared).toContain(`TicketListSortSchema = z.enum(${JSON.stringify([...TicketListSortSchema.options]).replace(/"/g, "'").replace(/,/g, ', ')})`);
   });
 
+  it('passes includeClosedMilestones=true only when asked for (ORB-2711)', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: { items: [], nextCursor: null } },
+      { json: PROJ },
+      { json: { items: [], nextCursor: null } },
+    ]);
+    await makeListTicketsHandler(client)({ projectKey: 'ACME', includeClosedMilestones: true });
+    expect(calls[1]).toContain('includeClosedMilestones=true');
+    await makeListTicketsHandler(client)({ projectKey: 'ACME' });
+    expect(calls[3]).not.toContain('includeClosedMilestones');
+  });
+
+  it('names how many tickets closed milestones hid and how to list them (ORB-2711)', async () => {
+    stub([
+      { json: PROJ },
+      { json: { items: [], nextCursor: null, hiddenByClosedMilestones: 4 } },
+      { json: PROJ },
+      { json: { items: [], nextCursor: null } },
+    ]);
+    const hid = await makeListTicketsHandler(client)({ projectKey: 'ACME' });
+    expect(hid.content[0]).toMatchObject({ text: expect.stringContaining('4 more in completed or archived milestones - pass includeClosedMilestones: true') });
+    expect((hid.structuredContent as { hiddenByClosedMilestones?: number }).hiddenByClosedMilestones).toBe(4);
+    const none = await makeListTicketsHandler(client)({ projectKey: 'ACME', includeClosedMilestones: true });
+    expect(JSON.stringify(none)).not.toContain('hiddenByClosedMilestones');
+    expect(JSON.stringify(none)).not.toContain('completed or archived');
+  });
+
   it('refuses unscheduled together with milestone', async () => {
     stub([{ json: PROJ }]);
     await expect(
@@ -233,6 +261,19 @@ describe('orboto_get_ticket', () => {
     const text = (res.content[0] as { text: string }).text;
     expect(text).toContain('Comments: 3');
     expect(text).toContain('Checklists: 1/2 done');
+  });
+
+  it('ORB-2711: the children of a ticket include those in completed or archived milestones', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-5', title: 'Epic', status: 'TODO', statusName: 'To Do', type: 'epic', priority: 'normal', gitActivityCount: 0, parentTicketId: null } },
+      { json: { id: 't1', projectId: 'p1', ticketKey: 'ACME-5', title: 'Epic', status: 'TODO', statusName: 'To Do', statusCategory: 'todo', type: 'epic', priority: 'normal', commentCount: 0, gitActivityCount: 0 } },
+      NO_CHILDREN,
+      { json: [] },
+    ]);
+    await makeGetTicketHandler(client)({ ticketKey: 'ACME-5' });
+    const children = calls.find((c) => c.includes('parentTicketId=t1'));
+    expect(children).toContain('includeClosedMilestones=true');
   });
 
   it('ORB-2169: the card shows the open dependency edges in both directions', async () => {
