@@ -6,7 +6,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { channelClientInfo, claudeContextDir, readClaudeContext } from './claude-context.js';
+import { channelClientInfo, claudeContextDir, newestSample, readClaudeContext, readClaudeReport, unsentSamples } from './claude-context.js';
 
 let root: string;
 
@@ -42,6 +42,30 @@ describe('ORB-2149 - claude statusline context reports', () => {
 
   it('reports nothing when the directory does not exist', () => {
     expect(readClaudeContext('/work/repo', Date.now(), path.join(root, 'missing'))).toBeNull();
+  });
+});
+
+describe('ORB-2729 - the account and the usage samples ride the heartbeat', () => {
+  const sample = (at: string, account = 'acct-a') => ({ at, account, session: 's', window: 'five_hour', usedPercent: 3, costUsd: 1, weightedTokens: 10 });
+
+  it('reads the account into clientInfo and the samples beside it, dropping a sample without an account', () => {
+    write('a.json', {
+      cwd: '/work/repo', contextTokens: 5, updatedAt: new Date().toISOString(), claudeAccount: 'acct-a', claudeProfile: 'work',
+      usageSamples: [sample('2026-10-30T08:00:00Z'), { ...sample('2026-10-30T08:01:00Z'), account: '' }, 'junk'],
+    });
+    const report = readClaudeReport('/work/repo', Date.now(), root);
+    expect(report?.context).toEqual({ contextTokens: 5, claudeAccount: 'acct-a', claudeProfile: 'work' });
+    expect(report?.usageSamples).toEqual([sample('2026-10-30T08:00:00Z')]);
+    expect(channelClientInfo(report!.context, 'host')).toMatchObject({ claudeAccount: 'acct-a', claudeProfile: 'work' });
+    expect(channelClientInfo(report!.context, 'host')).not.toHaveProperty('usageSamples');
+  });
+
+  it('sends a sample once: the next beat carries only the newer ones, also across Go fractional-second stamps', () => {
+    const samples = [sample('2026-10-30T08:00:00Z'), sample('2026-10-30T08:00:00.5Z'), sample('2026-10-30T08:01:00Z')];
+    expect(unsentSamples(samples, null)).toHaveLength(3);
+    const sent = newestSample(samples.slice(0, 2), null);
+    expect(unsentSamples(samples, sent).map((s) => s.at)).toEqual(['2026-10-30T08:01:00Z']);
+    expect(newestSample([], sent)).toBe(sent);
   });
 });
 

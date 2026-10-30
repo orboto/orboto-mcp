@@ -80,15 +80,19 @@ async function main() {
       if (declared?.refusal) void inbox.deliverNotice('session_exists', declared.refusal);
       const outdated = cliOutdatedNotice(process.env.ORBOTO_MCP_CLI_OUTDATED);
       if (outdated) void inbox.deliverNotice(CLI_OUTDATED_NOTICE, outdated);
-      const { readClaudeContext, channelClientInfo } = await import('./claude-context.js');
+      const { readClaudeReport, channelClientInfo, unsentSamples, newestSample } = await import('./claude-context.js');
       const { presenceRefusal } = await import('./tools/shared.js');
       const { checkoutRepository } = await import('./checkout-repository.js');
       const repository = checkoutRepository();
       let refusalLogged = false;
+      let samplesSentUpTo: number | null = null;
       const beat = () => {
-        preflightClient.post<{ joined?: { instanceToken?: string } }>('/v1/agent/heartbeat', { clientInfo: channelClientInfo(readClaudeContext(process.cwd()), undefined, channelStart ?? undefined), ...(repository ? { repository } : {}) }, { instanceToken })
+        const report = readClaudeReport(process.cwd());
+        const usageSamples = unsentSamples(report?.usageSamples ?? [], samplesSentUpTo);
+        preflightClient.post<{ joined?: { instanceToken?: string } }>('/v1/agent/heartbeat', { clientInfo: channelClientInfo(report?.context ?? null, undefined, channelStart ?? undefined), ...(repository ? { repository } : {}), ...(usageSamples.length ? { usageSamples } : {}) }, { instanceToken })
           .then((res) => {
             refusalLogged = false;
+            samplesSentUpTo = newestSample(usageSamples, samplesSentUpTo);
             const joined = adoptJoined(res);
             if (joined) {
               instanceToken = joined;
