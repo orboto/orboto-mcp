@@ -37,6 +37,7 @@ interface AgentMessage {
   payloadChars?: number;
   own?: boolean;
   repeatCount?: number;
+  lastRepeatedAt?: string | null;
   reminderCount?: number;
   priority?: 'normal' | 'urgent';
   escalationStep?: number;
@@ -44,11 +45,12 @@ interface AgentMessage {
 
 const ESCALATED = ['', 'escalated: mail and channels', 'escalated: deputy'];
 
-/** ORB-2563 - `[urgent]`, `sent N times` and `reminder N` next to a message, the same words the CLI prints; ORB-2564 - the ladder step it reached. */
-export function repeatMarks(m: Pick<AgentMessage, 'repeatCount' | 'reminderCount' | 'priority' | 'escalationStep'>): string {
+/** ORB-2563 - `[urgent]`, `sent N times` and `reminder N` next to a message, the same words the CLI prints; ORB-2564 - the ladder step it reached; ORB-2702 - a collapsed comment entry counts its comments. */
+export function repeatMarks(m: Pick<AgentMessage, 'repeatCount' | 'reminderCount' | 'priority' | 'escalationStep'> & Partial<Pick<AgentMessage, 'subject' | 'lastRepeatedAt'>>): string {
+  const comments = m.subject?.startsWith('comment:') && m.repeatCount && m.repeatCount > 1;
   const marks = [
     m.priority === 'urgent' ? 'urgent' : '',
-    m.repeatCount && m.repeatCount > 1 ? `sent ${m.repeatCount} times` : '',
+    comments ? `${m.repeatCount} comments${m.lastRepeatedAt ? `, last ${m.lastRepeatedAt}` : ''}` : m.repeatCount && m.repeatCount > 1 ? `sent ${m.repeatCount} times` : '',
     m.reminderCount ? `reminder ${m.reminderCount}` : '',
     ESCALATED[m.escalationStep ?? 0] ?? '',
   ].filter(Boolean);
@@ -153,21 +155,24 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
     let dismissedCount = 0;
     let closedCount = 0;
     let feedbackSent = 0;
+    let collapsedClosed = 0;
     if (args.dismiss) {
-      const res = await client.post<{ dismissed: number; closed: number; feedbackSent: number }>('/v1/agent/messages/dismiss', {
+      const res = await client.post<{ dismissed: number; closed: number; feedbackSent: number; collapsedClosed?: number }>('/v1/agent/messages/dismiss', {
         ...args.dismiss,
         instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined),
       });
       dismissedCount = res.dismissed;
       closedCount = res.closed;
       feedbackSent = res.feedbackSent;
+      collapsedClosed += res.collapsedClosed ?? 0;
     }
     let acked = 0;
     let escalationsStopped = 0;
     if (args.ackIds && args.ackIds.length > 0) {
-      const res = await client.post<{ acked: number; escalationsStopped?: number }>('/v1/agent/messages/ack', { ids: args.ackIds, instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
+      const res = await client.post<{ acked: number; escalationsStopped?: number; collapsedClosed?: number }>('/v1/agent/messages/ack', { ids: args.ackIds, instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
       acked = res.acked;
       escalationsStopped = res.escalationsStopped ?? 0;
+      collapsedClosed += res.collapsedClosed ?? 0;
     }
     const compact = !args.all;
     const q = new URLSearchParams();
@@ -198,6 +203,7 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
       lines.unshift(`Dismissed ${dismissedCount} message(s) as ${args.dismiss.reason}${closedCount > 0 ? `, ${closedCount} closed for the account` : ''}${feedbackSent > 0 ? `, ${feedbackSent} sender(s) told about the misroute` : ''}.`);
     }
     if (escalationsStopped > 0) lines.unshift(`Stopped the urgent escalation of ${escalationsStopped} message(s).`);
+    if (collapsedClosed > 0) lines.unshift(`Closed ${collapsedClosed} older repeat(s) of the collapsed comment entries with them.`);
     if (sessionId) lines.push(`This session: ${sessionId.slice(0, 8)} (ref ${instanceToken}).`);
     else lines.push(UNREGISTERED_INBOX_HINT);
     const view = inboxViewLine(inbox);
