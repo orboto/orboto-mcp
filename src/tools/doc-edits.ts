@@ -191,13 +191,13 @@ export const editDocToolConfig = {
   description:
     'Change a doc by byte-precise string replacement (Edit-tool-like) - ship only the diff, not the whole doc. Each oldString must match EXACTLY ONCE in the current content (add surrounding context to make it unique) unless replaceAll=true (then >=1). The whole batch is atomic: any match failure applies nothing and returns a 409 you can act on. Prefer this over orboto_update_doc for small changes to a large doc. Pass baseRevisionId (from a previous edit\'s revisionId or orboto_list_doc_revisions) for optimistic concurrency - a stale token is rejected with the current revision id instead of clobbering a concurrent change. Returns a short context window around each change, not the full doc.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or human-readable key (ORB-D12 / DOC-5). Find via orboto_search_docs.'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12).'),
     edits: z.array(z.object({
       oldString: z.string().min(1).describe('Exact substring to replace. Must be unique in the doc unless replaceAll.'),
       newString: z.string().describe('Replacement text (may be empty to delete).'),
       replaceAll: z.boolean().optional().describe('Replace every occurrence instead of requiring exactly one.'),
     })).min(1).max(100).describe('Applied sequentially; edit N sees the result of edits 0..N-1.'),
-    baseRevisionId: z.string().uuid().optional().describe('Optimistic-concurrency token = the revision id you last saw. Omit to always apply.'),
+    baseRevisionId: z.string().uuid().optional().describe('Revision id you last saw (optimistic lock); omit to always apply.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -227,13 +227,13 @@ export const editDocSectionToolConfig = {
   description:
     'Change a doc by heading-addressed section ops - ship only the new section content, not the whole doc. A section is addressed by its heading path (e.g. ["Setup","Credentials"] = a "Credentials" heading nested under "Setup"). Heading matching is EXACT + case-sensitive; the leading path elements must be an ordered ancestor chain (not necessarily immediate parents). op=replace swaps the section body, op=append adds to its end, op=insertAfter inserts directly below the heading line (the heading line itself is never removed). A path that matches zero or multiple headings returns a 409 you can act on (narrow the path to disambiguate). Prefer this over orboto_update_doc for section-scoped rewrites. baseRevisionId gives optimistic concurrency. Returns a short context window per op.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or human-readable key (ORB-D12 / DOC-5). Find via orboto_search_docs.'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12).'),
     sectionOps: z.array(z.object({
       headingPath: z.array(z.string().min(1)).min(1).max(20).describe('Ordered heading breadcrumb, top-down. Exact + case-sensitive.'),
       op: z.enum(['replace', 'append', 'insertAfter']).describe('replace body / append to body / insert directly below the heading line.'),
       content: z.string().describe('New markdown content for the op.'),
     })).min(1).max(100).describe('Applied sequentially after any string edits.'),
-    baseRevisionId: z.string().uuid().optional().describe('Optimistic-concurrency token = the revision id you last saw. Omit to always apply.'),
+    baseRevisionId: z.string().uuid().optional().describe('Revision id you last saw (optimistic lock); omit to always apply.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };

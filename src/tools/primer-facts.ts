@@ -157,7 +157,7 @@ export const primerFactAddToolConfig = {
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key, e.g. "ORB". Case-insensitive.'),
     category: PrimerFactCategoryEnum.describe(
-      'Fixed category. non_functional: an NFR (key = area, value = requirement, rendered in the spec NFR chapter); glossary: a term/definition (spec glossary only).',
+      'non_functional: an NFR (key = area, value = requirement, spec NFR chapter); glossary: a term/definition (spec glossary only).',
     ),
     key: z.string().min(1).max(120).describe(
       'Short id, lowercase-dashed, e.g. "node-version".',

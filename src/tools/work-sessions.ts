@@ -70,7 +70,7 @@ export const workStartToolConfig = {
     override: z.boolean().optional().describe("Bypass the spec gate; reason required. Never epics."),
     reason: z.string().trim().min(1).max(2000).optional(),
     takeover: z.boolean().optional()
-      .describe('Displace the lease holder; their session is cancelled, their time booked.'),
+      .describe('Displace the lease holder (their session ends, time booked).'),
     startTimer: z.boolean().optional()
       .describe('Default true for implementation, false otherwise.'),
     agentSessionToken: z.string().optional()
@@ -270,7 +270,7 @@ export const workSessionStartToolConfig = {
     override: z.boolean().optional().describe("Bypass the spec gate; reason required. Never epics."),
     reason: z.string().trim().min(1).max(2000).optional(),
     takeover: z.boolean().optional()
-      .describe('Displace the lease holder; their session is cancelled, their time booked.'),
+      .describe('Displace the lease holder (their session ends, time booked).'),
     startTimer: z.boolean().optional()
       .describe('Default true for implementation, false otherwise.'),
     agentSessionToken: z.string().optional()
@@ -399,12 +399,12 @@ export const workSessionFinishToolConfig = {
     commitSha: z.string().optional().describe('The commit this session produced, when it produced one.'),
     verification: z.object({
       reviewOfSessionId: z.string().uuid().optional().describe('Exact independent implementation work session this review examined.'),
-      reviewVerdict: z.enum(['approved', 'rework']).optional().describe('Explicit review outcome, paired with reviewOfSessionId; never inferred from later ticket status.'),
+      reviewVerdict: z.enum(['approved', 'rework']).optional().describe('Review outcome, paired with reviewOfSessionId; never inferred from ticket status.'),
       build: z.boolean().optional(),
       tests: z.boolean().optional(),
       lint: z.boolean().optional(),
       notes: z.string().optional(),
-    }).optional().describe('Which gates you actually ran and what they said. This is the attestation a reviewer reads cold.'),
+    }).optional().describe('The gates you ran and what they said: the attestation a reviewer reads cold.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -472,12 +472,12 @@ export const workFinishToolConfig = {
     commitSha: z.string().optional().describe('The commit this session produced; an attestation now, verified once git ingestion catches up.'),
     verification: z.object({
       reviewOfSessionId: z.string().uuid().optional().describe('Exact independent implementation work session this review examined.'),
-      reviewVerdict: z.enum(['approved', 'rework']).optional().describe('Explicit review outcome, paired with reviewOfSessionId; never inferred from later ticket status.'),
+      reviewVerdict: z.enum(['approved', 'rework']).optional().describe('Review outcome, paired with reviewOfSessionId; never inferred from ticket status.'),
       build: z.boolean().optional(),
       tests: z.boolean().optional(),
       lint: z.boolean().optional(),
       notes: z.string().optional(),
-    }).optional().describe('Which gates you actually ran and what they said. This is the attestation a reviewer reads cold.'),
+    }).optional().describe('The gates you ran and what they said: the attestation a reviewer reads cold.'),
     targetCategory: z.enum(['todo', 'in_progress', 'in_review', 'done', 'wont_fix']).optional()
       .describe('Default `done`; `in_review` when a human should look first. Implementation sessions with outcome `finished` only.'),
     note: z.string().optional().describe('The completion note on the ticket; generated from booked time, commit and verification when omitted.'),

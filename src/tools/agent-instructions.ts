@@ -44,7 +44,7 @@ export const listAgentInstructionsToolConfig = {
     scope: z.enum(['workspace', 'customer', 'project', 'personal']).default('workspace'),
     projectId: z.string().uuid().optional().describe('Required for scope=project.'),
     customerId: z.string().uuid().optional().describe('Required for scope=customer.'),
-    blockId: z.string().uuid().optional().describe('Return THIS block with its full body (ORB-1700). Without it the list carries excerpts + contentChars only.'),
+    blockId: z.string().uuid().optional().describe('Return THIS block with its full body. Without it the list carries excerpts + contentChars only.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -110,7 +110,7 @@ export const createAgentInstructionToolConfig = {
     mustRead: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
     allowOversize: z.boolean().optional().describe('Override the hard size cap (800 chars) after a blocked call.'),
-    oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true: why the body needs the length (audit-logged).'),
+    oversizeReason: z.string().min(10).max(500).optional().describe('With allowOversize: why it needs the length (audited).'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -147,7 +147,7 @@ export const updateAgentInstructionToolConfig = {
     mustRead: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
     allowOversize: z.boolean().optional().describe('Override the hard size cap (800 chars) after a blocked call.'),
-    oversizeReason: z.string().min(10).max(500).optional().describe('Required with allowOversize=true: why the body needs the length (audit-logged).'),
+    oversizeReason: z.string().min(10).max(500).optional().describe('With allowOversize: why it needs the length (audited).'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };

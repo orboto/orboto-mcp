@@ -61,7 +61,7 @@ export const workNextToolConfig = {
     agentSessionToken: z.string().optional()
       .describe('Agent instance token; default this connection\'s.'),
     resourceClaims: z.array(z.object(ResourceClaimShape)).max(50).optional()
-      .describe('ORB-1610 - claims to acquire with the reservation; a ticket under a conflicting granted write claim is skipped.'),
+      .describe('Claims to acquire with the reservation; a ticket under a conflicting granted write claim is skipped.'),
     onConflict: z.enum(['reject', 'queue']).optional()
       .describe('Only matters when `resourceClaims` is set on the WINNING candidate. Default `reject`.'),
     peek: z.boolean().optional()

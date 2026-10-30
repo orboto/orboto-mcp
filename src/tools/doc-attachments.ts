@@ -60,7 +60,7 @@ export const uploadDocAttachmentToolConfig = {
   description:
     'Upload a file as a doc attachment: returns its Markdown image (or link) line + a stable download URL. Bytes come in as base64 (`contentBase64`) so this works without local FS access on the agent side. Set `embed=true` to also PATCH the doc body to append the Markdown line - useful for dropping a screenshot into a page in one call. MIME / extension policy is enforced server-side: blocked types (HTML, SVG, executables) surface a 415.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12).'),
     filename: z.string().min(1).describe('Display filename, e.g. "architecture-diagram.png".'),
     contentBase64: z.string().min(1).describe('File content, base64-encoded.'),
     altText: z.string().optional().describe('Alt-text for the Markdown image line. Defaults to filename.'),
@@ -130,7 +130,7 @@ export const listDocAttachmentsToolConfig = {
   description:
     'Return the doc\'s attachments newest-first, with stable download URLs the agent can hand to the user. Empty list = no attachments.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12).'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -172,7 +172,7 @@ export const deleteDocAttachmentToolConfig = {
   description:
     'DESTRUCTIVE - drops the file row + deletes the underlying S3 object. Does NOT rewrite the doc body, so embedded Markdown lines pointing at the deleted URL will surface as broken images / links. Walk those by hand if needed.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12).'),
     attachmentId: z.string().uuid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },

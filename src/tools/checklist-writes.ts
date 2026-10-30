@@ -113,7 +113,7 @@ const toggleInputSchema = z.object({
   ticketKey: z.string().min(3),
   item: z.union([
     z.number().int().min(1).describe('1-based index across all checklists'),
-    z.string().describe('Item UUID - for callers that already have it'),
+    z.string().describe('Item UUID, if you have it'),
   ]),
 }).shape;
 
@@ -233,7 +233,7 @@ export const updateCheckToolConfig = {
     ticketKey: z.string().min(3),
     item: z.union([
       z.number().int().min(1).describe('1-based index across all checklists'),
-      z.string().describe('Item UUID - for callers that already have it'),
+      z.string().describe('Item UUID, if you have it'),
     ]),
     content: z.string().min(1).max(2000).optional().describe('New item text.'),
     assignee: z.string().nullable().optional().describe('Project member (email, full name or user id); null unassigns.'),

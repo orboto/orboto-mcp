@@ -33,7 +33,7 @@ export const listDocCommentsToolConfig = {
   description:
     'Return comments on a doc page, oldest-first so the reply tree reads top-to-bottom. Each row carries the author name + content + resolved state. Cursor-paged - pass `cursor` from the previous call\'s nextCursor to walk older pages.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12).'),
     limit: z.number().int().min(1).max(100).optional(),
     cursor: z.string().optional(),
   }).shape,
@@ -115,7 +115,7 @@ export const postDocCommentToolConfig = {
   description:
     'Add a comment to a doc page. Pass `parentCommentId` to reply (the API flattens reply chains past one level so a reply-of-reply lands as a sibling of the original reply). Optional `anchor` (`{text, before, after}`) attaches the comment to a specific highlight in the body - the frontend uses the surrounding context to re-locate the anchor even after the doc has been edited. Mention a person with the markup `@[Full Name](user:<uuid>)` - the UUIDs come from `orboto_list_users`. The response reports `mentions` (tokens that resolved to a user, who is then notified) and `unresolvedMentions` (tokens that named nobody); a mention is never silently dropped.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12).'),
     content: z.string().min(1).max(4000),
     parentCommentId: z.string().uuid().optional().describe('Reply to an existing comment.'),
     anchor: z.object({
@@ -169,7 +169,7 @@ export const resolveDocCommentToolConfig = {
   description:
     'Toggle a comment thread\'s resolved state. Pass `resolved=true` to fold the conversation, `resolved=false` to reopen. Always acts on the thread ROOT - resolving from a reply folds the whole conversation, same as the web UI.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12).'),
     commentId: z.string().uuid(),
     resolved: z.boolean(),
   }).shape,
@@ -204,7 +204,7 @@ export const updateDocCommentToolConfig = {
   description:
     'Edit a doc comment\'s body. Author OR super-admin can edit; everyone else gets a 403. Doc-comments do not carry a revision history today (unlike ticket comments), so the prior content is overwritten in place. A no-op call (same content as before) returns the unchanged row.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12).'),
     commentId: z.string().uuid(),
     content: z.string().min(1).max(4000),
   }).shape,
@@ -233,7 +233,7 @@ export const deleteDocCommentToolConfig = {
   description:
     'DESTRUCTIVE - drops the comment + (via FK cascade) every reply under it. Only the author can delete their own comments; super-admins can delete anyone\'s. Returns success silently; 403 surfaces as an OrbotoApiError.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12).'),
     commentId: z.string().uuid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },

@@ -79,6 +79,10 @@ afterEach(() => { vi.restoreAllMocks(); });
  * ORB-2711 gave `orboto_list_tickets` `includeClosedMilestones` inside the
  * ceiling: the parameter carries no description (the answer names the hidden
  * count and the parameter) and the first sentence shrank (full = 171,171).
+ * ORB-2719 added `orboto_connector` inside the ceiling: four agent actions
+ * (source_link, list, health, sync), the operator tail through
+ * orboto_api_call, paid for by shorter doc-id, review, lease and checklist
+ * parameter descriptions (full = 171,118).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

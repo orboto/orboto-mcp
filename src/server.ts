@@ -146,6 +146,7 @@ import { getChecklistsToolConfig, makeGetChecklistsHandler } from './tools/get-c
 import { listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler } from './tools/list-git-app-installations.js';
 import { gitRotateTokenToolConfig, makeGitRotateTokenHandler } from './tools/git-rotate-token.js';
 import { sentryToolConfig, makeSentryHandler } from './tools/sentry.js';
+import { connectorToolConfig, makeConnectorHandler } from './tools/connector.js';
 import {
   createTicketToolConfig, makeCreateTicketHandler,
   updateTicketToolConfig, makeUpdateTicketHandler,
@@ -514,6 +515,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_list_git_app_installations', listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler(client));
   reg('orboto_git_rotate_token', gitRotateTokenToolConfig, makeGitRotateTokenHandler(client));
   reg('orboto_sentry', sentryToolConfig, makeSentryHandler(client));
+  reg('orboto_connector', connectorToolConfig, makeConnectorHandler(client));
 
   reg('orboto_create_ticket', createTicketToolConfig, makeCreateTicketHandler(client));
   reg('orboto_update_ticket', updateTicketToolConfig, makeUpdateTicketHandler(client));

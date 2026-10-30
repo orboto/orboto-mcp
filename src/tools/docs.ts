@@ -90,7 +90,7 @@ export const getDocToolConfig = {
   description:
     'Return the doc content (Markdown) plus backlinks (other docs that reference this doc, or tickets/milestones the doc is linked from). Accepts either the doc UUID or its human-readable key (e.g. ORB-D12 / DOC-5). A UUID read also reports `embedding.state` - embedded | pending | stale | not_embeddable - so a caller waits for semantic search instead of guessing (ORB-2154).',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or human-readable key (ORB-D12 / DOC-5). Discover via orboto_list_doc_spaces or orboto_search.'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12); find via orboto_search.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -374,7 +374,7 @@ export const updateDocToolConfig = {
   description:
     'Patch a doc; content is appended unless replace. ORB-2468: title, visibility, parent and icon are set as given; content goes in as a new section (identical content twice is a no-op); replace: true replaces the whole page and the answer names the revision holding the previous body plus its restore command. Every body or title change snapshots a revision; orboto_restore_doc_revision rolls back. For one passage or section use orboto_edit_doc.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12).'),
     title: z.string().min(1).max(255).optional(),
     content: z.string().optional().describe('Markdown to append (with replace: the whole body). Pills: `:badge[LABEL]{tone=success}` (neutral/info/success/warning/danger/accent, unknown = neutral, label <= 24 chars).'),
     replace: z.boolean().optional(),
@@ -430,7 +430,7 @@ export const deleteDocToolConfig = {
   description:
     'DESTRUCTIVE - removes the page from the tree. Revisions are NOT auto-cascaded; the API keeps them so an admin could in principle resurrect from history, but the page itself is gone from listings. System-generated primer docs refuse deletion (the regenerator re-creates them). Returns success silently; 404 is also silent (idempotent).',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12).'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
@@ -451,7 +451,7 @@ export const moveDocToolConfig = {
   description:
     'Reparent a doc, change its sort order, or move it into a different space. All three target fields are optional but at least one must be supplied. Distinct from orboto_update_doc\'s parentDocId because the API endpoint emits a different WS event for the tree-rebuild path connected clients care about.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12, DOC-5).'),
+    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12).'),
     parentDocId: z.string().uuid().nullable().optional().describe('null = top-level; UUID = nest under that doc.'),
     spaceId: z.string().uuid().optional().describe('Target space (member of both); the parent must be in it, else the doc lands at the top level.'),
     sortOrder: z.number().int().optional(),

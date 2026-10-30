@@ -15,7 +15,7 @@ type Action = (typeof ACTIONS)[number];
 export const sentryToolConfig = {
   title: 'Sentry connector',
   description:
-    'Sentry connector (ORB-2123). Actions: list, health, connect (orgSlug, projectSlug, clientSecret), update (triageMode comment|fix_branch), rotate_secret, disconnect, triage_lane (laneId, empty unbinds), verdict (ticketKey, verdict known_fixed|regression|new, summary). Secrets never come back; docs/sentry-intake.md. connect and rotate_secret need an API key or the web login (403 over OAuth).',
+    'Sentry connector. Actions: list, health, connect (orgSlug, projectSlug, clientSecret), update (triageMode comment|fix_branch), rotate_secret, disconnect, triage_lane (laneId, empty unbinds), verdict (ticketKey, verdict known_fixed|regression|new, summary). Secrets never come back; docs/sentry-intake.md. connect and rotate_secret need an API key or the web login (403 over OAuth).',
   inputSchema: z.object({
     action: z.enum(ACTIONS),
     projectKey: z.string().min(1),
