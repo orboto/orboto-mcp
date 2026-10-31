@@ -47,6 +47,8 @@ export const TAIL_LABELS: readonly TailLabel[] = [
   { method: 'GET', path: new RegExp(`^/admin/agents/identities/${SEG}/query-rate-limit$`), label: 'orboto_agent_query_rate_limit' },
   { method: 'POST', path: new RegExp(`^/projects/${SEG}/change-key$`), label: 'orboto_project_change_key' },
   { method: 'GET', path: new RegExp(`^/projects/${SEG}/change-key/check$`), label: 'orboto_project_change_key' },
+  { method: 'POST', path: new RegExp(`^/projects/${SEG}/git-repositories$`), label: 'orboto_project_repository_create' },
+  { method: 'GET', path: new RegExp(`^/projects/${SEG}/git-repositories/sources$`), label: 'orboto_project_repository_create' },
   { method: 'PUT', path: new RegExp(`^/admin/agents/identities/${SEG}/query-rate-limit$`), label: 'orboto_agent_query_rate_limit' },
 ];
 
