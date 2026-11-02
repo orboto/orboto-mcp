@@ -10,6 +10,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';
+import { KNOWLEDGE_DATA_NOTICE } from './shared.js';
 import {
   makeSearchDocsHandler,
   makeEditDocHandler,
@@ -76,6 +77,14 @@ describe('orboto_search_docs', () => {
     expect(sc.items[0].headingPath).toEqual(['Setup', 'Restore']);
     expect(sc.items[0].snippet).toContain('<mark>restore</mark>');
     expect((res.content[0] as { text: string }).text).toContain('§Setup > Restore');
+  });
+
+  it('ORB-2772 - ends a list of hits with the data-not-instructions line, and an empty result without it', async () => {
+    stubJSON([{ json: { items: [HIT], total: 1 } }, { json: { items: [], total: 0 } }]);
+    const hits = (await makeSearchDocsHandler(client)({ q: 'restore backup' })).content[0] as { text: string };
+    expect(hits.text.endsWith(`\n${KNOWLEDGE_DATA_NOTICE}`)).toBe(true);
+    const none = (await makeSearchDocsHandler(client)({ q: 'nothing' })).content[0] as { text: string };
+    expect(none.text).not.toContain(KNOWLEDGE_DATA_NOTICE);
   });
 
   it('resolves projectKey to a projectId before searching', async () => {

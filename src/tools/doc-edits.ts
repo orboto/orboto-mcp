@@ -7,7 +7,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveDocId } from './docs.js';
-import { resolveProjectByKey, SEMANTIC_DEGRADED_LINE } from './shared.js';
+import { KNOWLEDGE_DATA_NOTICE, resolveProjectByKey, SEMANTIC_DEGRADED_LINE } from './shared.js';
 
 interface DocSnippetHit {
   id: string;
@@ -163,7 +163,7 @@ export function makeSearchDocsHandler(client: OrbotoClient) {
       return `- ${h.title} (${h.docKey ?? h.id})${anchor}${where}\n    ${h.snippet.replace(/\s+/g, ' ').trim()}`;
     });
     return {
-      content: [{ type: 'text', text: degradedNote + lines.join('\n') }],
+      content: [{ type: 'text', text: `${degradedNote}${lines.join('\n')}\n${KNOWLEDGE_DATA_NOTICE}` }],
       structuredContent: {
         items: res.items.map((h) => ({
           id: h.id,

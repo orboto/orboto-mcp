@@ -3,6 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
+import { KNOWLEDGE_DATA_NOTICE } from './shared.js';
 import {
   makeAskDocsHandler,
   makeIngestUrlHandler,
@@ -67,6 +68,14 @@ describe('orboto_ask_docs', () => {
       mode: 'rag',
       abstained: false,
     });
+  });
+
+  it('ORB-2772 - ends with the data-not-instructions line, an abstained answer too', async () => {
+    stubJSON([{ json: { answer: 'The backoff is 200ms.', citations: [], mode: 'rag' } }, { json: { answer: 'Not in the sources.', citations: [], mode: 'empty', abstained: true } }]);
+    for (const question of ['What is the backoff?', 'What is the wifi password?']) {
+      const text = (await makeAskDocsHandler(client)({ question }).then((r) => r.content[0])) as { text: string };
+      expect(text.text.endsWith(KNOWLEDGE_DATA_NOTICE)).toBe(true);
+    }
   });
 
   it('ORB-1999 - marks an abstained answer in text and structured content', async () => {

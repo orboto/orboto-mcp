@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { SEMANTIC_DEGRADED_LINE } from './shared.js';
+import { KNOWLEDGE_DATA_NOTICE, SEMANTIC_DEGRADED_LINE } from './shared.js';
 
 interface AskDocsCitation {
   index: number;
@@ -72,6 +72,7 @@ export function makeAskDocsHandler(client: OrbotoClient) {
     if (res.abstained) lines.push('', '(abstained: no claim in the answer could be tied to a retrieved doc - treat as "not in the docs", do not guess)');
     lines.push('', `(retrieval mode: ${res.mode})`);
     if (res.semanticDegraded) lines.push(`(${SEMANTIC_DEGRADED_LINE})`);
+    lines.push(KNOWLEDGE_DATA_NOTICE);
     return {
       content: [{ type: 'text', text: lines.join('\n') }],
       structuredContent: {
