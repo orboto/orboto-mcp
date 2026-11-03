@@ -7,6 +7,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey, SEMANTIC_DEGRADED_LINE } from './shared.js';
+import { hitSizeNote } from '../token-size.js';
 
 const SEARCH_TYPES = ['ticket', 'comment', 'doc', 'project', 'milestone', 'space', 'customer'] as const;
 type SearchType = typeof SEARCH_TYPES[number];
@@ -26,6 +27,8 @@ interface SearchHit {
   key?: string | null;
   projectKey?: string | null;
   rank?: number;
+  /** ORB-2791 - a doc hit's size in tokens. */
+  approxTokens?: number | null;
 }
 
 interface SearchResponse {
@@ -85,7 +88,7 @@ export function makeSearchHandler(client: OrbotoClient) {
         const ident = h.ticketKey ?? h.key ?? h.id;
         const project = h.projectName && h.type !== 'project' ? ` · ${h.projectName}` : '';
         const excerpt = h.excerpt ? `\n  ${h.excerpt}` : '';
-        return `- [${tag} ${ident}${project}] ${h.title}${excerpt}`;
+        return `- [${tag} ${ident}${project}] ${h.title}${hitSizeNote(h.approxTokens)}${excerpt}`;
       }).join('\n\n'));
 
     return {
@@ -107,6 +110,7 @@ export function makeSearchHandler(client: OrbotoClient) {
           projectName: h.projectName,
           spaceName: h.spaceName,
           url: h.url,
+          ...(h.type === 'doc' ? { approxTokens: h.approxTokens ?? null } : {}),
         })),
       },
     };

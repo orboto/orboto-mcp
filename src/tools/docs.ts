@@ -7,6 +7,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { replacedLines, resolveProjectByKey, type ReplacedRevision } from './shared.js';
+import { formatApproxTokens } from '../token-size.js';
 
 interface DocSpaceRow {
   id: string;
@@ -35,6 +36,18 @@ interface DocRow {
   updatedAt: string;
   /** ORB-2154 - whether the doc is semantically searchable yet. */
   embedding?: { state: string; updatedAt: string | null } | null;
+  /** ORB-2791 - the page's stored size in tokens. */
+  approxTokens?: number | null;
+}
+/** ORB-2791 - `GET /docs/:id/section`. */
+interface DocSectionRow {
+  docId: string;
+  docKey: string | null;
+  title: string;
+  headingPath: string[];
+  content: string;
+  approxTokens: number;
+  pageApproxTokens: number | null;
 }
 interface DocBacklinkRow {
   /** `ticket` | `milestone` | `doc` per DocLinkTargetEnum. */
@@ -91,12 +104,22 @@ export const getDocToolConfig = {
     'Return the doc content (Markdown) plus backlinks (other docs that reference this doc, or tickets/milestones the doc is linked from). Accepts either the doc UUID or its human-readable key (e.g. ORB-D12 / DOC-5). A UUID read also reports `embedding.state` - embedded | pending | stale | not_embeddable - so a caller waits for semantic search instead of guessing (ORB-2154).',
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or key (ORB-D12); find via orboto_search.'),
+    section: z.string().min(1).max(500).optional().describe('Heading path "A > B": only that section.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
+/** ORB-2791 - one section of a page, the read for a page over 2k tokens. */
+async function getDocSection(client: OrbotoClient, docId: string, section: string): Promise<CallToolResult> {
+  const s = await client.get<DocSectionRow>(`/docs/${encodeURIComponent(docId)}/section?${new URLSearchParams({ heading: section }).toString()}`);
+  const page = s.pageApproxTokens === null ? '' : ` of ${formatApproxTokens(s.pageApproxTokens)}`;
+  const head = `${s.title} > ${s.headingPath.join(' > ')}  ·  ${s.docKey ? `Key: ${s.docKey}  ·  ` : ''}${formatApproxTokens(s.approxTokens)}${page}`;
+  return { content: [{ type: 'text', text: `${head}\n\n${s.content}` }], structuredContent: { section: s } };
+}
+
 export function makeGetDocHandler(client: OrbotoClient) {
-  return async ({ docId }: { docId: string }): Promise<CallToolResult> => {
+  return async ({ docId, section }: { docId: string; section?: string }): Promise<CallToolResult> => {
+    if (section) return getDocSection(client, docId, section);
     const doc = UUID_RE.test(docId)
       ? await client.get<DocRow>(`/docs/${docId}`)
       : await client.get<DocRow>(`/docs/by-key/${encodeURIComponent(docId)}`);
@@ -104,7 +127,7 @@ export function makeGetDocHandler(client: OrbotoClient) {
 
     const lines = [
       `# ${doc.icon ? `${doc.icon} ` : ''}${doc.title}`,
-      `${doc.docKey ? `Key: ${doc.docKey}  ·  ` : ''}ID: ${doc.id}  ·  Visibility: ${doc.visibility}  ·  Updated: ${doc.updatedAt}${doc.embedding ? `  ·  Embedding: ${doc.embedding.state}` : ''}`,
+      `${doc.docKey ? `Key: ${doc.docKey}  ·  ` : ''}ID: ${doc.id}  ·  Visibility: ${doc.visibility}  ·  Updated: ${doc.updatedAt}${doc.embedding ? `  ·  Embedding: ${doc.embedding.state}` : ''}${typeof doc.approxTokens === 'number' ? `  ·  Size: ${formatApproxTokens(doc.approxTokens)}` : ''}`,
       '',
       doc.content || '_(empty)_',
     ];
@@ -131,6 +154,7 @@ export function makeGetDocHandler(client: OrbotoClient) {
           spaceId: doc.spaceId,
           slug: doc.slug,
           embedding: doc.embedding ?? null,
+          approxTokens: doc.approxTokens ?? null,
         },
         backlinks: backlinks.map((b) => ({
           sourceDocId: b.sourceDocId,

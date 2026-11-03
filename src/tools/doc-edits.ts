@@ -8,6 +8,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveDocId } from './docs.js';
 import { KNOWLEDGE_DATA_NOTICE, resolveProjectByKey, SEMANTIC_DEGRADED_LINE } from './shared.js';
+import { hitSizeNote } from '../token-size.js';
 
 interface DocSnippetHit {
   id: string;
@@ -22,6 +23,8 @@ interface DocSnippetHit {
   lineOffset: number;
   rank: number;
   url: string;
+  /** ORB-2791 - the page's size in tokens. */
+  approxTokens?: number | null;
 }
 interface DocSnippetSearchResponse {
   items: DocSnippetHit[];
@@ -160,7 +163,7 @@ export function makeSearchDocsHandler(client: OrbotoClient) {
     const lines = res.items.map((h) => {
       const anchor = h.headingPath.length ? `  §${h.headingPath.join(' > ')}` : '';
       const where = h.charOffset >= 0 ? `  (line ${h.lineOffset})` : '';
-      return `- ${h.title} (${h.docKey ?? h.id})${anchor}${where}\n    ${h.snippet.replace(/\s+/g, ' ').trim()}`;
+      return `- ${h.title} (${h.docKey ?? h.id})${hitSizeNote(h.approxTokens)}${anchor}${where}\n    ${h.snippet.replace(/\s+/g, ' ').trim()}`;
     });
     return {
       content: [{ type: 'text', text: `${degradedNote}${lines.join('\n')}\n${KNOWLEDGE_DATA_NOTICE}` }],
@@ -178,6 +181,7 @@ export function makeSearchDocsHandler(client: OrbotoClient) {
           lineOffset: h.lineOffset,
           rank: h.rank,
           url: h.url,
+          approxTokens: h.approxTokens ?? null,
         })),
         total: res.total,
         semanticDegraded: res.semanticDegraded ?? false,

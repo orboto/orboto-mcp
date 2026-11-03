@@ -7,6 +7,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { buildOrbotoMcpServer } from './server.js';
 import type { Toolset } from './toolset.js';
+import { tokensForChars } from './token-size.js';
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -106,10 +107,10 @@ const FULL_MAX_CHARS = 171_200;
  * (`n_keep: 13533 >= n_ctx: 8192` in LM Studio): characters / 3.6. It is
  * a rough tokenizer stand-in, deliberately the SAME rough number the
  * ticket, the docs page and these ceilings all use, so the figures a
- * reader compares are comparable.
+ * reader compares are comparable. ORB-2791: the one estimator in
+ * token-size.ts, which the stored doc sizes and every hit size share.
  */
-const CHARS_PER_TOKEN = 3.6;
-const estTokens = (chars: number) => Math.round(chars / CHARS_PER_TOKEN);
+const estTokens = tokensForChars;
 
 /**
  * The minimal tier's whole connect cost - tool schemas AND the

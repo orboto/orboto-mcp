@@ -4,11 +4,12 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { askTimingClause, KNOWLEDGE_DATA_NOTICE, mcpInstanceToken, reviewerFlaggedLine, rewriteDeadline, SEMANTIC_DEGRADED_LINE, STRICT_NO_EMBEDDING_LINE, type AskReview, type AskTimings } from './shared.js';
 import { droppedLines, type DroppedOp } from './wiki.js';
+import { hitSizeNote } from '../token-size.js';
 
 interface Citation { index: number; title: string; link: string }
 interface SpaceRef { spaceKey: string | null; spaceName: string; projectKey: string | null }
 interface AskResponse { answer: string; citations: Citation[]; mode: string; abstained: boolean; semanticDegraded?: boolean; timings?: AskTimings; review?: AskReview | null; source: string; spaces: SpaceRef[] }
-interface FindHit { id: string; docKey: string | null; title: string; snippet: string }
+interface FindHit { id: string; docKey: string | null; title: string; snippet: string; headingPath?: string[]; approxTokens?: number | null }
 interface FindResponse { items: FindHit[]; total: number; semantic?: boolean; semanticDegraded?: boolean; source: string; spaces: SpaceRef[]; strict?: boolean }
 interface AddResponse { action: 'recorded' | 'ingesting' | 'duplicate'; text: string; pages: Array<{ key: string | null; title: string; webUrl: string }>; source: { key: string | null; title: string; webUrl: string } | null; droppedOps?: DroppedOp[] }
 
@@ -47,11 +48,11 @@ export function makeKnowledgeFindHandler(client: OrbotoClient) {
     if (input.limit) qs.set('limit', String(input.limit));
     const res = await client.get<FindResponse>(`/knowledge/find?${qs.toString()}`, { instanceToken: mcpInstanceToken(undefined, extra as Extra) });
     const where = res.spaces.map((s) => s.spaceKey ?? s.spaceName).join(', ');
-    const lines = res.items.map((h) => `- ${h.docKey ?? h.id} ${h.title}: ${h.snippet.replace(/<\/?mark>/g, '').replace(/\s+/g, ' ').trim()}`);
+    const lines = res.items.map((h) => `- ${h.docKey ?? h.id} ${h.title}${hitSizeNote(h.approxTokens, h.headingPath)}: ${h.snippet.replace(/<\/?mark>/g, '').replace(/\s+/g, ' ').trim()}`);
     const head = lines.length ? lines.join('\n') : `No ${res.strict ? 'strict ' : ''}hit in ${where}.`;
     const noEmbedding = res.strict && res.semantic === false;
     const note = noEmbedding ? `(${STRICT_NO_EMBEDDING_LINE})` : res.semanticDegraded ? `(${SEMANTIC_DEGRADED_LINE})` : '';
-    const text = [head, `Searched: ${where}. Read a page with orboto_get_doc. ${KNOWLEDGE_DATA_NOTICE}`, note].filter(Boolean).join('\n\n');
+    const text = [head, `Searched: ${where}. Read a page with orboto_get_doc, a page over 2k tokens by its section. ${KNOWLEDGE_DATA_NOTICE}`, note].filter(Boolean).join('\n\n');
     return { content: [{ type: 'text', text }], structuredContent: res as unknown as Record<string, unknown> };
   };
 }
