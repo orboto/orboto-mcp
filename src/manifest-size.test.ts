@@ -104,6 +104,8 @@ afterEach(() => { vi.restoreAllMocks(); });
  * already says, repeated texts became shared constants, the pill tones moved
  * to the create_doc guidance (full = 166,377 from 171,133; the full ceiling
  * 171,200 became 169,400, which keeps 3,023 chars free for the next tool).
+ * ORB-2802 gave `orboto_wiki_runs` the show, apply and reject actions and a
+ * reason inside the ceiling, no new tool (full = 166,557, curated unchanged).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

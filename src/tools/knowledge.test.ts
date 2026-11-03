@@ -190,4 +190,61 @@ describe('ORB-2225 orboto_wiki_runs', () => {
     expect(text).toContain('r3 queued (waiting 21 min, stalled) ACME-D11');
     expect(text).toContain('r4 queued (running 3 min) ACME-D12');
   });
+
+  it('ORB-2802 - lists a stale re-ingest with its page and a reviewed run with its decision, and shows a plan as a diff', async () => {
+    const run = '11111111-0000-4000-8000-000000000000';
+    const get = vi.fn()
+      .mockResolvedValueOnce({ runs: [
+        { id: 'r5', kind: 'stale_reingest', target: { key: 'ACME-D3', title: 'Hosts' }, canReview: true, sourceKey: 'ACME-D20', sourceTitle: 'Infra change', status: 'pending_review', error: null, createdAt: '2026-11-03T08:00:00Z' },
+        { id: 'r6', kind: 'ingest', target: null, review: { decision: 'rejected', byName: 'Dana', reason: 'outdated' }, sourceKey: 'ACME-D21', sourceTitle: 'Old notes', status: 'rejected', error: null, createdAt: '2026-11-03T09:00:00Z' },
+      ] })
+      .mockResolvedValueOnce({
+        run: { id: run, kind: 'stale_reingest', target: { key: 'ACME-D3', title: 'Hosts' }, canReview: true, sourceKey: 'ACME-D20', sourceTitle: 'Infra change', status: 'pending_review', error: null, createdAt: '2026-11-03T08:00:00Z' },
+        logLine: 'stale re-ingest of ACME-D3',
+        ops: [{ action: 'supersede', title: 'Hosts', summary: '', target: { key: 'ACME-D3', title: 'Hosts', missing: false }, removed: 'The host is atlas.', added: 'The host is zephyr.' }],
+        sources: [{ key: 'ACME-D20', title: 'Infra change' }],
+      });
+    const handler = makeWikiRunsHandler({ get, post: vi.fn() } as unknown as OrbotoClient);
+    const list = textOf(await handler({ spaceId: 'ACME-S1', status: 'pending_review' }));
+    expect(get).toHaveBeenCalledWith('/spaces/ACME-S1/llm-wiki/ingest-runs?status=pending_review');
+    expect(list).toContain('r5 pending_review stale re-ingest of ACME-D3 "Hosts" from ACME-D20 "Infra change"');
+    expect(list).toContain('(apply or reject)');
+    expect(list).toContain('r6 rejected (rejected by Dana: outdated) ACME-D21');
+    const shown = textOf(await handler({ spaceId: 'ACME-S1', action: 'show', runId: run }));
+    expect(get).toHaveBeenLastCalledWith(`/spaces/ACME-S1/llm-wiki/ingest-runs/${run}`);
+    expect(shown).toContain('supersede "Hosts" -> ACME-D3 "Hosts"\n- The host is atlas.\n+ The host is zephyr.');
+    expect(shown).toContain('Sources: ACME-D20');
+  });
+
+  it('ORB-2802 - applies a pending run with an optional note and rejects one only with a reason', async () => {
+    const run = '11111111-0000-4000-8000-000000000000';
+    const post = vi.fn()
+      .mockResolvedValueOnce({ runId: run, status: 'applied', pages: ['Runner', 'Signing'], error: null })
+      .mockResolvedValueOnce({ runId: run, status: 'rejected', reason: 'outdated' });
+    const handler = makeWikiRunsHandler({ get: vi.fn(), post } as unknown as OrbotoClient);
+    expect(textOf(await handler({ spaceId: 'ACME-S1', action: 'apply', runId: run, reason: ' ok ' }))).toBe(`Run ${run} applied: 2 pages (Runner, Signing).`);
+    expect(post).toHaveBeenCalledWith(`/spaces/ACME-S1/llm-wiki/ingest-runs/${run}/apply`, { reason: 'ok' });
+    const refused = await handler({ spaceId: 'ACME-S1', action: 'reject', runId: run, reason: '  ' });
+    expect(refused.isError).toBe(true);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(textOf(await handler({ spaceId: 'ACME-S1', action: 'reject', runId: run, reason: 'outdated' }))).toBe(`Run ${run} rejected: outdated`);
+    expect(post).toHaveBeenLastCalledWith(`/spaces/ACME-S1/llm-wiki/ingest-runs/${run}/reject`, { reason: 'outdated' });
+    expect((await handler({ spaceId: 'ACME-S1', action: 'apply' })).isError).toBe(true);
+  });
+
+  it('ORB-2802 - an apply that wrote nothing says why and a failed or skipped review is not listed as applied', async () => {
+    const run = '11111111-0000-4000-8000-000000000000';
+    const post = vi.fn().mockResolvedValueOnce({ runId: run, status: 'skipped', pages: [], receipts: [], error: 'The page changed or is gone since this re-ingest ran.' })
+      .mockResolvedValueOnce({ runId: run, status: 'failed', pages: [], receipts: [], error: 'model down' });
+    const get = vi.fn().mockResolvedValueOnce({ runs: [
+      { id: 'r7', kind: 'ingest', target: null, review: { decision: 'applied', outcome: 'failed', byName: 'Dana', reason: null }, sourceKey: 'ACME-D22', sourceTitle: 'Notes', status: 'failed', error: 'boom', createdAt: '2026-11-03T09:00:00Z' },
+      { id: 'r8', kind: 'stale_reingest', target: { key: 'ACME-D3', title: 'Hosts' }, review: { decision: 'applied', outcome: 'skipped', byName: 'Dana', reason: 'ship it' }, sourceKey: 'ACME-D20', sourceTitle: 'Infra change', status: 'skipped', error: 'The page changed', createdAt: '2026-11-03T10:00:00Z' },
+    ] });
+    const handler = makeWikiRunsHandler({ get, post } as unknown as OrbotoClient);
+    expect(textOf(await handler({ spaceId: 'ACME-S1', action: 'apply', runId: run }))).toBe(`Run ${run} was skipped and wrote nothing: The page changed or is gone since this re-ingest ran.`);
+    expect(textOf(await handler({ spaceId: 'ACME-S1', action: 'apply', runId: run }))).toBe(`Run ${run} failed: model down`);
+    const list = textOf(await handler({ spaceId: 'ACME-S1' }));
+    expect(list).toContain('r7 failed (apply by Dana failed) ACME-D22');
+    expect(list).toContain('r8 skipped stale re-ingest of ACME-D3 "Hosts" from (applied by Dana, nothing written: ship it) ACME-D20');
+  });
 });

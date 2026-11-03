@@ -19,7 +19,7 @@ function text(t: string, structured?: Record<string, unknown>): CallToolResult {
 export const wikiIngestUrlToolConfig = {
   title: 'Ingest a URL into an LLM-Wiki space',
   description:
-    'Fetch a public URL, extract its main article as Markdown, and create a SOURCE doc in the space. On an LLM-Wiki space the ingest worker writes pages at once (auto-apply) or parks a plan (review-gate); lint merges and stale re-ingests always apply directly, with receipt and undo. Wraps POST /spaces/:id/docs/ingest-url.',
+    'Fetch a public URL, extract its main article as Markdown, and create a SOURCE doc in the space. On an LLM-Wiki space the ingest worker writes pages at once (auto-apply) or parks every ingest plan, stale re-ingests included, for review (review-gate; orboto_wiki_runs apply or reject); lint merges always apply directly, with receipt and undo. Wraps POST /spaces/:id/docs/ingest-url.',
   inputSchema: z.object({
     spaceId: z.string().uuid().describe('Target doc space (find via orboto_list_doc_spaces).'),
     url: z.string().url().max(2048),
@@ -245,25 +245,68 @@ function queuedNote(r: { status: string; createdAt: string; queuedAt?: string | 
 
 export const wikiRunsToolConfig = {
   title: 'Wiki ingest runs',
-  description: 'List a wiki space\'s ingest runs (queued: wait and stall, failed: each error) or retry a failed or stalled run.',
+  description: 'List a wiki space\'s ingest runs (queued: wait and stall, failed: each error, pending_review: plans waiting for review), show one run\'s plan as a diff, retry a failed or stalled run, or apply or reject (reason required) a pending_review run (space:wiki-config).',
   inputSchema: z.object({
     spaceId: z.string().min(1),
-    action: z.enum(['list', 'retry']).optional(),
+    action: z.enum(['list', 'show', 'retry', 'apply', 'reject']).optional(),
     runId: z.string().uuid().optional(),
-    status: z.enum(['pending_review', 'applied', 'failed', 'skipped', 'queued']).optional(),
+    status: z.enum(['pending_review', 'applied', 'failed', 'skipped', 'queued', 'rejected']).optional(),
+    reason: z.string().max(2000).optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
+
+type RunLine = { id: string; kind?: string; target?: { key: string | null; title: string } | null; review?: { decision: string; outcome?: string; byName: string | null; reason: string | null } | null; canReview?: boolean; sourceKey: string | null; sourceTitle: string; status: string; error: string | null; droppedOps?: DroppedOp[]; createdAt: string; queuedAt?: string | null; startedAt?: string | null; ageSeconds?: number | null; stalled?: boolean };
+type PlanOp = { action: string; title: string; summary: string; target: { key: string | null; title: string; missing: boolean } | null; removed: string | null; added: string };
+
+/** ORB-2802 - a stale re-ingest names its page; a reviewed run names the decision. */
+function runNote(r: RunLine): string {
+  const stale = r.kind === 'stale_reingest' ? ` stale re-ingest of ${r.target?.key ?? ''} "${r.target?.title ?? ''}" from` : '';
+  const by = r.review?.byName ?? 'unknown';
+  const verb = r.review?.outcome === 'failed' ? `apply by ${by} failed` : r.review?.outcome === 'skipped' ? `applied by ${by}, nothing written` : `${r.review?.decision} by ${by}`;
+  const review = r.review ? ` (${verb}${r.review.reason ? `: ${r.review.reason}` : ''})` : '';
+  return `${stale}${review}`;
+}
+
+/** ORB-2802 - one plan op as a diff: removed lines with "- ", added lines with "+ ". */
+function opLines(op: PlanOp): string[] {
+  const target = op.target ? ` -> ${op.target.key ?? ''} "${op.target.title}"${op.target.missing ? ' (skipped: target missing)' : ''}` : '';
+  const prefix = (sign: string, text: string) => text.split('\n').map((l) => `${sign} ${l}`);
+  return [`${op.action} "${op.title}"${target}${op.summary ? ` - ${op.summary}` : ''}`, ...(op.removed ? prefix('-', op.removed) : []), ...prefix('+', op.added)];
+}
+
 export function makeWikiRunsHandler(client: OrbotoClient) {
-  return async (input: { spaceId: string; action?: 'list' | 'retry'; runId?: string; status?: string }): Promise<CallToolResult> => {
+  return async (input: { spaceId: string; action?: 'list' | 'show' | 'retry' | 'apply' | 'reject'; runId?: string; status?: string; reason?: string }): Promise<CallToolResult> => {
+    const runs = `/spaces/${encodeURIComponent(input.spaceId)}/llm-wiki/ingest-runs`;
+    if (input.action && input.action !== 'list') {
+      if (!input.runId) return { isError: true, content: [{ type: 'text', text: `action ${input.action} needs the runId (action list; status failed or queued for retry, pending_review for apply and reject).` }] };
+      if (input.action === 'reject' && !input.reason?.trim()) return { isError: true, content: [{ type: 'text', text: 'action reject needs a reason; the creator of the run reads it.' }] };
+    }
     if (input.action === 'retry') {
-      if (!input.runId) return { isError: true, content: [{ type: 'text', text: 'action retry needs the runId of a failed or stalled run (action list, status failed or queued).' }] };
-      const res = await client.post<{ runId: string; status: string; queued: boolean; error: string | null }>(`/spaces/${encodeURIComponent(input.spaceId)}/llm-wiki/ingest-runs/${input.runId}/retry`, {});
+      const res = await client.post<{ runId: string; status: string; queued: boolean; error: string | null }>(`${runs}/${input.runId}/retry`, {});
       return text(res.queued ? `Run ${res.runId} is queued for the ingest worker again.` : `Run ${res.runId} ran again: ${res.status}${res.error ? ` - ${res.error}` : ''}.`, res);
     }
+    if (input.action === 'show') {
+      const res = await client.get<{ run: RunLine; logLine: string | null; ops: PlanOp[] | null; sources: Array<{ key: string | null; title: string }> }>(`${runs}/${input.runId}`);
+      const head = `${res.run.id} ${res.run.status}${runNote(res.run)} ${res.run.sourceKey ?? ''} "${res.run.sourceTitle}"${res.run.canReview ? ' - you can apply or reject it' : ''}`;
+      const plan = res.ops === null ? ['(the plan is hidden: you cannot open its source)'] : res.ops.flatMap(opLines);
+      const sources = res.sources.length ? [`Sources: ${res.sources.map((s) => s.key ?? s.title).join(', ')}`] : [];
+      return text([head, ...plan, ...sources, ...(res.logLine ? [`Log: ${res.logLine}`] : [])].join('\n'), res);
+    }
+    if (input.action === 'apply') {
+      const res = await client.post<{ runId: string; status: string; pages: string[]; error: string | null }>(`${runs}/${input.runId}/apply`, input.reason?.trim() ? { reason: input.reason.trim() } : {});
+      const line = res.status === 'failed' ? `Run ${res.runId} failed: ${res.error ?? 'no reason given'}`
+        : res.status === 'skipped' ? `Run ${res.runId} was skipped and wrote nothing: ${res.error ?? 'the plan changed nothing'}`
+          : `Run ${res.runId} applied: ${res.pages.length} pages (${res.pages.join(', ')}).`;
+      return text(line, res);
+    }
+    if (input.action === 'reject') {
+      const res = await client.post<{ runId: string; status: string; reason: string }>(`${runs}/${input.runId}/reject`, { reason: input.reason!.trim() });
+      return text(`Run ${res.runId} rejected: ${res.reason}`, res);
+    }
     const qs = input.status ? `?status=${input.status}` : '';
-    const res = await client.get<{ runs: Array<{ id: string; sourceKey: string | null; sourceTitle: string; status: string; error: string | null; droppedOps?: DroppedOp[]; createdAt: string; queuedAt?: string | null; startedAt?: string | null; ageSeconds?: number | null; stalled?: boolean }> }>(`/spaces/${encodeURIComponent(input.spaceId)}/llm-wiki/ingest-runs${qs}`);
-    const lines = res.runs.map((r) => `- ${r.id} ${r.status}${queuedNote(r)} ${r.sourceKey ?? ''} "${r.sourceTitle}" ${r.createdAt}${r.droppedOps?.length ? ` (ops dropped: ${r.droppedOps.length})` : ''}${r.error ? ` - ${r.error}` : ''}`);
+    const res = await client.get<{ runs: RunLine[] }>(`${runs}${qs}`);
+    const lines = res.runs.map((r) => `- ${r.id} ${r.status}${queuedNote(r)}${runNote(r)} ${r.sourceKey ?? ''} "${r.sourceTitle}" ${r.createdAt}${r.droppedOps?.length ? ` (ops dropped: ${r.droppedOps.length})` : ''}${r.canReview ? ' (apply or reject)' : ''}${r.error ? ` - ${r.error}` : ''}`);
     return text(lines.length ? lines.join('\n') : 'No ingest runs.', res);
   };
 }
