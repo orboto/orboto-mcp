@@ -18,6 +18,8 @@ export interface ClaudeContextReport {
   /** ORB-2729 - the Claude account UUID and orboto profile the status line found. */
   claudeAccount?: string;
   claudeProfile?: string;
+  /** ORB-2769 - the subagent limit gate summary; the API validates it and drops an invalid one. */
+  limitGate?: { noProfiles: boolean; decisions: unknown[] };
 }
 
 /** ORB-2729 - one usage sample the status line recorded; the heartbeat uploads the ones it has not sent yet. */
@@ -43,9 +45,19 @@ interface ContextFile {
   claudeAccount?: unknown;
   claudeProfile?: unknown;
   usageSamples?: unknown;
+  limitGate?: unknown;
 }
 
 const USAGE_SAMPLES_PER_BEAT = 50;
+const LIMIT_DECISIONS_PER_BEAT = 5;
+
+function limitGateOf(raw: unknown): ClaudeContextReport['limitGate'] | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const gate = raw as { noProfiles?: unknown; decisions?: unknown };
+  if (typeof gate.noProfiles !== 'boolean') return undefined;
+  const decisions = Array.isArray(gate.decisions) ? gate.decisions.filter((d) => Boolean(d) && typeof d === 'object').slice(-LIMIT_DECISIONS_PER_BEAT) : [];
+  return { noProfiles: gate.noProfiles, decisions };
+}
 
 function usageSamplesOf(raw: unknown): ClaudeUsageSample[] {
   if (!Array.isArray(raw)) return [];
@@ -84,6 +96,7 @@ export function readClaudeReport(dir: string, now = Date.now(), root = claudeCon
     const updated = typeof parsed.updatedAt === 'string' ? Date.parse(parsed.updatedAt) : NaN;
     if (!Number.isFinite(updated) || now - updated > CLAUDE_CONTEXT_MAX_AGE_MS) continue;
     if (typeof parsed.contextTokens !== 'number' || !Number.isFinite(parsed.contextTokens)) continue;
+    const limitGate = limitGateOf(parsed.limitGate);
     fresh.push({
       context: {
         contextTokens: Math.max(0, Math.round(parsed.contextTokens)),
@@ -93,6 +106,7 @@ export function readClaudeReport(dir: string, now = Date.now(), root = claudeCon
         ...(typeof parsed.sessionId === 'string' && parsed.sessionId ? { sessionId: parsed.sessionId } : {}),
         ...(typeof parsed.claudeAccount === 'string' && parsed.claudeAccount ? { claudeAccount: parsed.claudeAccount.slice(0, 64) } : {}),
         ...(typeof parsed.claudeProfile === 'string' && parsed.claudeProfile ? { claudeProfile: parsed.claudeProfile.slice(0, 64) } : {}),
+        ...(limitGate ? { limitGate } : {}),
       },
       usageSamples: usageSamplesOf(parsed.usageSamples),
     });

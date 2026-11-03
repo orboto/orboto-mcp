@@ -60,6 +60,17 @@ describe('ORB-2729 - the account and the usage samples ride the heartbeat', () =
     expect(channelClientInfo(report!.context, 'host')).not.toHaveProperty('usageSamples');
   });
 
+  it('ORB-2769 - carries the limit gate summary into clientInfo, at most five decisions, and drops a malformed one', () => {
+    const decisions = Array.from({ length: 7 }, (_, i) => ({ at: `2026-11-02T20:0${i}:00Z`, action: 'allow' }));
+    write('g.json', { cwd: '/work/gate', contextTokens: 5, updatedAt: new Date().toISOString(), limitGate: { noProfiles: true, decisions: [...decisions, 'junk'] } });
+    const report = readClaudeReport('/work/gate', Date.now(), root);
+    expect(report?.context.limitGate?.noProfiles).toBe(true);
+    expect(report?.context.limitGate?.decisions).toEqual(decisions.slice(-5));
+    expect(channelClientInfo(report!.context, 'host')).toHaveProperty('limitGate.noProfiles', true);
+    write('h.json', { cwd: '/work/bad', contextTokens: 5, updatedAt: new Date().toISOString(), limitGate: { noProfiles: 'yes' } });
+    expect(readClaudeReport('/work/bad', Date.now(), root)?.context).not.toHaveProperty('limitGate');
+  });
+
   it('sends a sample once: the next beat carries only the newer ones, also across Go fractional-second stamps', () => {
     const samples = [sample('2026-10-30T08:00:00Z'), sample('2026-10-30T08:00:00.5Z'), sample('2026-10-30T08:01:00Z')];
     expect(unsentSamples(samples, null)).toHaveLength(3);

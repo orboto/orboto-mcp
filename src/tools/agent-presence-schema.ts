@@ -24,6 +24,30 @@ export const AGENT_WAKE_LABELS: Record<AgentSessionWake, string> = {
 };
 export const AgentInventoryProjectSchema = z.object({ id: z.string().uuid(), key: z.string(), name: z.string() });
 
+/** ORB-2769 - one verdict of the subagent limit gate a Claude Code hook took before an Agent call. */
+export const AgentLimitDecisionSchema = z.object({
+  at: z.string().datetime({ offset: true }),
+  agent: z.string().max(64).optional().describe('The subagent that asked to start another one; absent for the main session.'),
+  model: z.string().max(64).optional(),
+  window: z.string().max(64).optional().describe('The window that gates the model, such as `Opus weekly` or `7-day`.'),
+  usedPercent: z.number().min(0).max(1000).optional(),
+  threshold: z.number().min(0).max(100).optional(),
+  action: z.enum(['allow', 'switch_needed', 'fallback', 'deny', 'unknown', 'no_profiles']),
+  profile: z.string().max(64).optional(),
+  target: z.string().max(64).optional().describe('The login profile that has room; the gate never switches a login.'),
+  fallback: z.string().max(32).optional().describe('The model a Fable subagent moves to: only `opus`.'),
+  resetsAt: z.string().max(40).optional(),
+  detail: z.string().max(400).optional(),
+});
+
+/** ORB-2769 - the limit gate summary a session's heartbeat carries: the last decisions and whether auto-switch has no login profiles. */
+export const AgentLimitGateSchema = z.object({
+  noProfiles: z.boolean(),
+  decisions: z.array(AgentLimitDecisionSchema).max(5),
+});
+export type AgentLimitGate = z.infer<typeof AgentLimitGateSchema>;
+export type AgentLimitDecision = z.infer<typeof AgentLimitDecisionSchema>;
+
 export const AgentInventoryEntrySchema = z.object({
   userId: z.string().uuid(),
   userEmail: z.string(),
@@ -72,6 +96,8 @@ export const AgentInventoryEntrySchema = z.object({
   /** ORB-2209 - stream reconnects this row survived; the id and the scope stayed the same. */
   reconnects: z.number().int(),
   lastReconnectAt: z.string().nullable(),
+  /** ORB-2769 - the subagent limit gate summary the session's status line last reported; null when it reported none. */
+  limitGate: AgentLimitGateSchema.nullable().optional(),
   lastSeenAt: z.string(),
   createdAt: z.string(),
 });
