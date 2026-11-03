@@ -11,7 +11,7 @@ interface SpaceRef { spaceKey: string | null; spaceName: string; projectKey: str
 interface AskResponse { answer: string; citations: Citation[]; mode: string; abstained: boolean; semanticDegraded?: boolean; timings?: AskTimings; review?: AskReview | null; source: string; spaces: SpaceRef[] }
 interface FindHit { id: string; docKey: string | null; title: string; snippet: string; headingPath?: string[]; approxTokens?: number | null }
 interface FindResponse { items: FindHit[]; total: number; semantic?: boolean; semanticDegraded?: boolean; source: string; spaces: SpaceRef[]; strict?: boolean }
-interface AddResponse { action: 'recorded' | 'ingesting' | 'duplicate'; text: string; pages: Array<{ key: string | null; title: string; webUrl: string }>; source: { key: string | null; title: string; webUrl: string } | null; droppedOps?: DroppedOp[] }
+interface AddResponse { action: 'recorded' | 'ingesting' | 'duplicate'; text: string; pages: Array<{ key: string | null; title: string; webUrl: string }>; source: { key: string | null; title: string; webUrl: string } | null; droppedOps?: DroppedOp[]; pending?: { step: 'ingest'; reason: string; deadlineSeconds?: number } | null }
 
 type Extra = { sessionId?: string } | undefined;
 
@@ -59,7 +59,7 @@ export function makeKnowledgeFindHandler(client: OrbotoClient) {
 
 export const knowledgeAddToolConfig = {
   title: 'File a fact in the wiki',
-  description: 'File a durable fact in a project wiki (projectKey) or the Operations wiki, never only in local memory. Wrap a passage the person wants kept out ("not that part") in <private>...</private>: the API drops it before anything is stored and the receipt line counts it; the receipt line never goes into your reply.',
+  description: 'File a durable fact in a project wiki (projectKey) or the Operations wiki, never only in local memory. The answer comes within about 15 s: a short fact is written into a page when the wiki agent\'s plan is done by then, else it is filed as a receipted source the ingest worker curates, and structuredContent.pending says so; do not file it again. Wrap a passage the person wants kept out ("not that part") in <private>...</private>: the API drops it before anything is stored and the receipt line counts it; the receipt line never goes into your reply.',
   inputSchema: z.object({
     title: z.string().min(1).max(200), content: z.string().min(1).max(50_000),
     projectKey: z.string().min(1).max(32).optional(), operations: z.boolean().optional(),

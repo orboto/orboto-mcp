@@ -115,6 +115,15 @@ describe('ORB-2225 orboto_knowledge_ask and orboto_knowledge_add', () => {
     expect(result.structuredContent).toMatchObject({ action: 'duplicate', duplicate });
   });
 
+  it('ORB-2807 - a fact whose plan was late comes back as a filed source with the pending step in the structured answer', async () => {
+    const pending = { step: 'ingest', reason: 'plan_deadline', deadlineSeconds: 15 };
+    const post = vi.fn().mockResolvedValue({ action: 'ingesting', pending, text: 'Filed as source ACME-D9 "Runner notes" in the ACME-S1 wiki (/s/d); the wiki agent\'s plan did not finish within 15 s, so the ingest worker curates it into wiki pages within minutes.', pages: [], source: { id: 'd9', key: 'ACME-D9', title: 'Runner notes', webUrl: '/s/d' }, droppedOps: [] });
+    const result = await makeKnowledgeAddHandler({ post } as unknown as OrbotoClient)({ title: 'Runner notes', content: 'x', projectKey: 'ACME' });
+    expect(textOf(result)).toContain('did not finish within 15 s');
+    expect(result.structuredContent).toMatchObject({ action: 'ingesting', pending });
+    expect(knowledgeAddToolConfig.description).toContain('structuredContent.pending');
+  });
+
   it('both tools carry a title and annotations; ask is read-only, add is not', () => {
     expect(knowledgeAskToolConfig.title).toBeTruthy();
     expect(knowledgeAskToolConfig.annotations.readOnlyHint).toBe(true);
