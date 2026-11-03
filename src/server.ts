@@ -192,6 +192,7 @@ import {
   getAuditLogToolConfig, makeGetAuditLogHandler,
   triggerBackupToolConfig, makeTriggerBackupHandler,
 } from './tools/admin-writes.js';
+import { laneControlToolConfig, makeLaneControlHandler, laneStopToolConfig, makeLaneStopHandler } from './tools/agent-lanes.js';
 import { freeBusyToolConfig, makeFreeBusyHandler } from './tools/free-busy.js';
 import {
   createFullBackupToolConfig, makeCreateFullBackupHandler,
@@ -565,6 +566,8 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_free_busy', freeBusyToolConfig, makeFreeBusyHandler(client));
   reg('orboto_get_audit_log', getAuditLogToolConfig, makeGetAuditLogHandler(client));
   reg('orboto_trigger_backup', triggerBackupToolConfig, makeTriggerBackupHandler(client));
+  reg('orboto_lane_pause', laneControlToolConfig, makeLaneControlHandler(client));
+  reg('orboto_lane_stop', laneStopToolConfig, makeLaneStopHandler(client));
   reg('orboto_create_full_backup', createFullBackupToolConfig, makeCreateFullBackupHandler(client));
   reg('orboto_list_backups', listBackupsToolConfig, makeListBackupsHandler(client));
   reg('orboto_download_backup', downloadBackupToolConfig, makeDownloadBackupHandler(client));

@@ -106,6 +106,8 @@ afterEach(() => { vi.restoreAllMocks(); });
  * 171,200 became 169,400, which keeps 3,023 chars free for the next tool).
  * ORB-2802 gave `orboto_wiki_runs` the show, apply and reject actions and a
  * reason inside the ceiling, no new tool (full = 166,557, curated unchanged).
+ * ORB-2818 added `orboto_lane_pause` and `orboto_lane_stop` to the full tier
+ * inside the ceiling, curated unchanged (full = 168,165).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
