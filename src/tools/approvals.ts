@@ -61,7 +61,7 @@ export const approvalDecideToolConfig = {
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key, e.g. ORB-42.'),
     decision: z.enum(['approve', 'reject']).describe('Your decision.'),
-    comment: z.string().optional().describe('Optional decision comment (recorded on the vote + notified to the requester).'),
+    comment: z.string().optional().describe('Decision comment, recorded on the vote and sent to the requester.'),
     requestId: z.string().uuid().optional().describe('Disambiguate when the ticket has more than one pending request.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },

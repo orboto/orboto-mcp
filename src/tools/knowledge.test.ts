@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OrbotoClient } from '../orboto-client.js';
 import { OrbotoApiError, OrbotoClient as RealClient } from '../orboto-client.js';
-import { knowledgeAddToolConfig, knowledgeAskToolConfig, makeKnowledgeAddHandler, makeKnowledgeAskHandler } from './knowledge.js';
+import { knowledgeAddToolConfig, knowledgeAskToolConfig, knowledgeFindToolConfig, makeKnowledgeAddHandler, makeKnowledgeAskHandler, makeKnowledgeFindHandler } from './knowledge.js';
 import { KNOWLEDGE_BLOCK_CHARS, knowledgeLines, makeSessionStartHandler } from './session-start.js';
 import { makeResponseExpandHandler } from './response-expand.js';
 import { makeWikiRunsHandler } from './wiki.js';
@@ -11,6 +11,39 @@ function textOf(result: { content: unknown[] }): string {
 }
 
 afterEach(() => { vi.restoreAllMocks(); });
+
+describe('ORB-2766 orboto_knowledge_find', () => {
+  it('asks for strict hits by default and lists key, title and one plain snippet line', async () => {
+    const get = vi.fn().mockResolvedValue({
+      items: [{ id: 'd1', docKey: 'ACME-D37', title: 'Release procedure', snippet: 'tag the <mark>commit</mark>\n then roll out' }],
+      total: 1, source: 'session', strict: true, spaces: [{ spaceKey: 'ACME-S1', spaceName: 'ACME', projectKey: 'ACME' }],
+    });
+    const result = await makeKnowledgeFindHandler({ get } as unknown as OrbotoClient)({ q: 'roll out the release' }, { sessionId: 'abc' });
+    expect(get).toHaveBeenCalledWith('/knowledge/find?q=roll+out+the+release&strict=true', { instanceToken: 'mcp-abc' });
+    expect(textOf(result)).toContain('- ACME-D37 Release procedure: tag the commit then roll out');
+    expect(textOf(result)).toContain('Searched: ACME-S1.');
+  });
+
+  it('passes strict false, the projects and the limit, and says when nothing matched', async () => {
+    const get = vi.fn().mockResolvedValue({ items: [], total: 0, source: 'explicit', strict: true, spaces: [{ spaceKey: 'SPACE-3', spaceName: 'Operations', projectKey: null }] });
+    const result = await makeKnowledgeFindHandler({ get } as unknown as OrbotoClient)({ q: 'weiter', projectKeys: ['ACME', 'OPS'], limit: 5 });
+    expect(textOf(result)).toContain('No strict hit in SPACE-3.');
+    await makeKnowledgeFindHandler({ get } as unknown as OrbotoClient)({ q: 'backup', strict: false });
+    expect(get.mock.calls.map((c) => c[0])).toEqual(['/knowledge/find?q=weiter&strict=true&projectKeys=ACME%2COPS&limit=5', '/knowledge/find?q=backup&strict=false']);
+    expect(knowledgeFindToolConfig.annotations).toEqual({ readOnlyHint: true, idempotentHint: true });
+  });
+});
+
+describe('ORB-2766 orboto_knowledge_find without a query embedding', () => {
+  it('says why a strict find is empty when the answer carries no query embedding, and stays quiet when the field is absent', async () => {
+    const answer = { items: [], total: 0, source: 'session', strict: true, spaces: [{ spaceKey: 'ACME-S1', spaceName: 'ACME', projectKey: 'ACME' }] };
+    const get = vi.fn().mockResolvedValueOnce({ ...answer, semantic: false }).mockResolvedValueOnce({ ...answer, semantic: true }).mockResolvedValueOnce(answer);
+    const find = makeKnowledgeFindHandler({ get } as unknown as OrbotoClient);
+    expect(textOf(await find({ q: 'roll out the release' }))).toContain('no query embedding (no provider, breaker open or too slow)');
+    expect(textOf(await find({ q: 'roll out the release' }))).not.toContain('no query embedding');
+    expect(textOf(await find({ q: 'roll out the release' }))).not.toContain('no query embedding');
+  });
+});
 
 describe('ORB-2225 orboto_knowledge_ask and orboto_knowledge_add', () => {
   it('asks the scope and lists the cited docs and the asked spaces', async () => {

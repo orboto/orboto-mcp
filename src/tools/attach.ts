@@ -36,7 +36,7 @@ export const attachToTicketToolConfig = {
     filename: z.string().min(1).describe('Display filename, e.g. "graph-q3.png".'),
     contentBase64: z.string().min(1).describe('File content, base64-encoded.'),
     altText: z.string().optional().describe('Alt-text for the markdown image line. Defaults to filename.'),
-    embed: z.boolean().optional().describe('If true, also PATCH the ticket\'s description to append the markdown image line.'),
+    embed: z.boolean().optional().describe('Also append the markdown image line to the ticket description.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };

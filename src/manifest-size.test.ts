@@ -89,6 +89,7 @@ afterEach(() => { vi.restoreAllMocks(); });
  * for it (full = 171,134). Its review shortened the repeated doc id,
  * project key, cursor, lease and oversize parameter descriptions to leave
  * 1,013 chars of headroom (full = 170,187).
+ * ORB-2766 added `orboto_knowledge_find` inside the ceiling: the whoami, cross-project-links and docs-in-space first sentences and the search_docs summary shrank to pay for it (full = 171,178).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

@@ -130,8 +130,8 @@ export const searchDocsToolConfig = {
     'Full-text search across wiki docs that returns a highlighted SNIPPET (matched fragments, <mark>…</mark> around each hit) plus the nearest markdown heading path (section anchor) and char/line offset per hit - WITHOUT echoing the full doc body. Use this instead of orboto_get_doc when you only need to locate a passage: find the right doc + section, then change it with orboto_edit_doc / orboto_edit_doc_section, all without transferring the whole document. ACL-filtered in SQL (you only see docs you can read). Ranked by relevance.',
   inputSchema: z.object({
     q: z.string().min(1).max(10_000).describe('Search terms. Keyword FTS (tsvector); more distinctive words rank higher.'),
-    projectKey: z.string().min(1).optional().describe('Scope to one project by key (e.g. "ORB"). Resolved to the project UUID.'),
-    spaceId: z.string().uuid().optional().describe('Scope to one doc space by UUID (discover via orboto_list_doc_spaces).'),
+    projectKey: z.string().min(1).optional().describe('Project key, e.g. ORB.'),
+    spaceId: z.string().uuid().optional().describe('Doc space UUID (orboto_list_doc_spaces).'),
     limit: z.number().int().positive().max(100).default(20).describe('Max hits (default 20, max 100).'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },

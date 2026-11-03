@@ -40,7 +40,7 @@ interface LinkView {
 export const listCrossProjectLinksToolConfig = {
   title: 'List cross-project links on a ticket',
   description:
-    'Return every cross-project link touching the ticket - both outgoing (this → other) and incoming (other → this). Each row carries the other end\'s project key, ticket key, title, and current status, so the model can see the linked work\'s state without a follow-up tool call. ACL-filtered: rows whose other-end project the caller cannot read are dropped silently.',
+    'Every cross-project link of the ticket, outgoing (this → other) and incoming (other → this). Each row carries the other end\'s project key, ticket key, title, and current status, so the model can see the linked work\'s state without a follow-up tool call. ACL-filtered: rows whose other-end project the caller cannot read are dropped silently.',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key (e.g. "ORB-42") or UUID.'),
   }).shape,

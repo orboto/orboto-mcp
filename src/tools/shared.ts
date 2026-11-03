@@ -47,6 +47,9 @@ export function reviewerFlaggedLine(review: AskReview | null | undefined): strin
   return `Reviewer flagged: ${quotes.length ? quotes.join('; ') : 'the review did not finish before the deadline'}`;
 }
 
+/** ORB-2766 - the line a strict find prints when no query embedding ranked the search, so no hit can be strict. */
+export const STRICT_NO_EMBEDDING_LINE = 'no query embedding (no provider, breaker open or too slow): strict finds nothing, strict false returns full-text hits';
+
 export type ReplacedRevision = { docId: string; revisionId: string; restoreCommand: string };
 
 /** ORB-2468 - the pages a write replaced, each with the revision holding the previous body and its restore command. */

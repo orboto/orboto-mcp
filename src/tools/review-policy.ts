@@ -41,7 +41,7 @@ export const reviewFingerprintToolConfig = {
   description:
     'Hash the exact submitted diff text server-side with sha256-diff-v2. Every text change, including indentation, blank lines, binary blob identities, mode/rename metadata and file order, changes the fingerprint. This is submitted-text identity, NOT independent repository attestation. Returns size/path metrics too. Preserve the complete opaque version-prefixed `fingerprint` for `orboto_review_policy_check` and `orboto_review_approval_record`; legacy v1 approvals remain history only and must be reviewed again.',
   inputSchema: z.object({
-    diff: z.string().min(1).describe('Raw unified diff text, e.g. the output of `git diff` / `git diff --no-color`.'),
+    diff: z.string().min(1).describe('Raw unified diff text (`git diff --no-color`).'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

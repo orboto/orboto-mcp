@@ -134,7 +134,7 @@ export const bulkPatchTicketsToolConfig = {
       isPrivate: z.boolean().optional(),
       estimatedTimeMinutes: z.number().int().nonnegative().optional(),
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
-    dryRun: z.boolean().optional().describe('Resolve every ticket to verify visibility/permission, but skip the actual PATCH.'),
+    dryRun: z.boolean().optional().describe('Check visibility and permission of every ticket without the PATCH.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
 };

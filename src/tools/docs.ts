@@ -271,9 +271,9 @@ export function makeDeleteDocSpaceHandler(client: OrbotoClient) {
 export const listDocsInSpaceToolConfig = {
   title: 'List docs inside a space',
   description:
-    'Return the flat list of doc pages in a space - each carries `parentDocId` to reconstruct the tree client-side. Use this when an agent needs to find a doc by title rather than asking for a UUID first. Pair with orboto_get_doc to read individual page bodies.',
+    'The flat list of doc pages in a space; each carries `parentDocId` to rebuild the tree client-side. Use this when an agent needs to find a doc by title rather than asking for a UUID first. Pair with orboto_get_doc to read individual page bodies.',
   inputSchema: z.object({
-    spaceId: z.string().min(1).describe('Space key (e.g. ORB-S1), name, or UUID. Discover via orboto_list_doc_spaces.'),
+    spaceId: z.string().min(1).describe('Space key (e.g. ORB-S1), name or UUID (orboto_list_doc_spaces).'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -332,7 +332,7 @@ export const createDocToolConfig = {
   description:
     'Create a new wiki page in `spaceId` with the supplied Markdown body. Unlike orboto_ingest_url / orboto_ingest_file (which derive content from an external source), this is the plain "I have the Markdown, make me a page" path. Title is required; content is optional (creates an empty page). Returns the new doc row including its UUID and its human-readable doc key (e.g. ORB-D12).',
   inputSchema: z.object({
-    spaceId: z.string().min(1).describe('Target doc space - key (e.g. ORB-S1), name, or UUID. Discover via orboto_list_doc_spaces.'),
+    spaceId: z.string().min(1).describe('Doc space key (e.g. ORB-S1), name or UUID (orboto_list_doc_spaces).'),
     title: z.string().min(1).max(255),
     content: z.string().optional().describe('Markdown (GFM); omitted: a blank page. Pills: `:badge[LABEL]{tone=success}` (tones neutral/info/success/warning/danger/accent; label <= 24 chars).'),
     parentDocId: z.string().uuid().nullable().optional().describe('Nest under another doc.'),

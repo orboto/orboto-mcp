@@ -273,7 +273,7 @@ export const updateMilestoneToolConfig = {
     milestone: z.string().min(1).describe('Milestone name or UUID to identify the target.'),
     patch: z.object({
       name: z.string().min(1).optional(),
-      customerSummary: z.string().max(2000).nullable().optional().describe('Customer-facing summary shown in the customer report instead of internal text.'),
+      customerSummary: z.string().max(2000).nullable().optional().describe('Summary the customer report shows instead of internal text.'),
       startDate: z.string().regex(DATE_RE).nullable().optional(),
       endDate: z.string().regex(DATE_RE).nullable().optional(),
       isPrivate: z.boolean().optional(),
