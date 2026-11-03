@@ -20,6 +20,7 @@ import { aiUsageToolConfig, makeAiUsageHandler } from './tools/ai-usage.js';
 import { secretScanToolConfig, makeSecretScanHandler } from './tools/secret-scan.js';
 import { sessionStartToolConfig, makeSessionStartHandler } from './tools/session-start.js';
 import { sessionDigestToolConfig, makeSessionDigestHandler } from './tools/session-digest.js';
+import { laneRereviewToolConfig, makeLaneRereviewHandler } from './tools/lane-rereview.js';
 import { CHANNEL_CAPABILITY, CHANNEL_INSTRUCTIONS } from './inbox-channel.js';
 import { loadRequiredRules } from './required-rules.js';
 import { responseExpandToolConfig, makeResponseExpandHandler } from './tools/response-expand.js';
@@ -629,6 +630,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_admin_translation_revert', revertTranslationToolConfig, makeAdminRevertTranslationHandler(client));
   reg('orboto_admin_agent_drift_list', listAgentDriftToolConfig, makeListAgentDriftHandler(client));
   reg('orboto_admin_agent_drift_resolve', resolveAgentDriftToolConfig, makeResolveAgentDriftHandler(client));
+  reg('orboto_lane_rereview', laneRereviewToolConfig, makeLaneRereviewHandler(client));
 
   if (toolset === 'channel') {
     registerEmptySurfaces(server);

@@ -108,6 +108,12 @@ afterEach(() => { vi.restoreAllMocks(); });
  * reason inside the ceiling, no new tool (full = 166,557, curated unchanged).
  * ORB-2818 added `orboto_lane_pause` and `orboto_lane_stop` to the full tier
  * inside the ceiling, curated unchanged (full = 168,165).
+ * ORB-2819 added `orboto_lane_rereview` (+693, full tier only) inside the
+ * ceiling: lane, ticket key and reason (full = 167,250, curated unchanged).
+ * Its fix round added the lane-UUID sentence for a coordinator without
+ * `admin:agent_lanes:read` to the tool and its lane parameter (full = 167,312
+ * measured after the rebase onto ORB-2817, curated unchanged at 38,604).
+ * Both together on develop: full = 168,920, 480 chars free under the ceiling.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
