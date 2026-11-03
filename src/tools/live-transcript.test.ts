@@ -38,6 +38,30 @@ describe('live transcript rendering', () => {
   });
 });
 
+describe('ORB-2817 - a tool call reads as text', () => {
+  const command = 'git status --short && git add -A apps && git commit -qm "SHOWH-1 stage" 2>&1|tail -2';
+  const call = (name: string, input: string): LiveEvent => ({ kind: 'tool_call', toolUseId: 'toolu_1', name, input });
+
+  it('renders a shell call as its command and not as its JSON', () => {
+    expect(renderLiveEvent(call('Bash', JSON.stringify({ command, description: 'stage' })))).toBe(`-> Bash ${command}`);
+    expect(renderLiveEvent(call('PowerShell', '{"command":"Get-ChildItem -Recurse"}'))).toBe('-> PowerShell Get-ChildItem -Recurse');
+    expect(renderLiveEvent(call('bash', '{"command":"cat <<\'EOF\'\\nhello\\nEOF"}'))).toBe("-> bash cat <<'EOF' hello EOF");
+  });
+
+  it('keeps the compact JSON of every other call and of a shell call without a command', () => {
+    const fetch = '{"prompt":"a<b>c","url":"https://example.org/a?b=1&c=2"}';
+    expect(renderLiveEvent(call('WebFetch', fetch))).toBe(`-> WebFetch ${fetch}`);
+    expect(renderLiveEvent(call('Bash', '{"bash_id":"b1"}'))).toBe('-> Bash {"bash_id":"b1"}');
+    expect(renderLiveEvent(call('Bash', '{"command":"ls -la /very/lo'))).toBe('-> Bash {"command":"ls -la /very/lo');
+    expect(renderLiveEvent(call('shell', 'go test ./...'))).toBe('-> shell go test ./...');
+  });
+
+  it('cuts a long command at 200 characters like any other input', () => {
+    const text = renderLiveEvent(call('Bash', JSON.stringify({ command: 'x'.repeat(300) })));
+    expect(text.startsWith(`-> Bash ${'x'.repeat(200)} [cut, 100 more chars`)).toBe(true);
+  });
+});
+
 describe('orboto://live/{sessionId}/transcript', () => {
   it('keeps the newest lines within its cap and says what it left out', () => {
     const items = Array.from({ length: 60 }, (_, i) => line(200 - i, { kind: 'assistant_text', text: `Zeile ${200 - i} ${'y'.repeat(300)}` }));

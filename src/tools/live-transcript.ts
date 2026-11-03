@@ -11,6 +11,25 @@ export const LIVE_KINDS = [
   'user_prompt', 'assistant_text', 'tool_group', 'turn_end', 'usage', 'context', 'checkout',
 ] as const;
 
+/** Mirrors LIVE_SHELL_TOOLS of @orboto/shared-schema; apps/api/src/test/agent-live-shell-command.test.ts pins the copy with fixtures/live-shell-command.json. */
+export const SHELL_TOOLS = ['bash', 'powershell', 'pwsh', 'shell'] as const;
+
+/** ORB-2817 - the command of a shell tool call whose input is a JSON object with a non-empty `command` string, null for every other call. */
+export function shellCommand(name: string, input: string): string | null {
+  if (!(SHELL_TOOLS as readonly string[]).includes(name.trim().toLowerCase())) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(input);
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const command = (parsed as { command?: unknown }).command;
+  if (typeof command !== 'string') return null;
+  const text = command.trim();
+  return text === '' ? null : text;
+}
+
 interface ToolItem { toolUseId: string; name: string; kind: string; summary: string; isError?: boolean; durationMs?: number }
 interface UsageWindow { window: string; usedPercent: number; resetsAt?: string }
 
@@ -71,7 +90,7 @@ function cut(text: string, limit = LIVE_LINE_CHARS): string {
 export function renderLiveEvent(event: LiveEvent): string {
   switch (event.kind) {
     case 'text': return `${event.role}: ${cut(event.text)}`;
-    case 'tool_call': return `-> ${event.name} ${cut(event.input, 200)}`;
+    case 'tool_call': return `-> ${event.name} ${cut(shellCommand(event.name, event.input) ?? event.input, 200)}`;
     case 'tool_result': return `<- ${event.isError ? 'error' : 'ok'}: ${cut(event.text, 200)}`;
     case 'question': return `? ${cut(event.text)}`;
     case 'permission_prompt': return `! permission ${event.tool}: ${cut(event.text)}`;
