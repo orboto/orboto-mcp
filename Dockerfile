@@ -14,6 +14,8 @@ RUN node /tmp/pnpm-bootstrap/install-pnpm.mjs "$TARGETARCH" \
 WORKDIR /app
 
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
+# ORB-2804 - the lockfile names the drizzle-orm patch; the frozen install fails without the file.
+COPY patches ./patches
 COPY apps/mcp/package.json ./apps/mcp/
 COPY packages/shared-schema/package.json ./packages/shared-schema/
 
