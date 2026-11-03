@@ -19,7 +19,7 @@ interface PauseState {
 
 export const sessionCheckToolConfig = {
   title: 'Completion check',
-  description: 'Before a turn ends: what this session still owes. verdict continue or may_stop, text says why; it lists, never re-runs. may_stop releases its granted capacity claims, sessionEnd all. pause with a reason, then resume.',
+  description: 'Before a turn ends: what this session still owes. verdict continue or may_stop, text says why; it lists, never re-runs. may_stop releases its granted capacity claims, sessionEnd all. pause (with a reason) only for an operator stop or a reason outside the work, never to wait for a go; then resume.',
   inputSchema: z.object({
     action: z.enum(['check', 'pause', 'resume']).default('check'),
     reason: z.string().min(3).max(500).optional(),
