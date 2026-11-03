@@ -49,7 +49,7 @@ interface IngestFileResponse {
 export const askDocsToolConfig = {
   title: 'Ask the docs (RAG)',
   description:
-    'Run a natural-language question against the wiki via the workspace\'s RAG pipeline. Returns an `answer` (Markdown) + `citations` array `[{index, title, link, spaceName}]`. The model is the workspace\'s configured AI provider; retrieval requires the embedding provider too - call `orboto_ai_status` to verify both before relying on this. Restrict to a single doc space with `spaceId` when scoping a query (e.g. "only the runbooks space"). At most 6 passages reach the model. Latency is dominated by retrieval + LLM round-trip; expect 2-10s. It answers within its deadline (25 s hosted, 120 s on a local provider; the operator can change it) or fails naming the phase that did not finish (retrieval or model); then search with `orboto_search_docs`. A "Reviewer flagged" line means the reviewer called claims in the answer invented or ran out of time: treat the answer as a draft.',
+    'Ask the wiki a natural-language question via the workspace\'s RAG pipeline. Returns an `answer` (Markdown) + `citations` array `[{index, title, link, spaceName}]`. The model is the workspace\'s configured AI provider; retrieval requires the embedding provider too - call `orboto_ai_status` to verify both before relying on this. Restrict to a single doc space with `spaceId` when scoping a query (e.g. "only the runbooks space"). At most 6 passages reach the model. Latency is dominated by retrieval + LLM round-trip; expect 2-10s. It answers within its deadline (25 s hosted, 120 s on a local provider; the operator can change it) or fails naming the phase that did not finish (retrieval or model); then search with `orboto_search_docs`. A "Reviewer flagged" line means the reviewer called claims in the answer invented or ran out of time: treat the answer as a draft.',
   inputSchema: z.object({
     question: z.string().min(3),
     spaceId: z.string().min(1).optional().describe('Limit RAG retrieval to one doc space - key (e.g. ORB-S1), name, or UUID.'),
@@ -146,12 +146,12 @@ function mimetypeFor(filename: string): string {
 }
 
 export const ingestFileToolConfig = {
-  title: 'Ingest a local file into a wiki space (multipart upload)',
+  title: 'Ingest a file into a wiki space',
   description:
     'Upload a file (PDF / DOCX / Markdown / plain text) into `spaceId` via multipart. The model passes the bytes as a base64 `contentBase64` field (so this works without local FS access on the agent side). Use `filename` to give the doc a meaningful title - the backend sniffs the mimetype but also uses the filename for display. Optional `parentDocId` nests under an existing doc. The uploaded file is ALSO attached to the doc it produces (ORB-2167): the response names `attachmentId`, `orboto_list_doc_attachments` lists it and `orboto_get_attachment` downloads the original bytes, so the extracted text and its source stay together.',
   inputSchema: z.object({
     spaceId: z.string().uuid(),
-    filename: z.string().min(1).describe('Display filename, e.g. "ADR-12-secrets-rotation.pdf".'),
+    filename: z.string().min(1).describe('Display filename, e.g. "adr-12.pdf".'),
     contentBase64: z.string().min(1).describe('File content, base64-encoded.'),
     parentDocId: z.string().uuid().optional(),
   }).shape,

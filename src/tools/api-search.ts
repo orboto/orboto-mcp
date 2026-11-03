@@ -54,8 +54,7 @@ export const apiSearchToolConfig = {
       .describe('Path for detail mode, e.g. "/projects/{id}". Needs method.'),
     method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).optional()
       .describe('Method for detail mode.'),
-    limit: z.number().int().min(1).max(20).default(8)
-      .describe('Max search results.'),
+    limit: z.number().int().min(1).max(20).default(8),
   }).shape,
   annotations: { readOnlyHint: true },
 };

@@ -162,7 +162,7 @@ export function makeBulkCreateTicketsHandler(client: OrbotoClient) {
 }
 
 export const bulkAddTicketDependenciesToolConfig = {
-  title: 'Add many ticket dependencies in one call',
+  title: 'Add many ticket dependencies',
   description:
     'Create up to 200 blocked-by edges in one call. Use it instead of repeated orboto_add_ticket_dependency whenever wiring more than ~3 edges (dependency graphs after a bulk create). Each pair is (ticketKey, dependsOnKey) = "ticket is blocked by dependsOn". Per-pair error isolation; an already-existing edge counts as ok, a cycle rejection lands in `failed` with the API\'s reason.',
   inputSchema: z.object({

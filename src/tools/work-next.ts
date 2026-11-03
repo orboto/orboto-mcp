@@ -9,7 +9,16 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { mcpInstanceToken } from './shared.js';
 import { validateNextWorkEnvelope, validateRulesReceipt } from '../required-rules.js';
-import { GIT_HEALTH_REASON_TEXT, ResourceClaimShape, type StartBundleResponse, type StartDependencyEdge } from './work-sessions-shared.js';
+import {
+  GIT_HEALTH_REASON_TEXT,
+  ResourceClaimShape,
+  WORK_ROLES,
+  workAgentSessionTokenParam,
+  workLeaseSecondsParam,
+  workStartTimerParam,
+  type StartBundleResponse,
+  type StartDependencyEdge,
+} from './work-sessions-shared.js';
 
 interface LandedIdleHint {
   ticketId: string;
@@ -45,25 +54,22 @@ function landedIdleLines(rows: LandedIdleHint[] | undefined): string[] {
 }
 
 export const workNextToolConfig = {
-  title: 'Pull and reserve the next ready ticket (worker-pool dispatch)',
+  title: 'Pull and reserve the next ready ticket',
   description:
-    'ORB-1613 - the pull side of low-management dispatch, sibling of orboto_work_start for "any ticket will do". Picks the highest-priority ticket in a project that is READY FOR THE REQUESTED ROLE (default role implementation pulls TODO tickets; `role: "review"` pulls tickets in the in_review status category instead, and NEVER offers a ticket the caller itself implemented - the review lane primitive, ORB-1777), unblocked (every dependency closed), not already leased under the requested role, and not blocked by a conflicting resourceClaim - then reserves it with the EXACT same guarantees as orboto_work_start (atomic lease acquire + the full context bundle: rules ack, primer, ticket, checklists, dependencies, git health, siblings) in the same response. Priority then ticket number, deterministic - never a coin flip on ties. Two workers calling this concurrently never receive the SAME ticket: the underlying reservation is the identical partial-unique-index INSERT orboto_work_start uses, just walked across an ordered candidate list - a collision just advances to the next candidate. Epics are never returned (they are containers, not directly implementable). When nothing is ready, the response is a STRUCTURED result (`reserved: null`) with a `reason` (`none-matching` = no todo tickets at all; `all-blocked` = candidates exist but all have open dependencies; `all-leased` = ready candidates exist but are all currently leased or claim-conflicted; `autonomy_paused` = ORB-1774, this agent identity or the whole workspace has autonomous pulls paused by an operator - idle and wait for an operator/notify wakeup instead of retrying) and, ONLY when derivable from an actual active lease, a `retryAfterSeconds` backoff hint (`earliestFreeAt` null and `retryAfterSeconds` null means no signal exists - never a fabricated constant). This is never an error - a worker pool should back off on the hint rather than poll hot. Prefer this over orboto_work_start whenever the caller does not care WHICH ticket it gets, only that it gets the best available one right now. Every response - reserved, empty or paused - also carries `landedIdle`: YOUR OWN tickets in this project that are still in_progress with a linked commit and no activity for days (ORB-1799). Those are finished-looking work nobody handed to the review lane; move them on instead of re-implementing them.',
+    'Pull the next ready ticket of a project for a role and reserve it (any ticket will do). Picks the highest-priority ticket in a project that is READY FOR THE REQUESTED ROLE (default role implementation pulls TODO tickets; `role: "review"` pulls tickets in the in_review status category instead, and NEVER offers a ticket the caller itself implemented - the review lane primitive, ORB-1777), unblocked (every dependency closed), not already leased under the requested role, and not blocked by a conflicting resourceClaim - then reserves it with the EXACT same guarantees as orboto_work_start (atomic lease acquire + the full context bundle: rules ack, primer, ticket, checklists, dependencies, git health, siblings) in the same response. Priority then ticket number, deterministic - never a coin flip on ties. Two workers calling this concurrently never receive the SAME ticket: the underlying reservation is the identical partial-unique-index INSERT orboto_work_start uses, just walked across an ordered candidate list - a collision just advances to the next candidate. Epics are never returned (they are containers, not directly implementable). When nothing is ready, the response is a STRUCTURED result (`reserved: null`) with a `reason` (`none-matching` = no todo tickets at all; `all-blocked` = candidates exist but all have open dependencies; `all-leased` = ready candidates exist but are all currently leased or claim-conflicted; `autonomy_paused` = ORB-1774, this agent identity or the whole workspace has autonomous pulls paused by an operator - idle and wait for an operator/notify wakeup instead of retrying) and, ONLY when derivable from an actual active lease, a `retryAfterSeconds` backoff hint (`earliestFreeAt` null and `retryAfterSeconds` null means no signal exists - never a fabricated constant). This is never an error - a worker pool should back off on the hint rather than poll hot. Prefer this over orboto_work_start whenever the caller does not care WHICH ticket it gets, only that it gets the best available one right now. Every response - reserved, empty or paused - also carries `landedIdle`: YOUR OWN tickets in this project that are still in_progress with a linked commit and no activity for days (ORB-1799). Those are finished-looking work nobody handed to the review lane; move them on instead of re-implementing them.',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Project key (e.g. "ACME") or UUID.'),
     agentTag: z.string().min(1).max(64).optional()
       .describe('Routing tag: `agent:<tag>` tickets first, foreign `agent:*` last but eligible.'),
-    role: z.enum(['implementation', 'review', 'preflight', 'integration', 'spec']).optional()
+    role: z.enum(WORK_ROLES).optional()
       .describe('Default `implementation`; reserves only a ticket whose (ticket, role) lease is free.'),
-    leaseSeconds: z.number().int().min(60).max(86_400).optional()
-      .describe('Lease seconds without renewal, default 900.'),
-    startTimer: z.boolean().optional()
-      .describe('Default: true for implementation.'),
-    agentSessionToken: z.string().optional()
-      .describe('Agent instance token; default this connection\'s.'),
+    leaseSeconds: workLeaseSecondsParam,
+    startTimer: workStartTimerParam,
+    agentSessionToken: workAgentSessionTokenParam,
     resourceClaims: z.array(z.object(ResourceClaimShape)).max(50).optional()
       .describe('Claims to acquire with the reservation; a ticket under a conflicting granted write claim is skipped.'),
     onConflict: z.enum(['reject', 'queue']).optional()
-      .describe('Only matters when `resourceClaims` is set on the WINNING candidate. Default `reject`.'),
+      .describe('Applies to the winning candidate\'s `resourceClaims`; default `reject`.'),
     peek: z.boolean().optional()
       .describe('Look without reserving (no lease, timer or quota); returns `candidate` or the empty reason.'),
   }).shape,

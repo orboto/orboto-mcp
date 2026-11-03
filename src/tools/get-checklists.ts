@@ -35,7 +35,7 @@ export const getChecklistsToolConfig = {
   description:
     'Return all checklists on a ticket with per-item completion state. Items that link to another ticket carry that ticket\'s key + status so the model can explain why an item is (not) done.',
   inputSchema: z.object({
-    ticketKey: z.string().min(3).describe('Ticket key like "ACME-42".'),
+    ticketKey: z.string().min(3),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

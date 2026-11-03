@@ -1,4 +1,4 @@
-import { specReleaseInfo } from './shared.js';
+import { specReleaseInfo, MILESTONE_REF_PARAM } from './shared.js';
 import { TicketSpecStateSchema, isAlreadyAssigned, type TicketSpecState } from './spec-schemas.js';
 /**
  * ORB-244 Phase C Group 1 - ticket mutation tools.
@@ -80,7 +80,7 @@ export const createTicketToolConfig = {
     + '**Pre-flight (ORB-2162):** `dryRun: true` runs the same language, type, label and duplicate checks the write runs and returns their verdicts WITHOUT creating anything - `structuredContent.preflight` carries `ok`, `severity`, `blockedBy` and one verdict per check, each with the exact message the real create would answer with. Use it when a create would otherwise cost a round trip to fix the payload afterwards; re-send the same arguments without `dryRun` once the verdicts are clean. '
     + '**Parameter notes.** `deliveryMode` (ORB-1608) is the role-aware commit policy that replaced the blanket one-commit-per-ticket rule: implementation/docs expect exactly one linked commit (closing without one is a non-blocking warning); review/admin/epic never expect one - reviews are read-only, admin work carries external evidence, epics derive completion from their children; unset defaults to "epic" when type=epic, else "implementation". `milestone` takes a key ("ORB-M3"), a name, or a UUID and is looked up in the project including closed milestones - unknown or ambiguous is an error, so pass the key/UUID when a name repeats. `labels` and `assigneeEmails` attach ATOMICALLY inside the create (ORB-1416): an unknown label or non-member email rolls the whole create back with a 400, leaving no orphan ticket - there is no separate attach call to retry.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key.'),
+    projectKey: z.string().min(1),
     title: z.string().min(1).max(255),
     description: z.string().optional(),
     type: z.enum(['task', 'bug', 'story', 'epic']).optional(),
@@ -89,7 +89,7 @@ export const createTicketToolConfig = {
     reason: z.string().trim().min(1).max(2000).optional(),
     specState: TicketSpecStateSchema.optional(),
     deliveryMode: z.enum(['implementation', 'docs', 'review', 'admin', 'epic']).optional(),
-    milestone: z.string().optional().describe('Key ("ORB-M3"), name, or UUID.'),
+    milestone: z.string().optional().describe(MILESTONE_REF_PARAM),
     assigneeEmails: z.array(z.string().email()).max(100).optional().describe('Project-member emails.'),
     labels: z.array(z.string()).max(100).optional(),
     parentTicketKey: z.string().optional().describe('Parent key - makes this a sub-ticket.'),
@@ -473,7 +473,7 @@ export function makeUpdateTicketHandler(client: OrbotoClient) {
 export const moveTicketToolConfig = {
   title: 'Move a ticket between status categories',
   description:
-    'Move a ticket to a status category - todo / in_progress / in_review / done / wont_fix. The API picks the project\'s first status with it. Needs `ticket:change_status`. Moving to `in_review` or `done` without a just-posted summary comment returns a non-blocking `summaryWarning` (ORB-1332): post what changed, the commit SHA and how to verify; `orboto_close_ticket` with a `comment` avoids it. Moving an `implementation`/`docs` ticket to `done` with zero linked commits returns a non-blocking `deliveryModeWarning` (ORB-1608/1642), omitted without a git connection; its codes are explained on `orboto_close_ticket`. **Timer (ORB-2687):** `in_review`, `done` and `wont_fix` stop and book your own running timer on the ticket (a close also finishes your work sessions); `keepTimer: true` keeps them.',
+    'Move a ticket to a status category. The API picks the project\'s first status with it. Needs `ticket:change_status`. Moving to `in_review` or `done` without a just-posted summary comment returns a non-blocking `summaryWarning` (ORB-1332): post what changed, the commit SHA and how to verify; `orboto_close_ticket` with a `comment` avoids it. Moving an `implementation`/`docs` ticket to `done` with zero linked commits returns a non-blocking `deliveryModeWarning` (ORB-1608/1642), omitted without a git connection; its codes are explained on `orboto_close_ticket`. **Timer (ORB-2687):** `in_review`, `done` and `wont_fix` stop and book your own running timer on the ticket (a close also finishes your work sessions); `keepTimer: true` keeps them.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     statusCategory: z.enum(STATUS_CATEGORIES),
@@ -789,7 +789,7 @@ export const unlabelTicketToolConfig = {
   description: 'Detach a label (by name) from a ticket (by key). Idempotent: a label not on the ticket is a no-op. Needs ticket:edit.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    label: z.string().min(1).describe('Label name.'),
+    label: z.string().min(1),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
@@ -809,10 +809,10 @@ export function makeUnlabelTicketHandler(client: OrbotoClient) {
 export const setMilestoneToolConfig = {
   title: 'Set a ticket\'s milestone',
   description:
-    'Move a ticket onto a different milestone (or off all milestones with milestone=null/undefined). Resolves the milestone by key (e.g. "ORB-M3"), name, OR UUID within the ticket\'s project (including closed/archived). If two milestones share a name, pass the key or UUID - an ambiguous name is rejected, not silently guessed.',
+    'Move a ticket to another milestone, or off every milestone with null. Resolves the milestone by key (e.g. "ORB-M3"), name, OR UUID within the ticket\'s project (including closed/archived). If two milestones share a name, pass the key or UUID - an ambiguous name is rejected, not silently guessed.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    milestone: z.string().nullable().optional().describe('Milestone key ("ORB-M3"), name or UUID (key when the name is ambiguous); null removes it.'),
+    milestone: z.string().nullable().optional().describe('Key ("ORB-M3"), name or UUID (key if the name is ambiguous); null removes it.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -856,7 +856,7 @@ interface DependencyEdge {
 export const addTicketDependencyToolConfig = {
   title: 'Add a ticket dependency',
   description:
-    'Mark `ticketKey` as depending on `dependsOnKey` - i.e. `dependsOnKey` blocks `ticketKey`. Wiring more than ~3 edges? Use `orboto_bulk_add_ticket_dependencies` instead. ORB-1614: the two tickets may live in DIFFERENT projects, as long as you can read both - the API 403s with a forbidden error otherwise. Self-dependencies and cycles (including cycles that span projects) are rejected.',
+    'Mark `ticketKey` as blocked by `dependsOnKey`. Wiring more than ~3 edges? Use `orboto_bulk_add_ticket_dependencies` instead. ORB-1614: the two tickets may live in DIFFERENT projects, as long as you can read both - the API 403s with a forbidden error otherwise. Self-dependencies and cycles (including cycles that span projects) are rejected.',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('The blocked ticket.'),
     dependsOnKey: z.string().min(3).describe('The blocker; may be in another project.'),

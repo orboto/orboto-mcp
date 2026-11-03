@@ -5,13 +5,14 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { resolveDocId } from './docs.js';
+import { DOC_ID_PARAM } from './shared.js';
 
 export const exportDocMdToolConfig = {
   title: 'Export a doc page as Markdown',
   description:
     'Return the doc body as plain Markdown (text/markdown). Differs from orboto_get_doc.content in that the server-side export endpoint emits the canonical saved body - agents pulling docs to feed into another tool should prefer this over get_doc, which wraps the body in get-doc envelope text + backlinks.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key.'),
+    docId: z.string().min(1).describe(DOC_ID_PARAM),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -34,9 +35,9 @@ export function makeExportDocMdHandler(client: OrbotoClient) {
 export const exportDocPdfToolConfig = {
   title: 'Export a doc page as PDF',
   description:
-    'Render the doc page to PDF and return it as a base64 MCP resource attachment. Requires the PDF engine to be configured - deployments without Chromium / Puppeteer return 503 (errors.pdf.engine_unavailable) which surfaces as an OrbotoApiError.',
+    'Render a doc page to PDF, returned as a base64 resource attachment. Requires the PDF engine to be configured - deployments without Chromium / Puppeteer return 503 (errors.pdf.engine_unavailable) which surfaces as an OrbotoApiError.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key.'),
+    docId: z.string().min(1).describe(DOC_ID_PARAM),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

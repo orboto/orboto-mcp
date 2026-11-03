@@ -33,7 +33,7 @@ export function makePersonalFactListHandler(client: OrbotoClient) {
 
 export const personalFactAddToolConfig = {
   title: 'Add a personal AI preference',
-  description: 'Record a personal primer fact for the calling user (e.g. communication style, coding convention). Owner-scoped. Wraps POST /users/me/primer-facts.',
+  description: 'Record a personal primer fact for the calling user. Examples: communication style, coding convention. Owner-scoped. Wraps POST /users/me/primer-facts.',
   inputSchema: z.object({
     category: CATEGORY.describe('Closest category (e.g. conventions for communication/coding style).'),
     key: z.string().min(1).max(100).describe('Short machine-readable key, e.g. "tone".'),

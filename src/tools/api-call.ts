@@ -26,7 +26,7 @@ interface ProxyEnvelope {
 export const apiCallToolConfig = {
   title: 'Call any orboto REST endpoint',
   description:
-    'Execute one REST API request - the escape hatch for every endpoint without a named tool. '
+    'Run one REST API request: the escape hatch for any endpoint without a named tool. '
     + 'Find the endpoint + its schema with `orboto_api_search` first. Runs with YOUR permissions '
     + 'only (the API enforces them server-side); the response is an envelope carrying the inner '
     + 'HTTP status + body verbatim, so react to a 403/404/422 as data. Auth/OAuth/setup/webhook '
@@ -37,8 +37,7 @@ export const apiCallToolConfig = {
     method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
     path: z.string().min(1).max(500)
       .describe('Route path, e.g. "/projects/<uuid>/milestones". No query string.'),
-    query: boundedRecord(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string()).max(200)]), 100).optional()
-      .describe('Query parameters as an object.'),
+    query: boundedRecord(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string()).max(200)]), 100).optional(),
     body: z.union([z.record(z.unknown()), z.array(z.unknown()), z.string(), z.number(), z.boolean()]).optional()
       .describe('JSON body - a real object/array, not a stringified one.'),
   }).shape,

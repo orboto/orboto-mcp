@@ -37,7 +37,7 @@ const CATEGORY_TO_LEGACY = {
 } as const;
 
 export const claimToolConfig = {
-  title: 'Claim a ticket (assign self + in_progress + timer)',
+  title: 'Claim a ticket',
   description:
     'Assign yourself, move to in_progress and start a timer. Repeated claims recheck the specification gate. Worker bots need ready, or override=true with a reason; enabled epics are blocked. sole removes other assignees after the gate passes. force permits reopening done tickets. noTimer skips time tracking. On human accounts a different active timer is stopped first and its elapsed time booked to that ticket. Bot timers are per instance and never auto-stop each other: agentSessionToken defaults to this MCP connection; own both start and stop. The server attributes the timer to the session of this connection only (ORB-2550): a token that is not its own is refused 403, a session another harness process owns 409.',
   inputSchema: z.object({
@@ -161,9 +161,9 @@ export function makeClaimHandler(client: OrbotoClient) {
 }
 
 export const unclaimToolConfig = {
-  title: 'Unclaim a ticket (composite: unassign self + move to todo)',
+  title: 'Unclaim a ticket',
   description:
-    'Inverse of `orboto_claim`: remove the calling user as an assignee and move the ticket back to `todo`. Idempotent - if the caller wasn\'t an assignee, the unassign step is a no-op and the status move still happens. Does not stop a running timer (use `orboto_timer_stop` if you want that side-effect; staying separate avoids surprising the next claimant).',
+    'Inverse of `orboto_claim`: unassign yourself and move the ticket back to `todo`. Idempotent - if the caller wasn\'t an assignee, the unassign step is a no-op and the status move still happens. Does not stop a running timer (use `orboto_timer_stop` if you want that side-effect; staying separate avoids surprising the next claimant).',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
   }).shape,

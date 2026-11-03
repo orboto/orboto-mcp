@@ -11,6 +11,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { CURSOR_PARAM } from './shared.js';
 
 interface DriftEvent {
   id: string;
@@ -55,7 +56,7 @@ export const listAgentDriftToolConfig = {
     to: z.string().optional().describe('ISO timestamp upper bound (detected_at).'),
     resolved: z.boolean().optional().describe('true = only resolved, false = only open.'),
     limit: z.number().int().min(1).max(200).optional().describe('Default: 50.'),
-    cursor: z.string().optional().describe('nextCursor of the previous page.'),
+    cursor: z.string().optional().describe(CURSOR_PARAM),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

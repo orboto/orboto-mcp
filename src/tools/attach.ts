@@ -30,12 +30,12 @@ function mimetypeFor(filename: string): string {
 export const attachToTicketToolConfig = {
   title: 'Attach a file to a ticket',
   description:
-    'Upload a file as an attachment on a ticket and return its markdown image-embed line + raw URL. The bytes come in as base64 (`contentBase64`) so this works without local FS access on the agent side. Set `embed=true` to also PATCH the ticket\'s description with the markdown line appended (idempotent only up to duplicate detection - re-running with the same file appends another copy). Use `altText` for accessibility / image alt-text; defaults to the filename. Mirrors `orboto.mjs attach`.',
+    'Attach a file to a ticket; returns its markdown image line and raw URL. The bytes come in as base64 (`contentBase64`) so this works without local FS access on the agent side. Set `embed=true` to also PATCH the ticket\'s description with the markdown line appended (idempotent only up to duplicate detection - re-running with the same file appends another copy). Use `altText` for accessibility / image alt-text; defaults to the filename. Mirrors `orboto.mjs attach`.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     filename: z.string().min(1).describe('Display filename, e.g. "graph-q3.png".'),
     contentBase64: z.string().min(1).describe('File content, base64-encoded.'),
-    altText: z.string().optional().describe('Alt-text for the markdown image line. Defaults to filename.'),
+    altText: z.string().optional().describe('Alt text of the Markdown image; default filename.'),
     embed: z.boolean().optional().describe('Also append the markdown image line to the ticket description.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },

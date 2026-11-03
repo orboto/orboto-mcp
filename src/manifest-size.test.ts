@@ -99,11 +99,16 @@ afterEach(() => { vi.restoreAllMocks(); });
  * ORB-2790 added `orboto_session_digest` (+464, full tier only) inside the
  * ceiling: one optional sessionId without a description and a one-sentence
  * summary (full = 171,133 from 170,669; curated unchanged at 39,394).
+ * ORB-2799 won the headroom back without dropping a parameter: titles, first
+ * sentences and parameter texts lost what the schema or the parameter name
+ * already says, repeated texts became shared constants, the pill tones moved
+ * to the create_doc guidance (full = 166,377 from 171,133; the full ceiling
+ * 171,200 became 169,400, which keeps 3,023 chars free for the next tool).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
 const CURATED_MAX_CHARS = 39_900;
-const FULL_MAX_CHARS = 171_200;
+const FULL_MAX_CHARS = 169_400;
 
 /**
  * ORB-1805 - the estimator the ticket measured the failure with

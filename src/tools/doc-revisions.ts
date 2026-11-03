@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { resolveDocId } from './docs.js';
+import { CURSOR_PARAM, DOC_ID_PARAM } from './shared.js';
 
 interface RevisionListRow {
   id: string;
@@ -38,9 +39,9 @@ export const listDocRevisionsToolConfig = {
   description:
     'Return saved revisions for a doc page, newest-first. Each row carries the revision id, title at snapshot time, editor user id, and editedAt timestamp; the body content is NOT in this list (use orboto_get_doc_revision to fetch one). Cursor-paged - pass `cursor` to walk older pages.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key.'),
-    limit: z.number().int().min(1).max(100).optional().describe('Page size. Defaults to API default (25).'),
-    cursor: z.string().optional().describe('Opaque cursor from a previous call\'s nextCursor.'),
+    docId: z.string().min(1).describe(DOC_ID_PARAM),
+    limit: z.number().int().min(1).max(100).optional().describe('Default 25.'),
+    cursor: z.string().optional().describe(CURSOR_PARAM),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -90,7 +91,7 @@ export const getDocRevisionToolConfig = {
   description:
     'Return the full content + title of one saved revision. Use this to diff against the current doc before deciding whether to restore.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key.'),
+    docId: z.string().min(1).describe(DOC_ID_PARAM),
     revisionId: z.string().uuid(),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
@@ -124,7 +125,7 @@ export const restoreDocRevisionToolConfig = {
   description:
     'Roll back the doc to the saved revision. The API snapshots the CURRENT body to a fresh revision row first, so the restore itself is also undoable. Returns the post-restore doc state.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key.'),
+    docId: z.string().min(1).describe(DOC_ID_PARAM),
     revisionId: z.string().uuid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },

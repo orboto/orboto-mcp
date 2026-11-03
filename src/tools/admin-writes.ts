@@ -66,7 +66,7 @@ export const listUsersToolConfig = {
   inputSchema: z.object({
     search: z.string().optional().describe('Substring match against fullName + email.'),
     limit: z.number().int().min(1).max(100).default(50),
-    showGhosts: z.boolean().optional().describe('Include the `*@imported.ghost` users of project imports (default off).'),
+    showGhosts: z.boolean().optional().describe('Include the `*@imported.ghost` users of project imports.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -118,7 +118,7 @@ export function makeListUsersHandler(client: OrbotoClient) {
 export const getAuditLogToolConfig = {
   title: 'Read the workspace audit log (admin)',
   description:
-    'Recent audit events - admin actions, role changes, ticket deletions, federation handshakes, etc. Super-admin only. Filter by actor or entity to narrow the window.',
+    'Recent audit events: admin actions, role changes, ticket deletions, federation handshakes. Super-admin only. Filter by actor or entity to narrow the window.',
   inputSchema: z.object({
     actorEmail: z.string().email().optional().describe('Filter to one actor.'),
     entityType: z.string().optional().describe('e.g. "user", "project", "ticket", "federation_link".'),

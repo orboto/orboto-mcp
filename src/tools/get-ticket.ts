@@ -79,7 +79,7 @@ export const getTicketToolConfig = {
   description:
     'A ticket\'s decision card: description, status, priority, milestone, assignees, labels, dates, checklist progress, parent, open dependency edges and COUNTS of what is omitted (`include` opts blocks in). Comments: newest first, 3 newest in full, older shortened; `full` all, `commentId` one. Input: ticket key like "ACME-42".',
   inputSchema: z.object({
-    ticketKey: z.string().min(3).describe('Key like "ACME-42".'),
+    ticketKey: z.string().min(3),
     include: z.array(z.enum(['comments', 'git', 'attachments', 'children', 'raci', 'checklistItems'])).max(20)
       .optional()
       .describe('Blocks to inline.'),

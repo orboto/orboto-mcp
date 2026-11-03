@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { resolveDocId } from './docs.js';
+import { DOC_ID_PARAM } from './shared.js';
 
 interface AttachmentResponse {
   id: string;
@@ -58,12 +59,12 @@ function isImage(mimetype: string): boolean {
 export const uploadDocAttachmentToolConfig = {
   title: 'Upload a doc attachment',
   description:
-    'Upload a file as a doc attachment: returns its Markdown image (or link) line + a stable download URL. Bytes come in as base64 (`contentBase64`) so this works without local FS access on the agent side. Set `embed=true` to also PATCH the doc body to append the Markdown line - useful for dropping a screenshot into a page in one call. MIME / extension policy is enforced server-side: blocked types (HTML, SVG, executables) surface a 415.',
+    'Upload a file as a doc attachment; returns its Markdown line and a stable download URL. Bytes come in as base64 (`contentBase64`) so this works without local FS access on the agent side. Set `embed=true` to also PATCH the doc body to append the Markdown line - useful for dropping a screenshot into a page in one call. MIME / extension policy is enforced server-side: blocked types (HTML, SVG, executables) surface a 415.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key.'),
-    filename: z.string().min(1).describe('Display filename, e.g. "architecture-diagram.png".'),
+    docId: z.string().min(1).describe(DOC_ID_PARAM),
+    filename: z.string().min(1).describe('Display filename, e.g. "diagram.png".'),
     contentBase64: z.string().min(1).describe('File content, base64-encoded.'),
-    altText: z.string().optional().describe('Alt-text for the Markdown image line. Defaults to filename.'),
+    altText: z.string().optional().describe('Alt text of the Markdown image; default filename.'),
     embed: z.boolean().optional().describe('Append the Markdown line to the doc body; a re-run appends another copy.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -128,9 +129,9 @@ export function makeUploadDocAttachmentHandler(client: OrbotoClient) {
 export const listDocAttachmentsToolConfig = {
   title: 'List doc attachments',
   description:
-    'Return the doc\'s attachments newest-first, with stable download URLs the agent can hand to the user. Empty list = no attachments.',
+    'List a doc\'s attachments newest-first with stable download URLs. Empty list = no attachments.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key.'),
+    docId: z.string().min(1).describe(DOC_ID_PARAM),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -172,7 +173,7 @@ export const deleteDocAttachmentToolConfig = {
   description:
     'DESTRUCTIVE - drops the file row + deletes the underlying S3 object. Does NOT rewrite the doc body, so embedded Markdown lines pointing at the deleted URL will surface as broken images / links. Walk those by hand if needed.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key.'),
+    docId: z.string().min(1).describe(DOC_ID_PARAM),
     attachmentId: z.string().uuid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },

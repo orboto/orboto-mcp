@@ -37,7 +37,7 @@ interface ReviewPolicyDecision {
 }
 
 export const reviewFingerprintToolConfig = {
-  title: 'Compute a canonical diff fingerprint',
+  title: 'Compute a diff fingerprint',
   description:
     'Hash the exact submitted diff text server-side with sha256-diff-v2. Every text change, including indentation, blank lines, binary blob identities, mode/rename metadata and file order, changes the fingerprint. This is submitted-text identity, NOT independent repository attestation. Returns size/path metrics too. Preserve the complete opaque version-prefixed `fingerprint` for `orboto_review_policy_check` and `orboto_review_approval_record`; legacy v1 approvals remain history only and must be reviewed again.',
   inputSchema: z.object({
@@ -60,14 +60,14 @@ export function makeReviewFingerprintHandler(client: OrbotoClient) {
 }
 
 export const reviewPolicyCheckToolConfig = {
-  title: 'Check a ticket\'s review policy before invoking a reviewer',
+  title: 'Check a ticket\'s review policy',
   description:
     'Consult a ticket\'s structural review policy BEFORE spawning a review session or invoking a model. Called with no diff context (the common case, right after picking up a ticket) it resolves the per-ticket override or a deliveryMode-only rule; passing `paths`/`linesChanged` (from `orboto_review_fingerprint`) additionally matches path/size-scoped rules and, if `fingerprint` is passed too, checks whether a VALID approval already covers this exact diff - so a low-risk ticket, or one already reviewed at this fingerprint, can close without spawning a reviewer. `riskLevel: "required"` with `source: "fail_safe"` means the policy engine itself errored - treat that as "review required", never as "no review needed".',
   inputSchema: z.object({
-    ticketKey: z.string().min(3).describe('Ticket key, e.g. ORB-42.'),
-    fingerprint: z.string().min(8).optional().describe('From orboto_review_fingerprint - checks for an existing valid approval at this exact diff.'),
-    paths: z.array(z.string()).max(500).optional().describe('Changed file paths (from orboto_review_fingerprint) - refines the match against path-scoped rules.'),
-    linesChanged: z.number().int().nonnegative().optional().describe('Total changed lines (linesAdded + linesRemoved) - refines the match against size-scoped rules.'),
+    ticketKey: z.string().min(3),
+    fingerprint: z.string().min(8).optional().describe('From orboto_review_fingerprint; finds a valid approval for this exact diff.'),
+    paths: z.array(z.string()).max(500).optional().describe('Changed paths (from orboto_review_fingerprint); refines path-scoped rule matches.'),
+    linesChanged: z.number().int().nonnegative().optional().describe('linesAdded + linesRemoved; refines size-scoped rule matches.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -94,13 +94,13 @@ export function makeReviewPolicyCheckHandler(client: OrbotoClient) {
 }
 
 export const reviewApprovalRecordToolConfig = {
-  title: 'Record a review decision against a diff fingerprint',
+  title: 'Record a review decision',
   description:
-    'Record your review verdict (approve/reject) against the version-prefixed fingerprint from orboto_review_fingerprint. A current-algorithm approval is reusable only for identical submitted diff text; even whitespace or file-order changes require a fresh review. Legacy/unversioned records remain history only. This advisory review ledger does not itself enforce ticket closure. Requires ticket:record_review_approval.',
+    'Record your review verdict against the fingerprint from orboto_review_fingerprint. A current-algorithm approval is reusable only for identical submitted diff text; even whitespace or file-order changes require a fresh review. Legacy/unversioned records remain history only. This advisory review ledger does not itself enforce ticket closure. Requires ticket:record_review_approval.',
   inputSchema: z.object({
-    ticketKey: z.string().min(3).describe('Ticket key, e.g. ORB-42.'),
+    ticketKey: z.string().min(3),
     fingerprint: z.string().min(8).describe('From orboto_review_fingerprint.'),
-    decision: z.enum(['approved', 'rejected']).describe('Your review verdict.'),
+    decision: z.enum(['approved', 'rejected']),
     note: z.string().max(2000).optional().describe('Optional review comment.'),
     filesChanged: z.number().int().nonnegative().optional(),
     linesAdded: z.number().int().nonnegative().optional(),

@@ -91,7 +91,7 @@ export const CURATED_TOOLS: ReadonlySet<string> = new Set([
  * Resolve the effective toolset. `explicit` (per-connection: URL query /
  * header / BuildServerOptions) beats `envValue` (process-wide default);
  * anything unrecognized falls through, so a typo degrades to the safe
- * default instead of surprising with 190 tools.
+ * default instead of surprising with 202 tools.
  */
 export function resolveToolset(
   explicit?: string | null,

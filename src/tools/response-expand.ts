@@ -13,7 +13,7 @@ import {
 } from '../response-budget.js';
 
 export const responseExpandToolConfig = {
-  title: 'Fetch the omitted part of a truncated response',
+  title: 'Fetch the omitted part of a response',
   description:
     'Return the content a previous tool response omitted. When a result exceeds its response budget it comes back with a `__truncation` block containing a `handle` and the list of cut paths; pass that handle here to read the omitted remainder. Call with `handle` alone to list what is available, then with `path` (e.g. "description" or "ticketBundle.primer.markdown", or "$text" for the human-readable block) to read it, following `nextCursor` while it is not null. Handles live 15 minutes in the MCP server process - if one has expired, re-run the original tool. Read-only; returns nothing the original call did not already return.',
   inputSchema: z.object({

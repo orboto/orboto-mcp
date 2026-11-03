@@ -22,7 +22,7 @@ const CATEGORY_TO_LEGACY: Record<StatusCategory, string> = {
 interface MemberRow { userId: string; user: { email: string } }
 
 const TICKET_KEY_ARRAY = z.array(z.string().min(3)).min(1).max(200).optional()
-  .describe('Ticket keys (max 200), or query.');
+  .describe('Ticket keys, or query.');
 /** ORB-2054 - the target set can be an OQL query instead of a key list. */
 const QUERY_SOURCE = z.string().min(1).max(8000).optional()
   .describe('OQL instead of ticketKeys, max 200.');
@@ -119,7 +119,7 @@ async function resolveBatch(
 export const bulkPatchTicketsToolConfig = {
   title: 'Apply the same patch to many tickets',
   description:
-    'PATCH every ticket in `ticketKeys` (or the tickets `query` selects) with the same `patch` body. The patch shape mirrors `orboto_update_ticket`: title, description, type, priority, dueDate, startDate, isPrivate, estimatedTimeMinutes. To move many tickets between status categories, use `orboto_bulk_move_tickets` instead. Returns `{successful, failed, skipped, dryRun}` so the caller can branch on partial failures.',
+    'PATCH every ticket in `ticketKeys` or `query` with the same `patch` body. The patch shape mirrors `orboto_update_ticket`: title, description, type, priority, dueDate, startDate, isPrivate, estimatedTimeMinutes. To move many tickets between status categories, use `orboto_bulk_move_tickets` instead. Returns `{successful, failed, skipped, dryRun}` so the caller can branch on partial failures.',
   inputSchema: z.object({
     ticketKeys: TICKET_KEY_ARRAY,
     query: QUERY_SOURCE,
@@ -200,9 +200,9 @@ export function makeBulkMoveTicketsHandler(client: OrbotoClient) {
 }
 
 export const bulkCloseTicketsToolConfig = {
-  title: 'Close many tickets (optional shared comment)',
+  title: 'Close many tickets',
   description:
-    'Close every ticket in `ticketKeys` (or `query` selects), optionally posting one shared `comment` first. Mirrors `orboto.mjs bulk-close`. Comment-first ordering means the close note lands in the audit trail even if the status PATCH 403s. Each close stops your own timer and work sessions on the ticket (ORB-2687); `keepTimer` keeps them.',
+    'Close every ticket in `ticketKeys` or `query`, optionally posting one shared `comment` first. Mirrors `orboto.mjs bulk-close`. Comment-first ordering means the close note lands in the audit trail even if the status PATCH 403s. Each close stops your own timer and work sessions on the ticket (ORB-2687); `keepTimer` keeps them.',
   inputSchema: z.object({
     ticketKeys: TICKET_KEY_ARRAY,
     query: QUERY_SOURCE,
@@ -241,7 +241,7 @@ export function makeBulkCloseTicketsHandler(client: OrbotoClient) {
 export const bulkCommentTicketsToolConfig = {
   title: 'Post the same comment on many tickets',
   description:
-    'Append the same comment body to every ticket in `ticketKeys` (or the tickets `query` selects). Useful for "I am back-propagating decision X to all affected tickets" workflows. `isInternal=true` hides from external/guest users.',
+    'Append the same comment to every ticket in `ticketKeys` or `query`. Useful for "I am back-propagating decision X to all affected tickets" workflows. `isInternal=true` hides from external/guest users.',
   inputSchema: z.object({
     ticketKeys: TICKET_KEY_ARRAY,
     query: QUERY_SOURCE,
@@ -296,7 +296,7 @@ async function makeAssigneeResolver(client: OrbotoClient, email: string) {
 export const bulkAssignTicketsToolConfig = {
   title: 'Assign the same user to many tickets',
   description:
-    'POST `assigneeEmail` as an additional assignee on every ticket in `ticketKeys` (or `query` selects). Multi-assignee: this adds, never replaces. Idempotent: a 409 (already assigned) counts as success.',
+    'Add `assigneeEmail` as an additional assignee on every ticket in `ticketKeys` or `query`. Multi-assignee: this adds, never replaces. Idempotent: a 409 (already assigned) counts as success.',
   inputSchema: z.object({
     ticketKeys: TICKET_KEY_ARRAY,
     query: QUERY_SOURCE,
@@ -339,9 +339,9 @@ export function makeBulkAssignTicketsHandler(client: OrbotoClient) {
 }
 
 export const bulkUnassignTicketsToolConfig = {
-  title: 'Unassign the same user from many tickets',
+  title: 'Unassign a user from many tickets',
   description:
-    'DELETE `assigneeEmail` from every ticket in `ticketKeys` (or `query` selects). Idempotent: a 404 (was not assigned) counts as success.',
+    'Remove `assigneeEmail` from every ticket in `ticketKeys` or `query`. Idempotent: a 404 (was not assigned) counts as success.',
   inputSchema: z.object({
     ticketKeys: TICKET_KEY_ARRAY,
     query: QUERY_SOURCE,

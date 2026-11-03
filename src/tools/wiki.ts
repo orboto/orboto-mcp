@@ -9,7 +9,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
-import { SEMANTIC_DEGRADED_LINE, askTimingClause, replacedLines, reviewerFlaggedLine, rewriteDeadline, type AskReview, type AskTimings, type ReplacedRevision } from './shared.js';
+import { SEMANTIC_DEGRADED_LINE, askTimingClause, replacedLines, reviewerFlaggedLine, rewriteDeadline, type AskReview, type AskTimings, type ReplacedRevision, DOC_ID_PARAM } from './shared.js';
 import { resolveDocId } from './docs.js';
 
 function text(t: string, structured?: Record<string, unknown>): CallToolResult {
@@ -22,7 +22,7 @@ export const wikiIngestUrlToolConfig = {
     'Fetch a public URL, extract its main article as Markdown, and create a SOURCE doc in the space. On an LLM-Wiki space the ingest worker writes pages at once (auto-apply) or parks a plan (review-gate); lint merges and stale re-ingests always apply directly, with receipt and undo. Wraps POST /spaces/:id/docs/ingest-url.',
   inputSchema: z.object({
     spaceId: z.string().uuid().describe('Target doc space (find via orboto_list_doc_spaces).'),
-    url: z.string().url().max(2048).describe('Public URL to import.'),
+    url: z.string().url().max(2048),
     parentDocId: z.string().uuid().optional().describe('Nest the source under this doc.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -41,7 +41,7 @@ export const wikiAskToolConfig = {
   description:
     'Retrieval-augmented Q&A over the docs corpus, optionally scoped to one space. Returns an answer with numbered citations linking back to source docs and where the time went. At most 6 passages reach the model. Answers within its deadline (25 s hosted, 120 s on a local provider; the operator can change it) or fails naming the phase that did not finish (retrieval or model); then search with orboto_search_docs. A "Reviewer flagged" line means the reviewer called claims in the answer invented or ran out of time: treat the answer as a draft. Requires both a chat AND an embedding provider (check orboto_ai_status). Wraps POST /ai/ask-docs.',
   inputSchema: z.object({
-    question: z.string().min(1).max(2000).describe('Natural-language question.'),
+    question: z.string().min(1).max(2000),
     spaceId: z.string().uuid().optional().describe('Scope the search to one space; omit for the whole corpus.'),
     limit: z.number().int().min(1).max(20).optional().describe('Passages (default 5; model reads up to 6).'),
   }).shape,
@@ -108,7 +108,7 @@ export const wikiPlanUpdateToolConfig = {
   description:
     'Turn a natural-language instruction into page operations (create/patch/append) WITHOUT writing anything. Returns a planId valid for 15 minutes plus the proposed ops, and droppedOps: ops whose target page matched no docId, doc key or title. Review the ops, then call orboto_wiki_apply_plan to commit. Wraps POST /spaces/:id/docs/plan-update.',
   inputSchema: z.object({
-    spaceId: z.string().uuid().describe('The wiki space to edit.'),
+    spaceId: z.string().uuid(),
     instruction: z.string().min(1).max(4000).describe('What to change, in plain language.'),
     sourceDocId: z.string().uuid().optional().describe('A source doc to draw content from.'),
   }).shape,
@@ -181,8 +181,8 @@ export const wikiAppendSectionToolConfig = {
   description:
     'Append a Markdown section to a doc. Idempotent: appending identical content a second time is a no-op, so this is safe to call repeatedly (e.g. across multiple ingests). Wraps POST /docs/:id/append-section.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('The page to append to - UUID or doc key (ORB-D12 / DOC-5).'),
-    content: z.string().min(1).max(50_000).describe('Markdown section to append.'),
+    docId: z.string().min(1).describe(DOC_ID_PARAM),
+    content: z.string().min(1).max(50_000),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -204,7 +204,7 @@ export const wikiSaveAnswerToolConfig = {
     answer: z.string().min(1).max(50_000),
     title: z.string().max(200).optional().describe('Defaults to the question.'),
     parentDocId: z.string().uuid().optional(),
-    citations: z.array(z.object({ docId: z.string().min(1).describe('Doc UUID or key.'), title: z.string() })).max(50).optional().describe('From orboto_wiki_ask.'),
+    citations: z.array(z.object({ docId: z.string().min(1).describe(DOC_ID_PARAM), title: z.string() })).max(50).optional().describe('From orboto_wiki_ask.'),
     replace: z.boolean().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -222,7 +222,7 @@ export const wikiFlagStaleToolConfig = {
   description:
     'Set or clear the "may be outdated" flag on a page. The flag surfaces passively as a pill in the UI; it does not change the content. Pass stale=false to clear. Wraps POST /docs/:id/flag-stale.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key.'),
+    docId: z.string().min(1).describe(DOC_ID_PARAM),
     stale: z.boolean().optional().describe('true to flag (default), false to clear.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -245,7 +245,7 @@ function queuedNote(r: { status: string; createdAt: string; queuedAt?: string | 
 
 export const wikiRunsToolConfig = {
   title: 'Wiki ingest runs',
-  description: 'List the ingest runs of a wiki space (queued shows the wait and a stall, failed each error) or retry a failed or stalled run.',
+  description: 'List a wiki space\'s ingest runs (queued: wait and stall, failed: each error) or retry a failed or stalled run.',
   inputSchema: z.object({
     spaceId: z.string().min(1),
     action: z.enum(['list', 'retry']).optional(),

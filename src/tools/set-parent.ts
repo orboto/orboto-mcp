@@ -14,7 +14,7 @@ export const setParentToolConfig = {
     'Re-parent an existing ticket. Pass `parentTicketKey` to make this ticket a sub-ticket of another, or pass `parentTicketKey: null` to detach from any parent (back to top-level). Both tickets must live in the same project. Cycle detection + self-parenting are rejected by the API. Symmetric to `orboto_set_milestone` - use this rather than `orboto_update_ticket` for parent moves.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    parentTicketKey: z.string().nullable().describe('New parent ticket key (e.g. "ACME-10"), or null to detach.'),
+    parentTicketKey: z.string().nullable().describe('New parent key, or null to detach.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };

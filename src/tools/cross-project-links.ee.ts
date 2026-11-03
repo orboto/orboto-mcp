@@ -40,7 +40,7 @@ interface LinkView {
 export const listCrossProjectLinksToolConfig = {
   title: 'List cross-project links on a ticket',
   description:
-    'Every cross-project link of the ticket, outgoing (this → other) and incoming (other → this). Each row carries the other end\'s project key, ticket key, title, and current status, so the model can see the linked work\'s state without a follow-up tool call. ACL-filtered: rows whose other-end project the caller cannot read are dropped silently.',
+    'Every cross-project link of the ticket, outgoing and incoming. Each row carries the other end\'s project key, ticket key, title, and current status, so the model can see the linked work\'s state without a follow-up tool call. ACL-filtered: rows whose other-end project the caller cannot read are dropped silently.',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('Ticket key (e.g. "ORB-42") or UUID.'),
   }).shape,
@@ -71,7 +71,7 @@ export function makeListCrossProjectLinksHandler(client: OrbotoClient) {
 }
 
 export const addCrossProjectLinkToolConfig = {
-  title: 'Add a cross-project link between two tickets',
+  title: 'Add a cross-project link',
   description:
     'Create a formal relation between two tickets in different projects. The caller must be a member of both projects and read both tickets. Relation types: counterpart (parallel work, bidirectional), depends_on (this waits for the other), blocks (the other waits for this), related (loose). statusSyncEnabled=true (default off) auto-closes the other end of a counterpart link when one moves to done; it needs ticket:edit and ticket:change_status in both projects (403 otherwise). A close by a user lacking those grants or read access on the far end leaves it open, audited and notified.',
   inputSchema: z.object({

@@ -7,7 +7,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveDocId } from './docs.js';
-import { KNOWLEDGE_DATA_NOTICE, resolveProjectByKey, SEMANTIC_DEGRADED_LINE } from './shared.js';
+import { KNOWLEDGE_DATA_NOTICE, resolveProjectByKey, SEMANTIC_DEGRADED_LINE, DOC_ID_PARAM } from './shared.js';
 import { hitSizeNote } from '../token-size.js';
 
 interface DocSnippetHit {
@@ -132,10 +132,10 @@ export const searchDocsToolConfig = {
   description:
     'Full-text search across wiki docs that returns a highlighted SNIPPET (matched fragments, <mark>…</mark> around each hit) plus the nearest markdown heading path (section anchor) and char/line offset per hit - WITHOUT echoing the full doc body. Use this instead of orboto_get_doc when you only need to locate a passage: find the right doc + section, then change it with orboto_edit_doc / orboto_edit_doc_section, all without transferring the whole document. ACL-filtered in SQL (you only see docs you can read). Ranked by relevance.',
   inputSchema: z.object({
-    q: z.string().min(1).max(10_000).describe('Search terms. Keyword FTS (tsvector); more distinctive words rank higher.'),
+    q: z.string().min(1).max(10_000).describe('Search terms; distinctive words rank higher.'),
     projectKey: z.string().min(1).optional().describe('Project key, e.g. ORB.'),
     spaceId: z.string().uuid().optional().describe('Doc space UUID (orboto_list_doc_spaces).'),
-    limit: z.number().int().positive().max(100).default(20).describe('Max hits (default 20, max 100).'),
+    limit: z.number().int().positive().max(100).default(20),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -195,7 +195,7 @@ export const editDocToolConfig = {
   description:
     'Change a doc by exact string replacement; ship only the diff, not the whole doc. Each oldString must match EXACTLY ONCE in the current content (add surrounding context to make it unique) unless replaceAll=true (then >=1). The whole batch is atomic: any match failure applies nothing and returns a 409 you can act on. Prefer this over orboto_update_doc for small changes to a large doc. Pass baseRevisionId (from a previous edit\'s revisionId or orboto_list_doc_revisions) for optimistic concurrency - a stale token is rejected with the current revision id instead of clobbering a concurrent change. Returns a short context window around each change, not the full doc.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key.'),
+    docId: z.string().min(1).describe(DOC_ID_PARAM),
     edits: z.array(z.object({
       oldString: z.string().min(1).describe('Exact substring to replace. Must be unique in the doc unless replaceAll.'),
       newString: z.string().describe('Replacement text (may be empty to delete).'),
@@ -231,7 +231,7 @@ export const editDocSectionToolConfig = {
   description:
     'Change a doc by heading-addressed section ops; ship only the new section, not the whole doc. A section is addressed by its heading path (e.g. ["Setup","Credentials"] = a "Credentials" heading nested under "Setup"). Heading matching is EXACT + case-sensitive; the leading path elements must be an ordered ancestor chain (not necessarily immediate parents). op=replace swaps the section body, op=append adds to its end, op=insertAfter inserts directly below the heading line (the heading line itself is never removed). A path that matches zero or multiple headings returns a 409 you can act on (narrow the path to disambiguate). Prefer this over orboto_update_doc for section-scoped rewrites. baseRevisionId gives optimistic concurrency. Returns a short context window per op.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key.'),
+    docId: z.string().min(1).describe(DOC_ID_PARAM),
     sectionOps: z.array(z.object({
       headingPath: z.array(z.string().min(1)).min(1).max(20).describe('Ordered heading breadcrumb, top-down. Exact + case-sensitive.'),
       op: z.enum(['replace', 'append', 'insertAfter']).describe('replace body / append to body / insert directly below the heading line.'),

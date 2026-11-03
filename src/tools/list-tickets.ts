@@ -11,7 +11,7 @@ import { TicketListSortSchema, TicketSpecStateSchema, type TicketListSort, type 
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { resolveProjectByKey, resolveTicketByKey, ticketLine, agentTicketListRow, type TicketRow } from './shared.js';
+import { resolveProjectByKey, resolveTicketByKey, ticketLine, agentTicketListRow, type TicketRow, MILESTONE_REF_PARAM } from './shared.js';
 import { resolveMilestoneByNameOrId } from './milestones.js';
 
 interface TicketPage {
@@ -25,7 +25,7 @@ export const listTicketsToolConfig = {
   description:
     'List a project\'s tickets by status, milestone or assignee. unscheduled=true = the backlog (no milestone yet). Tickets in completed or archived milestones are left out unless includeClosedMilestones=true; the answer says how many. Up to 50 per call.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key.'),
+    projectKey: z.string().min(1),
     specState: TicketSpecStateSchema.optional(),
     statusCategory: z
       .enum(['todo', 'in_progress', 'in_review', 'done', 'wont_fix'])
@@ -38,22 +38,21 @@ export const listTicketsToolConfig = {
     milestone: z
       .string()
       .optional()
-      .describe('Key (ORB-M3), name or UUID.'),
+      .describe(MILESTONE_REF_PARAM),
     unscheduled: z
       .boolean()
       .optional()
       .describe('true = no milestone. Not with `milestone`.'),
     assigneeEmail: z
       .string()
-      .optional()
-      .describe('Member email.'),
+      .optional(),
     parentTicketKey: z
       .string()
       .optional()
       .describe('Children of this ticket.'),
     includeClosedMilestones: z.boolean().optional(),
     sort: TicketListSortSchema.optional().describe('Newest first; default updated.'),
-    limit: z.number().int().min(1).max(50).default(25).describe('Max rows.'),
+    limit: z.number().int().min(1).max(50).default(25),
     verbose: z.boolean().default(false).describe('true = full rows.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },

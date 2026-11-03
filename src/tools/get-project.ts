@@ -28,7 +28,7 @@ export const getProjectToolConfig = {
   description:
     'Return a single project with its milestones, labels, and members. Input is the project key like "ACME" (case-insensitive).',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key (e.g. "ACME"). Case-insensitive.'),
+    projectKey: z.string().min(1).describe('Project key, case-insensitive.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

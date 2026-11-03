@@ -38,7 +38,7 @@ export const listMilestonesToolConfig = {
   title: 'List milestones',
   description: 'List milestones in a project, newest first.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key.'),
+    projectKey: z.string().min(1),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -75,9 +75,9 @@ export function makeListMilestonesHandler(client: OrbotoClient) {
 export const getMilestoneToolConfig = {
   title: 'Get milestone details',
   description:
-    'Return milestone metadata plus ticket-count breakdown by status (to do / in progress / done / …).',
+    'Return milestone metadata plus a ticket count per status.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key.'),
+    projectKey: z.string().min(1),
     milestone: z.string().min(1).describe('Key ("ORB-M3"), name, or UUID. Name matching normalises HTML entities/case/whitespace.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
@@ -140,7 +140,7 @@ export const createMilestoneToolConfig = {
   description:
     'Create a milestone in a project. `startDate` + `endDate` are optional - omit them (or pass null) for a milestone with no dates. The caller must have `milestone:create`.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key.'),
+    projectKey: z.string().min(1),
     name: z.string().min(1).describe('Milestone name (unique within the project).'),
     startDate: z.string().regex(DATE_RE).nullable().optional().describe('YYYY-MM-DD or null.'),
     endDate: z.string().regex(DATE_RE).nullable().optional().describe('YYYY-MM-DD or null.'),
@@ -233,7 +233,7 @@ export const closeMilestoneToolConfig = {
   inputSchema: z.object({
     projectKey: z.string().min(1),
     milestone: z.string().min(1).describe('Milestone name or UUID.'),
-    archive: z.boolean().optional().describe('Set true to archive (status=archived) instead of merely completing.'),
+    archive: z.boolean().optional().describe('true archives (status=archived) instead of completing.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -267,10 +267,10 @@ export function makeCloseMilestoneHandler(client: OrbotoClient) {
 export const updateMilestoneToolConfig = {
   title: 'Update a milestone\'s fields',
   description:
-    'Patch a milestone (`name`, `customerSummary`, `startDate`, `endDate`, `isPrivate`). At least one field must be set. `customerSummary` is the customer-facing text shown in the customer project report instead of any internal text. Use `orboto_close_milestone` to flip status to completed/archived - this tool intentionally does NOT touch the status field so closing remains a clear semantic operation.',
+    'Patch a milestone\'s fields (at least one). `customerSummary` is the customer-facing text shown in the customer project report instead of any internal text. Use `orboto_close_milestone` to flip status to completed/archived - this tool intentionally does NOT touch the status field so closing remains a clear semantic operation.',
   inputSchema: z.object({
     projectKey: z.string().min(1),
-    milestone: z.string().min(1).describe('Milestone name or UUID to identify the target.'),
+    milestone: z.string().min(1).describe('Milestone name or UUID.'),
     patch: z.object({
       name: z.string().min(1).optional(),
       customerSummary: z.string().max(2000).nullable().optional().describe('Summary the customer report shows instead of internal text.'),

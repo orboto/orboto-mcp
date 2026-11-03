@@ -32,11 +32,11 @@ function fmt(r: ApprovalRequestSummary): string {
 }
 
 export const listApprovalsToolConfig = {
-  title: 'List a ticket\'s approval / sign-off requests',
+  title: 'List a ticket\'s sign-off requests',
   description:
-    'List the approval / sign-off requests on a ticket (generic change-management gates on status transitions). Shows each request\'s target status, mode, approval progress, and whether YOU can vote on it right now. Use this before `orboto_approval_decide`.',
+    'List a ticket\'s sign-off requests, the change-management gates on status transitions. Shows each request\'s target status, mode, approval progress, and whether YOU can vote on it right now. Use this before `orboto_approval_decide`.',
   inputSchema: z.object({
-    ticketKey: z.string().min(3).describe('Ticket key, e.g. ORB-42.'),
+    ticketKey: z.string().min(3),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -55,12 +55,12 @@ export function makeListApprovalsHandler(client: OrbotoClient) {
 }
 
 export const approvalDecideToolConfig = {
-  title: 'Approve or reject a ticket sign-off request',
+  title: 'Approve or reject a sign-off request',
   description:
-    'Cast an approve/reject vote on a pending approval / sign-off request that gates a ticket status transition. You must be an eligible approver (a policy role, a named user, or a RACI role on the ticket) - otherwise the API returns 403. A single reject resolves the request; enough approvals unblock the transition (the requester then re-applies the status move). If the ticket has several pending requests, pass `requestId`.',
+    'Cast an approve/reject vote on a pending sign-off request that gates a ticket status transition. You must be an eligible approver (a policy role, a named user, or a RACI role on the ticket) - otherwise the API returns 403. A single reject resolves the request; enough approvals unblock the transition (the requester then re-applies the status move). If the ticket has several pending requests, pass `requestId`.',
   inputSchema: z.object({
-    ticketKey: z.string().min(3).describe('Ticket key, e.g. ORB-42.'),
-    decision: z.enum(['approve', 'reject']).describe('Your decision.'),
+    ticketKey: z.string().min(3),
+    decision: z.enum(['approve', 'reject']),
     comment: z.string().optional().describe('Decision comment, recorded on the vote and sent to the requester.'),
     requestId: z.string().uuid().optional().describe('Disambiguate when the ticket has more than one pending request.'),
   }).shape,

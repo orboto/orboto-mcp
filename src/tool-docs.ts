@@ -21,7 +21,7 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_requirements_spec:
     'Generate a structured requirements spec for a project or milestone from its tickets.',
   orboto_update_doc_space:
-    'Update a doc space\'s name, description, icon, project binding or access mode (open/restricted) by space id.',
+    'Update a doc space\'s name, description, icon, project binding or access mode by space id.',
   orboto_search_docs:
     'Full-text search over doc/wiki pages with snippets, filtered by space or project.',
   orboto_critical_path:

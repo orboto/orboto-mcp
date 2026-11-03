@@ -16,7 +16,7 @@ type MyTicketRow = TicketRow;
 export const myTicketsToolConfig = {
   title: 'My assigned tickets',
   description:
-    'List tickets assigned to the authenticated user, optionally filtered to a status category. Useful when the user says "what am I working on?"',
+    'List tickets assigned to you, optionally of one status category. Useful when the user says "what am I working on?"',
   inputSchema: z.object({
     statusCategory: z
       .enum(['todo', 'in_progress', 'in_review', 'done', 'wont_fix'])

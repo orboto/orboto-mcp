@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
-import { resolveProjectByKey, sizeBlockResult } from './shared.js';
+import { OVERSIZE_REASON_PARAM, resolveProjectByKey, sizeBlockResult } from './shared.js';
 
 const FACT_WRITING_CONTRACT =
   ' Fact: <= 300 chars, one fact per key, the value is the fact - long material goes into a doc, the fact holds the doc key.';
@@ -189,7 +189,7 @@ export const primerFactListToolConfig = {
   description:
     'List the structured project facts feeding the AI primer, each with author, session and evidence. Read them before adding an observation. Workspace facts are merged in unless includeWorkspace=false.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key.'),
+    projectKey: z.string().min(1),
     category: PrimerFactCategoryEnum.optional().describe(
       'Filter by category. Omit for all categories.',
     ),
@@ -249,7 +249,7 @@ export const primerFactAddToolConfig = {
     + LIVE_CONTRACT
     + FACT_WRITING_CONTRACT,
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key.'),
+    projectKey: z.string().min(1),
     category: PrimerFactCategoryEnum.describe(
       'non_functional: an NFR (key = area); glossary: a term and its definition.',
     ),
@@ -262,7 +262,7 @@ export const primerFactAddToolConfig = {
     evidence: EvidenceParam,
     observed: z.boolean().default(false),
     allowOversize: z.boolean().optional().describe('After a 600-char block.'),
-    oversizeReason: z.string().min(10).max(500).optional().describe('Why (audited).'),
+    oversizeReason: z.string().min(10).max(500).optional().describe(OVERSIZE_REASON_PARAM),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -317,10 +317,10 @@ export const primerFactUpdateToolConfig = {
   inputSchema: z.object({
     factId: z.string().min(1).describe('UUID from orboto_primer_fact_list.'),
     value: z.string().min(1).max(8000).optional().describe('New Markdown body.'),
-    category: PrimerFactCategoryEnum.optional().describe('New category.'),
-    key: z.string().min(1).max(120).optional().describe('New key.'),
+    category: PrimerFactCategoryEnum.optional(),
+    key: z.string().min(1).max(120).optional(),
     allowOversize: z.boolean().optional().describe('After a 600-char block.'),
-    oversizeReason: z.string().min(10).max(500).optional().describe('Why (audited).'),
+    oversizeReason: z.string().min(10).max(500).optional().describe(OVERSIZE_REASON_PARAM),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -378,7 +378,7 @@ export function makePrimerFactUpdateHandler(client: OrbotoClient) {
 export const primerFactSupersedeToolConfig = {
   title: 'Supersede a primer fact',
   description:
-    'Replace a fact by id, the old one stays in history (orboto_primer_fact_history); for a wrong fact, instead of deleting it. Workspace facts are person-written (403); an already superseded fact answers 409 already_superseded. Same live, pinned and size rules as orboto_primer_fact_add.',
+    'Replace a wrong fact by id instead of deleting it; the old one stays in orboto_primer_fact_history. Workspace facts are person-written (403); an already superseded fact answers 409 already_superseded. Same live, pinned and size rules as orboto_primer_fact_add.',
   inputSchema: z.object({
     oldFactId: z.string().min(1).describe('UUID of the fact being replaced.'),
     category: PrimerFactCategoryEnum,
@@ -386,7 +386,7 @@ export const primerFactSupersedeToolConfig = {
     value: z.string().min(1).max(8000).describe('Corrected Markdown body.'),
     evidence: EvidenceParam,
     allowOversize: z.boolean().optional().describe('After a 600-char block.'),
-    oversizeReason: z.string().min(10).max(500).optional().describe('Why (audited).'),
+    oversizeReason: z.string().min(10).max(500).optional().describe(OVERSIZE_REASON_PARAM),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };

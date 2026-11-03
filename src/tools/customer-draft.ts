@@ -20,12 +20,12 @@ interface DraftResponse {
 }
 
 export const draftCustomerReplyToolConfig = {
-  title: 'Draft a customer-facing reply for a ticket',
+  title: 'Draft a customer reply for a ticket',
   description:
     'Draft a customer-facing reply about a ticket (by key). It is built server-side from customer-safe facts only (key, title, status, due date, customer summary, non-internal comments, your `ask`) - never from internal notes. Returns the draft, the facts used and what was excluded. Never posts: show it to the user, then `orboto_comment` only after approval. Use it for every customer-facing text.',
   inputSchema: z.object({
-    ticketKey: z.string().describe('Ticket key like "ORB-42".'),
-    ask: z.string().min(3).max(1000).describe('What the reply should do, in the user\'s words, e.g. "ask for the browser version".'),
+    ticketKey: z.string(),
+    ask: z.string().min(3).max(1000).describe('What the reply should do, e.g. "ask for the browser version".'),
   }).shape,
   outputSchema: z.object({
     draft: z.string(),

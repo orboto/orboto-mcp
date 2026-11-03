@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
-import { ticketLine, type TicketRow, agentTicketListRow } from './shared.js';
+import { ticketLine, type TicketRow, agentTicketListRow, CURSOR_PARAM } from './shared.js';
 
 interface QueryResponse {
   items: TicketRow[];
@@ -30,9 +30,9 @@ export const queryToolConfig = {
     + 'A 429 is retried at most twice, then returned with structuredContent rateLimited, retryAfterSeconds, limitPerMinute.',
   inputSchema: z.object({
     oql: z.string().min(1).max(8000).describe('The query string.'),
-    syntax: z.enum(['oql', 'jql']).default('oql').describe('"jql" accepts Jira-flavoured syntax.'),
-    cursor: z.string().optional().describe('Cursor from a previous response.'),
-    limit: z.number().int().min(1).max(100).default(25).describe('Max rows. Default 25.'),
+    syntax: z.enum(['oql', 'jql']).default('oql').describe('"jql" accepts Jira syntax.'),
+    cursor: z.string().optional().describe(CURSOR_PARAM),
+    limit: z.number().int().min(1).max(100).default(25),
     verbose: z.boolean().default(false).describe('true = full rows; default is the decision fields only.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },

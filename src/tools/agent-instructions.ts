@@ -7,7 +7,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { sizeBlockResult } from './shared.js';
+import { OVERSIZE_REASON_PARAM, sizeBlockResult } from './shared.js';
 
 interface BlockRow {
   id: string;
@@ -37,7 +37,7 @@ function renderBlock(b: BlockRow): string {
 }
 
 export const listAgentInstructionsToolConfig = {
-  title: 'MANAGE the workspace coding-agent rule blocks (admin)',
+  title: 'MANAGE coding-agent rule blocks (admin)',
   description:
     'ADMIN tool: lists the rule BLOCKS at a scope for editing, not the rules to follow. Scopes: workspace needs admin:ai:read, project needs project:edit, personal is your own; blocks can be edited, toggled and reordered. This is NOT how you read the rules to follow. To LOAD the rules you must follow as an agent, call orboto_session_start instead - it returns the complete assembled rule set.',
   inputSchema: z.object({
@@ -102,7 +102,7 @@ export const createAgentInstructionToolConfig = {
     + AGENTS_PROPOSE + RULE_WRITING_CONTRACT,
   inputSchema: z.object({
     title: z.string().min(1).max(120),
-    body: z.string().min(1).max(8000).describe('The rule text the agent should follow.'),
+    body: z.string().min(1).max(8000),
     scope: z.enum(['workspace', 'customer', 'project', 'personal']).default('workspace'),
     projectId: z.string().uuid().optional().describe('Required for scope=project.'),
     customerId: z.string().uuid().optional().describe('Required for scope=customer.'),
@@ -110,7 +110,7 @@ export const createAgentInstructionToolConfig = {
     mustRead: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
     allowOversize: z.boolean().optional().describe('After a blocked call (800-char hard cap).'),
-    oversizeReason: z.string().min(10).max(500).optional().describe('Why (audited).'),
+    oversizeReason: z.string().min(10).max(500).optional().describe(OVERSIZE_REASON_PARAM),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -135,7 +135,7 @@ export function makeCreateAgentInstructionHandler(client: OrbotoClient) {
 }
 
 export const updateAgentInstructionToolConfig = {
-  title: 'Edit / toggle / reorder a coding-agent rule block',
+  title: 'Edit, toggle or reorder a rule block',
   description:
     'Patch a rule block: title, body, enabled (toggle a rule on/off), or sortOrder. Works on default AND custom blocks (defaults keep their builtinKey and can be reset later). Needs admin:ai:write.'
     + AGENTS_PROPOSE + RULE_WRITING_CONTRACT,
@@ -147,7 +147,7 @@ export const updateAgentInstructionToolConfig = {
     mustRead: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
     allowOversize: z.boolean().optional().describe('After a blocked call (800-char hard cap).'),
-    oversizeReason: z.string().min(10).max(500).optional().describe('Why (audited).'),
+    oversizeReason: z.string().min(10).max(500).optional().describe(OVERSIZE_REASON_PARAM),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -172,7 +172,7 @@ export function makeUpdateAgentInstructionHandler(client: OrbotoClient) {
 }
 
 export const resetAgentInstructionToolConfig = {
-  title: 'Reset a default rule block to its shipped text',
+  title: 'Reset a rule block to its shipped text',
   description:
     'Restore a seeded DEFAULT rule block (one with a builtinKey) to the text orboto ships. No-op for custom blocks. Needs admin:ai:write.' + AGENTS_PROPOSE,
   inputSchema: z.object({ id: z.string().uuid() }).shape,

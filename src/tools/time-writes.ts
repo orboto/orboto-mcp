@@ -127,7 +127,7 @@ export function makeTimerStopHandler(client: OrbotoClient) {
 export const logTimeToolConfig = {
   title: 'Log a time entry on a ticket',
   description:
-    'Direct time-entry POST - for "I just spent 90 minutes on this last Tuesday but forgot to start a timer". `loggedAt` defaults to now; pass an ISO datetime to back-date. Pass `dates` (YYYY-MM-DD list) to book the same entry on several days in one call (ORB-2056): all-or-nothing, a day inside an approved timesheet refuses the set and names the day, capacity warnings come back advisory.',
+    'Book time directly for work done without a timer, such as 90 minutes last Tuesday. `loggedAt` defaults to now; pass an ISO datetime to back-date. Pass `dates` (YYYY-MM-DD list) to book the same entry on several days in one call (ORB-2056): all-or-nothing, a day inside an approved timesheet refuses the set and names the day, capacity warnings come back advisory.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     durationMinutes: z.number().int().positive().describe('Minutes, > 0.'),
@@ -186,7 +186,7 @@ export function makeLogTimeHandler(client: OrbotoClient) {
 export const listTimeEntriesToolConfig = {
   title: 'List a ticket\'s time entries',
   description:
-    'List the time entries on a ticket (most recent first) with each entry\'s id, duration, date and agent label. Use this to FIND an over-tracked entry before fixing it with orboto_edit_time_entry / orboto_delete_time_entry.',
+    'List a ticket\'s time entries, newest first: id, duration, date, agent label. Use this to FIND an over-tracked entry before fixing it with orboto_edit_time_entry / orboto_delete_time_entry.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     limit: z.number().int().positive().max(100).optional().describe('Default 25.'),
@@ -217,7 +217,7 @@ export function makeListTimeEntriesHandler(client: OrbotoClient) {
 export const editTimeEntryToolConfig = {
   title: 'Edit / correct a time entry',
   description:
-    'Correct a time entry: fix a duration, edit its note, change its date, or re-target it to another ticket. Use THIS (not orboto_log_time) to fix a wrong entry: log_time is additive and only makes the total worse. Get the entryId from orboto_list_time_entries (or an orboto_log_time response). Blocked if the entry is locked by an approved timesheet.',
+    'Correct a time entry: duration, note, date or ticket. Use THIS (not orboto_log_time) to fix a wrong entry: log_time is additive and only makes the total worse. Get the entryId from orboto_list_time_entries (or an orboto_log_time response). Blocked if the entry is locked by an approved timesheet.',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('The ticket the entry currently belongs to.'),
     entryId: z.string().uuid(),
@@ -253,7 +253,7 @@ export function makeEditTimeEntryHandler(client: OrbotoClient) {
 export const deleteTimeEntryToolConfig = {
   title: 'Delete a time entry',
   description:
-    'Delete a time entry - e.g. a bogus over-tracked entry that should not exist at all (prefer orboto_edit_time_entry when it should just have a different duration). You can delete your own; deleting another user\'s needs the `time:delete_others` permission. Blocked if locked by an approved timesheet. Get the entryId from orboto_list_time_entries.',
+    'Delete a time entry. Use it for a bogus over-tracked entry that should not exist at all (prefer orboto_edit_time_entry when it should just have a different duration). You can delete your own; deleting another user\'s needs the `time:delete_others` permission. Blocked if locked by an approved timesheet. Get the entryId from orboto_list_time_entries.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     entryId: z.string().uuid(),

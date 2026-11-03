@@ -148,9 +148,9 @@ export function makeCreateProjectHandler(client: OrbotoClient) {
 export const archiveProjectToolConfig = {
   title: 'Archive a project',
   description:
-    'Archive a project - moves it out of the active rotation without deleting any data. Convenience wrapper around `orboto_update_project({ status: "archived" })` because "archive this project" is a workflow operators hit often. Archiving is reversible: pass the same project back through `orboto_update_project({ status: "active" })` to restore. Idempotent - re-archiving an already-archived project is a no-op success.',
+    'Archive a project: out of the active rotation, no data deleted. Convenience wrapper around `orboto_update_project({ status: "archived" })` because "archive this project" is a workflow operators hit often. Archiving is reversible: pass the same project back through `orboto_update_project({ status: "active" })` to restore. Idempotent - re-archiving an already-archived project is a no-op success.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key (e.g. "ACME") of the project to archive.'),
+    projectKey: z.string().min(1),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };

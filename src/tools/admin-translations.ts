@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { CURSOR_PARAM } from './shared.js';
 
 interface TranslationRow {
   id: string;
@@ -31,7 +32,7 @@ export const listAdminTranslationsToolConfig = {
   inputSchema: z.object({
     status: z.enum(['pending', 'all']).optional().describe('Default: pending.'),
     limit: z.number().int().min(1).max(100).optional().describe('Default: 25.'),
-    cursor: z.string().optional().describe('nextCursor of the previous page.'),
+    cursor: z.string().optional().describe(CURSOR_PARAM),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -65,7 +66,7 @@ export function makeListAdminTranslationsHandler(client: OrbotoClient) {
 export const approveTranslationToolConfig = {
   title: 'Approve an auto-translated ticket',
   description:
-    'Stamp `translation_reviewed_at` + `translation_reviewed_by` on a ticket the AI auto-translate flow rewrote. Idempotent - re-approving the same row simply refreshes the timestamp + reviewer. 409 if the ticket was never auto-translated. Requires `admin:translation_review`.',
+    'Approve a ticket the AI auto-translate flow rewrote: stamps the reviewer and the time. Idempotent - re-approving the same row simply refreshes the timestamp + reviewer. 409 if the ticket was never auto-translated. Requires `admin:translation_review`.',
   inputSchema: z.object({
     ticketId: z.string().uuid().describe('UUID of the ticket to approve.'),
   }).shape,
@@ -86,7 +87,7 @@ export function makeApproveTranslationHandler(client: OrbotoClient) {
 }
 
 export const revertTranslationToolConfig = {
-  title: 'Revert an auto-translated ticket back to the original',
+  title: 'Revert an auto-translated ticket',
   description:
     'Restore the pre-translation title + description from the audit comment and clear the auto-translate marker + prior approval. Use when the AI got the translation wrong and the operator wants to start over. 409 if the ticket was never auto-translated. Requires `admin:translation_review`.',
   inputSchema: z.object({

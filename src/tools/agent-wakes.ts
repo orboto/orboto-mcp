@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { AGENT_WAKE_LABELS, type AgentSessionWake } from './agent-presence-schema.js';
+import { CURSOR_PARAM } from './shared.js';
 
 interface WakeRow {
   id: string;
@@ -49,7 +50,7 @@ export const agentWakesToolConfig = {
     project: z.string().min(1).max(64).optional().describe('Project key or UUID.'),
     outcome: z.enum(['pending', 'handled', 'not_mine', 'obsolete', 'duplicate', 'expired']).optional(),
     limit: z.number().int().min(1).max(200).optional().describe('Default: 50.'),
-    cursor: z.string().optional().describe('nextCursor of the previous page.'),
+    cursor: z.string().optional().describe(CURSOR_PARAM),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

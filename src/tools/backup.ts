@@ -95,7 +95,7 @@ export function makeCreateFullBackupHandler(client: OrbotoClient) {
 export const listBackupsToolConfig = {
   title: 'List backup runs',
   description:
-    'List recent backup runs (id, status, size, time) so you can pick one to download with orboto_download_backup. Requires admin:backup:read.',
+    'List recent backup runs (id, status, size, time); download one with orboto_download_backup. Requires admin:backup:read.',
   inputSchema: z.object({}).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

@@ -105,7 +105,7 @@ function decisionText(verb: string, res: Decision): string {
 
 export const ruleProposalAcceptToolConfig = {
   title: 'Accept a rule proposal',
-  description: 'Adopt a rule candidate or accept a pending proposal as a rule block, as proposed or edited. Only a person with rule rights on its scope, on their explicit instruction; a bot or agent key gets 403 errors.agent_rules.review_needs_person. must-read stays off unless set.',
+  description: 'Adopt a rule candidate or pending proposal as a rule block, as proposed or edited. Only a person with rule rights on its scope, on their explicit instruction; a bot or agent key gets 403 errors.agent_rules.review_needs_person. must-read stays off unless set.',
   inputSchema: z.object({
     proposalId: z.string().uuid(),
     title: z.string().min(1).max(120).optional(),

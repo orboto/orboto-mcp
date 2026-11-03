@@ -31,10 +31,10 @@ export const requirementsSpecToolConfig = {
     + '`priceMode`: "hours" (estimates, default), "money" (customer rates - needs the budget:view permission), or "lumpSum" (a flat price - pass `lumpSumAmount`). '
     + 'Private tickets and milestones are always excluded, and internal cost/overhead is never included. Requires the requirements_spec:generate permission on the project.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key.'),
-    outlineVariant: z.enum(OUTLINE_VARIANTS).default('neutral').describe('Outline variant (default "neutral"). "industry" = VDI-3694 style, "software" = IEEE-830 style.'),
-    locale: z.enum(LOCALES).default('en').describe('Document language (default "en").'),
-    priceMode: z.enum(['hours', 'money', 'lumpSum']).default('hours').describe('Pricing mode (default "hours"). "money" needs budget:view.'),
+    projectKey: z.string().min(1),
+    outlineVariant: z.enum(OUTLINE_VARIANTS).default('neutral').describe('"industry" = VDI-3694 style, "software" = IEEE-830 style.'),
+    locale: z.enum(LOCALES).default('en'),
+    priceMode: z.enum(['hours', 'money', 'lumpSum']).default('hours').describe('"money" needs budget:view.'),
     lumpSumAmount: z.number().nonnegative().optional().describe('Flat price for priceMode="lumpSum".'),
     lumpSumCurrency: z.string().min(1).max(8).optional().describe('Currency for the lump sum (default EUR).'),
     showAssigneeNames: z.boolean().optional().describe('Include assignee names (default off).'),

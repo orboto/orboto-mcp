@@ -41,9 +41,9 @@ function scheduleLine(s: TicketScheduleRow): string {
 }
 
 export const listTicketSchedulesToolConfig = {
-  title: 'List a ticket\'s scheduled working sessions',
+  title: 'List a ticket\'s scheduled sessions',
   description:
-    'List the meeting / working sessions scheduled on a ticket (by key). Active sessions only by default; pass includeCancelled=true for history. Returns each session\'s id, title, window and attendee count - get the id here before cancelling one with orboto_cancel_ticket_session.',
+    'List the working sessions scheduled on a ticket. Active sessions only by default; pass includeCancelled=true for history. Returns each session\'s id, title, window and attendee count - get the id here before cancelling one with orboto_cancel_ticket_session.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     includeCancelled: z.boolean().optional().describe('Include cancelled sessions (default: active only).'),
