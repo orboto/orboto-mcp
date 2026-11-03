@@ -1,4 +1,4 @@
-/** ORB-2767 - receipts leave every JSON body and come back once, as the last text block of the tool result. */
+/** ORB-2767 - receipts leave every JSON body and come back once, as the last text block of the tool result; ORB-2792 - so does the private count. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from './orboto-client.js';
 import { collectingReceipts, takeReceipts, withReceiptLines } from './knowledge-receipts.js';
@@ -42,6 +42,19 @@ describe('ORB-2767 receipt collector', () => {
     expect(takeReceipts([{ receipts: [receipt] }])).toEqual([{ receipts: [receipt] }]);
     expect(takeReceipts({ receipts: 'not-a-list' })).toEqual({ receipts: 'not-a-list' });
     expect(takeReceipts(undefined)).toBeUndefined();
+  });
+
+  it('ORB-2792 takes the privateRemoved count out of the body; its line comes back only without a receipt line or with the unclosed or the unopened warning', async () => {
+    const counted = { code: 'rcp_7f3a9k2m', line: 'ACME-D12 "Release window" r41 -> r42 - 2 private passages left out - undo: orboto knowledge undo rcp_7f3a9k2m' };
+    const { value, lines } = await collectingReceipts(async () => [
+      takeReceipts({ id: 'd1', receipts: [counted], privateRemoved: { passages: 2, unclosed: false, unopened: false, line: '2 private passages left out.' } }),
+      takeReceipts({ action: 'duplicate', privateRemoved: { passages: 1, unclosed: false, unopened: false, line: '1 private passage left out.' } }),
+      takeReceipts({ id: 'd2', receipts: [receipt], privateRemoved: { passages: 1, unclosed: true, unopened: false, line: '1 private passage left out. An unclosed <private> marker removed everything after it.' } }),
+      takeReceipts({ id: 'd3', receipts: [receipt], privateRemoved: { passages: 1, unclosed: false, unopened: true, line: '1 private passage left out. A </private> marker without an opener removed everything before it.' } }),
+    ]);
+    expect(value).toEqual([{ id: 'd1' }, { action: 'duplicate' }, { id: 'd2' }, { id: 'd3' }]);
+    expect(lines).toEqual([counted.line, '1 private passage left out.', LINE, '1 private passage left out. An unclosed <private> marker removed everything after it.', '1 private passage left out. A </private> marker without an opener removed everything before it.']);
+    expect(JSON.stringify(value)).not.toContain('private passage');
   });
 
   it('appends the lines as the last text block, and never to an error result', () => {

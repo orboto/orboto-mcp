@@ -59,7 +59,7 @@ export function makeKnowledgeFindHandler(client: OrbotoClient) {
 
 export const knowledgeAddToolConfig = {
   title: 'File a fact in the wiki',
-  description: 'File a durable fact in a project wiki (projectKey) or the Operations wiki, never only in local memory.',
+  description: 'File a durable fact in a project wiki (projectKey) or the Operations wiki, never only in local memory. Wrap a passage the person wants kept out ("not that part") in <private>...</private>: the API drops it before anything is stored and the receipt line counts it; the receipt line never goes into your reply.',
   inputSchema: z.object({
     title: z.string().min(1).max(200), content: z.string().min(1).max(50_000),
     projectKey: z.string().min(1).max(32).optional(), operations: z.boolean().optional(),
