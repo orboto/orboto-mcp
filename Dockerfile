@@ -37,8 +37,10 @@ RUN NODE_OPTIONS=--max-old-space-size=1024 pnpm --filter @orboto/mcp build
 # pnpm deploy - copies the package + workspace deps as concrete modules
 # under /deploy/mcp. --legacy preserves pre-pnpm-v10 behaviour (no
 # inject-workspace-packages requirement) since shared-schema has already
-# been rewired to its dist output above.
-RUN pnpm --filter @orboto/mcp deploy --legacy --prod /deploy/mcp
+# been rewired to its dist output above. ORB-2810 - the mcp tree has no
+# drizzle-orm, so the workspace's drizzle-orm patch is unused here and pnpm
+# stops with ERR_PNPM_UNUSED_PATCH without --config.allow-unused-patches.
+RUN pnpm --filter @orboto/mcp deploy --legacy --prod --config.allow-unused-patches=true /deploy/mcp
 
 # ── runner ──────────────────────────────────────────────────────────────────
 FROM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS runner
