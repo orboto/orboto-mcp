@@ -32,7 +32,7 @@ function inventoryRow(i: number) {
     scope: { projectKeys: ['OCP'], role: i === 17 ? 'integrator' : 'worker' },
     unreadMessages: 3, wakes: { count: 4, precision: 1, wrongWakeContextTokens: 0, backlogSeen: 0 },
     guard: { held: 0, released: 2, stalled: 0, consecutiveHolds: 0, lastOutcome: 'released', lastReason: null, lastAt: '2026-10-16T09:50:00.000Z', paused: false },
-    knowledge: { writes: 0, asks: 1, lastAt: null, localPending: false },
+    knowledge: { writes: 0, asks: 1, offered: 0, read: 0, undone: 0, lastAt: null, localPending: false },
     restartPending: false, restartReason: null, restartable: true, reconnects: 2, lastReconnectAt: '2026-10-16T09:40:00.000Z',
     lastSeenAt: '2026-10-16 09:54:00.504+00', createdAt: '2026-10-16 08:01:12.719715+00',
     origin: { host: 'build-host', machineId: '4ea7904991187bf1', repo: 'orboto-control-plane', pid: 15503 + i, startedAt: '2026-10-16T08:00:00.000Z', client: 'orboto-mcp', clientVersion: '0.224.0', harness: 'claude-code', credential: 'api_key', known: true },
