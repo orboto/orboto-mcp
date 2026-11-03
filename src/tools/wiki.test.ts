@@ -95,6 +95,21 @@ describe('orboto_wiki_lint', () => {
     const res = await makeWikiLintHandler(client)({ spaceId: SPACE });
     expect((res.content[0] as { text: string }).text).toContain('[orphan] Page X is orphaned');
   });
+  it('names each merge with its undo and each queued re-ingest (ORB-2774)', async () => {
+    const page = (key: string, title: string) => ({ id: DOC, key, title });
+    stubJSON([{ json: {
+      issues: [], detected: 0, resolved: 1,
+      merged: [{ from: page('ORB-D44', 'Hooks'), into: page('ORB-D12', 'Hooks'), receiptCode: 'rcp_abcdefgh', undoCommand: 'orboto knowledge undo rcp_abcdefgh' }],
+      reingested: [page('ORB-D7', 'Deploy')],
+      receipts: [{ line: 'ORB-D12 "Hooks" r4 -> r5, merged ORB-D44 into ORB-D12 - undo: orboto knowledge undo rcp_abcdefgh' }],
+    } }]);
+    const res = await makeWikiLintHandler(client)({ spaceId: SPACE });
+    const out = res.content.map((c) => (c as { text: string }).text).join('\n');
+    expect(out).toContain('Lint complete: 0 open issue(s), 1 auto-resolved, 1 merged, 1 re-ingest(s) queued.');
+    expect(out).toContain('- merged ORB-D44 into ORB-D12 (undo: orboto knowledge undo rcp_abcdefgh)');
+    expect(out).toContain('- re-ingest queued for stale ORB-D7 "Deploy"');
+    expect(JSON.stringify(res.structuredContent)).not.toContain('"receipts"');
+  });
   it('propagates a 403 as OrbotoApiError', async () => {
     stubJSON([{ ok: false, status: 403, json: { error: 'Forbidden' } }]);
     await expect(makeWikiLintHandler(client)({ spaceId: SPACE })).rejects.toBeInstanceOf(OrbotoApiError);
@@ -148,6 +163,22 @@ describe('orboto_wiki_record', () => {
     expect(calls[0].url).toContain('/plan-update');
     expect(calls[1].url).toContain('/apply-plan');
     expect((res.content[0] as { text: string }).text).toContain('1 page(s) updated');
+  });
+
+  it('plans once more when a supersede found its page moved, and gives up on a second conflict (ORB-2774)', async () => {
+    const conflict = { ok: false, status: 409, statusText: 'Conflict', json: async () => ({}), text: async () => '{"errorKey":"errors.docs.supersede_conflict"}' };
+    const replies = [{ planId: 'p1' }, conflict, { planId: 'p2' }, { touchedDocs: [DOC] }];
+    const urls: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      urls.push(url.toString());
+      const r = replies.shift()!;
+      return ('status' in r ? r : { ok: true, status: 200, statusText: 'OK', json: async () => r, text: async () => '' }) as unknown as Response;
+    });
+    const res = await makeWikiRecordHandler(client)({ spaceId: SPACE, instruction: 'the host is zephyr now' });
+    expect(urls.map((u) => u.split('/docs/')[1])).toEqual(['plan-update', 'apply-plan', 'plan-update', 'apply-plan']);
+    expect((res.content[0] as { text: string }).text).toContain('1 page(s) updated');
+    replies.push({ planId: 'p3' }, conflict, { planId: 'p4' }, conflict);
+    await expect(makeWikiRecordHandler(client)({ spaceId: SPACE, instruction: 'again' })).rejects.toBeInstanceOf(OrbotoApiError);
   });
 });
 

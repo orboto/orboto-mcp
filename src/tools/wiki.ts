@@ -8,7 +8,7 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { OrbotoClient } from '../orboto-client.js';
+import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { SEMANTIC_DEGRADED_LINE, askTimingClause, replacedLines, reviewerFlaggedLine, rewriteDeadline, type AskReview, type AskTimings, type ReplacedRevision } from './shared.js';
 import { resolveDocId } from './docs.js';
 
@@ -19,7 +19,7 @@ function text(t: string, structured?: Record<string, unknown>): CallToolResult {
 export const wikiIngestUrlToolConfig = {
   title: 'Ingest a URL into an LLM-Wiki space',
   description:
-    'Fetch a public URL, extract its main article as Markdown, and create a SOURCE doc in the space. When the space has the LLM-Wiki enabled, this also enqueues the auto-ingest worker, which curates the source into wiki pages (immediately under auto-apply, or as a pending plan under review-gate). Wraps POST /spaces/:id/docs/ingest-url.',
+    'Fetch a public URL, extract its main article as Markdown, and create a SOURCE doc in the space. On an LLM-Wiki space the ingest worker writes pages at once (auto-apply) or parks a plan (review-gate); lint merges and stale re-ingests always apply directly, with receipt and undo. Wraps POST /spaces/:id/docs/ingest-url.',
   inputSchema: z.object({
     spaceId: z.string().uuid().describe('Target doc space (find via orboto_list_doc_spaces).'),
     url: z.string().url().max(2048).describe('Public URL to import.'),
@@ -64,19 +64,34 @@ export function makeWikiAskHandler(client: OrbotoClient) {
 export const wikiLintToolConfig = {
   title: 'Lint a wiki space',
   description:
-    'Lint an LLM-Wiki space for inconsistencies. It finds orphan pages, missing cross-references, stale pages, unprocessed sources and, when AI is configured, contradictions and undocumented concepts. Returns the open issues, each with a suggested fix. Wraps POST /spaces/:id/llm-wiki/lint.',
+    'Lint an LLM-Wiki space for inconsistencies. It merges a duplicate page (same title or near-identical text) into the older one, whose stub keeps the key and smart links valid, queues a re-ingest from newer sources for a stale page instead of filing it, and finds orphan pages, missing cross-references, unprocessed sources and, when AI is configured, contradictions and undocumented concepts. Returns the open issues with a suggested fix, the merges and re-ingests, and a receipt with its undo for every merge. Wraps POST /spaces/:id/llm-wiki/lint.',
   inputSchema: z.object({
     spaceId: z.string().uuid().describe('The LLM-Wiki space to lint.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
+type WikiPageLink = { id: string; key: string | null; title: string };
+type WikiLintAnswer = {
+  issues: Array<{ kind: string; message: string; suggestedFix: string | null; docId: string | null }>;
+  detected: number;
+  resolved: number;
+  merged?: Array<{ from: WikiPageLink; into: WikiPageLink; undoCommand: string }>;
+  reingested?: WikiPageLink[];
+};
 export function makeWikiLintHandler(client: OrbotoClient) {
   return async (input: { spaceId: string }): Promise<CallToolResult> => {
-    const res = await client.post<{ issues: Array<{ kind: string; message: string; suggestedFix: string | null; docId: string | null }>; detected: number; resolved: number }>(`/spaces/${input.spaceId}/llm-wiki/lint`, {});
+    const res = await client.post<WikiLintAnswer>(`/spaces/${input.spaceId}/llm-wiki/lint`, {});
     const lines = res.issues.length === 0
       ? ['No open lint issues.']
       : res.issues.map((i) => `- [${i.kind}] ${i.message}${i.suggestedFix ? ` (fix: ${i.suggestedFix})` : ''}`);
-    return text(`Lint complete: ${res.issues.length} open issue(s), ${res.resolved} auto-resolved.\n${lines.join('\n')}`, { issues: res.issues, detected: res.detected, resolved: res.resolved });
+    const merged = res.merged ?? [];
+    const reingested = res.reingested ?? [];
+    const page = (p: WikiPageLink) => p.key ?? p.id;
+    const done = [
+      ...merged.map((m) => `- merged ${page(m.from)} into ${page(m.into)} (undo: ${m.undoCommand})`),
+      ...reingested.map((p) => `- re-ingest queued for stale ${page(p)} "${p.title}"`),
+    ];
+    return text(`Lint complete: ${res.issues.length} open issue(s), ${res.resolved} auto-resolved, ${merged.length} merged, ${reingested.length} re-ingest(s) queued.\n${[...done, ...lines].join('\n')}`, { issues: res.issues, detected: res.detected, resolved: res.resolved, merged, reingested });
   };
 }
 
@@ -129,6 +144,9 @@ export function makeWikiApplyPlanHandler(client: OrbotoClient) {
   };
 }
 
+/** ORB-2774 - the apply of a supersede op whose page moved since the plan read it; the record tool plans once more. */
+const SUPERSEDE_CONFLICT = 'errors.docs.supersede_conflict';
+
 export const wikiRecordToolConfig = {
   title: 'Record a wiki update (plan + apply)',
   description:
@@ -144,8 +162,15 @@ export function makeWikiRecordHandler(client: OrbotoClient) {
   return async (input: { spaceId: string; instruction: string; sourceDocId?: string }): Promise<CallToolResult> => {
     const planBody: Record<string, unknown> = { instruction: input.instruction };
     if (input.sourceDocId) planBody.sourceDocId = input.sourceDocId;
-    const plan = await client.post<{ planId: string; droppedOps?: DroppedOp[] }>(`/spaces/${input.spaceId}/docs/plan-update`, planBody);
-    const applied = await client.post<{ touchedDocs: string[] }>(`/spaces/${input.spaceId}/docs/apply-plan`, { planId: plan.planId });
+    const planAndApply = async () => {
+      const plan = await client.post<{ planId: string; droppedOps?: DroppedOp[] }>(`/spaces/${input.spaceId}/docs/plan-update`, planBody);
+      const applied = await client.post<{ touchedDocs: string[] }>(`/spaces/${input.spaceId}/docs/apply-plan`, { planId: plan.planId });
+      return { plan, applied };
+    };
+    const { plan, applied } = await planAndApply().catch((err: unknown) => {
+      if (err instanceof OrbotoApiError && err.status === 409 && err.body.includes(SUPERSEDE_CONFLICT)) return planAndApply();
+      throw err;
+    });
     const droppedOps = plan.droppedOps ?? [];
     return text(`Recorded: ${applied.touchedDocs.length} page(s) updated.${droppedLines(droppedOps)}`, { planId: plan.planId, touchedDocs: applied.touchedDocs, droppedOps });
   };

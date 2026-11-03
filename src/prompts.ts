@@ -176,7 +176,7 @@ export function registerOrbotoPrompts(server: McpServer): void {
             '',
             'Steps:',
             `1. Call \`orboto_wiki_ingest_url\` with spaceId="${spaceId}" and url="${url}".`,
-            '2. If the space runs review-gate, the curation lands as a pending plan - tell the operator to review it in the space (sidebar). If auto-apply, the pages were written directly.',
+            '2. If the space runs review-gate, the curation is parked as a pending plan (approving it is ORB-2802) - tell the operator; if auto-apply, the pages were written directly. Lint merges and stale re-ingests are not gated: they apply at once with a receipt and undo.',
             '3. Read `orboto://wiki/' + spaceId + '/log` to confirm what changed and summarise the new / updated pages in 2-3 sentences.',
             '',
             'If ingest fails (bad URL, space not wiki-enabled), report the error plainly and stop.',
