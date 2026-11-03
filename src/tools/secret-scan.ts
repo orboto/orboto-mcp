@@ -38,11 +38,11 @@ interface SecretScanReport {
 export const secretScanToolConfig = {
   title: 'Secret scan',
   description:
-    'Admin sweep for stored secret-shaped values; see skill reference admin.md "Secret scan". Each offer prints a findingId (the credential kind it would become); the move into the vault is not a tool: send that id to POST /admin/content/secret-scan/move through orboto_api_call, or run `orboto admin secret-scan move <findingId>` in the CLI.',
+    'Admin sweep for stored secret-shaped values. Skill reference admin.md "Secret scan". Each offer prints a findingId (the credential kind it would become); the move into the vault is not a tool: send that id to POST /admin/content/secret-scan/move through orboto_api_call, or run `orboto admin secret-scan move <findingId>` in the CLI.',
   inputSchema: z.object({
     redact: z.boolean().optional().describe('Replace found values, purge history (default false).'),
     limit: z.number().int().min(1).max(1000).optional().describe('Max hits (default 200).'),
-    cursor: z.string().min(1).max(2000).optional().describe('The nextCursor of a scan that stopped at its limit.'),
+    cursor: z.string().min(1).max(2000).optional().describe('nextCursor of a scan stopped at its limit.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
