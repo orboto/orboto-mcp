@@ -40,6 +40,15 @@ describe('ORB-2181 - the restart request file', () => {
     expect(JSON.parse(readFileSync(file, 'utf8'))).toMatchObject({ reason: 'the CLI was updated', source: 'mcp' });
   });
 
+  it('tells the agent that running subagents and background tasks hold the restart back (ORB-2771)', () => {
+    report({ cwd: '/work/repo', sessionId: 'sess-7f3a2b1c', contextTokens: 10, updatedAt: new Date(NOW).toISOString() });
+    const { detail } = writeRestartRequestHere('/work/repo', 'the CLI was updated');
+    expect(detail).toContain('no turn, subagent or background task is running');
+    expect(detail).toContain('never interrupts a turn or ends a subagent or background task');
+    expect(detail).toContain('orboto claude --restart --force-end-agents');
+    expect(detail).not.toContain('as soon as no turn is running; it never interrupts one');
+  });
+
   it('refuses without a status line report and names the fix', () => {
     const result = writeRestartRequestHere('/work/repo', 'rotated key');
     expect(result.written).toBe(false);

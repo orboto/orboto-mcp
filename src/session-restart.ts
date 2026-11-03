@@ -88,6 +88,7 @@ export function writeRestartRequest(
     written: true,
     sessionId,
     path: file,
-    detail: 'the supervisor restarts this session as soon as no turn is running; it never interrupts one',
+    detail:
+      'the supervisor restarts this session as soon as no turn, subagent or background task is running; it never interrupts a turn or ends a subagent or background task, and declines the request when they still run after the idle timeout (10 minutes unless set) - only `orboto claude --restart --force-end-agents` on the machine restarts over running work',
   };
 }
