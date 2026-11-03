@@ -31,6 +31,8 @@ interface SecretScanReport {
   scanned: Record<string, number>;
   hits: SecretScanHit[];
   redacted: number;
+  truncated: boolean;
+  nextCursor: string | null;
 }
 
 export const secretScanToolConfig = {
@@ -40,15 +42,17 @@ export const secretScanToolConfig = {
   inputSchema: z.object({
     redact: z.boolean().optional().describe('Replace found values, purge history (default false).'),
     limit: z.number().int().min(1).max(1000).optional().describe('Max hits (default 200).'),
+    cursor: z.string().min(1).max(2000).optional().describe('The nextCursor of a scan that stopped at its limit.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
 export function makeSecretScanHandler(client: OrbotoClient) {
-  return async (args: { redact?: boolean; limit?: number }): Promise<CallToolResult> => {
+  return async (args: { redact?: boolean; limit?: number; cursor?: string }): Promise<CallToolResult> => {
     const report = await client.post<SecretScanReport>('/admin/content/secret-scan', {
       redact: args.redact ?? false,
       limit: args.limit ?? 200,
+      ...(args.cursor ? { cursor: args.cursor } : {}),
     });
 
     const lines: string[] = [];
@@ -73,6 +77,12 @@ export function makeSecretScanHandler(client: OrbotoClient) {
         : `${report.hits.length} hits; rotate every credential listed above, then run with redact: true.`);
     }
 
+    if (report.truncated) {
+      lines.push(report.nextCursor
+        ? `The scan stopped at its limit and rows after the last hit were not checked: continue with cursor ${report.nextCursor}.`
+        : 'The scan stopped at its limit and cannot be continued: rows after the last hit were not checked. Redact the hits found, then scan again.');
+    }
+
     return {
       content: [{ type: 'text', text: lines.join('\n') }],
       structuredContent: {
@@ -80,6 +90,8 @@ export function makeSecretScanHandler(client: OrbotoClient) {
         scanned: report.scanned,
         hitCount: report.hits.length,
         redactedCount: report.redacted,
+        truncated: report.truncated,
+        nextCursor: report.nextCursor,
         hits: report.hits.map((h) => ({
           entity: h.entity, id: h.id, label: h.label, field: h.field,
           projectKey: h.projectKey, spaceVisibility: h.spaceVisibility, webUrl: h.webUrl,

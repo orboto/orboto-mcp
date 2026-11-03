@@ -30,4 +30,25 @@ describe('orboto_secret_scan', () => {
     expect(text).toContain('move as login: findingId WyJkb2MiXQ');
     expect(res.structuredContent).toMatchObject({ hits: [{ moves: [{ findingId: 'WyJkb2MiXQ', kind: 'login' }] }] });
   });
+
+  it('forwards the cursor and says what a truncated scan allows', async () => {
+    const bodies: unknown[] = [];
+    const page = (nextCursor: string | null) => ({
+      scannedAt: '2026-11-02T10:00:00.000Z', scanned: { doc: 2 }, redacted: 0, nextCursor, truncated: true,
+      hits: [{ entity: 'doc', id: 'd1', label: 'ACME-D1', field: 'content', projectKey: null, spaceVisibility: null, webUrl: null, findings: [], redacted: false }],
+    });
+    const answers = [page('cur-2'), page(null)];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      bodies.push(init?.body ? JSON.parse(init.body as string) : undefined);
+      return { ok: true, status: 200, statusText: 'OK', text: async () => '', json: async () => answers.shift() } as unknown as Response;
+    });
+    const first = await makeSecretScanHandler(client)({ limit: 1, cursor: 'cur-1' });
+    expect(bodies[0]).toMatchObject({ limit: 1, cursor: 'cur-1' });
+    expect((first.content[0] as { text: string }).text).toContain('continue with cursor cur-2');
+    expect(first.structuredContent).toMatchObject({ truncated: true, nextCursor: 'cur-2' });
+    const second = await makeSecretScanHandler(client)({ limit: 1 });
+    expect(bodies[1]).not.toHaveProperty('cursor');
+    expect((second.content[0] as { text: string }).text).toContain('cannot be continued');
+    expect(second.structuredContent).toMatchObject({ truncated: true, nextCursor: null });
+  });
 });
