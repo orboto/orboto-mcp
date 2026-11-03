@@ -96,6 +96,9 @@ afterEach(() => { vi.restoreAllMocks(); });
  * (the search and list-in-space summaries stay as ORB-2766 shortened them),
  * and the save-answer summary no longer stops at "e.g." (full = 170,552 on
  * top of ORB-2766, from 171,178; curated = 39,277).
+ * ORB-2790 added `orboto_session_digest` (+464, full tier only) inside the
+ * ceiling: one optional sessionId without a description and a one-sentence
+ * summary (full = 171,133 from 170,669; curated unchanged at 39,394).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

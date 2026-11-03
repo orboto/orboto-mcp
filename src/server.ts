@@ -19,6 +19,7 @@ import { embeddingStatusToolConfig, makeEmbeddingStatusHandler } from './tools/e
 import { aiUsageToolConfig, makeAiUsageHandler } from './tools/ai-usage.js';
 import { secretScanToolConfig, makeSecretScanHandler } from './tools/secret-scan.js';
 import { sessionStartToolConfig, makeSessionStartHandler } from './tools/session-start.js';
+import { sessionDigestToolConfig, makeSessionDigestHandler } from './tools/session-digest.js';
 import { CHANNEL_CAPABILITY, CHANNEL_INSTRUCTIONS } from './inbox-channel.js';
 import { loadRequiredRules } from './required-rules.js';
 import { responseExpandToolConfig, makeResponseExpandHandler } from './tools/response-expand.js';
@@ -441,6 +442,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_messages', agentMessagesToolConfig, makeAgentMessagesHandler(client));
   reg('orboto_agent_wakes', agentWakesToolConfig, makeAgentWakesHandler(client));
   reg('orboto_session_check', sessionCheckToolConfig, makeSessionCheckHandler(client));
+  reg('orboto_session_digest', sessionDigestToolConfig, makeSessionDigestHandler(client));
   reg('orboto_knowledge_ask', knowledgeAskToolConfig, makeKnowledgeAskHandler(client));
   reg('orboto_knowledge_find', knowledgeFindToolConfig, makeKnowledgeFindHandler(client));
   reg('orboto_knowledge_add', knowledgeAddToolConfig, makeKnowledgeAddHandler(client));
