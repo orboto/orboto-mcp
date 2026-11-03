@@ -6,9 +6,10 @@
  * exercising the edge cases here beats duplicating them in every
  * tool test.
  */
+import { readFileSync } from 'node:fs';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';
-import { resolveProjectByKey, resolveTicketByKey, ticketLine, normalizeName, resolveByName, mcpProcessInstance, checkoutInstanceToken } from './shared.js';
+import { resolveProjectByKey, resolveTicketByKey, ticketLine, normalizeName, resolveByName, mcpProcessInstance, checkoutInstanceToken, reviewerFlaggedLine } from './shared.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
 afterEach(() => { vi.restoreAllMocks(); });
@@ -199,5 +200,14 @@ describe('mcpProcessInstance', () => {
   it('is the checkout token this process derived at start', () => {
     expect(mcpProcessInstance()).toBe(checkoutInstanceToken());
     expect(mcpProcessInstance().length).toBeGreaterThan(0);
+  });
+});
+
+describe('reviewerFlaggedLine (ORB-2775)', () => {
+  const fixture = JSON.parse(readFileSync(new URL('../../../../packages/shared-schema/fixtures/reviewer-flagged-line.json', import.meta.url), 'utf8')) as { cases: Array<{ name: string; review: Parameters<typeof reviewerFlaggedLine>[0]; line: string | null }> };
+
+  it('prints every line of the shared-schema fixture the same way', () => {
+    expect(fixture.cases.length).toBeGreaterThan(5);
+    for (const c of fixture.cases) expect(reviewerFlaggedLine(c.review), c.name).toBe(c.line);
   });
 });

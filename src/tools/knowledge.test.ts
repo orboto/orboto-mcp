@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OrbotoClient } from '../orboto-client.js';
-import { OrbotoClient as RealClient } from '../orboto-client.js';
+import { OrbotoApiError, OrbotoClient as RealClient } from '../orboto-client.js';
 import { knowledgeAddToolConfig, knowledgeAskToolConfig, makeKnowledgeAddHandler, makeKnowledgeAskHandler } from './knowledge.js';
 import { KNOWLEDGE_BLOCK_CHARS, knowledgeLines, makeSessionStartHandler } from './session-start.js';
 import { makeResponseExpandHandler } from './response-expand.js';
@@ -22,6 +22,38 @@ describe('ORB-2225 orboto_knowledge_ask and orboto_knowledge_add', () => {
     expect(post).toHaveBeenCalledWith('/knowledge/ask', { question: 'where does the backup run?' }, { instanceToken: 'mcp-abc' });
     expect(textOf(result)).toContain('[1] Backup chain - /spaces/s/docs/d');
     expect(textOf(result)).toContain('Asked: ACME-S1, SPACE-3.');
+  });
+
+  it('ORB-2775 - says where the time went and turns a deadline into the phase plus the search fallback', async () => {
+    const post = vi.fn().mockResolvedValue({
+      answer: 'Nightly [1].', citations: [], mode: 'semantic', abstained: false, source: 'session', spaces: [{ spaceKey: 'ACME-S1', spaceName: 'ACME', projectKey: 'ACME' }],
+      timings: { totalMs: 4200, retrievalMs: 400, modelMs: 3600, reviewMs: 0, passages: 5, promptChars: 9000 },
+    });
+    const result = await makeKnowledgeAskHandler({ post } as unknown as OrbotoClient)({ question: 'backup?' });
+    expect(textOf(result)).toContain('Asked: ACME-S1 in 4.2 s (retrieval 0.4 s, model 3.6 s).');
+    const body = JSON.stringify({ error: 'No answer within 25 s: the model phase did not finish in time.', errorKey: 'errors.ai.ask_deadline', errorParams: { phase: 'model', seconds: 25 } });
+    const failing = vi.fn().mockRejectedValue(new OrbotoApiError(504, body, '/knowledge/ask'));
+    await expect(makeKnowledgeAskHandler({ post: failing } as unknown as OrbotoClient)({ question: 'backup?' }))
+      .rejects.toThrow('No answer within 25 s: the model phase did not finish in time. Search the same wikis without the model with orboto_search_docs.');
+  });
+
+  it('ORB-2775 - prints what the reviewer flagged as its own line and says when the review ran out of time', async () => {
+    const base = { answer: 'It runs every hour [1].', citations: [], mode: 'semantic', abstained: false, source: 'session', spaces: [{ spaceKey: 'ACME-S1', spaceName: 'ACME', projectKey: 'ACME' }] };
+    const ask = async (review: unknown) => textOf(await makeKnowledgeAskHandler({ post: vi.fn().mockResolvedValue({ ...base, review }) } as unknown as OrbotoClient)({ question: 'backup?' }));
+    const flagged = { reviewer: 'r', findings: [{ kind: 'invented_fact', quote: 'every hour', reason: 'x' }, { kind: 'inference', quote: 'runs', reason: 'y' }], regenerated: true, flagged: true };
+    expect(await ask(flagged)).toContain('Reviewer flagged: "every hour"');
+    expect(await ask(flagged)).not.toContain('"runs"');
+    expect(await ask({ reviewer: 'r', findings: [], regenerated: false, flagged: true })).toContain('Reviewer flagged: the review did not finish before the deadline');
+    expect(await ask({ reviewer: 'r', findings: [], regenerated: false, flagged: false })).not.toContain('Reviewer flagged');
+    expect(await ask(null)).not.toContain('Reviewer flagged');
+    const result = await makeKnowledgeAskHandler({ post: vi.fn().mockResolvedValue({ ...base, review: flagged }) } as unknown as OrbotoClient)({ question: 'backup?' });
+    expect(result.structuredContent).toMatchObject({ review: { flagged: true } });
+  });
+
+  it('ORB-2775 - the description names the passage clamp and both deadlines', () => {
+    expect(knowledgeAskToolConfig.description).toContain('At most 6 passages');
+    expect(knowledgeAskToolConfig.description).toContain('25 s hosted, 120 s on a local provider');
+    expect(knowledgeAskToolConfig.description).toContain('Reviewer flagged');
   });
 
   it('files a fact and returns the server sentence naming where it landed', async () => {

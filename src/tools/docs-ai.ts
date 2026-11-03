@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { KNOWLEDGE_DATA_NOTICE, SEMANTIC_DEGRADED_LINE } from './shared.js';
+import { KNOWLEDGE_DATA_NOTICE, SEMANTIC_DEGRADED_LINE, askTimingClause, reviewerFlaggedLine, rewriteDeadline, type AskReview, type AskTimings } from './shared.js';
 
 interface AskDocsCitation {
   index: number;
@@ -21,6 +21,10 @@ interface AskDocsResponse {
   abstained?: boolean;
   /** ORB-2543 - retrieval ran on keyword candidates only. */
   semanticDegraded?: boolean;
+  /** ORB-2775 - where the time went. */
+  timings?: AskTimings;
+  /** ORB-2775 - the reviewer's verdict; flagged means invented claims remain or the review ran out of time. */
+  review?: AskReview | null;
 }
 
 interface IngestUrlResponse {
@@ -45,11 +49,11 @@ interface IngestFileResponse {
 export const askDocsToolConfig = {
   title: 'Ask a question against the wiki (RAG)',
   description:
-    'Run a natural-language question against the wiki via the workspace\'s RAG pipeline. Returns an `answer` (Markdown) + `citations` array `[{index, title, link, spaceName}]`. The model is the workspace\'s configured AI provider; retrieval requires the embedding provider too - call `orboto_ai_status` to verify both before relying on this. Restrict to a single doc space with `spaceId` when scoping a query (e.g. "only the runbooks space"). Latency is dominated by retrieval + LLM round-trip; expect 2-10s.',
+    'Run a natural-language question against the wiki via the workspace\'s RAG pipeline. Returns an `answer` (Markdown) + `citations` array `[{index, title, link, spaceName}]`. The model is the workspace\'s configured AI provider; retrieval requires the embedding provider too - call `orboto_ai_status` to verify both before relying on this. Restrict to a single doc space with `spaceId` when scoping a query (e.g. "only the runbooks space"). At most 6 passages reach the model. Latency is dominated by retrieval + LLM round-trip; expect 2-10s. It answers within its deadline (25 s hosted, 120 s on a local provider; the operator can change it) or fails naming the phase that did not finish (retrieval or model); then search with `orboto_search_docs`. A "Reviewer flagged" line means the reviewer called claims in the answer invented or ran out of time: treat the answer as a draft.',
   inputSchema: z.object({
     question: z.string().min(3),
     spaceId: z.string().min(1).optional().describe('Limit RAG retrieval to one doc space - key (e.g. ORB-S1), name, or UUID.'),
-    limit: z.number().int().min(1).max(20).optional().describe('Max chunks to retrieve (default: 5).'),
+    limit: z.number().int().min(1).max(20).optional().describe('Passages (default 5; model reads up to 6).'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -60,7 +64,7 @@ export function makeAskDocsHandler(client: OrbotoClient) {
   }): Promise<CallToolResult> => {
     const body: Record<string, unknown> = { question, limit: limit ?? 5 };
     if (spaceId) body.spaceId = spaceId;
-    const res = await client.post<AskDocsResponse>('/ai/ask-docs', body);
+    const res = await client.post<AskDocsResponse>('/ai/ask-docs', body).catch(rewriteDeadline);
     const lines = [res.answer.trim()];
     if (res.citations.length > 0) {
       lines.push('', 'Sources:');
@@ -71,6 +75,9 @@ export function makeAskDocsHandler(client: OrbotoClient) {
     }
     if (res.abstained) lines.push('', '(abstained: no claim in the answer could be tied to a retrieved doc - treat as "not in the docs", do not guess)');
     lines.push('', `(retrieval mode: ${res.mode})`);
+    if (res.timings) lines.push(`Answered${askTimingClause(res.timings)}.`);
+    const flagged = reviewerFlaggedLine(res.review);
+    if (flagged) lines.push(flagged);
     if (res.semanticDegraded) lines.push(`(${SEMANTIC_DEGRADED_LINE})`);
     lines.push(KNOWLEDGE_DATA_NOTICE);
     return {
@@ -81,6 +88,8 @@ export function makeAskDocsHandler(client: OrbotoClient) {
         mode: res.mode,
         abstained: res.abstained ?? false,
         semanticDegraded: res.semanticDegraded ?? false,
+        timings: res.timings ?? null,
+        review: res.review ?? null,
       },
     };
   };

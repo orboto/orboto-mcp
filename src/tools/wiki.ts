@@ -9,7 +9,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { SEMANTIC_DEGRADED_LINE, replacedLines, type ReplacedRevision } from './shared.js';
+import { SEMANTIC_DEGRADED_LINE, askTimingClause, replacedLines, reviewerFlaggedLine, rewriteDeadline, type AskReview, type AskTimings, type ReplacedRevision } from './shared.js';
 import { resolveDocId } from './docs.js';
 
 function text(t: string, structured?: Record<string, unknown>): CallToolResult {
@@ -39,11 +39,11 @@ export function makeWikiIngestUrlHandler(client: OrbotoClient) {
 export const wikiAskToolConfig = {
   title: 'Ask a question over the wiki (RAG with citations)',
   description:
-    'Retrieval-augmented Q&A over the docs corpus, optionally scoped to one space. Returns an answer with numbered citations linking back to source docs. Requires both a chat AND an embedding provider (check orboto_ai_status). Wraps POST /ai/ask-docs.',
+    'Retrieval-augmented Q&A over the docs corpus, optionally scoped to one space. Returns an answer with numbered citations linking back to source docs and where the time went. At most 6 passages reach the model. Answers within its deadline (25 s hosted, 120 s on a local provider; the operator can change it) or fails naming the phase that did not finish (retrieval or model); then search with orboto_search_docs. A "Reviewer flagged" line means the reviewer called claims in the answer invented or ran out of time: treat the answer as a draft. Requires both a chat AND an embedding provider (check orboto_ai_status). Wraps POST /ai/ask-docs.',
   inputSchema: z.object({
     question: z.string().min(1).max(2000).describe('Natural-language question.'),
     spaceId: z.string().uuid().optional().describe('Scope the search to one space; omit for the whole corpus.'),
-    limit: z.number().int().min(1).max(20).optional().describe('Max source docs to retrieve (default 5).'),
+    limit: z.number().int().min(1).max(20).optional().describe('Passages (default 5; model reads up to 6).'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -52,10 +52,12 @@ export function makeWikiAskHandler(client: OrbotoClient) {
     const body: Record<string, unknown> = { question: input.question };
     if (input.spaceId) body.spaceId = input.spaceId;
     if (input.limit) body.limit = input.limit;
-    const res = await client.post<{ answer: string; citations: Array<{ index: number; title: string; link: string }>; mode: string; semanticDegraded?: boolean }>(`/ai/ask-docs`, body);
+    const res = await client.post<{ answer: string; citations: Array<{ index: number; title: string; link: string }>; mode: string; semanticDegraded?: boolean; timings?: AskTimings; review?: AskReview | null }>(`/ai/ask-docs`, body).catch(rewriteDeadline);
     const cites = res.citations.map((c) => `[${c.index}] ${c.title} - ${c.link}`).join('\n');
     const degraded = res.semanticDegraded ? `\n\n(${SEMANTIC_DEGRADED_LINE})` : '';
-    return text(`${res.answer}\n\n${cites ? `Sources:\n${cites}` : ''}`.trim() + degraded, { answer: res.answer, citations: res.citations, mode: res.mode, semanticDegraded: res.semanticDegraded ?? false });
+    const timing = res.timings ? `\n\nAnswered${askTimingClause(res.timings)}.` : '';
+    const flagged = reviewerFlaggedLine(res.review);
+    return text(`${res.answer}\n\n${cites ? `Sources:\n${cites}` : ''}`.trim() + timing + (flagged ? `\n\n${flagged}` : '') + degraded, { answer: res.answer, citations: res.citations, mode: res.mode, semanticDegraded: res.semanticDegraded ?? false, timings: res.timings ?? null, review: res.review ?? null });
   };
 }
 

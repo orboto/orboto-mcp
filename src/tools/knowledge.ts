@@ -2,30 +2,30 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { KNOWLEDGE_DATA_NOTICE, mcpInstanceToken, SEMANTIC_DEGRADED_LINE } from './shared.js';
+import { askTimingClause, KNOWLEDGE_DATA_NOTICE, mcpInstanceToken, reviewerFlaggedLine, rewriteDeadline, SEMANTIC_DEGRADED_LINE, type AskReview, type AskTimings } from './shared.js';
 import { droppedLines, type DroppedOp } from './wiki.js';
 
 interface Citation { index: number; title: string; link: string }
 interface SpaceRef { spaceKey: string | null; spaceName: string; projectKey: string | null }
-interface AskResponse { answer: string; citations: Citation[]; mode: string; abstained: boolean; semanticDegraded?: boolean; source: string; spaces: SpaceRef[] }
+interface AskResponse { answer: string; citations: Citation[]; mode: string; abstained: boolean; semanticDegraded?: boolean; timings?: AskTimings; review?: AskReview | null; source: string; spaces: SpaceRef[] }
 interface AddResponse { action: 'recorded' | 'ingesting' | 'duplicate'; text: string; pages: Array<{ key: string | null; title: string; webUrl: string }>; source: { key: string | null; title: string; webUrl: string } | null; droppedOps?: DroppedOp[] }
 
 type Extra = { sessionId?: string } | undefined;
 
 export const knowledgeAskToolConfig = {
   title: 'Ask the wiki',
-  description: 'Ask your session\'s project wikis and the Operations wiki before asking a person; cite docs by key.',
+  description: 'Ask your session\'s project wikis and the Operations wiki before asking a person; cite docs by key. At most 6 passages reach the model. Answers within its deadline (25 s hosted, 120 s on a local provider; the operator can change it) or fails naming the phase that did not finish (retrieval or model); then search with orboto_search_docs. A "Reviewer flagged" line means the reviewer called claims in the answer invented or ran out of time: treat the answer as a draft.',
   inputSchema: z.object({ question: z.string().min(3).max(1000), projectKeys: z.array(z.string().min(1).max(32)).max(20).optional() }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeKnowledgeAskHandler(client: OrbotoClient) {
   return async (input: { question: string; projectKeys?: string[] }, extra?: unknown): Promise<CallToolResult> => {
-    const res = await client.post<AskResponse>('/knowledge/ask', input, { instanceToken: mcpInstanceToken(undefined, extra as Extra) });
+    const res = await client.post<AskResponse>('/knowledge/ask', input, { instanceToken: mcpInstanceToken(undefined, extra as Extra) }).catch(rewriteDeadline);
     const where = res.spaces.map((s) => s.spaceKey ?? s.spaceName).join(', ');
     const cites = res.citations.map((c) => `[${c.index}] ${c.title} - ${c.link}`).join('\n');
     return {
-      content: [{ type: 'text', text: [res.answer, cites ? `Sources:\n${cites}` : '', `Asked: ${where}. ${KNOWLEDGE_DATA_NOTICE}`, res.semanticDegraded ? `(${SEMANTIC_DEGRADED_LINE})` : ''].filter(Boolean).join('\n\n') }],
+      content: [{ type: 'text', text: [res.answer, cites ? `Sources:\n${cites}` : '', `Asked: ${where}${askTimingClause(res.timings)}. ${KNOWLEDGE_DATA_NOTICE}`, reviewerFlaggedLine(res.review) ?? '', res.semanticDegraded ? `(${SEMANTIC_DEGRADED_LINE})` : ''].filter(Boolean).join('\n\n') }],
       structuredContent: res as unknown as Record<string, unknown>,
     };
   };

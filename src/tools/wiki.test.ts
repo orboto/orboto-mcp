@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
 import {
+  wikiAskToolConfig,
   makeWikiIngestUrlHandler,
   makeWikiAskHandler,
   makeWikiLintHandler,
@@ -51,6 +52,40 @@ describe('orboto_wiki_ask', () => {
     const txt = (res.content[0] as { text: string }).text;
     expect(txt).toContain('It uses MVCC.');
     expect(txt).toContain('[1] Concurrency');
+  });
+});
+
+describe('orboto_wiki_ask ORB-2775 timings, reviewer and deadline', () => {
+  const answer = { answer: 'It runs every hour [1].', citations: [{ index: 1, title: 'Backup', link: '/spaces/x/docs/y' }], mode: 'semantic', timings: { totalMs: 4200, retrievalMs: 400, modelMs: 3600, reviewMs: 0, passages: 5, promptChars: 9000 } };
+
+  it('says where the time went and prints what the reviewer flagged', async () => {
+    stubJSON([{ json: { ...answer, review: { reviewer: 'r', findings: [{ kind: 'invented_fact', quote: 'every hour', reason: 'x' }], regenerated: true, flagged: true } } }]);
+    const res = await makeWikiAskHandler(client)({ question: 'backup?' });
+    const txt = (res.content[0] as { text: string }).text;
+    expect(txt).toContain('Answered in 4.2 s (retrieval 0.4 s, model 3.6 s).');
+    expect(txt).toContain('Reviewer flagged: "every hour"');
+    expect(res.structuredContent).toMatchObject({ timings: { totalMs: 4200 }, review: { flagged: true } });
+  });
+
+  it('prints no reviewer line for a clean review', async () => {
+    stubJSON([{ json: { ...answer, review: { reviewer: 'r', findings: [], regenerated: false, flagged: false } } }]);
+    expect(((await makeWikiAskHandler(client)({ question: 'backup?' })).content[0] as { text: string }).text).not.toContain('Reviewer flagged');
+  });
+
+  it('turns a 504 into the phase message plus the search fallback and leaves other errors alone', async () => {
+    const body = JSON.stringify({ error: 'No answer within 25 s: the model phase did not finish in time.', errorKey: 'errors.ai.ask_deadline', errorParams: { phase: 'model', seconds: 25 } });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status: 504 }));
+    await expect(makeWikiAskHandler(client)({ question: 'backup?' }))
+      .rejects.toThrow('No answer within 25 s: the model phase did not finish in time. Search the same wikis without the model with orboto_search_docs.');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{"error":"nope"}', { status: 400 }));
+    await expect(makeWikiAskHandler(client)({ question: 'backup?' })).rejects.toBeInstanceOf(OrbotoApiError);
+  });
+
+  it('the description names the passage clamp, both deadlines and the fallback', () => {
+    expect(wikiAskToolConfig.description).toContain('At most 6 passages');
+    expect(wikiAskToolConfig.description).toContain('25 s hosted, 120 s on a local provider');
+    expect(wikiAskToolConfig.description).toContain('orboto_search_docs');
+    expect(JSON.stringify(wikiAskToolConfig.inputSchema.limit.description)).toContain('model reads up to 6');
   });
 });
 
