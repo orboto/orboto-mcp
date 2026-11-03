@@ -447,7 +447,7 @@ export function makeDeleteDocHandler(client: OrbotoClient) {
 }
 
 export const moveDocToolConfig = {
-  title: 'Move a doc page (reparent / reorder / cross-space)',
+  title: 'Move a doc page',
   description:
     'Reparent a doc, change its sort order, or move it into a different space. All three target fields are optional but at least one must be supplied. Distinct from orboto_update_doc\'s parentDocId because the API endpoint emits a different WS event for the tree-rebuild path connected clients care about.',
   inputSchema: z.object({
@@ -485,7 +485,7 @@ export function makeMoveDocHandler(client: OrbotoClient) {
 }
 
 export const duplicateDocSpaceToolConfig = {
-  title: 'Duplicate a doc space (clone the space + the docs you can read)',
+  title: 'Clone a doc space with the docs you can read',
   description:
     'Fork a doc space along with its doc tree. Needs manage rights on the source space; only docs the caller can read are copied. The new space\'s name becomes `<source> (copy)`, parent-child relationships in the tree are preserved via UUID remap. Useful when an agent wants to iterate on a runbook space without mutating the original.',
   inputSchema: z.object({
@@ -527,7 +527,7 @@ interface SmartLinkResolution {
 }
 
 export const resolveDocSmartLinksToolConfig = {
-  title: 'Batch-resolve smart-link references to display metadata',
+  title: 'Resolve smart links',
   description:
     'Resolve `[[doc:UUID]]`/`[[ticket:UUID]]`/`[[milestone:UUID]]`/`[[project:UUID]]`/commit-hash references to their title + URL. Visibility-filtered - items the caller is not allowed to see come back as missing (the rendering frontend falls back to the literal label in that case). Useful when reading a doc body that contains many tokens and you want to display them with current titles in one round-trip rather than N+1 get-* calls. Max 200 items per call.',
   inputSchema: z.object({

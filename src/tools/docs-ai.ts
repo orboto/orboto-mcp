@@ -47,7 +47,7 @@ interface IngestFileResponse {
 }
 
 export const askDocsToolConfig = {
-  title: 'Ask a question against the wiki (RAG)',
+  title: 'Ask the docs (RAG)',
   description:
     'Run a natural-language question against the wiki via the workspace\'s RAG pipeline. Returns an `answer` (Markdown) + `citations` array `[{index, title, link, spaceName}]`. The model is the workspace\'s configured AI provider; retrieval requires the embedding provider too - call `orboto_ai_status` to verify both before relying on this. Restrict to a single doc space with `spaceId` when scoping a query (e.g. "only the runbooks space"). At most 6 passages reach the model. Latency is dominated by retrieval + LLM round-trip; expect 2-10s. It answers within its deadline (25 s hosted, 120 s on a local provider; the operator can change it) or fails naming the phase that did not finish (retrieval or model); then search with `orboto_search_docs`. A "Reviewer flagged" line means the reviewer called claims in the answer invented or ran out of time: treat the answer as a draft.',
   inputSchema: z.object({

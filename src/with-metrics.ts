@@ -12,6 +12,7 @@ import { buildStrictInputSchema, isRawShape } from './input-schema.js';
 import { captureToolDoc, summarizeToolDescription } from './tool-docs.js';
 import { postLogEntry, redactSecrets } from './mcp-instrument.js';
 import { envelopeStatus, metricsToolName } from './tail-labels.js';
+import { collectingReceipts, withReceiptLines } from './knowledge-receipts.js';
 
 /**
  * ORB-1174 - turn an OrbotoApiError into an actionable, agent-visible
@@ -75,9 +76,9 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
     }
     const label = metricsToolName(toolName, args);
     try {
-      const handlerResult = await handler(args, extra);
+      const { value: handlerResult, lines: receiptLines } = await collectingReceipts(() => handler(args, extra));
       const budgeted = applyResponseBudget(toolName, handlerResult, process.env, client);
-      const result = budgeted.result;
+      const result = withReceiptLines(budgeted.result, receiptLines);
       const inner = label === toolName ? undefined : envelopeStatus(handlerResult.structuredContent);
       const isError = result.isError === true || (inner !== undefined && inner >= 400);
       if (nudge) recordSessionStartResult(nudge, toolName, result.isError !== true);

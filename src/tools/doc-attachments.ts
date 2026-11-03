@@ -56,7 +56,7 @@ function isImage(mimetype: string): boolean {
 }
 
 export const uploadDocAttachmentToolConfig = {
-  title: 'Upload an attachment to a doc page',
+  title: 'Upload a doc attachment',
   description:
     'Upload a file as a doc attachment: returns its Markdown image (or link) line + a stable download URL. Bytes come in as base64 (`contentBase64`) so this works without local FS access on the agent side. Set `embed=true` to also PATCH the doc body to append the Markdown line - useful for dropping a screenshot into a page in one call. MIME / extension policy is enforced server-side: blocked types (HTML, SVG, executables) surface a 415.',
   inputSchema: z.object({
@@ -126,7 +126,7 @@ export function makeUploadDocAttachmentHandler(client: OrbotoClient) {
 }
 
 export const listDocAttachmentsToolConfig = {
-  title: 'List attachments on a doc page',
+  title: 'List doc attachments',
   description:
     'Return the doc\'s attachments newest-first, with stable download URLs the agent can hand to the user. Empty list = no attachments.',
   inputSchema: z.object({
@@ -168,7 +168,7 @@ export function makeListDocAttachmentsHandler(client: OrbotoClient) {
 }
 
 export const deleteDocAttachmentToolConfig = {
-  title: 'Delete an attachment from a doc page',
+  title: 'Delete a doc attachment',
   description:
     'DESTRUCTIVE - drops the file row + deletes the underlying S3 object. Does NOT rewrite the doc body, so embedded Markdown lines pointing at the deleted URL will surface as broken images / links. Walk those by hand if needed.',
   inputSchema: z.object({

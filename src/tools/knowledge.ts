@@ -75,3 +75,17 @@ export function makeKnowledgeAddHandler(client: OrbotoClient) {
     return { content: [{ type: 'text', text: `${res.text}${droppedLines(res.droppedOps ?? [])}` }], structuredContent: res as unknown as Record<string, unknown> };
   };
 }
+
+export const knowledgeUndoToolConfig = {
+  title: 'Undo a knowledge write',
+  description: 'Undo one knowledge write by its receipt code. A page changed since is refused (409) with the newer revision and its author; the receipt line never goes into your reply.',
+  inputSchema: z.object({ receipt: z.string().min(1).max(64) }).shape,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+};
+
+export function makeKnowledgeUndoHandler(client: OrbotoClient) {
+  return async (input: { receipt: string }, extra?: unknown): Promise<CallToolResult> => {
+    const res = await client.post<{ text: string; undone: string[] }>(`/knowledge/undo/${encodeURIComponent(input.receipt.trim())}`, {}, { instanceToken: mcpInstanceToken(undefined, extra as Extra) });
+    return { content: [{ type: 'text', text: res.text }], structuredContent: { undone: res.undone } };
+  };
+}

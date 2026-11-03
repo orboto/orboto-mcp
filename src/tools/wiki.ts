@@ -37,7 +37,7 @@ export function makeWikiIngestUrlHandler(client: OrbotoClient) {
 }
 
 export const wikiAskToolConfig = {
-  title: 'Ask a question over the wiki (RAG with citations)',
+  title: 'Wiki Q&A with citations',
   description:
     'Retrieval-augmented Q&A over the docs corpus, optionally scoped to one space. Returns an answer with numbered citations linking back to source docs and where the time went. At most 6 passages reach the model. Answers within its deadline (25 s hosted, 120 s on a local provider; the operator can change it) or fails naming the phase that did not finish (retrieval or model); then search with orboto_search_docs. A "Reviewer flagged" line means the reviewer called claims in the answer invented or ran out of time: treat the answer as a draft. Requires both a chat AND an embedding provider (check orboto_ai_status). Wraps POST /ai/ask-docs.',
   inputSchema: z.object({
@@ -62,7 +62,7 @@ export function makeWikiAskHandler(client: OrbotoClient) {
 }
 
 export const wikiLintToolConfig = {
-  title: 'Run the LLM-Wiki lint pass on a space',
+  title: 'Lint a wiki space',
   description:
     'Lint an LLM-Wiki space for inconsistencies. It finds orphan pages, missing cross-references, stale pages, unprocessed sources and, when AI is configured, contradictions and undocumented concepts. Returns the open issues, each with a suggested fix. Wraps POST /spaces/:id/llm-wiki/lint.',
   inputSchema: z.object({
@@ -111,9 +111,9 @@ export function makeWikiPlanUpdateHandler(client: OrbotoClient) {
 }
 
 export const wikiApplyPlanToolConfig = {
-  title: 'Apply a previously-planned wiki edit',
+  title: 'Apply a planned wiki edit',
   description:
-    'Commit the page operations from a plan created by orboto_wiki_plan_update. Applies every op atomically (each page edit is snapshotted for rollback), then rebuilds the index doc of the space and appends a line to its log doc. ORB-2468: a patch op that drops more than half of its page refuses the whole plan with 409 (nothing written) unless replace is true; each rewritten page comes back in replaced with the revision and the restore command. Fails with 410 if the plan has expired (>15 min) or was already applied. Wraps POST /spaces/:id/docs/apply-plan.',
+    'Commit the page operations from a plan created by orboto_wiki_plan_update. Applies every op atomically (each page edit is snapshotted for rollback), then rebuilds the index doc of the space and appends a line to its log doc. A patch op rewrites its page at once, even when it drops most of it (replace: true is accepted and not required); each rewritten page comes back in replaced with the revision and the restore command, and every write carries its receipt. Fails with 410 if the plan has expired (>15 min) or was already applied. Wraps POST /spaces/:id/docs/apply-plan.',
   inputSchema: z.object({
     spaceId: z.string().uuid(),
     planId: z.string().uuid().describe('From orboto_wiki_plan_update.'),
@@ -130,7 +130,7 @@ export function makeWikiApplyPlanHandler(client: OrbotoClient) {
 }
 
 export const wikiRecordToolConfig = {
-  title: 'Record a wiki update in one step (plan + apply)',
+  title: 'Record a wiki update (plan + apply)',
   description:
     'Plan and apply a wiki edit in one step. Use it mid-task to capture a fact or update a page without the two-step review loop. Internally calls plan-update then apply-plan. For a reviewable change, use orboto_wiki_plan_update instead.',
   inputSchema: z.object({
@@ -172,7 +172,7 @@ export function makeWikiAppendSectionHandler(client: OrbotoClient) {
 export const wikiSaveAnswerToolConfig = {
   title: 'Save a Q&A answer as a wiki page',
   description:
-    'Turn an answer (e.g. from orboto_wiki_ask) into a curated wiki page with smart-links to its citations. Idempotent per (space, question): re-saving the same question updates the page instead of duplicating it. ORB-2468: a re-save that drops more than half of the saved page is refused with 409 unless replace is true; an update names the revision it replaced and the restore command. Wraps POST /ai/save-answer-to-wiki.',
+    'Save an answer (as from orboto_wiki_ask) as a wiki page linking its citations. Idempotent per (space, question): re-saving the same question updates the page instead of duplicating it. A re-save rewrites the saved page at once, even when it drops most of it (replace: true is accepted and not required); an update names the revision it replaced and the restore command. Wraps POST /ai/save-answer-to-wiki.',
   inputSchema: z.object({
     spaceId: z.string().uuid(),
     question: z.string().min(3).max(1000),
@@ -193,7 +193,7 @@ export function makeWikiSaveAnswerHandler(client: OrbotoClient) {
 }
 
 export const wikiFlagStaleToolConfig = {
-  title: 'Flag (or unflag) a wiki page as possibly outdated',
+  title: 'Flag or clear a stale wiki page',
   description:
     'Set or clear the "may be outdated" flag on a page. The flag surfaces passively as a pill in the UI; it does not change the content. Pass stale=false to clear. Wraps POST /docs/:id/flag-stale.',
   inputSchema: z.object({

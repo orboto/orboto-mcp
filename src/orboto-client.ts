@@ -4,6 +4,7 @@
  */
 import { VERSION } from './version.js';
 import { originHeader } from './session-origin.js';
+import { takeReceipts } from './knowledge-receipts.js';
 
 /** ORB-943 - the two ways the stdio proxy authenticates. A static `orb_*` PAT
  *  (service-account fallback) OR a live OAuth token provider that mints
@@ -133,7 +134,7 @@ export class OrbotoClient {
   /** GET a JSON endpoint. Throws `OrbotoApiError` on non-2xx. */
   async get<T>(path: string, options: { signal?: AbortSignal; instanceToken?: string } = {}): Promise<T> {
     const res = await this.authedFetch(this.fullUrl(path), { method: 'GET', signal: options.signal, ...(options.instanceToken ? { headers: { 'x-orboto-agent-session': options.instanceToken } } : {}) });
-    return (await res.json()) as T;
+    return takeReceipts((await res.json()) as T);
   }
 
   /** POST a JSON body. `instanceToken` sends `x-orboto-agent-session` so the api attributes the call to this MCP session (ORB-2136). */
@@ -144,7 +145,7 @@ export class OrbotoClient {
       body: JSON.stringify(body),
     });
     if (res.status === 204) return undefined as T;
-    return (await res.json()) as T;
+    return takeReceipts((await res.json()) as T);
   }
 
   /** PATCH a JSON body. */
@@ -154,7 +155,7 @@ export class OrbotoClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    return (await res.json()) as T;
+    return takeReceipts((await res.json()) as T);
   }
 
   async put<T>(path: string, body: unknown): Promise<T> {
@@ -163,7 +164,7 @@ export class OrbotoClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    return (await res.json()) as T;
+    return takeReceipts((await res.json()) as T);
   }
 
   /** DELETE. Returns the parsed body when the route sends one (some
@@ -183,7 +184,7 @@ export class OrbotoClient {
     });
     if (res.status === 204) return undefined as T;
     const text = await res.text();
-    return (text ? JSON.parse(text) : undefined) as T;
+    return takeReceipts((text ? JSON.parse(text) : undefined) as T);
   }
 
   /**
@@ -198,7 +199,7 @@ export class OrbotoClient {
       body: form, // no Content-Type - fetch sets the boundary
     });
     if (res.status === 204) return undefined as T;
-    return (await res.json()) as T;
+    return takeReceipts((await res.json()) as T);
   }
 
   /**

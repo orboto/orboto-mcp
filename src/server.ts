@@ -49,7 +49,7 @@ import { agentMessagesToolConfig, makeAgentMessagesHandler } from './tools/agent
 import { agentWakesToolConfig, makeAgentWakesHandler } from './tools/agent-wakes.js';
 import { agentWhoToolConfig, makeAgentWhoHandler } from './tools/agent-who.js';
 import { sessionCheckToolConfig, makeSessionCheckHandler } from './tools/session-check.js';
-import { knowledgeAskToolConfig, makeKnowledgeAskHandler, knowledgeAddToolConfig, makeKnowledgeAddHandler, knowledgeFindToolConfig, makeKnowledgeFindHandler } from './tools/knowledge.js';
+import { knowledgeAskToolConfig, makeKnowledgeAskHandler, knowledgeAddToolConfig, makeKnowledgeAddHandler, knowledgeFindToolConfig, makeKnowledgeFindHandler, knowledgeUndoToolConfig, makeKnowledgeUndoHandler } from './tools/knowledge.js';
 import { listProjectsToolConfig, makeListProjectsHandler } from './tools/list-projects.js';
 import { getProjectToolConfig, makeGetProjectHandler } from './tools/get-project.js';
 import { projectReadinessToolConfig, makeProjectReadinessHandler } from './tools/project-readiness.js';
@@ -444,6 +444,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_knowledge_ask', knowledgeAskToolConfig, makeKnowledgeAskHandler(client));
   reg('orboto_knowledge_find', knowledgeFindToolConfig, makeKnowledgeFindHandler(client));
   reg('orboto_knowledge_add', knowledgeAddToolConfig, makeKnowledgeAddHandler(client));
+  reg('orboto_knowledge_undo', knowledgeUndoToolConfig, makeKnowledgeUndoHandler(client));
   reg('orboto_agent_broadcast', agentBroadcastToolConfig, makeAgentBroadcastHandler(client));
   reg('orboto_list_projects', listProjectsToolConfig, makeListProjectsHandler(client));
   reg('orboto_get_project', getProjectToolConfig, makeGetProjectHandler(client));

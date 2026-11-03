@@ -125,7 +125,7 @@ function renderEditResult(res: DocEditsResult): CallToolResult {
 }
 
 export const searchDocsToolConfig = {
-  title: 'Search docs for snippets (context-efficient)',
+  title: 'Search docs for snippets',
   description:
     'Full-text search across wiki docs that returns a highlighted SNIPPET (matched fragments, <mark>…</mark> around each hit) plus the nearest markdown heading path (section anchor) and char/line offset per hit - WITHOUT echoing the full doc body. Use this instead of orboto_get_doc when you only need to locate a passage: find the right doc + section, then change it with orboto_edit_doc / orboto_edit_doc_section, all without transferring the whole document. ACL-filtered in SQL (you only see docs you can read). Ranked by relevance.',
   inputSchema: z.object({
@@ -187,9 +187,9 @@ export function makeSearchDocsHandler(client: OrbotoClient) {
 }
 
 export const editDocToolConfig = {
-  title: 'Targeted string-replace edit of a doc (context-efficient)',
+  title: 'String-replace edit of a doc',
   description:
-    'Change a doc by byte-precise string replacement (Edit-tool-like) - ship only the diff, not the whole doc. Each oldString must match EXACTLY ONCE in the current content (add surrounding context to make it unique) unless replaceAll=true (then >=1). The whole batch is atomic: any match failure applies nothing and returns a 409 you can act on. Prefer this over orboto_update_doc for small changes to a large doc. Pass baseRevisionId (from a previous edit\'s revisionId or orboto_list_doc_revisions) for optimistic concurrency - a stale token is rejected with the current revision id instead of clobbering a concurrent change. Returns a short context window around each change, not the full doc.',
+    'Change a doc by exact string replacement; ship only the diff, not the whole doc. Each oldString must match EXACTLY ONCE in the current content (add surrounding context to make it unique) unless replaceAll=true (then >=1). The whole batch is atomic: any match failure applies nothing and returns a 409 you can act on. Prefer this over orboto_update_doc for small changes to a large doc. Pass baseRevisionId (from a previous edit\'s revisionId or orboto_list_doc_revisions) for optimistic concurrency - a stale token is rejected with the current revision id instead of clobbering a concurrent change. Returns a short context window around each change, not the full doc.',
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or key.'),
     edits: z.array(z.object({
@@ -223,9 +223,9 @@ export function makeEditDocHandler(client: OrbotoClient) {
 }
 
 export const editDocSectionToolConfig = {
-  title: 'Edit a doc section by heading path (context-efficient)',
+  title: 'Edit a doc section by heading path',
   description:
-    'Change a doc by heading-addressed section ops - ship only the new section content, not the whole doc. A section is addressed by its heading path (e.g. ["Setup","Credentials"] = a "Credentials" heading nested under "Setup"). Heading matching is EXACT + case-sensitive; the leading path elements must be an ordered ancestor chain (not necessarily immediate parents). op=replace swaps the section body, op=append adds to its end, op=insertAfter inserts directly below the heading line (the heading line itself is never removed). A path that matches zero or multiple headings returns a 409 you can act on (narrow the path to disambiguate). Prefer this over orboto_update_doc for section-scoped rewrites. baseRevisionId gives optimistic concurrency. Returns a short context window per op.',
+    'Change a doc by heading-addressed section ops; ship only the new section, not the whole doc. A section is addressed by its heading path (e.g. ["Setup","Credentials"] = a "Credentials" heading nested under "Setup"). Heading matching is EXACT + case-sensitive; the leading path elements must be an ordered ancestor chain (not necessarily immediate parents). op=replace swaps the section body, op=append adds to its end, op=insertAfter inserts directly below the heading line (the heading line itself is never removed). A path that matches zero or multiple headings returns a 409 you can act on (narrow the path to disambiguate). Prefer this over orboto_update_doc for section-scoped rewrites. baseRevisionId gives optimistic concurrency. Returns a short context window per op.',
   inputSchema: z.object({
     docId: z.string().min(1).describe('Doc UUID or key.'),
     sectionOps: z.array(z.object({

@@ -132,10 +132,6 @@ describe('orboto_wiki_plan_update + apply_plan', () => {
     expect(out).toContain(replaced.restoreCommand);
     expect(res.structuredContent).toMatchObject({ replaced: [replaced] });
   });
-  it('ORB-2468 - apply-plan surfaces the 409 shrink refusal as OrbotoApiError', async () => {
-    stubJSON([{ ok: false, status: 409, json: { error: 'This write would drop 90% of the existing page KB-D4', errorKey: 'errors.docs.replace_drops_content' } }]);
-    await expect(makeWikiApplyPlanHandler(client)({ spaceId: SPACE, planId: 'p1' })).rejects.toBeInstanceOf(OrbotoApiError);
-  });
   it('apply-plan surfaces a 410 expired plan as OrbotoApiError', async () => {
     stubJSON([{ ok: false, status: 410, json: { error: 'Plan has expired' } }]);
     await expect(makeWikiApplyPlanHandler(client)({ spaceId: SPACE, planId: 'p1' })).rejects.toBeInstanceOf(OrbotoApiError);

@@ -34,7 +34,7 @@ interface DocRow {
 }
 
 export const listDocRevisionsToolConfig = {
-  title: 'List the revision history of a doc page',
+  title: 'List doc revisions',
   description:
     'Return saved revisions for a doc page, newest-first. Each row carries the revision id, title at snapshot time, editor user id, and editedAt timestamp; the body content is NOT in this list (use orboto_get_doc_revision to fetch one). Cursor-paged - pass `cursor` to walk older pages.',
   inputSchema: z.object({
@@ -120,7 +120,7 @@ export function makeGetDocRevisionHandler(client: OrbotoClient) {
 }
 
 export const restoreDocRevisionToolConfig = {
-  title: 'Restore a doc page to a saved revision',
+  title: 'Restore a doc revision',
   description:
     'Roll back the doc to the saved revision. The API snapshots the CURRENT body to a fresh revision row first, so the restore itself is also undoable. Returns the post-restore doc state.',
   inputSchema: z.object({

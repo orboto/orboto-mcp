@@ -90,6 +90,11 @@ afterEach(() => { vi.restoreAllMocks(); });
  * project key, cursor, lease and oversize parameter descriptions to leave
  * 1,013 chars of headroom (full = 170,187).
  * ORB-2766 added `orboto_knowledge_find` inside the ceiling: the whoami, cross-project-links and docs-in-space first sentences and the search_docs summary shrank to pay for it (full = 171,178).
+ * ORB-2767 added `orboto_knowledge_undo` (+481) inside the ceiling: doc,
+ * wiki and primer fact titles and the edit summaries shrank to pay for it
+ * (the search and list-in-space summaries stay as ORB-2766 shortened them),
+ * and the save-answer summary no longer stops at "e.g." (full = 170,552 on
+ * top of ORB-2766, from 171,178; curated = 39,277).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

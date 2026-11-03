@@ -185,7 +185,7 @@ function writeResult(answer: WriteAnswer, label: string): CallToolResult {
 }
 
 export const primerFactListToolConfig = {
-  title: 'List structured project primer facts',
+  title: 'List project primer facts',
   description:
     'List the structured project facts feeding the AI primer, each with author, session and evidence. Read them before adding an observation. Workspace facts are merged in unless includeWorkspace=false.',
   inputSchema: z.object({
@@ -310,7 +310,7 @@ export function makePrimerFactAddHandler(client: OrbotoClient) {
 }
 
 export const primerFactUpdateToolConfig = {
-  title: 'Update an existing primer fact',
+  title: 'Update a primer fact',
   description:
     'Edit a fact in place. Use this when the value has changed (e.g. version bumped) or you are renaming the key. Bumps last_verified_at automatically when the value changes; pure renames leave it untouched. To replace a fact while preserving history, use orboto_primer_fact_supersede instead. A person edits in place: a bot account or an agent key gets 403 errors.primer_facts.update_needs_person and writes the corrected value with orboto_primer_fact_add, which replaces an unpinned fact and keeps its history.'
     + FACT_WRITING_CONTRACT,
@@ -376,7 +376,7 @@ export function makePrimerFactUpdateHandler(client: OrbotoClient) {
 }
 
 export const primerFactSupersedeToolConfig = {
-  title: 'Replace a primer fact while preserving history',
+  title: 'Supersede a primer fact',
   description:
     'Replace a fact by id, the old one stays in history (orboto_primer_fact_history); for a wrong fact, instead of deleting it. Workspace facts are person-written (403); an already superseded fact answers 409 already_superseded. Same live, pinned and size rules as orboto_primer_fact_add.',
   inputSchema: z.object({
