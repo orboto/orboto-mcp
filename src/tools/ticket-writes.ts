@@ -80,7 +80,7 @@ export const createTicketToolConfig = {
     + '**Pre-flight (ORB-2162):** `dryRun: true` runs the same language, type, label and duplicate checks the write runs and returns their verdicts WITHOUT creating anything - `structuredContent.preflight` carries `ok`, `severity`, `blockedBy` and one verdict per check, each with the exact message the real create would answer with. Use it when a create would otherwise cost a round trip to fix the payload afterwards; re-send the same arguments without `dryRun` once the verdicts are clean. '
     + '**Parameter notes.** `deliveryMode` (ORB-1608) is the role-aware commit policy that replaced the blanket one-commit-per-ticket rule: implementation/docs expect exactly one linked commit (closing without one is a non-blocking warning); review/admin/epic never expect one - reviews are read-only, admin work carries external evidence, epics derive completion from their children; unset defaults to "epic" when type=epic, else "implementation". `milestone` takes a key ("ORB-M3"), a name, or a UUID and is looked up in the project including closed milestones - unknown or ambiguous is an error, so pass the key/UUID when a name repeats. `labels` and `assigneeEmails` attach ATOMICALLY inside the create (ORB-1416): an unknown label or non-member email rolls the whole create back with a 400, leaving no orphan ticket - there is no separate attach call to retry.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
+    projectKey: z.string().min(1).describe('Project key.'),
     title: z.string().min(1).max(255),
     description: z.string().optional(),
     type: z.enum(['task', 'bug', 'story', 'epic']).optional(),

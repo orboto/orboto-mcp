@@ -31,7 +31,7 @@ export const listAdminTranslationsToolConfig = {
   inputSchema: z.object({
     status: z.enum(['pending', 'all']).optional().describe('Default: pending.'),
     limit: z.number().int().min(1).max(100).optional().describe('Default: 25.'),
-    cursor: z.string().optional().describe('Opaque cursor from a previous response.'),
+    cursor: z.string().optional().describe('nextCursor of the previous page.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

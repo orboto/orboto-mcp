@@ -49,7 +49,7 @@ export const agentWakesToolConfig = {
     project: z.string().min(1).max(64).optional().describe('Project key or UUID.'),
     outcome: z.enum(['pending', 'handled', 'not_mine', 'obsolete', 'duplicate', 'expired']).optional(),
     limit: z.number().int().min(1).max(200).optional().describe('Default: 50.'),
-    cursor: z.string().optional().describe('Opaque cursor from a previous response.'),
+    cursor: z.string().optional().describe('nextCursor of the previous page.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

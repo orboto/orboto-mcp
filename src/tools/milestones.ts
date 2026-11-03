@@ -38,7 +38,7 @@ export const listMilestonesToolConfig = {
   title: 'List milestones',
   description: 'List milestones in a project, newest first.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
+    projectKey: z.string().min(1).describe('Project key.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -77,7 +77,7 @@ export const getMilestoneToolConfig = {
   description:
     'Return milestone metadata plus ticket-count breakdown by status (to do / in progress / done / …).',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
+    projectKey: z.string().min(1).describe('Project key.'),
     milestone: z.string().min(1).describe('Key ("ORB-M3"), name, or UUID. Name matching normalises HTML entities/case/whitespace.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
@@ -140,7 +140,7 @@ export const createMilestoneToolConfig = {
   description:
     'Create a milestone in a project. `startDate` + `endDate` are optional - omit them (or pass null) for a milestone with no dates. The caller must have `milestone:create`.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
+    projectKey: z.string().min(1).describe('Project key.'),
     name: z.string().min(1).describe('Milestone name (unique within the project).'),
     startDate: z.string().regex(DATE_RE).nullable().optional().describe('YYYY-MM-DD or null.'),
     endDate: z.string().regex(DATE_RE).nullable().optional().describe('YYYY-MM-DD or null.'),

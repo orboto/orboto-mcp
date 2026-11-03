@@ -25,9 +25,9 @@ const TICKET_KEY_ARRAY = z.array(z.string().min(3)).min(1).max(200).optional()
   .describe('Ticket keys (max 200), or query.');
 /** ORB-2054 - the target set can be an OQL query instead of a key list. */
 const QUERY_SOURCE = z.string().min(1).max(8000).optional()
-  .describe('OQL instead of ticketKeys (your ACL), max 200 matches.');
+  .describe('OQL instead of ticketKeys, max 200.');
 const QUERY_PROJECT = z.string().optional()
-  .describe('Project key scoping `query`.');
+  .describe('Project key for `query`.');
 /** Matches per call the MCP loop will process; above that the server-side bulk route is the right tool. */
 export const BULK_QUERY_MAX = 200;
 

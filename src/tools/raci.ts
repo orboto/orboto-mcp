@@ -31,7 +31,7 @@ export const raciToolConfig = {
   description:
     "Read a project's RACI matrix (tickets x members, cells = R/A/C/I). `milestone` scopes to one milestone; `epicsOnly` narrows rows to epics. RACI is OPT-IN per project: only use this when the project has RACI enabled (check `raciEnabled` on orboto_get_project / the primer). Do NOT raise or suggest RACI on projects that haven't enabled it. Returns empty when RACI is off.",
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key (e.g. "ORB").'),
+    projectKey: z.string().min(1).describe('Project key.'),
     milestone: z.string().optional().describe('Milestone name to scope the matrix.'),
     epicsOnly: z.boolean().optional().describe('Only include epics as rows.'),
   }).shape,

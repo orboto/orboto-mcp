@@ -179,7 +179,7 @@ export const wikiSaveAnswerToolConfig = {
     answer: z.string().min(1).max(50_000),
     title: z.string().max(200).optional().describe('Defaults to the question.'),
     parentDocId: z.string().uuid().optional(),
-    citations: z.array(z.object({ docId: z.string().min(1).describe('Doc UUID or key (ORB-D12).'), title: z.string() })).max(50).optional().describe('From orboto_wiki_ask.'),
+    citations: z.array(z.object({ docId: z.string().min(1).describe('Doc UUID or key.'), title: z.string() })).max(50).optional().describe('From orboto_wiki_ask.'),
     replace: z.boolean().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -197,7 +197,7 @@ export const wikiFlagStaleToolConfig = {
   description:
     'Set or clear the "may be outdated" flag on a page. The flag surfaces passively as a pill in the UI; it does not change the content. Pass stale=false to clear. Wraps POST /docs/:id/flag-stale.',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12).'),
+    docId: z.string().min(1).describe('Doc UUID or key.'),
     stale: z.boolean().optional().describe('true to flag (default), false to clear.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },

@@ -39,7 +39,7 @@ export const criticalPathToolConfig = {
   description:
     "Compute a project's (or one milestone's) critical path via the Critical Path Method: the longest finish-to-start dependency chain that sets the delivery date, plus each ticket's slack (total float, in working days). Durations come from `estimatedTimeMinutes` (8h/day, floored at 1 day). Deadline-aware (ORB-1459): a ticket's due date (or its milestone's, when tighter) seeds the backward pass, so total float can go NEGATIVE when a chain cannot meet its deadline - those tickets are reported under `deadlineRisks` with the shortfall in working days. ORB-1614: a dependency edge to a ticket in ANOTHER project is followed one hop (that ticket's own further cross-project blockers are not) when you can read it, and marked `external: true` in the result - an edge to a foreign ticket you cannot read is silently absent from the graph, same as any other out-of-window ticket. Returns the critical path (ticket keys in order), the total working-day duration, per-ticket float, and the deadline risks. A dependency cycle (including one spanning projects) returns the tangled ticket keys instead of a path. By default tickets in completed/archived milestones are excluded (matching the board); set includeClosedMilestones to include them.",
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
+    projectKey: z.string().min(1).describe('Project key.'),
     milestone: z.string().optional().describe('Milestone name to scope to. Omit for the whole project.'),
     includeClosedMilestones: z.boolean().optional().describe('Include tickets of completed/archived milestones (default false, like the board).'),
   }).shape,

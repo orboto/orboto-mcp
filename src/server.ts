@@ -207,6 +207,7 @@ import {
   primerFactUpdateToolConfig, makePrimerFactUpdateHandler,
   primerFactSupersedeToolConfig, makePrimerFactSupersedeHandler,
   primerFactVerifyToolConfig, makePrimerFactVerifyHandler,
+  primerFactHistoryToolConfig, makePrimerFactHistoryHandler,
   primerFactDeleteToolConfig, makePrimerFactDeleteHandler,
 } from './tools/primer-facts.js';
 
@@ -571,6 +572,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_primer_fact_update', primerFactUpdateToolConfig, makePrimerFactUpdateHandler(client));
   reg('orboto_primer_fact_supersede', primerFactSupersedeToolConfig, makePrimerFactSupersedeHandler(client));
   reg('orboto_primer_fact_verify', primerFactVerifyToolConfig, makePrimerFactVerifyHandler(client));
+  reg('orboto_primer_fact_history', primerFactHistoryToolConfig, makePrimerFactHistoryHandler(client));
   reg('orboto_primer_fact_delete', primerFactDeleteToolConfig, makePrimerFactDeleteHandler(client));
 
   reg('orboto_whoami', whoamiToolConfig, makeWhoamiHandler(client));

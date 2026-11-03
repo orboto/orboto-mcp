@@ -83,6 +83,12 @@ afterEach(() => { vi.restoreAllMocks(); });
  * (source_link, list, health, sync), the operator tail through
  * orboto_api_call, paid for by shorter doc-id, review, lease and checklist
  * parameter descriptions (full = 171,118).
+ * ORB-2773 added `orboto_primer_fact_history`, gave add and supersede
+ * `evidence` and `orboto_primer_fact_verify` `pinned` inside the ceiling:
+ * the primer fact parameter descriptions and the add summary shrank to pay
+ * for it (full = 171,134). Its review shortened the repeated doc id,
+ * project key, cursor, lease and oversize parameter descriptions to leave
+ * 1,013 chars of headroom (full = 170,187).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

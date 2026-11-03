@@ -55,9 +55,9 @@ export const workNextToolConfig = {
     role: z.enum(['implementation', 'review', 'preflight', 'integration', 'spec']).optional()
       .describe('Default `implementation`; reserves only a ticket whose (ticket, role) lease is free.'),
     leaseSeconds: z.number().int().min(60).max(86_400).optional()
-      .describe('Lease without renewal, default 900 (15 min).'),
+      .describe('Lease seconds without renewal, default 900.'),
     startTimer: z.boolean().optional()
-      .describe('Default true for implementation, false otherwise.'),
+      .describe('Default: true for implementation.'),
     agentSessionToken: z.string().optional()
       .describe('Agent instance token; default this connection\'s.'),
     resourceClaims: z.array(z.object(ResourceClaimShape)).max(50).optional()

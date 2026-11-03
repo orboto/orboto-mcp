@@ -1,5 +1,5 @@
 /**
- * ORB-510 / ORB-513 - primer-fact tool tests.
+ * ORB-510 / ORB-513 / ORB-2773 - primer-fact tool tests.
  *
  * Each tool is a thin wrapper around a REST endpoint, so the tests
  * pin the wire shape: correct HTTP method, URL with key→UUID
@@ -14,6 +14,7 @@ import {
   makePrimerFactUpdateHandler,
   makePrimerFactSupersedeHandler,
   makePrimerFactVerifyHandler,
+  makePrimerFactHistoryHandler,
   makePrimerFactDeleteHandler,
   primerFactAddToolConfig,
   primerFactSupersedeToolConfig,
@@ -264,11 +265,11 @@ describe('orboto_primer_fact_supersede', () => {
 });
 
 describe('orboto_primer_fact_verify', () => {
-  it('POSTs /primer-facts/<id>/verify with empty body', async () => {
+  it('POSTs /primer-facts/<id>/pin with empty body', async () => {
     const calls = stub([{ json: { ...factStub, verified: true, verifiedBy: 'u1', verifiedAt: 'now' } }]);
     await makePrimerFactVerifyHandler(client)({ factId: factStub.id });
     expect(calls[0].method).toBe('POST');
-    expect(calls[0].url).toContain(`/primer-facts/${factStub.id}/verify`);
+    expect(calls[0].url).toContain(`/primer-facts/${factStub.id}/pin`);
     expect(calls[0].body).toEqual({});
   });
 });
@@ -380,5 +381,115 @@ describe('ORB-1819 size contract', () => {
     expect(res.isError).toBe(true);
     const sc = res.structuredContent as { blocked: boolean };
     expect(sc.blocked).toBe(true);
+  });
+});
+
+function respond(status: number, payload: unknown, headers: Record<string, string> = {}) {
+  return {
+    ok: status < 400,
+    status,
+    statusText: 'x',
+    headers: { get: (name: string) => headers[name.toLowerCase()] ?? null },
+    json: async () => payload,
+    text: async () => JSON.stringify(payload),
+  } as unknown as Response;
+}
+
+function script(answers: Response[]) {
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+    calls.push({ url: url.toString(), method: init?.method ?? 'GET', body: init?.body ? JSON.parse(init.body as string) : undefined });
+    const next = answers.shift();
+    if (!next) throw new Error('unexpected extra fetch');
+    return next;
+  });
+  return calls;
+}
+
+describe('ORB-2773 - an agent fact is live at once, a person pins', () => {
+  const agentFact = { ...factStub, source: 'agent_observed', evidence: 'package.json packageManager', createdByName: 'Claude Agent', agentSessionLabel: 'claude-code on mbp', earlierVersions: 1 };
+
+  it('add sends the evidence and answers live with the outcome', async () => {
+    const calls = script([respond(200, projectStub), respond(201, agentFact)]);
+    const res = await makePrimerFactAddHandler(client)({
+      projectKey: 'ORB', category: 'tech_stack', key: 'package-manager', value: 'pnpm 9', evidence: 'package.json packageManager',
+    });
+    expect(calls[1].body).toMatchObject({ evidence: 'package.json packageManager' });
+    expect((res.content[0] as { text: string }).text).toContain('Live ORB primer fact: tech_stack/package-manager');
+    expect(res.structuredContent).toMatchObject({ outcome: 'live', pinned: false, replaced: null });
+  });
+
+  it('add under an existing unpinned key names the replaced version and the history tool', async () => {
+    script([respond(200, projectStub), respond(201, { ...agentFact, id: 'f-new-2222', replaced: { id: 'f-old-1111', value: 'pnpm 8' } })]);
+    const res = await makePrimerFactAddHandler(client)({
+      projectKey: 'ORB', category: 'tech_stack', key: 'package-manager', value: 'pnpm 9', evidence: 'package.json',
+    });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('replaces f-old-11');
+    expect(text).toContain('orboto_primer_fact_history f-new-2222');
+    expect(res.structuredContent).toMatchObject({ outcome: 'replaced', replaced: 'f-old-1111' });
+  });
+
+  it('add on a pinned fact relays the lesson as a success, never an error', async () => {
+    const lesson = { id: 'd-1', key: 'ORB-D9', title: 'Fact mismatch: tech_stack/package-manager', webUrl: '/docs/ORB-D9' };
+    script([respond(200, projectStub), respond(202, {
+      outcome: 'lesson', fact: { ...factStub, verified: true }, lesson,
+      text: 'Pinned: tech_stack/package-manager stays "pnpm 9". Your value and evidence are filed as lesson ORB-D9 /docs/ORB-D9. Nothing to ask; continue.',
+    })]);
+    const res = await makePrimerFactAddHandler(client)({
+      projectKey: 'ORB', category: 'tech_stack', key: 'package-manager', value: 'yarn', evidence: 'yarn.lock',
+    });
+    expect(res.isError).toBeUndefined();
+    expect((res.content[0] as { text: string }).text).toContain('Nothing to ask; continue.');
+    expect(res.structuredContent).toMatchObject({ outcome: 'lesson', pinned: true, lesson: { key: 'ORB-D9' } });
+  });
+
+  it('add names the evidence, workspace and rate-limit refusals with their keys', async () => {
+    script([respond(200, projectStub), respond(422, { error: 'An agent fact needs evidence', errorKey: 'errors.primer_facts.evidence_required' })]);
+    await expect(makePrimerFactAddHandler(client)({ projectKey: 'ORB', category: 'other', key: 'k', value: 'v' }))
+      .rejects.toThrow(/errors\.primer_facts\.evidence_required/);
+    script([respond(200, projectStub), respond(429, { error: 'Too many knowledge writes', errorKey: 'errors.knowledge.agent_write_rate_limited' }, { 'retry-after': '120' })]);
+    await expect(makePrimerFactAddHandler(client)({ projectKey: 'ORB', category: 'other', key: 'k', value: 'v', evidence: 'e' }))
+      .rejects.toThrow(/agent_write_rate_limited\)\. Retry after 120 s/);
+    script([respond(403, { error: 'A person writes a workspace fact', errorKey: 'errors.primer_facts.workspace_needs_person' })]);
+    await expect(makePrimerFactSupersedeHandler(client)({ oldFactId: 'f-ws', category: 'other', key: 'k', value: 'v', evidence: 'e' }))
+      .rejects.toThrow(/workspace_needs_person/);
+  });
+
+  it('supersede sends the evidence and relays a pinned lesson', async () => {
+    const calls = script([respond(202, { outcome: 'lesson', fact: { ...factStub, verified: true }, lesson: null, text: 'Pinned: tech_stack/package-manager stays "pnpm 9". Your value and evidence are not filed: no wiki. Nothing to ask; continue.' })]);
+    const res = await makePrimerFactSupersedeHandler(client)({
+      oldFactId: factStub.id, category: 'tech_stack', key: 'package-manager', value: 'yarn', evidence: 'yarn.lock',
+    });
+    expect(calls[0].body).toMatchObject({ evidence: 'yarn.lock' });
+    expect(res.structuredContent).toMatchObject({ outcome: 'lesson', lesson: null });
+  });
+
+  it('orboto_primer_fact_verify pins and with pinned=false unpins through /primer-facts/<id>/pin, history reads the versions', async () => {
+    const calls = script([
+      respond(200, { ...factStub, verified: true, verifiedBy: 'u1', verifiedAt: '2026-11-02T10:00:00Z' }),
+      respond(200, { ...factStub, verified: false }),
+      respond(200, [agentFact, { ...factStub, id: 'f-old-1111', supersededById: factStub.id, value: 'pnpm 8' }]),
+    ]);
+    const pinned = await makePrimerFactVerifyHandler(client)({ factId: factStub.id });
+    expect(calls[0]).toMatchObject({ method: 'POST', body: {} });
+    expect(calls[0].url).toContain(`/primer-facts/${factStub.id}/pin`);
+    expect(pinned.structuredContent).toMatchObject({ pinned: true, verifiedBy: 'u1' });
+    const unpinned = await makePrimerFactVerifyHandler(client)({ factId: factStub.id, pinned: false });
+    expect(calls[1].method).toBe('DELETE');
+    expect(calls[1].url).toContain(`/primer-facts/${factStub.id}/pin`);
+    expect((unpinned.content[0] as { text: string }).text).toContain('Unpinned');
+    const history = await makePrimerFactHistoryHandler(client)({ factId: factStub.id });
+    expect(calls[2].url).toContain(`/primer-facts/${factStub.id}/history`);
+    const text = (history.content[0] as { text: string }).text;
+    expect(text).toContain('by Claude Agent (claude-code on mbp)');
+    expect(text).toContain('evidence: package.json packageManager');
+    expect(text).toContain('_(superseded)_');
+    expect(history.structuredContent).toMatchObject({ count: 2 });
+  });
+
+  it('pin as a bot names errors.primer_facts.pin_needs_person', async () => {
+    script([respond(403, { error: 'A person pins a fact', errorKey: 'errors.primer_facts.pin_needs_person' })]);
+    await expect(makePrimerFactVerifyHandler(client)({ factId: factStub.id })).rejects.toThrow(/pin_needs_person/);
   });
 });

@@ -32,14 +32,14 @@ export const customerReportToolConfig = {
     + '`priceMode`: "hours" (estimates, default), "money" (customer rates - needs the budget:view permission), or "lumpSum" (a flat price - pass `lumpSumAmount`). '
     + 'Private tickets and milestones are always excluded, and internal cost/overhead is never included. Toggle sections with `sections` (overview, milestones, epics, tickets, budget). Requires the customer_report:generate permission on the project.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key (e.g. "ORB").'),
+    projectKey: z.string().min(1).describe('Project key.'),
     preset: z.enum(['scope', 'status']).default('scope').describe('Report preset (default "scope").'),
     locale: z.enum(LOCALES).default('en').describe('Report language (default "en").'),
     priceMode: z.enum(['hours', 'money', 'lumpSum']).default('hours').describe('Pricing mode (default "hours"). "money" needs budget:view.'),
     lumpSumAmount: z.number().nonnegative().optional().describe('Flat price for priceMode="lumpSum".'),
     lumpSumCurrency: z.string().min(1).max(8).optional().describe('Currency for the lump sum (default EUR).'),
-    showAssigneeNames: z.boolean().optional().describe('Include assignee names (opt-in, default off).'),
-    showTicketKeys: z.boolean().optional().describe('Show ticket keys in the output (default on).'),
+    showAssigneeNames: z.boolean().optional().describe('Include assignee names (default off).'),
+    showTicketKeys: z.boolean().optional().describe('Show ticket keys (default on).'),
     sections: z.object({
       overview: z.boolean().optional(),
       milestones: z.boolean().optional(),

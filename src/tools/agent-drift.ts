@@ -55,7 +55,7 @@ export const listAgentDriftToolConfig = {
     to: z.string().optional().describe('ISO timestamp upper bound (detected_at).'),
     resolved: z.boolean().optional().describe('true = only resolved, false = only open.'),
     limit: z.number().int().min(1).max(200).optional().describe('Default: 50.'),
-    cursor: z.string().optional().describe('Opaque cursor from a previous response.'),
+    cursor: z.string().optional().describe('nextCursor of the previous page.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

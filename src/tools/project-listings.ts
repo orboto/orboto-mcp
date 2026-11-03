@@ -26,7 +26,7 @@ export const listTicketStatusesToolConfig = {
   description:
     'Return the project\'s workflow rows - `{id, name, category, color, sortOrder, isTerminal}`. The `category` is the broad bucket (todo / in_progress / in_review / done / wont_fix); `name` is the workspace\'s display label (e.g. "Code Review"). Use the `id` to do typed transitions through `orboto_update_ticket` when the standard category-based move is too coarse.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
+    projectKey: z.string().min(1).describe('Project key.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -89,7 +89,7 @@ export const createLabelToolConfig = {
   description:
     'Create a label in a project so it can be assigned to tickets. Closes the gap where `orboto_create_ticket` errors on an unknown label name (labels are not auto-created). Idempotent: if a label with the same name already exists, it is returned instead of erroring. Needs project:edit.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key (e.g. "ACME").'),
+    projectKey: z.string().min(1).describe('Project key.'),
     name: z.string().min(1).max(100).describe('Label name.'),
     color: z.string().optional().describe('Hex colour like "#6366f1". Defaults to indigo.'),
   }).shape,

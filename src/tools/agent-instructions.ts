@@ -109,8 +109,8 @@ export const createAgentInstructionToolConfig = {
     enabled: z.boolean().optional(),
     mustRead: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
-    allowOversize: z.boolean().optional().describe('Override the hard size cap (800 chars) after a blocked call.'),
-    oversizeReason: z.string().min(10).max(500).optional().describe('With allowOversize: why it needs the length (audited).'),
+    allowOversize: z.boolean().optional().describe('After a blocked call (800-char hard cap).'),
+    oversizeReason: z.string().min(10).max(500).optional().describe('Why (audited).'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -146,8 +146,8 @@ export const updateAgentInstructionToolConfig = {
     enabled: z.boolean().optional(),
     mustRead: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
-    allowOversize: z.boolean().optional().describe('Override the hard size cap (800 chars) after a blocked call.'),
-    oversizeReason: z.string().min(10).max(500).optional().describe('With allowOversize: why it needs the length (audited).'),
+    allowOversize: z.boolean().optional().describe('After a blocked call (800-char hard cap).'),
+    oversizeReason: z.string().min(10).max(500).optional().describe('Why (audited).'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };

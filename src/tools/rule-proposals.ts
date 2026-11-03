@@ -1,5 +1,5 @@
 /**
- * ORB-2579 - rule proposals: an agent proposes a behaviour rule, a person with rule rights accepts or rejects it.
+ * ORB-2579 / ORB-2773 - rule proposals: a bot's proposal is a rule candidate filed as a wiki lesson, a person with rule rights adopts or dismisses it.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -11,6 +11,8 @@ interface ProposalRow {
   id: string; scope: string; projectKey: string | null; title: string; status: string;
   duplicates: Duplicate[]; proposedByName: string | null; decisionReason: string | null; canDecide: boolean;
   sizeWarning?: { chars: number; limit: number; hint: string };
+  lesson?: { id: string; key: string | null; title: string; webUrl: string } | null;
+  text?: string;
 }
 
 const SCOPES = ['workspace', 'customer', 'project', 'personal'] as const;
@@ -25,7 +27,7 @@ function scopeLabel(row: ProposalRow): string {
 
 export const ruleProposeToolConfig = {
   title: 'Propose a behaviour rule',
-  description: 'Propose a behaviour rule for a person to accept. It binds only once a person with rule rights accepts it, and the decision comes back as agent mail; overlapping rules are named as text matches. Title: one imperative sentence; body <= 400 chars, Rule / Why / How.',
+  description: 'Propose a behaviour rule. From a bot or agent key it is a rule candidate, filed at once as a wiki lesson and listed on the rules page (Adopt as rule); no counter, no agent mail, nothing to wait for. A proposal by a person stays pending. Binds once adopted; overlaps are named. Title: one imperative sentence; body <= 400 chars, Rule / Why / How.',
   inputSchema: z.object({
     title: z.string().min(1).max(120),
     body: z.string().min(1).max(8000),
@@ -53,8 +55,9 @@ export function makeRuleProposeHandler(client: OrbotoClient) {
       throw err;
     }
     const warn = row.sizeWarning ? `\nBody is over the ${row.sizeWarning.limit}-char soft limit. ${row.sizeWarning.hint}` : '';
+    const head = row.text ?? `Proposed rule "${row.title}" (${scopeLabel(row)}, id ${row.id}), pending review by a person with rule rights.`;
     return {
-      content: [{ type: 'text', text: `Proposed rule "${row.title}" (${scopeLabel(row)}, id ${row.id}), pending review by a person with rule rights.${duplicateLines(row)}${warn}` }],
+      content: [{ type: 'text', text: `${head}${duplicateLines(row)}${warn}` }],
       structuredContent: row as unknown as Record<string, unknown>,
     };
   };
@@ -62,9 +65,9 @@ export function makeRuleProposeHandler(client: OrbotoClient) {
 
 export const ruleProposalsToolConfig = {
   title: 'List rule proposals',
-  description: 'List rule proposals. Your own plus the queue you may see, newest first; canDecide marks what you may accept or reject (a person with rule rights: orboto_rule_proposal_accept, orboto_rule_proposal_reject).',
+  description: 'List rule proposals and candidates. Newest first; status candidate lists bot proposals filed as lessons. canDecide marks what you may adopt or dismiss (orboto_rule_proposal_accept / _reject).',
   inputSchema: z.object({
-    status: z.enum(['pending', 'accepted', 'rejected', 'all']).default('pending'),
+    status: z.enum(['pending', 'candidate', 'accepted', 'rejected', 'all']).default('pending'),
     scope: z.enum(SCOPES).optional(),
     projectId: z.string().uuid().optional(),
     customerId: z.string().uuid().optional(),
@@ -85,7 +88,7 @@ export function makeRuleProposalsHandler(client: OrbotoClient) {
     if (input.limit !== undefined) p.set('limit', String(input.limit));
     if (input.cursor) p.set('cursor', input.cursor);
     const page = await client.get<{ items: ProposalRow[]; nextCursor: string | null }>(`/agent-instructions/proposals?${p.toString()}`);
-    const lines = page.items.map((r) => `- [${r.status}] ${r.title} (${scopeLabel(r)}, id ${r.id}, by ${r.proposedByName ?? 'unknown'})${r.canDecide ? ' [you can decide]' : ''}${r.decisionReason ? `\n  reason: ${r.decisionReason}` : ''}${duplicateLines(r)}`);
+    const lines = page.items.map((r) => `- [${r.status}] ${r.title} (${scopeLabel(r)}, id ${r.id}, by ${r.proposedByName ?? 'unknown'})${r.canDecide ? ' [you can decide]' : ''}${r.decisionReason ? `\n  reason: ${r.decisionReason}` : ''}${r.lesson ? `\n  lesson: ${r.lesson.key ?? r.lesson.id}` : ''}${duplicateLines(r)}`);
     return {
       content: [{ type: 'text', text: (lines.length ? lines.join('\n') : 'No rule proposals.') + (page.nextCursor ? `\nMore: cursor ${page.nextCursor}` : '') }],
       structuredContent: page as unknown as Record<string, unknown>,
@@ -102,7 +105,7 @@ function decisionText(verb: string, res: Decision): string {
 
 export const ruleProposalAcceptToolConfig = {
   title: 'Accept a rule proposal',
-  description: 'Accept a pending rule proposal as a rule block, as proposed or edited. A person with rule rights on its scope only, on the explicit instruction of that person; a bot account or an agent key gets 403 errors.agent_rules.review_needs_person. must-read stays off unless set.',
+  description: 'Adopt a rule candidate or accept a pending proposal as a rule block, as proposed or edited. Only a person with rule rights on its scope, on their explicit instruction; a bot or agent key gets 403 errors.agent_rules.review_needs_person. must-read stays off unless set.',
   inputSchema: z.object({
     proposalId: z.string().uuid(),
     title: z.string().min(1).max(120).optional(),
@@ -133,7 +136,7 @@ export function makeRuleProposalAcceptHandler(client: OrbotoClient) {
 
 export const ruleProposalRejectToolConfig = {
   title: 'Reject a rule proposal',
-  description: 'Reject a pending rule proposal with a reason the proposer receives. A person with rule rights on its scope only, on the explicit instruction of that person; a bot account or an agent key gets 403 errors.agent_rules.review_needs_person.',
+  description: 'Dismiss a rule candidate or reject a pending proposal; the reason stays on it. Only a person with rule rights on its scope, on their explicit instruction; a bot or agent key gets 403 errors.agent_rules.review_needs_person.',
   inputSchema: z.object({
     proposalId: z.string().uuid(),
     reason: z.string().min(3).max(1000),

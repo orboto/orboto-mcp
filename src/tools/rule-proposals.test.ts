@@ -39,6 +39,27 @@ describe('rule proposal MCP tools (ORB-2579)', () => {
     expect(calls2[0]!.body).toEqual({ title: 'x', body: 'y', scope: 'workspace' });
   });
 
+  it('ORB-2773 - a bot proposal answers as a rule candidate with its lesson and the list shows the lesson', async () => {
+    const candidate = {
+      ...ROW, status: 'candidate',
+      lesson: { id: '66666666-6666-4666-8666-666666666666', key: 'ORB-D12', title: 'Rule candidate: Run the gates one by one', webUrl: '/docs/ORB-D12' },
+      text: 'Rule candidate "Run the gates one by one" filed as lesson ORB-D12. Nothing to wait for; continue.',
+    };
+    stub([{ status: 201, json: candidate }]);
+    const res = await makeRuleProposeHandler(client)({ title: ROW.title, body: 'Rule: one gate per call.' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('filed as lesson ORB-D12. Nothing to wait for; continue.');
+    expect(text).not.toContain('pending review');
+    expect(res.structuredContent).toMatchObject({ status: 'candidate', lesson: { key: 'ORB-D12' } });
+
+    const calls = stub([{ json: { items: [candidate], nextCursor: null } }]);
+    const listed = await makeRuleProposalsHandler(client)({ status: 'candidate' });
+    expect(calls[0]!.url).toBe('https://orboto.example.com/agent-instructions/proposals?status=candidate');
+    const listText = (listed.content[0] as { text: string }).text;
+    expect(listText).toContain('[candidate] Run the gates one by one');
+    expect(listText).toContain('lesson: ORB-D12');
+  });
+
   it('propose turns the hard-cap refusal into a blocked result', async () => {
     stub([{ status: 422, json: { error: 'too long', errorKey: 'errors.agent_content.oversize', sizeWarning: { chars: 900, limit: 800, hint: 'shorten it' } } }]);
     const res = await makeRuleProposeHandler(client)({ title: 'x', body: 'y'.repeat(900) });
@@ -70,10 +91,10 @@ describe('rule proposal MCP tools (ORB-2579)', () => {
   });
 
   it('accept posts the edits and names the new block', async () => {
-    const calls = stub([{ json: { proposal: { ...ROW, status: 'accepted', acceptedEdited: true }, block: { id: 'b1' }, proposerNotified: true } }]);
+    const calls = stub([{ json: { proposal: { ...ROW, status: 'accepted', acceptedEdited: true }, block: { id: 'b1' }, proposerNotified: false } }]);
     const res = await makeRuleProposalAcceptHandler(client)({ proposalId: ROW.id, title: 'Short', mustRead: true, note: 'tightened' });
     expect(calls[0]).toMatchObject({ method: 'POST', url: `https://orboto.example.com/agent-instructions/proposals/${ROW.id}/accept`, body: { title: 'Short', mustRead: true, note: 'tightened' } });
-    expect((res.content[0] as { text: string }).text).toBe(`Accepted rule proposal "${ROW.title}" as rule block b1 (edited); the proposer got the decision as agent mail.`);
+    expect((res.content[0] as { text: string }).text).toBe(`Accepted rule proposal "${ROW.title}" as rule block b1 (edited); no agent mail was sent.`);
   });
 
   it('accept surfaces the person-only refusal and the hard-cap block', async () => {
