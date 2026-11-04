@@ -141,6 +141,33 @@ export interface TicketRow {
   blockedByOpen?: TicketDependencySummary[];
   blocksOpenCount?: number;
   blocksOpen?: TicketDependencySummary[];
+  workingNow?: TicketWorkingNowRow | null;
+}
+
+/** ORB-2830 - the holder of the ticket's live work-session lease, as the enriched ticket row carries it. */
+export interface TicketWorkingNowRow {
+  workSessionId: string;
+  userId: string;
+  fullName: string;
+  avatarUrl: string | null;
+  isBot: boolean;
+  role: string;
+  laneName: string | null;
+  startedAt: string;
+  leaseUntil: string;
+}
+
+/** ORB-2830 - the agent-facing holder: who, person or agent, in which role and lane, since when (ISO); null without a live session. */
+export function workingNowSummary(w: TicketWorkingNowRow | null | undefined): Record<string, unknown> | null {
+  if (!w) return null;
+  return { name: w.fullName, bot: w.isBot, role: w.role, ...(w.laneName ? { lane: w.laneName } : {}), since: w.startedAt };
+}
+
+/** ORB-2830 - the one-line holder text of a ticket line or card, null without a live session. */
+export function workingNowText(w: TicketWorkingNowRow | null | undefined): string | null {
+  if (!w) return null;
+  const role = w.laneName ? `${w.role}, lane ${w.laneName}` : w.role;
+  return `${w.fullName}${w.isBot ? ' (agent)' : ''} - ${role}, since ${w.startedAt}`;
 }
 
 /** ORB-2169 - one open dependency edge as the enriched ticket row carries it;
@@ -198,10 +225,12 @@ export function agentTicketListRow(t: TicketRow, verbose = false): Record<string
       milestoneName: t.milestoneName ?? null,
       createdAt: t.createdAt ?? null,
       updatedAt: t.updatedAt ?? null,
+      workingNow: workingNowSummary(t.workingNow),
       ...(t.waitingForGitIngestion ? { waitingForGitIngestion: true } : {}),
     };
   }
   const assigneeNames = (t.assignees ?? []).map((a) => a.fullName || a.email);
+  const workingNow = workingNowSummary(t.workingNow);
   return {
     key: t.ticketKey,
     ...specReleaseInfo(t),
@@ -212,6 +241,7 @@ export function agentTicketListRow(t: TicketRow, verbose = false): Record<string
     ...(t.type && t.type !== 'task' ? { type: t.type } : {}),
     ...(t.dueDate ? { dueDate: t.dueDate } : {}),
     ...(assigneeNames.length > 0 ? { assigneeNames } : {}),
+    ...(workingNow ? { workingNow } : {}),
     ...(t.waitingForGitIngestion ? { waitingForGitIngestion: true } : {}),
   };
 }
@@ -254,6 +284,8 @@ export function ticketLine(t: TicketRow): string {
   if (t.assignees && t.assignees.length > 0) {
     parts.push(`→ ${t.assignees.map((a) => a.fullName || a.email).join(', ')}`);
   }
+  const working = workingNowText(t.workingNow);
+  if (working) parts.push(`[working now: ${working}]`);
   if (t.waitingForGitIngestion) parts.push('[waiting on Git ingestion]');
   return parts.join(' ');
 }

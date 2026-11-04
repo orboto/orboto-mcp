@@ -8,7 +8,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { COMMENT_FULL_COUNT, fetchThread, selectComments, type ShownComment } from './comment-thread.js';
-import { formatDependencySummary, resolveTicketByKey, type TicketDependencySummary, type TicketRow } from './shared.js';
+import { formatDependencySummary, resolveTicketByKey, workingNowSummary, workingNowText, type TicketDependencySummary, type TicketRow } from './shared.js';
 
 interface TicketSummaryRow {
   id: string;
@@ -184,6 +184,7 @@ export function makeGetTicketHandler(client: OrbotoClient) {
           })),
         } : {}),
         assignees: full.assignees ?? [],
+        workingNow: workingNowSummary(full.workingNow),
         ...(inc.has('raci') ? {
           raci: (full.raci ?? []).map((r) => ({ userId: r.userId, fullName: r.fullName, role: r.role })),
         } : {}),
@@ -294,6 +295,7 @@ function formatTicket(
     ticket.assignees && ticket.assignees.length > 0
       ? `Assignees: ${ticket.assignees.map((a) => a.fullName || a.email).join(', ')}`
       : 'Assignees: (unassigned)',
+    ticket.workingNow ? `Working now: ${workingNowText(ticket.workingNow)}` : null,
     ticket.raci && ticket.raci.some((r) => r.role !== 'R')
       ? `RACI: ${(['A', 'R', 'C', 'I'] as const)
           .map((role) => {

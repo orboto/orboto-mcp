@@ -65,6 +65,11 @@ describe('eventToUris', () => {
     expect(uris).toEqual(['orboto://ticket/ORB-7', 'orboto://project/p1']);
   });
 
+  it('ORB-2830 - maps ticket:working-now to the ticket and project URIs', () => {
+    const uris = eventToUris({ type: 'ticket:working-now', projectId: 'p1', ticketId: 't1', payload: { ticketKey: 'ORB-7' } });
+    expect(uris).toEqual(['orboto://ticket/ORB-7', 'orboto://project/p1']);
+  });
+
   it('maps doc:updated to a doc URI', () => {
     expect(eventToUris({ type: 'doc:updated', docId: 'd1' })).toEqual(['orboto://doc/d1']);
   });
