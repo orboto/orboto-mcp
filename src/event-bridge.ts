@@ -47,7 +47,7 @@ export interface EventBridgeOpts {
  *  subscribed resource shape (no-op). */
 export function eventToUris(event: BridgeEvent): string[] {
   if (event.type === 'ticket:created' || event.type === 'ticket:updated' || event.type === 'ticket:deleted'
-   || event.type === 'ticket:activity'
+   || event.type === 'ticket:activity' || event.type === 'approval:changed'
    || event.type === 'comment:created' || event.type === 'comment:updated' || event.type === 'comment:deleted'
    || event.type === 'checklist:created' || event.type === 'checklist:updated' || event.type === 'checklist:deleted'
    || event.type === 'checklist-item:created' || event.type === 'checklist-item:updated' || event.type === 'checklist-item:deleted') {
