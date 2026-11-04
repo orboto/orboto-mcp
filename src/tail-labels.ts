@@ -49,6 +49,7 @@ export const TAIL_LABELS: readonly TailLabel[] = [
   { method: 'GET', path: new RegExp(`^/projects/${SEG}/change-key/check$`), label: 'orboto_project_change_key' },
   { method: 'POST', path: new RegExp(`^/projects/${SEG}/git-repositories$`), label: 'orboto_project_repository_create' },
   { method: 'GET', path: new RegExp(`^/projects/${SEG}/git-repositories/sources$`), label: 'orboto_project_repository_create' },
+  { method: 'PATCH', path: new RegExp(`^/projects/${SEG}/git-connections/${SEG}$`), label: 'orboto_git_connection_update' },
   { method: 'PUT', path: new RegExp(`^/admin/agents/identities/${SEG}/query-rate-limit$`), label: 'orboto_agent_query_rate_limit' },
   { method: 'POST', path: /^\/knowledge\/import-local$/, label: 'orboto_knowledge_import_local' },
   { method: 'POST', path: new RegExp(`^/docs/${SEG}/merge-into$`), label: 'orboto_wiki_merge' },
