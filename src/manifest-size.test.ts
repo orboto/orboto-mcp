@@ -114,6 +114,16 @@ afterEach(() => { vi.restoreAllMocks(); });
  * `admin:agent_lanes:read` to the tool and its lane parameter (full = 167,312
  * measured after the rebase onto ORB-2817, curated unchanged at 38,604).
  * Both together on develop: full = 168,920, 480 chars free under the ceiling.
+ * ORB-2758 added `orboto_upload_link` to the full and curated tiers inside
+ * both ceilings and the curated count: it took the curated seat of
+ * `orboto_get_timer` (43 calls/30d), and the attachment tools gained the
+ * stdio-only `filePath`, measured on the stdio build below. On top of
+ * ORB-2818 and ORB-2819 it paid for itself without a new ceiling: the two
+ * attachment tools lost their parameter texts for `contentBase64`, `filePath`
+ * and `filename` (the name says it; the size bound sits in the one-sentence
+ * summary), the shared handle text of the 16 truncation blocks lost 4 chars
+ * (curated = 38,883, full = 169,379 over HTTP with 21 chars free, 169,326 on
+ * the stdio build).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
@@ -146,11 +156,12 @@ const CURATED_SCHEMA_MAX_TOKENS = 11_100;
 
 interface Measurement { count: number; chars: number; instructionsChars: number }
 
-async function measuredManifest(toolset?: Toolset): Promise<Measurement> {
+async function measuredManifest(toolset?: Toolset, localFiles = false): Promise<Measurement> {
   const server = await buildOrbotoMcpServer({
     baseUrl: 'https://orboto.example.com',
     apiKey: 'orb_test',
     ...(toolset ? { toolset } : {}),
+    ...(localFiles ? { localFiles } : {}),
   });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'manifest-measure', version: '0.0.0' });
@@ -191,6 +202,14 @@ describe('ORB-1521 - eager-load manifest size', () => {
     expect(full.count).toBeGreaterThan(150);
     expect(full.chars).toBeLessThanOrEqual(FULL_MAX_CHARS);
     expect(full.chars / curated.chars).toBeGreaterThan(3);
+  });
+
+  it('ORB-2758 - the stdio build with filePath stays under the same ceilings', async () => {
+    const curated = await measuredManifest(undefined, true);
+    const full = await measuredManifest('full', true);
+    process.stdout.write(`[manifest-size] stdio: curated ${curated.chars} chars, full ${full.chars} chars (~${estTokens(full.chars)} tokens)\n`);
+    expect(curated.chars).toBeLessThanOrEqual(CURATED_MAX_CHARS);
+    expect(full.chars).toBeLessThanOrEqual(FULL_MAX_CHARS);
   });
 });
 

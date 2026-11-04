@@ -4,7 +4,9 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { readLocalAttachment } from '../local-file.js';
 import { resolveTicketByKey, type TicketRow } from './shared.js';
+import { attachmentBytes } from './attachment-input.js';
 
 interface AttachmentResponse {
   id: string;
@@ -27,47 +29,55 @@ function mimetypeFor(filename: string): string {
   return 'application/octet-stream';
 }
 
+const ATTACH_TAIL =
+  'Returns its Markdown line and URL. `embed=true` also appends the line to the ticket description (a re-run appends another copy); `altText` defaults to the filename. Mirrors `orboto.mjs attach`.';
+
 export const attachToTicketToolConfig = {
   title: 'Attach a file to a ticket',
   description:
-    'Attach a file to a ticket; returns its markdown image line and raw URL. The bytes come in as base64 (`contentBase64`) so this works without local FS access on the agent side. Set `embed=true` to also PATCH the ticket\'s description with the markdown line appended (idempotent only up to duplicate detection - re-running with the same file appends another copy). Use `altText` for accessibility / image alt-text; defaults to the filename. Mirrors `orboto.mjs attach`.',
+    `Attach a file to a ticket from \`contentBase64\` (up to about 25 KB; a bigger file needs orboto_upload_link). ${ATTACH_TAIL} The local stdio server also takes \`filePath\`.`,
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     filename: z.string().min(1).describe('Display filename, e.g. "graph-q3.png".'),
-    contentBase64: z.string().min(1).describe('File content, base64-encoded.'),
-    altText: z.string().optional().describe('Alt text of the Markdown image; default filename.'),
-    embed: z.boolean().optional().describe('Also append the markdown image line to the ticket description.'),
+    contentBase64: z.string().min(1),
+    altText: z.string().optional().describe('Image alt text; default filename.'),
+    embed: z.boolean().optional().describe('Also append the image line to the description.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
-export function makeAttachToTicketHandler(client: OrbotoClient) {
-  return async ({ ticketKey, filename, contentBase64, altText, embed }: {
+/** The stdio variant: the server reads `filePath` itself, so the model carries no bytes. */
+export const attachToTicketLocalToolConfig = {
+  ...attachToTicketToolConfig,
+  description:
+    `Attach a file to a ticket by \`filePath\` (this local server reads it, up to 50 MB) or \`contentBase64\` (up to about 25 KB). ${ATTACH_TAIL} Without file access, orboto_upload_link mints a browser link for the person.`,
+  inputSchema: z.object({
+    ticketKey: z.string().min(3),
+    filePath: z.string().min(1).optional(),
+    filename: z.string().min(1).optional(),
+    contentBase64: z.string().min(1).optional(),
+    altText: z.string().optional().describe('Image alt text; default filename.'),
+    embed: z.boolean().optional().describe('Also append the image line to the description.'),
+  }).shape,
+};
+
+export function makeAttachToTicketHandler(client: OrbotoClient, opts: { localFiles?: boolean } = {}) {
+  return async ({ ticketKey, filename, contentBase64, filePath, altText, embed }: {
     ticketKey: string;
-    filename: string;
-    contentBase64: string;
+    filename?: string;
+    contentBase64?: string;
+    filePath?: string;
     altText?: string;
     embed?: boolean;
   }): Promise<CallToolResult> => {
-    let arrayBuffer: ArrayBuffer;
-    try {
-      const buf = Buffer.from(contentBase64, 'base64');
-      arrayBuffer = new ArrayBuffer(buf.byteLength);
-      new Uint8Array(arrayBuffer).set(buf);
-    } catch {
-      throw new Error('contentBase64 is not valid base64.');
-    }
-    if (arrayBuffer.byteLength === 0) {
-      throw new Error('contentBase64 decoded to 0 bytes - refuse to upload an empty file.');
-    }
-
+    const file = await attachmentBytes({ filename, contentBase64, filePath, localFiles: opts.localFiles === true }, readLocalAttachment);
     const ticket = await resolveTicketByKey(client, ticketKey);
 
     const form = new FormData();
     form.append(
       'file',
-      new Blob([arrayBuffer], { type: mimetypeFor(filename) }),
-      filename,
+      new Blob([file.bytes], { type: mimetypeFor(file.filename) }),
+      file.filename,
     );
     const att = await client.postMultipart<AttachmentResponse>(
       `/tickets/${ticket.id}/attachments`,

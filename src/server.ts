@@ -108,7 +108,7 @@ import {
   editDocSectionToolConfig, makeEditDocSectionHandler,
 } from './tools/doc-edits.js';
 import {
-  uploadDocAttachmentToolConfig, makeUploadDocAttachmentHandler,
+  uploadDocAttachmentToolConfig, uploadDocAttachmentLocalToolConfig, makeUploadDocAttachmentHandler,
   listDocAttachmentsToolConfig, makeListDocAttachmentsHandler,
   deleteDocAttachmentToolConfig, makeDeleteDocAttachmentHandler,
 } from './tools/doc-attachments.js';
@@ -257,7 +257,8 @@ import {
   ingestUrlToolConfig, makeIngestUrlHandler,
   ingestFileToolConfig, makeIngestFileHandler,
 } from './tools/docs-ai.js';
-import { attachToTicketToolConfig, makeAttachToTicketHandler } from './tools/attach.js';
+import { attachToTicketToolConfig, attachToTicketLocalToolConfig, makeAttachToTicketHandler } from './tools/attach.js';
+import { uploadLinkToolConfig, makeUploadLinkHandler } from './tools/upload-link.js';
 import { setParentToolConfig, makeSetParentHandler } from './tools/set-parent.js';
 import { applyAgentProfile } from './tools/shared.js';
 import {
@@ -292,6 +293,8 @@ export interface BuildServerOptions extends OrbotoClientConfig {
   clientDescription?: string;
   /** ORB-2140 - declare the Claude Code channel capability (stdio only); the inbox channel then pushes messages as `notifications/claude/channel`. */
   channel?: boolean;
+  /** ORB-2758 - the stdio server on the user's machine: the attachment tools take `filePath`; the HTTP server never sets it. */
+  localFiles?: boolean;
   /** ORB-1520 - which manifest to register. `curated` (default) is the
    *  measured high-frequency set + the api_search/api_call escape
    *  hatch; `full` registers every named tool. Entry points resolve
@@ -480,7 +483,8 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_update_doc', updateDocToolConfig, makeUpdateDocHandler(client));
   reg('orboto_delete_doc', deleteDocToolConfig, makeDeleteDocHandler(client));
   reg('orboto_move_doc', moveDocToolConfig, makeMoveDocHandler(client));
-  reg('orboto_upload_doc_attachment', uploadDocAttachmentToolConfig, makeUploadDocAttachmentHandler(client));
+  reg('orboto_upload_doc_attachment', opts.localFiles ? uploadDocAttachmentLocalToolConfig : uploadDocAttachmentToolConfig, makeUploadDocAttachmentHandler(client, { localFiles: opts.localFiles }));
+  reg('orboto_upload_link', uploadLinkToolConfig, makeUploadLinkHandler(client));
   reg('orboto_list_doc_attachments', listDocAttachmentsToolConfig, makeListDocAttachmentsHandler(client));
   reg('orboto_delete_doc_attachment', deleteDocAttachmentToolConfig, makeDeleteDocAttachmentHandler(client));
   reg('orboto_list_ticket_attachments', listTicketAttachmentsToolConfig, makeListTicketAttachmentsHandler(client));
@@ -610,7 +614,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_ask_docs', askDocsToolConfig, makeAskDocsHandler(client));
   reg('orboto_ingest_url', ingestUrlToolConfig, makeIngestUrlHandler(client));
   reg('orboto_ingest_file', ingestFileToolConfig, makeIngestFileHandler(client));
-  reg('orboto_attach_to_ticket', attachToTicketToolConfig, makeAttachToTicketHandler(client));
+  reg('orboto_attach_to_ticket', opts.localFiles ? attachToTicketLocalToolConfig : attachToTicketToolConfig, makeAttachToTicketHandler(client, { localFiles: opts.localFiles }));
   reg('orboto_set_parent', setParentToolConfig, makeSetParentHandler(client));
   reg('orboto_update_project', updateProjectToolConfig, makeUpdateProjectHandler(client));
   reg('orboto_project_readiness', projectReadinessToolConfig, makeProjectReadinessHandler(client));

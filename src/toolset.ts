@@ -75,13 +75,13 @@ export const CURATED_TOOLS: ReadonlySet<string> = new Set([
   'orboto_timer_start',     // 34
   'orboto_timer_stop',      // 772
   'orboto_log_time',        // 130
-  'orboto_get_timer',       // 43
   'orboto_messages',
   'orboto_agent_notify',
   'orboto_agent_broadcast',
   'orboto_agent_heartbeat',
   'orboto_response_expand',
   'orboto_report_feedback', // ORB-1910 - an agent that hits a bug reports it without ?toolset=full
+  'orboto_upload_link',     // ORB-2758 - took the seat of orboto_get_timer (43/30d, now one orboto_api_call away): a hosted connector cannot attach a file it cannot write as base64
   'orboto_help', // ORB-1697 - the way back from a budget cut
   'orboto_api_search',      // ORB-1518 - discovery half of the escape hatch
   'orboto_api_call',        // ORB-1519 - execute half of the escape hatch

@@ -63,7 +63,7 @@ async function main() {
       ORBOTO_ORIGIN: process.env.ORBOTO_ORIGIN, ORBOTO_MCP_CLI_OUTDATED: process.env.ORBOTO_MCP_CLI_OUTDATED,
     });
     const channel = channelStart !== null;
-    const server = await buildOrbotoMcpServer({ ...clientConfig, channel, instanceToken: (await import('./tools/shared.js')).mcpProcessInstance() });
+    const server = await buildOrbotoMcpServer({ ...clientConfig, channel, localFiles: true, instanceToken: (await import('./tools/shared.js')).mcpProcessInstance() });
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
     const stdio = new StdioServerTransport();
     await server.connect(stdio);

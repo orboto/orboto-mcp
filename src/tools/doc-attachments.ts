@@ -4,8 +4,10 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { readLocalAttachment } from '../local-file.js';
 import { resolveDocId } from './docs.js';
 import { DOC_ID_PARAM } from './shared.js';
+import { attachmentBytes } from './attachment-input.js';
 
 interface AttachmentResponse {
   id: string;
@@ -56,40 +58,48 @@ function isImage(mimetype: string): boolean {
   return mimetype.startsWith('image/');
 }
 
+const UPLOAD_DOC_TAIL =
+  'Returns its Markdown line and a stable download URL. `embed=true` also appends the line to the doc body (a re-run appends another copy). Blocked types (HTML, SVG, executables) answer 415.';
+
 export const uploadDocAttachmentToolConfig = {
   title: 'Upload a doc attachment',
   description:
-    'Upload a file as a doc attachment; returns its Markdown line and a stable download URL. Bytes come in as base64 (`contentBase64`) so this works without local FS access on the agent side. Set `embed=true` to also PATCH the doc body to append the Markdown line - useful for dropping a screenshot into a page in one call. MIME / extension policy is enforced server-side: blocked types (HTML, SVG, executables) surface a 415.',
+    `Upload a doc attachment from \`contentBase64\` (up to about 25 KB; a bigger file needs orboto_upload_link). ${UPLOAD_DOC_TAIL} The local stdio server also takes \`filePath\`.`,
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
     filename: z.string().min(1).describe('Display filename, e.g. "diagram.png".'),
-    contentBase64: z.string().min(1).describe('File content, base64-encoded.'),
-    altText: z.string().optional().describe('Alt text of the Markdown image; default filename.'),
-    embed: z.boolean().optional().describe('Append the Markdown line to the doc body; a re-run appends another copy.'),
+    contentBase64: z.string().min(1),
+    altText: z.string().optional().describe('Image alt text; default filename.'),
+    embed: z.boolean().optional().describe('Append the Markdown line to the doc body.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
-export function makeUploadDocAttachmentHandler(client: OrbotoClient) {
-  return async ({ docId, filename, contentBase64, altText, embed }: {
-    docId: string; filename: string; contentBase64: string;
+/** The stdio variant: the server reads `filePath` itself, so the model carries no bytes. */
+export const uploadDocAttachmentLocalToolConfig = {
+  ...uploadDocAttachmentToolConfig,
+  description:
+    `Upload a doc attachment by \`filePath\` (this local server reads it, up to 50 MB) or \`contentBase64\` (up to about 25 KB). ${UPLOAD_DOC_TAIL} Without file access, orboto_upload_link mints a browser link for the person.`,
+  inputSchema: z.object({
+    docId: z.string().min(1).describe(DOC_ID_PARAM),
+    filePath: z.string().min(1).optional(),
+    filename: z.string().min(1).optional(),
+    contentBase64: z.string().min(1).optional(),
+    altText: z.string().optional().describe('Image alt text; default filename.'),
+    embed: z.boolean().optional().describe('Append the Markdown line to the doc body.'),
+  }).shape,
+};
+
+export function makeUploadDocAttachmentHandler(client: OrbotoClient, opts: { localFiles?: boolean } = {}) {
+  return async ({ docId, filename, contentBase64, filePath, altText, embed }: {
+    docId: string; filename?: string; contentBase64?: string; filePath?: string;
     altText?: string; embed?: boolean;
   }): Promise<CallToolResult> => {
+    const file = await attachmentBytes({ filename, contentBase64, filePath, localFiles: opts.localFiles === true }, readLocalAttachment);
     docId = await resolveDocId(client, docId);
-    let arrayBuffer: ArrayBuffer;
-    try {
-      const buf = Buffer.from(contentBase64, 'base64');
-      arrayBuffer = new ArrayBuffer(buf.byteLength);
-      new Uint8Array(arrayBuffer).set(buf);
-    } catch {
-      throw new Error('contentBase64 is not valid base64.');
-    }
-    if (arrayBuffer.byteLength === 0) {
-      throw new Error('contentBase64 decoded to 0 bytes - refuse to upload an empty file.');
-    }
 
     const form = new FormData();
-    form.append('file', new Blob([arrayBuffer], { type: mimetypeFor(filename) }), filename);
+    form.append('file', new Blob([file.bytes], { type: mimetypeFor(file.filename) }), file.filename);
     const att = await client.postMultipart<AttachmentResponse>(`/docs/${docId}/attachments`, form);
 
     const alt = altText ?? att.filename;
