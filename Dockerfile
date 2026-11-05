@@ -2,7 +2,7 @@
 # BuildKit cache-mount support - Coolify exports DOCKER_BUILDKIT=1.
 
 # ── builder ─────────────────────────────────────────────────────────────────
-FROM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS builder
+FROM node:24.22.2-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS builder
 
 # Install pnpm from GitHub (avoids registry.npmjs.org flakiness - same
 # rationale as apps/api/Dockerfile). Pin version in lockstep with the
@@ -43,7 +43,7 @@ RUN NODE_OPTIONS=--max-old-space-size=1024 pnpm --filter @orboto/mcp build
 RUN pnpm --filter @orboto/mcp deploy --legacy --prod --config.allow-unused-patches=true /deploy/mcp
 
 # ── runner ──────────────────────────────────────────────────────────────────
-FROM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS runner
+FROM node:24.22.2-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -52,7 +52,11 @@ ENV NODE_ENV=production
 # evaluates to UTC. Operator can override via a TZ service env var
 # at runtime; this just makes the out-of-the-box default match the
 # team's expectations instead of UTC.
-RUN apk add --no-cache tzdata
+# ORB-2848 - apk upgrade takes the fixed Alpine packages newer than the pinned base; npm, corepack and yarn are not used at runtime and leave the image.
+RUN apk upgrade --no-cache \
+  && apk add --no-cache tzdata \
+  && rm -rf /usr/local/lib/node_modules /opt/yarn-* \
+  && for link in /usr/local/bin/*; do if [ -L "$link" ] && [ ! -e "$link" ]; then rm -f "$link"; fi; done
 ENV TZ=Europe/Berlin
 
 # Default to the HTTP transport - that's the container's reason to exist.
