@@ -195,6 +195,7 @@ import {
   triggerBackupToolConfig, makeTriggerBackupHandler,
 } from './tools/admin-writes.js';
 import { laneControlToolConfig, makeLaneControlHandler, laneStopToolConfig, makeLaneStopHandler } from './tools/agent-lanes.js';
+import { browserGrantsToolConfig, makeBrowserGrantsHandler } from './tools/browser-grants.js';
 import { freeBusyToolConfig, makeFreeBusyHandler } from './tools/free-busy.js';
 import {
   createFullBackupToolConfig, makeCreateFullBackupHandler,
@@ -370,6 +371,14 @@ export function assembleInstructions(head: string, workingRules: string, budget 
   return `${head}\n\n${RULES_HEADING}${kept}${TRUNCATION_MARKER}`;
 }
 
+/** ORB-2837 - the listed annotations leave out `idempotentHint: false`, the MCP default, so the manifest carries no hint a client already assumes. */
+export function withoutDefaultHints<T>(config: T): T {
+  const annotations = (config as { annotations?: Record<string, unknown> } | undefined)?.annotations;
+  if (!annotations || annotations.idempotentHint !== false) return config;
+  const { idempotentHint: _default, ...rest } = annotations;
+  return { ...config, annotations: rest };
+}
+
 export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<McpServer> {
   installZodCollectionBounds();
   assertZodCollectionBounds();
@@ -415,10 +424,10 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   const regAll = registerWithMetrics(server, client, opts.userAgentSuffix, nudgeState);
   const reg: typeof regAll = (toolName, config, handler) => {
     if (!toolInToolset(toolName, toolset)) return;
-    const cfg = toolset === 'minimal' && config && 'title' in config
+    const titled = toolset === 'minimal' && config && 'title' in config
       ? (() => { const { title: _title, ...rest } = config; return rest; })()
       : config;
-    regAll(toolName, cfg, handler);
+    regAll(toolName, withoutDefaultHints(titled), handler);
   };
 
   reg('orboto_ai_status', aiStatusToolConfig, makeAiStatusHandler(client));
@@ -575,6 +584,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_trigger_backup', triggerBackupToolConfig, makeTriggerBackupHandler(client));
   reg('orboto_lane_pause', laneControlToolConfig, makeLaneControlHandler(client));
   reg('orboto_lane_stop', laneStopToolConfig, makeLaneStopHandler(client));
+  reg('orboto_browser_grants', browserGrantsToolConfig, makeBrowserGrantsHandler(client));
   reg('orboto_create_full_backup', createFullBackupToolConfig, makeCreateFullBackupHandler(client));
   reg('orboto_list_backups', listBackupsToolConfig, makeListBackupsHandler(client));
   reg('orboto_download_backup', downloadBackupToolConfig, makeDownloadBackupHandler(client));

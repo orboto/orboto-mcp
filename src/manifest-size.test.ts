@@ -132,6 +132,11 @@ afterEach(() => { vi.restoreAllMocks(); });
  * stop first sentences and reason text and the GitHub App installations one
  * shrank to pay for it, the pinned pause and stop phrases kept (full = 169,379
  * over HTTP, 21 chars free; curated = 38,836).
+ * ORB-2837 added `orboto_browser_grants` (+680, full tier only) inside the
+ * ceiling: the registration lists no `idempotentHint: false`, the MCP default
+ * a client assumes anyway (56 tools, -1,288 chars, no hint lost; every other
+ * hint stays as declared), so full = 168,794 over HTTP, 606 chars free;
+ * curated = 38,583.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
