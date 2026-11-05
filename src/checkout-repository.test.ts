@@ -1,4 +1,5 @@
 /** ORB-2684 - the checkout repository a heartbeat names parses remotes the way the CLI and the wrapper do. */
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { checkoutRepository, parseRemote, remoteHost } from './checkout-repository.js';
 import { inboxViewLine } from './tools/agent-messages.js';
@@ -16,8 +17,8 @@ const REMOTES = [
 
 describe('ORB-2684 - checkout repository', () => {
   it('parses every remote form exactly like the wrapper', async () => {
-    const wrapperPath = '../../../skills/orboto/scripts/checkout-project.mjs';
-    const wrapper = await import(wrapperPath) as { parseRemote(raw: string): unknown; remoteHost(raw: string): string };
+    const wrapperPath = fileURLToPath(new URL('../../../skills/orboto/scripts/checkout-project.mjs', import.meta.url));
+    const wrapper = await import(/* @vite-ignore */ wrapperPath) as { parseRemote(raw: string): unknown; remoteHost(raw: string): string };
     for (const remote of REMOTES) {
       expect(parseRemote(remote), remote).toEqual(wrapper.parseRemote(remote));
       expect(remoteHost(remote), remote).toBe(wrapper.remoteHost(remote));
