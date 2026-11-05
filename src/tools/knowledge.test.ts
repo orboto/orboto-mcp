@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import type { OrbotoClient } from '../orboto-client.js';
 import { OrbotoApiError, OrbotoClient as RealClient } from '../orboto-client.js';
 import { knowledgeAddToolConfig, knowledgeAskToolConfig, knowledgeFindToolConfig, makeKnowledgeAddHandler, makeKnowledgeAskHandler, makeKnowledgeFindHandler } from './knowledge.js';
@@ -31,6 +32,22 @@ describe('ORB-2766 orboto_knowledge_find', () => {
     await makeKnowledgeFindHandler({ get } as unknown as OrbotoClient)({ q: 'backup', strict: false });
     expect(get.mock.calls.map((c) => c[0])).toEqual(['/knowledge/find?q=weiter&strict=true&projectKeys=ACME%2COPS&limit=5', '/knowledge/find?q=backup&strict=false']);
     expect(knowledgeFindToolConfig.annotations).toEqual({ readOnlyHint: true, idempotentHint: true });
+  });
+});
+
+describe('ORB-2840 orboto_knowledge_find token budget', () => {
+  it('passes the budget, bounds it in the schema and says how many hits it left out', async () => {
+    const get = vi.fn().mockResolvedValue({
+      items: [{ id: 'd1', docKey: 'ACME-D37', title: 'Release procedure', snippet: 'tag the commit' }], total: 1, source: 'session', strict: true,
+      spaces: [{ spaceKey: 'ACME-S1', spaceName: 'ACME', projectKey: 'ACME' }], budget: { tokens: 200, used: 40, trimmed: 0, dropped: 2 },
+    });
+    const result = await makeKnowledgeFindHandler({ get } as unknown as OrbotoClient)({ q: 'roll out the release', tokenBudget: 200 });
+    expect(get.mock.calls[0][0]).toBe('/knowledge/find?q=roll+out+the+release&strict=true&tokenBudget=200');
+    expect(textOf(result)).toContain('2 more hit(s) left out by the 200-token budget');
+    const schema = z.object(knowledgeFindToolConfig.inputSchema);
+    expect(schema.safeParse({ q: 'x', tokenBudget: 99 }).success).toBe(false);
+    expect(schema.safeParse({ q: 'x', tokenBudget: 4001 }).success).toBe(false);
+    expect(schema.safeParse({ q: 'x', tokenBudget: 4000 }).success).toBe(true);
   });
 });
 
