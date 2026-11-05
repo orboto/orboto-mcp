@@ -19,13 +19,13 @@ interface LaneRow {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LANE_PARAM = 'Lane name (any case) or UUID.';
-const REASON_PARAM = 'Why (audited, max 500).';
+const REASON_PARAM = 'Why (audited).';
 const LIST_LANES_LIMIT = 20;
 
 export const laneControlToolConfig = {
   title: 'Pause or resume an agent lane',
   description:
-    'Pause an agent lane at its next turn boundary (the running turn finishes, the work session is held) or resume it (the held task continues in the same session); orboto_lane_stop interrupts the running turn instead. A pause records the turn\'s usage and starts no new turn or task until resume; resume also clears a pending stop. Needs admin:agent_lanes:write, audited as agent_lane.paused or agent_lane.resumed.',
+    'Pause a lane at its next turn boundary (the work session is held) or resume it; orboto_lane_stop interrupts the running turn instead. The running turn finishes first; resume continues the held task in that session. A pause records the turn\'s usage and starts no new turn or task until resume; resume also clears a pending stop. Needs admin:agent_lanes:write, audited as agent_lane.paused or agent_lane.resumed.',
   inputSchema: z.object({
     lane: z.string().trim().min(1).max(64).describe(LANE_PARAM),
     action: z.enum(['pause', 'resume']),
@@ -37,7 +37,7 @@ export const laneControlToolConfig = {
 export const laneStopToolConfig = {
   title: 'Stop an agent lane now',
   description:
-    'Stop an agent lane now: its runner interrupts the running turn at its next heartbeat (the poll interval of the runner), releases the work session and records the task as interrupted; the lane stays paused until resume. The next run of that task is a new attempt that first inspects the saved effects; orboto_lane_pause waits for the turn boundary instead. Needs admin:agent_lanes:write, audited as agent_lane.stopped.',
+    'Stop a lane now: its runner interrupts the running turn at its next heartbeat, releases the work session and marks the task interrupted; the lane stays paused until resume. The heartbeat is the runner\'s poll interval. The next run of that task is a new attempt that first inspects the saved effects; orboto_lane_pause waits for the turn boundary instead. Needs admin:agent_lanes:write, audited as agent_lane.stopped.',
   inputSchema: z.object({
     lane: z.string().trim().min(1).max(64).describe(LANE_PARAM),
     reason: z.string().trim().max(500).optional().describe(REASON_PARAM),

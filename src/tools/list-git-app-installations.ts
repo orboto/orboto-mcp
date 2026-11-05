@@ -26,7 +26,7 @@ interface InstallationRow {
 export const listGitAppInstallationsToolConfig = {
   title: 'List GitHub App installations',
   description:
-    'Every known GitHub App installation (admin:system:read): account, install time, suspension, allowed project keys.',
+    'Every known GitHub App installation: account, install time, suspension, allowed project keys. Needs admin:system:read.',
   inputSchema: z.object({}).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

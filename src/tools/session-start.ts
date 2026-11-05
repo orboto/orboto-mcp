@@ -16,7 +16,7 @@ import { machineId, shortHost } from '../session-origin.js';
 import { AgentSessionScopeInputSchema, type AgentSessionScope } from './agent-session-scope.js';
 import { PROCESS_OWNER, PROTECT_TEXT_META, storePayload } from '../response-budget.js';
 import { loadRequiredRules } from '../required-rules.js';
-import { GIT_HEALTH_REASON_TEXT } from './git-health-reasons.js';
+import { GIT_HEALTH_REASON_TEXT, probePendingLine } from './git-health-reasons.js';
 import { channelStartLines } from '../inbox-channel.js';
 import { rememberDeclaredScope } from '../session-scope-memory.js';
 import { declareEnvProjectScope, envProjectScope, supervisorScopePending } from '../project-scope.js';
@@ -81,6 +81,8 @@ interface GitConnectionHealth {
   inboundDelivering: boolean | null;
   deliveryError: string | null;
   lastProbeAt: string | null;
+  probePending?: boolean;
+  nextProbeAt?: string | null;
 }
 interface ChecklistItemRow {
   content: string;
@@ -162,6 +164,8 @@ async function buildTicketBundle(
   const connections = Array.isArray(gitHealthConnections) ? gitHealthConnections : [];
   const sessionsOnTicket = sessions.filter((s) => s.workingOnTicket?.key === full.ticketKey);
   const unhealthy = connections.filter((c) => !c.healthy);
+  const probePending = connections.filter((c) => c.healthy && c.probePending);
+  const bundleProjectKey = full.ticketKey?.slice(0, full.ticketKey.lastIndexOf('-')) ?? '<KEY>';
 
   const lines: string[] = ['', `## Ticket bundle: ${full.ticketKey}`];
 
@@ -196,6 +200,9 @@ async function buildTicketBundle(
       lines.push(`- "${c.name}" (${c.provider}) - ${GIT_HEALTH_REASON_TEXT[c.reason ?? ''] ?? c.reason ?? 'unknown reason'}`);
     }
   }
+  if (probePending.length > 0) {
+    lines.push('', '### Git connection health - not probed yet', ...probePending.map((c) => probePendingLine(bundleProjectKey, c)));
+  }
 
   lines.push('', '### Active agent sessions on this ticket');
   lines.push(
@@ -224,7 +231,10 @@ async function buildTicketBundle(
         blockedBy: deps.blockedBy.map((e) => ({ ticketKey: e.ticketKey, title: e.title, statusName: e.statusName, external: e.external, resolved: e.resolved })),
         blocks: deps.blocks.map((e) => ({ ticketKey: e.ticketKey, title: e.title, statusName: e.statusName, external: e.external, resolved: e.resolved })),
       },
-      gitHealth: { unhealthy, healthyCount: connections.length - unhealthy.length },
+      gitHealth: {
+        unhealthy, healthyCount: connections.length - unhealthy.length,
+        ...(probePending.length ? { probePending: probePending.map((c) => ({ connectionId: c.connectionId, name: c.name, nextProbeAt: c.nextProbeAt ?? null })) } : {}),
+      },
       activeSessions: sessionsOnTicket.map((s) => ({ userFullName: s.userFullName, userEmail: s.userEmail, status: s.status, lastSeenAt: s.lastSeenAt })),
     },
   };
@@ -441,6 +451,13 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
         .filter((c) => !c.healthy)
         .map((c) => `- Project ${p.projectId}: connection "${c.name}" (${c.provider}) is unhealthy - ${GIT_HEALTH_REASON_TEXT[c.reason ?? ''] ?? c.reason ?? 'unknown reason'}. If closing a ticket here depends on commit/PR ingestion, verify manually - ingestion may be stalled.`),
     );
+    const projectKeyOf = (projectId: string) => {
+      const key = tickets.find((t) => t.projectId === projectId && t.ticketKey)?.ticketKey;
+      return key ? key.slice(0, key.lastIndexOf('-')) : projectId;
+    };
+    const probePendingNotes = gitHealthWithConnections.flatMap((p) =>
+      p.connections.filter((c) => c.healthy && c.probePending).map((c) => probePendingLine(projectKeyOf(p.projectId), c)),
+    );
 
     const bundle = input.ticketKey ? await buildTicketBundle(client, input.ticketKey) : null;
 
@@ -502,6 +519,9 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
     }
     if (unhealthyWarnings.length > 0) {
       lines.push('', '## Git connection health - WARNING', ...unhealthyWarnings);
+    }
+    if (probePendingNotes.length > 0) {
+      lines.push('', '## Git connection health - not probed yet', ...probePendingNotes);
     }
     lines.push('', '## Timer');
     lines.push(timer?.ticketId ? `Running on ${timer.ticketKey ?? timer.ticketId} since ${timer.startedAt ?? 'earlier'}.` : 'No timer running.');
@@ -569,6 +589,10 @@ export function makeSessionStartHandler(client: OrbotoClient, opts: { channel?: 
             (n, p) => n + p.connections.filter((c) => c.healthy).length,
             0,
           ),
+          ...(probePendingNotes.length ? {
+            probePending: gitHealthWithConnections.flatMap((p) => p.connections.filter((c) => c.healthy && c.probePending)
+              .map((c) => ({ projectId: p.projectId, connectionId: c.connectionId, name: c.name, nextProbeAt: c.nextProbeAt ?? null }))),
+          } : {}),
         },
         ...(knowledge ? { knowledge: knowledgeSummary(knowledge, knowledgeBlock?.handle) } : {}),
         ...(projectFacts ? {

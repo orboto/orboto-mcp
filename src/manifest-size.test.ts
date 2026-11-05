@@ -124,6 +124,14 @@ afterEach(() => { vi.restoreAllMocks(); });
  * summary), the shared handle text of the 16 truncation blocks lost 4 chars
  * (curated = 38,883, full = 169,379 over HTTP with 21 chars free, 169,326 on
  * the stdio build).
+ * ORB-2834 added `orboto_git_probe` (full tier only) inside the ceiling: the
+ * git_rotate_token title and its project key and connection id texts, the
+ * project key texts of get_project, get_project_primer and project_readiness
+ * (the first sentences say it), the wiki_runs first sentence (it keeps the
+ * reject reason, the reason parameter says it too), the lane pause and lane
+ * stop first sentences and reason text and the GitHub App installations one
+ * shrank to pay for it, the pinned pause and stop phrases kept (full = 169,379
+ * over HTTP, 21 chars free; curated = 38,836).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

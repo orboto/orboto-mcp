@@ -116,6 +116,31 @@ describe('orboto_session_start (ORB-1093)', () => {
     expect(structured.gitHealth.healthyCount).toBe(0);
   });
 
+  it('ORB-2834 names a connection no probe has checked yet with the next fleet probe and the probe command', async () => {
+    stubByPath({
+      '/users/me/assigned-tickets': {
+        items: [{ ticketKey: 'ORB-42', title: 'Wire it up', statusName: 'In Review', projectId: 'proj-1' }],
+      },
+      '/users/me': { email: 'dev@x.io', fullName: 'Dev' },
+      '/agent-instructions': { instructions: 'rules here', rulesHash: 'fixture' },
+      '/time/timer': {},
+      '/projects/proj-1/git-health': {
+        connections: [{
+          connectionId: 'conn-1', name: 'acme/app', provider: 'forgejo', connected: true, healthy: true, lastEventAt: null, reason: null,
+          outboundReachable: null, inboundDelivering: null, deliveryError: null, lastProbeAt: null, probePending: true, nextProbeAt: '2026-11-05T10:10:00.000Z',
+        }],
+      },
+    });
+    const res = await makeSessionStartHandler(client)();
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Git connection health - not probed yet');
+    expect(text).toContain('- "acme/app" (forgejo) of ORB is not probed yet; the next fleet probe cycle starts at 2026-11-05T10:10:00.000Z, or probe it now: orboto git probe --project ORB --connection conn-1');
+    expect(text).not.toContain('Git connection health - WARNING');
+    const structured = res.structuredContent as { gitHealth: { healthyCount: number; probePending: unknown[] } };
+    expect(structured.gitHealth.healthyCount).toBe(1);
+    expect(structured.gitHealth.probePending).toEqual([{ projectId: 'proj-1', connectionId: 'conn-1', name: 'acme/app', nextProbeAt: '2026-11-05T10:10:00.000Z' }]);
+  });
+
   it('omits the git health section when every connection is healthy', async () => {
     stubByPath({
       '/users/me/assigned-tickets': {

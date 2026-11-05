@@ -147,6 +147,7 @@ import { getTimerToolConfig, makeGetTimerHandler } from './tools/get-timer.js';
 import { getChecklistsToolConfig, makeGetChecklistsHandler } from './tools/get-checklists.js';
 import { listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler } from './tools/list-git-app-installations.js';
 import { gitRotateTokenToolConfig, makeGitRotateTokenHandler } from './tools/git-rotate-token.js';
+import { gitProbeToolConfig, makeGitProbeHandler } from './tools/git-probe.js';
 import { sentryToolConfig, makeSentryHandler } from './tools/sentry.js';
 import { connectorToolConfig, makeConnectorHandler } from './tools/connector.js';
 import {
@@ -525,6 +526,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_get_timer', getTimerToolConfig, makeGetTimerHandler(client));
   reg('orboto_list_git_app_installations', listGitAppInstallationsToolConfig, makeListGitAppInstallationsHandler(client));
   reg('orboto_git_rotate_token', gitRotateTokenToolConfig, makeGitRotateTokenHandler(client));
+  reg('orboto_git_probe', gitProbeToolConfig, makeGitProbeHandler(client));
   reg('orboto_sentry', sentryToolConfig, makeSentryHandler(client));
   reg('orboto_connector', connectorToolConfig, makeConnectorHandler(client));
 

@@ -27,12 +27,12 @@ interface RotateResponse {
 }
 
 export const gitRotateTokenToolConfig = {
-  title: 'Rotate a git connection\'s access token',
+  title: 'Rotate a git token',
   description:
     'Replace a git connection\'s access token (ssh: private key). The provider is probed with the new credential first; on success it is re-sealed under the same connection id, on failure 422 and the old one stays. reinstallWebhook also reinstalls the hook. App / OAuth connections answer 422. Needs an API key or the web login: an OAuth MCP connection gets 403 errors.auth.oauth_credential_route_refused.',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key, e.g. ORB.'),
-    connectionId: z.string().uuid().describe('Git connection id.'),
+    projectKey: z.string().min(1),
+    connectionId: z.string().uuid(),
     accessToken: z.string().min(1).optional().describe('New access token (every provider but ssh).'),
     privateKey: z.string().min(1).optional().describe('New SSH private key (ssh only).'),
     reinstallWebhook: z.boolean().optional().describe('Also reinstall the provider hook.'),

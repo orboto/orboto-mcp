@@ -5,8 +5,10 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
+import { summarizeToolDescription } from '../tool-docs.js';
 import {
   wikiAskToolConfig,
+  wikiRunsToolConfig,
   makeWikiIngestUrlHandler,
   makeWikiAskHandler,
   makeWikiLintHandler,
@@ -212,5 +214,13 @@ describe('orboto_wiki_flag_stale', () => {
     const res = await makeWikiFlagStaleHandler(client)({ docId: DOC });
     expect(calls[0]).toMatchObject({ method: 'POST', url: `https://orboto.example.com/docs/${DOC}/flag-stale`, body: { stale: true } });
     expect((res.content[0] as { text: string }).text).toMatch(/outdated/);
+  });
+});
+
+describe('orboto_wiki_runs wire text', () => {
+  it('says in its first sentence, which is all the manifest carries, that reject needs a reason, and describes the reason', () => {
+    const wire = summarizeToolDescription('orboto_wiki_runs', wikiRunsToolConfig.description);
+    expect(wire).toMatch(/reject \(reason required\)/);
+    expect(wikiRunsToolConfig.inputSchema.reason.description).toBe('Required for reject.');
   });
 });

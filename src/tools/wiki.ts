@@ -245,13 +245,13 @@ function queuedNote(r: { status: string; createdAt: string; queuedAt?: string | 
 
 export const wikiRunsToolConfig = {
   title: 'Wiki ingest runs',
-  description: 'List a wiki space\'s ingest runs (queued: wait and stall, failed: each error, pending_review: plans waiting for review), show one run\'s plan as a diff, retry a failed or stalled run, or apply or reject (reason required) a pending_review run (space:wiki-config).',
+  description: 'List, show, retry, apply or reject (reason required) a wiki space\'s ingest runs. list names the wait and stall of a queued run, the error of a failed one and the plans waiting for review (pending_review); show gives one run\'s plan as a diff; retry reruns a failed or stalled run; apply or reject decides a pending_review run. Needs space:wiki-config.',
   inputSchema: z.object({
     spaceId: z.string().min(1),
     action: z.enum(['list', 'show', 'retry', 'apply', 'reject']).optional(),
     runId: z.string().uuid().optional(),
     status: z.enum(['pending_review', 'applied', 'failed', 'skipped', 'queued', 'rejected']).optional(),
-    reason: z.string().max(2000).optional(),
+    reason: z.string().max(2000).optional().describe('Required for reject.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
