@@ -95,6 +95,7 @@ import {
   updateDocSpaceToolConfig, makeUpdateDocSpaceHandler,
   deleteDocSpaceToolConfig, makeDeleteDocSpaceHandler,
   listDocsInSpaceToolConfig, makeListDocsInSpaceHandler,
+  spaceManifestToolConfig, makeSpaceManifestHandler,
   createDocToolConfig, makeCreateDocHandler,
   updateDocToolConfig, makeUpdateDocHandler,
   deleteDocToolConfig, makeDeleteDocHandler,
@@ -489,6 +490,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_update_doc_space', updateDocSpaceToolConfig, makeUpdateDocSpaceHandler(client));
   reg('orboto_delete_doc_space', deleteDocSpaceToolConfig, makeDeleteDocSpaceHandler(client));
   reg('orboto_list_docs_in_space', listDocsInSpaceToolConfig, makeListDocsInSpaceHandler(client));
+  reg('orboto_space_manifest', spaceManifestToolConfig, makeSpaceManifestHandler(client));
   reg('orboto_create_doc', createDocToolConfig, makeCreateDocHandler(client));
   reg('orboto_update_doc', updateDocToolConfig, makeUpdateDocHandler(client));
   reg('orboto_delete_doc', deleteDocToolConfig, makeDeleteDocHandler(client));

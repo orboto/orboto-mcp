@@ -8,6 +8,7 @@
  * unit-test layer rather than against a live API.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
 import {
   makeCreateDocSpaceHandler,
@@ -430,5 +431,32 @@ describe('orboto_resolve_doc_smart_links', () => {
       items: [{ type: 'doc', id: 'd' }],
     });
     expect((res.content[0] as { text: string }).text).not.toContain('Unresolved');
+  });
+});
+
+describe('ORB-2843 orboto_space_manifest', () => {
+  it('asks the sync route with the cursor and limit and reports the cursors it got back', async () => {
+    const { makeSpaceManifestHandler } = await import('./docs.js');
+    const row = { id: '11111111-0000-4000-8000-000000000001', docKey: 'ACME-D1', title: 'Runbook', slug: 'runbook', parentDocId: null, kind: 'wiki', revision: 'abcdef0123456789', updatedAt: '2026-11-05T10:00:00.000Z' };
+    const calls = stubJSON([{ json: { items: [row], nextCursor: 'next.tok', syncCursor: 'sync.tok' } }]);
+    const result = await makeSpaceManifestHandler(client)({ spaceId: 'ACME-S1', cursor: 'c1', limit: 50 });
+    expect(calls[0].url).toBe('https://orboto.example.com/spaces/ACME-S1/docs/sync?cursor=c1&limit=50');
+    expect(result.structuredContent).toMatchObject({ items: [row], nextCursor: 'next.tok', syncCursor: 'sync.tok' });
+    expect((result.content[0] as { text: string }).text).toContain('ACME-D1  Runbook  rev abcdef0123456789');
+  });
+
+  it('refuses a limit below 1 in the tool schema instead of passing it on to the API', async () => {
+    const { spaceManifestToolConfig } = await import('./docs.js');
+    const schema = z.object(spaceManifestToolConfig.inputSchema);
+    expect(schema.safeParse({ spaceId: 'ACME-S1', limit: 0 }).success).toBe(false);
+    expect(schema.safeParse({ spaceId: 'ACME-S1', limit: 1001 }).success).toBe(false);
+    expect(schema.safeParse({ spaceId: 'ACME-S1', limit: 1 }).success).toBe(true);
+  });
+
+  it('says so when nothing changed', async () => {
+    const { makeSpaceManifestHandler } = await import('./docs.js');
+    stubJSON([{ json: { items: [], nextCursor: null, syncCursor: 'sync.tok' } }]);
+    const result = await makeSpaceManifestHandler(client)({ spaceId: 'ACME-S1' });
+    expect((result.content[0] as { text: string }).text).toContain('No pages changed.');
   });
 });

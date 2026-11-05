@@ -351,6 +351,48 @@ export function makeListDocsInSpaceHandler(client: OrbotoClient) {
   };
 }
 
+interface DocSyncRow {
+  id: string;
+  docKey: string | null;
+  title: string;
+  slug: string;
+  parentDocId: string | null;
+  kind: string;
+  revision: string;
+  updatedAt: string;
+}
+interface DocSyncPage { space?: { id: string; key: string | null }; items: DocSyncRow[]; nextCursor: string | null; syncCursor: string | null }
+
+export const spaceManifestToolConfig = {
+  title: 'Doc space page manifest',
+  description:
+    'Page manifest of a space, no bodies, by cursor. No cursor lists every visible page; the syncCursor of a walk lists only later changes. The file mount is the CLI: orboto wiki mount <space> <dir> [--watch].',
+  inputSchema: z.object({
+    spaceId: z.string().min(1).describe(SPACE_REF_PARAM),
+    cursor: z.string().max(2000).optional(),
+    limit: z.number().int().min(1).max(1000).optional(),
+  }).shape,
+  annotations: { readOnlyHint: true, idempotentHint: true },
+};
+
+export function makeSpaceManifestHandler(client: OrbotoClient) {
+  return async ({ spaceId, cursor, limit }: { spaceId: string; cursor?: string; limit?: number }): Promise<CallToolResult> => {
+    const query = new URLSearchParams();
+    if (cursor) query.set('cursor', cursor);
+    if (limit !== undefined) query.set('limit', String(limit));
+    const page = await client.get<DocSyncPage>(`/spaces/${encodeURIComponent(spaceId)}/docs/sync?${query.toString()}`);
+    const lines = page.items.map((r) => `- ${r.docKey ?? r.id}  ${r.title}  rev ${r.revision}  ${r.updatedAt}${r.parentDocId ? `  parent ${r.parentDocId}` : ''}`);
+    const tail = [
+      page.nextCursor ? `More: pass cursor ${page.nextCursor}` : 'End of this walk.',
+      page.syncCursor ? `syncCursor (the next sync's cursor once the walk ended): ${page.syncCursor}` : '',
+    ].filter(Boolean);
+    return {
+      content: [{ type: 'text', text: [...(lines.length ? lines : ['No pages changed.']), '', ...tail].join('\n') }],
+      structuredContent: { space: page.space ?? null, items: page.items, nextCursor: page.nextCursor, syncCursor: page.syncCursor },
+    };
+  };
+}
+
 export const createDocToolConfig = {
   title: 'Create a doc page',
   description:
