@@ -51,6 +51,13 @@ describe('tools/embedding-status', () => {
     expect(text).not.toContain('BILLING GATE');
   });
 
+  it('reports the doc chunk progress of ORB-2850 as detail', async () => {
+    mockFetch({ ...BASE_STATUS, coverage: { ...BASE_STATUS.coverage, doc: { ...BASE_STATUS.coverage.doc, chunks: { chunkedPages: 2, waitingPages: 1, stored: 14 } } } });
+    const result = await makeEmbeddingStatusHandler(client)();
+    expect(result.structuredContent).toMatchObject({ docChunkedPages: 2, docPagesWaitingForChunks: 1, docChunksStored: 14 });
+    expect((result.content[0] as { text: string }).text).toContain('doc chunks: 14 stored across 2 pages · 1 pages waiting for their chunk set');
+  });
+
   it('surfaces the billing gate with its reason instead of a provider fault', async () => {
     mockFetch({
       ...BASE_STATUS,

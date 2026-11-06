@@ -13,7 +13,7 @@ interface EmbeddingStatusResponse {
   coverage: {
     ticket: { embedded: number; total: number; embeddable: number };
     comment: { embedded: number; total: number; embeddable: number };
-    doc: { embedded: number; total: number; embeddable: number };
+    doc: { embedded: number; total: number; embeddable: number; chunks?: { chunkedPages: number; waitingPages: number; stored: number } };
     overall: { embedded: number; total: number; embeddable: number; pending: number; noContent: number };
   };
   breaker: { tripped: boolean; trippedUntil: string | null; consecutiveFailures: number; lastTrippedReason: string | null; interactive?: { tripped: boolean; trippedUntil: string | null; consecutiveFailures: number; lastTrippedReason: string | null } };
@@ -38,7 +38,7 @@ interface EmbeddingStatusResponse {
 export const embeddingStatusToolConfig = {
   title: 'Embedding pipeline status',
   description:
-    'Operator diagnostic for AI search / embeddings. Returns the configured provider/model + vector dimensions, coverage (embedded vs total, and how many are PENDING - never-embedded / stale - per tickets / comments / docs and overall), the circuit-breaker state (tripped + reason + consecutive failures), and when the last embedding was written. Use this to diagnose why semantic search / duplicate detection / ask-docs are stale or empty - e.g. a tripped breaker, a stuck queue, or a provider that stopped responding. Deeper than orboto_ai_status (which only says whether embeddings are configured). Requires admin:ai:read - returns 403 for non-admin callers.',
+    'Operator diagnostic for AI search / embeddings. Returns the configured provider/model + vector dimensions, coverage (embedded vs total, and how many are PENDING - never-embedded / stale - per tickets / comments / docs and overall; a doc counts as embedded once its whole body is embedded in chunks, with the chunk progress as detail), the circuit-breaker state (tripped + reason + consecutive failures), and when the last embedding was written. Use this to diagnose why semantic search / duplicate detection / ask-docs are stale or empty - e.g. a tripped breaker, a stuck queue, or a provider that stopped responding. Deeper than orboto_ai_status (which only says whether embeddings are configured). Requires admin:ai:read - returns 403 for non-admin callers.',
   inputSchema: z.object({}).shape,
   outputSchema: z.object({
     configured: z.boolean(),
@@ -50,6 +50,9 @@ export const embeddingStatusToolConfig = {
     embeddable: z.number(),
     pending: z.number(),
     noContent: z.number(),
+    docChunkedPages: z.number().nullable(),
+    docPagesWaitingForChunks: z.number().nullable(),
+    docChunksStored: z.number().nullable(),
     breakerTripped: z.boolean(),
     breakerReason: z.string().nullable(),
     billingGated: z.boolean(),
@@ -77,6 +80,8 @@ export function makeEmbeddingStatusHandler(client: OrbotoClient) {
       lines.push(
         `  tickets ${s.coverage.ticket.embedded}/${s.coverage.ticket.embeddable} · comments ${s.coverage.comment.embedded}/${s.coverage.comment.embeddable} · docs ${s.coverage.doc.embedded}/${s.coverage.doc.embeddable} (embeddable)`,
       );
+      const dc = s.coverage.doc.chunks;
+      if (dc) lines.push(`  doc chunks: ${dc.stored} stored across ${dc.chunkedPages} pages · ${dc.waitingPages} pages waiting for their chunk set`);
       lines.push(
         `Circuit breaker: ${s.breaker.tripped ? `TRIPPED - ${s.breaker.lastTrippedReason ?? 'unknown reason'} (${s.breaker.consecutiveFailures} consecutive failures)` : 'ok'}`,
       );
@@ -119,6 +124,9 @@ export function makeEmbeddingStatusHandler(client: OrbotoClient) {
         embeddable: o.embeddable,
         pending: o.pending,
         noContent: o.noContent,
+        docChunkedPages: s.coverage.doc.chunks?.chunkedPages ?? null,
+        docPagesWaitingForChunks: s.coverage.doc.chunks?.waitingPages ?? null,
+        docChunksStored: s.coverage.doc.chunks?.stored ?? null,
         breakerTripped: s.breaker.tripped,
         breakerReason: s.breaker.lastTrippedReason,
         billingGated: s.billingGate?.gated ?? false,
