@@ -2,12 +2,14 @@
  * ORB-1521 - manifest-size measurement + regression ratchet (epic
  * ORB-1517).
  */
+import { readFileSync } from 'node:fs';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { buildOrbotoMcpServer } from './server.js';
 import type { Toolset } from './toolset.js';
 import { tokensForChars } from './token-size.js';
+import { GUARDED_FILES, driftProblems } from './test/toolset-quotes.js';
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -319,5 +321,23 @@ describe('ORB-2210 - the channel manifest costs only its instructions', () => {
     expect(bare.tools).toBe(0);
     expect(estTokens(withWake.instructionsChars)).toBeLessThanOrEqual(CHANNEL_MAX_TOKENS);
     expect(bare.instructionsChars).toBeLessThan(withWake.instructionsChars);
+  });
+});
+
+/**
+ * ORB-2873 - the tool counts, token figures and character counts the docs, the READMEs, the skill reference and the Go cost table
+ * quote follow the measurement above; GUARDED_FILES lists every file that carries one.
+ */
+describe('ORB-2873 - quoted toolset figures follow the measurement', () => {
+  it('every quoted tool count is the measured one, every token and character figure is within 5 % of it, and no figure is unmarked', async () => {
+    const [channel, minimal, curated, full] = [await channelInstructions(true), await measuredManifest('minimal'), await measuredManifest(), await measuredManifest('full')];
+    const measured = {
+      channel: { tools: channel.tools, tokens: estTokens(channel.instructionsChars), chars: channel.instructionsChars },
+      minimal: { tools: minimal.count, tokens: estTokens(minimal.chars + minimal.instructionsChars), chars: minimal.chars },
+      curated: { tools: curated.count, tokens: estTokens(curated.chars), chars: curated.chars },
+      full: { tools: full.count, tokens: estTokens(full.chars), chars: full.chars },
+    };
+    const read = (file: string) => readFileSync(new URL(`../../../${file}`, import.meta.url), 'utf8');
+    expect(driftProblems(GUARDED_FILES, read, measured), 'update each marked quote to the measured figure in the same commit as the tool change').toEqual([]);
   });
 });
