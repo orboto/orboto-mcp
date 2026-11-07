@@ -39,11 +39,11 @@ interface AbsenceRow {
 export const updatePublicHolidayToolConfig = {
   title: 'Edit a public holiday',
   description:
-    'Correct a typo or wrong date on a public holiday without losing the row id. Admin-only (`admin:absences:write`). Pass only the fields you want to change; at least one field is required.',
+    'Correct a public holiday\'s typo or date, keeping the row id. Admin-only (`admin:absences:write`). Pass only the fields you want to change; at least one field is required.',
   inputSchema: z.object({
     id: z.string().uuid(),
     name: z.string().min(1).max(100).optional(),
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD'),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     countryCode: z.string().max(10).nullable().optional(),
     regionCode: z.string().max(10).nullable().optional(),
     isRecurring: z.boolean().optional(),
@@ -76,8 +76,8 @@ export const updateCompanyClosureToolConfig = {
   inputSchema: z.object({
     id: z.string().uuid(),
     name: z.string().min(1).optional(),
-    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD'),
-    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD'),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     note: z.string().nullish(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -106,9 +106,9 @@ export const updateAbsenceToolConfig = {
     'Edit your own absence request before a reviewer acts on it. Locked once the status is `approved`, `rejected`, or `cancelled` - those transitions go through the approve / reject / cancel endpoints, not this one. Caller must be the absence owner or a super-admin. `durationDays` is recomputed automatically when dates move (uses the owner\'s working-day rules + holidays + closures).',
   inputSchema: z.object({
     id: z.string().uuid(),
-    typeId: z.string().uuid().optional().describe('Absence-type id (vacation, sick, etc.).'),
-    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD'),
-    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD'),
+    typeId: z.string().uuid().optional().describe('Absence-type id.'),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     note: z.string().nullish(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },

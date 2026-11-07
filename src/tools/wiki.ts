@@ -9,7 +9,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
-import { SEMANTIC_DEGRADED_LINE, askTimingClause, replacedLines, reviewerFlaggedLine, rewriteDeadline, type AskReview, type AskTimings, type ReplacedRevision, DOC_ID_PARAM } from './shared.js';
+import { SEMANTIC_DEGRADED_LINE, askTimingClause, replacedLines, reviewerFlaggedLine, rewriteDeadline, type AskReview, type AskTimings, type ReplacedRevision, DOC_ID_PARAM, PARENT_DOC_PARAM, SPACE_UUID_PARAM } from './shared.js';
 import { resolveDocId } from './docs.js';
 
 function text(t: string, structured?: Record<string, unknown>): CallToolResult {
@@ -17,13 +17,13 @@ function text(t: string, structured?: Record<string, unknown>): CallToolResult {
 }
 
 export const wikiIngestUrlToolConfig = {
-  title: 'Ingest a URL into an LLM-Wiki space',
+  title: 'Ingest a URL as a wiki SOURCE doc',
   description:
-    'Fetch a public URL, extract its main article as Markdown, and create a SOURCE doc in the space. On an LLM-Wiki space the ingest worker writes pages at once (auto-apply) or parks every ingest plan, stale re-ingests included, for review (review-gate; orboto_wiki_runs apply or reject); lint merges always apply directly, with receipt and undo. Wraps POST /spaces/:id/docs/ingest-url.',
+    'Fetch a public URL, extract its article as Markdown, create a SOURCE doc in the space. On an LLM-Wiki space the ingest worker writes pages at once (auto-apply) or parks every ingest plan, stale re-ingests included, for review (review-gate; orboto_wiki_runs apply or reject); lint merges always apply directly, with receipt and undo. Wraps POST /spaces/:id/docs/ingest-url.',
   inputSchema: z.object({
-    spaceId: z.string().uuid().describe('Target doc space (find via orboto_list_doc_spaces).'),
+    spaceId: z.string().uuid().describe(SPACE_UUID_PARAM),
     url: z.string().url().max(2048),
-    parentDocId: z.string().uuid().optional().describe('Nest the source under this doc.'),
+    parentDocId: z.string().uuid().optional().describe(PARENT_DOC_PARAM),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -42,7 +42,7 @@ export const wikiAskToolConfig = {
     'Retrieval-augmented Q&A over the docs corpus, optionally scoped to one space. Returns an answer with numbered citations linking back to source docs and where the time went. At most 6 passages reach the model. Answers within its deadline (25 s hosted, 120 s on a local provider; the operator can change it) or fails naming the phase that did not finish (retrieval or model); then search with orboto_search_docs. A "Reviewer flagged" line means the reviewer called claims in the answer invented or ran out of time: treat the answer as a draft. Requires both a chat AND an embedding provider (check orboto_ai_status). Wraps POST /ai/ask-docs.',
   inputSchema: z.object({
     question: z.string().min(1).max(2000),
-    spaceId: z.string().uuid().optional().describe('Scope the search to one space; omit for the whole corpus.'),
+    spaceId: z.string().uuid().optional().describe('One space; omit for the whole corpus.'),
     limit: z.number().int().min(1).max(20).optional().describe('Passages (default 5; model reads up to 6).'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
@@ -66,7 +66,7 @@ export const wikiLintToolConfig = {
   description:
     'Lint an LLM-Wiki space for inconsistencies. It merges a duplicate page (same title or near-identical text) into the older one, whose stub keeps the key and smart links valid, queues a re-ingest from newer sources for a stale page instead of filing it, and finds orphan pages, missing cross-references, unprocessed sources and, when AI is configured, contradictions and undocumented concepts. Returns the open issues with a suggested fix, the merges and re-ingests, and a receipt with its undo for every merge. Wraps POST /spaces/:id/llm-wiki/lint.',
   inputSchema: z.object({
-    spaceId: z.string().uuid().describe('The LLM-Wiki space to lint.'),
+    spaceId: z.string().uuid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -104,12 +104,12 @@ export function droppedLines(dropped: DroppedOp[]): string {
 }
 
 export const wikiPlanUpdateToolConfig = {
-  title: 'Plan a wiki edit (dry-run, no writes)',
+  title: 'Plan a wiki edit (dry run)',
   description:
     'Turn a natural-language instruction into page operations (create/patch/append) WITHOUT writing anything. Returns a planId valid for 15 minutes plus the proposed ops, and droppedOps: ops whose target page matched no docId, doc key or title. Review the ops, then call orboto_wiki_apply_plan to commit. Wraps POST /spaces/:id/docs/plan-update.',
   inputSchema: z.object({
     spaceId: z.string().uuid(),
-    instruction: z.string().min(1).max(4000).describe('What to change, in plain language.'),
+    instruction: z.string().min(1).max(4000),
     sourceDocId: z.string().uuid().optional().describe('A source doc to draw content from.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: false },
@@ -148,12 +148,12 @@ export function makeWikiApplyPlanHandler(client: OrbotoClient) {
 const SUPERSEDE_CONFLICT = 'errors.docs.supersede_conflict';
 
 export const wikiRecordToolConfig = {
-  title: 'Record a wiki update (plan + apply)',
+  title: 'Record a wiki update',
   description:
     'Plan and apply a wiki edit in one step. Use it mid-task to capture a fact or update a page without the two-step review loop. Internally calls plan-update then apply-plan. For a reviewable change, use orboto_wiki_plan_update instead.',
   inputSchema: z.object({
     spaceId: z.string().uuid(),
-    instruction: z.string().min(1).max(4000).describe('What to record, in plain language.'),
+    instruction: z.string().min(1).max(4000),
     sourceDocId: z.string().uuid().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -177,7 +177,7 @@ export function makeWikiRecordHandler(client: OrbotoClient) {
 }
 
 export const wikiAppendSectionToolConfig = {
-  title: 'Append a section to a wiki page (idempotent)',
+  title: 'Append a wiki section (idempotent)',
   description:
     'Append a Markdown section to a doc. Idempotent: appending identical content a second time is a no-op, so this is safe to call repeatedly (e.g. across multiple ingests). Wraps POST /docs/:id/append-section.',
   inputSchema: z.object({
@@ -195,7 +195,7 @@ export function makeWikiAppendSectionHandler(client: OrbotoClient) {
 }
 
 export const wikiSaveAnswerToolConfig = {
-  title: 'Save a Q&A answer as a wiki page',
+  title: 'Save an answer as a wiki page',
   description:
     'Save an answer (as from orboto_wiki_ask) as a wiki page linking its citations. Idempotent per (space, question): re-saving the same question updates the page instead of duplicating it. A re-save rewrites the saved page at once, even when it drops most of it (replace: true is accepted and not required); an update names the revision it replaced and the restore command. Wraps POST /ai/save-answer-to-wiki.',
   inputSchema: z.object({

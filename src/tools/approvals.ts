@@ -32,9 +32,9 @@ function fmt(r: ApprovalRequestSummary): string {
 }
 
 export const listApprovalsToolConfig = {
-  title: 'List a ticket\'s sign-off requests',
+  title: 'List sign-off requests',
   description:
-    'List a ticket\'s sign-off requests, the change-management gates on status transitions. Shows each request\'s target status, mode, approval progress, and whether YOU can vote on it right now. Use this before `orboto_approval_decide`.',
+    'List a ticket\'s sign-off requests, the gates on status transitions. Shows each request\'s target status, mode, approval progress, and whether YOU can vote on it right now. Use this before `orboto_approval_decide`.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
   }).shape,
@@ -57,12 +57,12 @@ export function makeListApprovalsHandler(client: OrbotoClient) {
 export const approvalDecideToolConfig = {
   title: 'Approve or reject a sign-off request',
   description:
-    'Cast an approve/reject vote on a pending sign-off request that gates a ticket status transition. You must be an eligible approver (a policy role, a named user, or a RACI role on the ticket) - otherwise the API returns 403. A single reject resolves the request; enough approvals unblock the transition (the requester then re-applies the status move). If the ticket has several pending requests, pass `requestId`.',
+    'Approve or reject a pending sign-off request. You must be an eligible approver (a policy role, a named user, or a RACI role on the ticket) - otherwise the API returns 403. A single reject resolves the request; enough approvals unblock the transition (the requester then re-applies the status move). If the ticket has several pending requests, pass `requestId`.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     decision: z.enum(['approve', 'reject']),
-    comment: z.string().optional().describe('Decision comment, recorded on the vote and sent to the requester.'),
-    requestId: z.string().uuid().optional().describe('Disambiguate when the ticket has more than one pending request.'),
+    comment: z.string().optional().describe('Recorded on the vote and sent to the requester.'),
+    requestId: z.string().uuid().optional().describe('Needed when several requests are pending.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };

@@ -14,16 +14,16 @@ import { agentTicketListRow, type TicketRow } from './shared.js';
 type MyTicketRow = TicketRow;
 
 export const myTicketsToolConfig = {
-  title: 'My assigned tickets',
+  title: 'My tickets',
   description:
-    'List tickets assigned to you, optionally of one status category. Useful when the user says "what am I working on?"',
+    'Your assigned tickets, optionally of one status category. Useful when the user says "what am I working on?"',
   inputSchema: z.object({
     statusCategory: z
       .enum(['todo', 'in_progress', 'in_review', 'done', 'wont_fix'])
       .optional()
-      .describe('Filter to one workflow category. Omit for all non-done.'),
+      .describe('One category; omit for all non-done.'),
     limit: z.number().int().min(1).max(50).default(25),
-    verbose: z.boolean().default(false).describe('true = full rows; default is the decision fields only.'),
+    verbose: z.boolean().default(false).describe('true = full rows, else decision fields.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

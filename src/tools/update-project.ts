@@ -17,7 +17,7 @@ const LOCALE_CODES = ['en', 'de', 'fr', 'es', 'it', 'nl', 'pt', 'ru', 'pl', 'tr'
 type LocaleCode = (typeof LOCALE_CODES)[number];
 
 export const updateProjectToolConfig = {
-  title: 'Update a project\'s metadata',
+  title: 'Update a project',
   description:
     'Patch a project; set at least one field. `status` archived or closed leaves rotation. A `key` rename rewrites `PROJ-N` references. `language` null inherits. `noLaneReason`: no headless lane needed (bots work interactively); null clears.',
   inputSchema: z.object({

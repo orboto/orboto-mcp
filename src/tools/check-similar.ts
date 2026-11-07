@@ -31,7 +31,7 @@ export const checkSimilarToolConfig = {
     'Run the duplicate check before orboto_create_ticket; creates nothing. The pipeline is tsvector plus an AI-embedding rerank when configured. Returns up to `limit` candidates ranked by similarity. Use this BEFORE `orboto_create_ticket` when you want to confirm a feature is not already tracked - if a high-similarity candidate exists, prefer to comment on / claim / extend it instead of opening a new ticket. Empty result = safe to create. `orboto_create_ticket` runs the same check after the fact and surfaces `similarWarnings` in its response, so this tool is optional but cheaper than a create-then-close round trip. Only an AI-embedding candidate carries an absolute similarity; a full-text candidate prints as "text match" without a percentage (its rank is relative, so the best text match always scores 1.000) and can never trigger the hard duplicate-block, and neither can a match against a CLOSED ticket (ORB-2185). An empty result from a LONG, solution-framed title is weak evidence - detection ranks by term co-occurrence, so also probe with a single distinctive STABLE token (file/component/error-string fragment) and the SYMPTOM wording, not just your intended fix.',
   inputSchema: z.object({
     projectKey: z.string().min(1),
-    title: z.string().min(1).describe('Proposed ticket title.'),
+    title: z.string().min(1),
     description: z.string().optional().describe('Proposed description - improves recall.'),
     limit: z.number().int().min(1).max(10).optional().describe('Max candidates. Default 5.'),
     parentTicketKey: z.string().optional().describe('Intended parent; makes the check hierarchy-aware.'),

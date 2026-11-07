@@ -46,8 +46,8 @@ export const claimToolConfig = {
     reason: z.string().trim().min(1).max(2000).optional(),
     sole: z.boolean().optional().describe('Remove other assignees after gate.'),
     force: z.boolean().optional().describe('Reopen done.'),
-    noTimer: z.boolean().optional().describe('No timer.'),
-    agentSessionToken: z.string().optional().describe('Instance token for bot timers; must be this connection\'s own.'),
+    noTimer: z.boolean().optional(),
+    agentSessionToken: z.string().optional().describe('Instance token (bot timers); must be this connection\'s own.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };

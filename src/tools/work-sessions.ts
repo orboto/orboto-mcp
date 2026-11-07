@@ -276,7 +276,7 @@ export const workSessionStartToolConfig = {
     resourceClaims: z.array(z.object(ResourceClaimShape)).max(50).optional()
       .describe('Atomic claims: path = repo-relative glob, named = exact id; overlapping writes conflict, reads never.'),
     onConflict: z.enum(['reject', 'queue']).optional()
-      .describe('reject rolls back a new session on conflict; queue keeps it, waiting claims promoted when clear.'),
+      .describe('reject rolls back a new session on conflict; queue keeps it, and its waiting claims promote when clear.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
@@ -459,12 +459,12 @@ export const workFinishToolConfig = {
   inputSchema: z.object({
     sessionId: z.string().uuid().describe('From orboto_work_start / orboto_work_session_start.'),
     outcome: z.enum(['finished', 'cancelled']).optional()
-      .describe('`finished` (default) drives the ticket transition; `cancelled` = abandoned: time booked, ticket untouched.'),
+      .describe('`finished` (default) moves the ticket; `cancelled` = abandoned: time booked, ticket untouched.'),
     commitSha: z.string().optional().describe('The commit produced; an attestation, verified once git ingestion catches up.'),
     verification: workVerificationParam,
     targetCategory: z.enum(['todo', 'in_progress', 'in_review', 'done', 'wont_fix']).optional()
-      .describe('Default `done`; `in_review` when a human should look first. Implementation sessions with outcome `finished` only.'),
-    note: z.string().optional().describe('Completion note on the ticket; generated from time, commit and verification when omitted.'),
+      .describe('Default `done`; `in_review` for human review. Implementation sessions with outcome `finished` only.'),
+    note: z.string().optional().describe('Completion note on the ticket; generated when omitted.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -559,7 +559,7 @@ export function makeWorkSessionsHandler(client: OrbotoClient) {
 }
 
 export const workSessionClaimsAddToolConfig = {
-  title: 'Add resource claims to a session',
+  title: 'Add resource claims',
   description:
     'Declare more resource claims on a session you hold, leaving lease and timer alone. Use this when you did not know the files/resources you would touch at start time, or need to widen scope mid-task. Same conflict rule as start: `write` claims conflict with any OVERLAPPING active write claim workspace-wide; `read` claims never conflict. Default `onConflict: "reject"` fails the WHOLE call (nothing is added) and names every conflicting holder; `queue` accepts the conflicting ones as `state: "waiting"`.',
   inputSchema: z.object({

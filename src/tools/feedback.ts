@@ -11,9 +11,9 @@ import type { OrbotoClient } from '../orboto-client.js';
 const PUBLIC_TRACKER = 'https://github.com/orboto/orboto-cli/issues';
 
 export const reportFeedbackToolConfig = {
-  title: 'Send feedback to the operator',
+  title: 'Send feedback',
   description:
-    'File a bug report, feedback or feature request with the orboto operator. Relayed without your identity; up to 3 png/jpeg/txt attachments (2 MB each, base64). Refused on self-hosted instances without an operator link. Answers with the report id only.',
+    'File a bug report, feedback or feature request. Relayed without your identity; up to 3 png/jpeg/txt attachments (2 MB each, base64). Refused on self-hosted instances without an operator link. Answers with the report id only.',
   inputSchema: z.object({
     kind: z.enum(['bug', 'feedback', 'feature']),
     title: z.string().min(1).max(200),

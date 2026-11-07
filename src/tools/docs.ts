@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { DOC_ID_PARAM, SPACE_REF_PARAM, replacedLines, resolveProjectByKey, type ReplacedRevision } from './shared.js';
+import { DOC_ID_PARAM, EMOJI_PARAM, PARENT_DOC_PARAM, SPACE_REF_PARAM, SPACE_UUID_PARAM, replacedLines, resolveProjectByKey, type ReplacedRevision } from './shared.js';
 import { formatApproxTokens } from '../token-size.js';
 
 interface DocSpaceRow {
@@ -62,7 +62,7 @@ interface DocBacklinkRow {
 export const listDocSpacesToolConfig = {
   title: 'List doc spaces',
   description:
-    'List wiki spaces (global and project-scoped) the caller can read. Each space contains a tree of docs accessed via orboto_get_doc.',
+    'List the wiki spaces you can read. Each space contains a tree of docs accessed via orboto_get_doc.',
   inputSchema: z.object({}).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -99,11 +99,11 @@ export async function resolveDocId(client: OrbotoClient, docIdOrKey: string): Pr
 }
 
 export const getDocToolConfig = {
-  title: 'Get a doc by id or key',
+  title: 'Get a doc',
   description:
     'Return the doc content (Markdown) plus backlinks (other docs that reference this doc, or tickets/milestones the doc is linked from). Accepts either the doc UUID or its human-readable key (e.g. ORB-D12 / DOC-5). A UUID read also reports `embedding.state` - embedded | pending | stale | not_embeddable - so a caller waits for semantic search instead of guessing (ORB-2154).',
   inputSchema: z.object({
-    docId: z.string().min(1).describe('Doc UUID or key (ORB-D12); find via orboto_search.'),
+    docId: z.string().min(1).describe('UUID or key (ORB-D12); find via orboto_search.'),
     section: z.string().min(1).max(500).optional().describe('Heading path "A > B": only that section.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
@@ -175,10 +175,10 @@ export const createDocSpaceToolConfig = {
     name: z.string().min(1).max(100),
     type: z.enum(['global', 'project']).describe('Scope: workspace-wide or project-scoped.'),
     projectKey: z.string().min(1).optional().describe('Required when type=project (or pass projectId).'),
-    projectId: z.string().uuid().optional().describe('Alternative to projectKey when type=project.'),
+    projectId: z.string().uuid().optional().describe('Alternative to projectKey.'),
     description: z.string().nullish(),
-    icon: z.string().nullish().describe('Single emoji (e.g. "📘") used in the sidebar tree.'),
-    slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional().describe('URL slug. Auto-derived from name when omitted.'),
+    icon: z.string().nullish().describe(EMOJI_PARAM),
+    slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional().describe('Default: derived from name.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -224,7 +224,7 @@ export const updateDocSpaceToolConfig = {
   description:
     'Patch a space\'s name / description / icon / slug, and (ORB-1080) its visibility settings: `visibility` (workspace = every internal member, restricted = explicit allowlist via memberIds), `guestsVisible` (external users see the space only when true). Visibility fields require space-management rights (global spaces: super-admin; project spaces: project:edit) - plain membership gets a 403 for those. `isPublic` is deprecated (replaced by guestsVisible). `type` and `projectId` are immutable; auto-generated primer spaces refuse name/slug edits.',
   inputSchema: z.object({
-    spaceId: z.string().uuid().describe('Space UUID (find via orboto_list_doc_spaces).'),
+    spaceId: z.string().uuid().describe(SPACE_UUID_PARAM),
     name: z.string().min(1).max(100).optional(),
     description: z.string().nullish(),
     icon: z.string().nullish(),
@@ -275,7 +275,7 @@ export function makeUpdateDocSpaceHandler(client: OrbotoClient) {
 export const deleteDocSpaceToolConfig = {
   title: 'Delete a doc space',
   description:
-    'DESTRUCTIVE - cascades through every doc in the space (the pages themselves are gone, not just hidden). System-generated project primer spaces refuse deletion (they cascade only when the owning project is deleted). Needs `project:edit` on the space\'s project (global spaces: super-admin): 404 for a space the caller cannot see or that does not exist, 403 for one they cannot manage. Returns success silently; errors surface as an OrbotoApiError.',
+    'DESTRUCTIVE - cascades through every doc in the space (pages are gone, not hidden). System-generated project primer spaces refuse deletion (they cascade only when the owning project is deleted). Needs `project:edit` on the space\'s project (global spaces: super-admin): 404 for a space the caller cannot see or that does not exist, 403 for one they cannot manage. Returns success silently; errors surface as an OrbotoApiError.',
   inputSchema: z.object({
     spaceId: z.string().uuid(),
   }).shape,
@@ -293,7 +293,7 @@ export function makeDeleteDocSpaceHandler(client: OrbotoClient) {
 }
 
 export const listDocsInSpaceToolConfig = {
-  title: 'List docs inside a space',
+  title: 'List docs in a space',
   description:
     'Flat list of a space\'s doc pages; `parentDocId` rebuilds the tree. Use this when an agent needs to find a doc by title rather than asking for a UUID first. Pair with orboto_get_doc to read individual page bodies.',
   inputSchema: z.object({
@@ -364,7 +364,7 @@ interface DocSyncRow {
 interface DocSyncPage { space?: { id: string; key: string | null }; items: DocSyncRow[]; nextCursor: string | null; syncCursor: string | null }
 
 export const spaceManifestToolConfig = {
-  title: 'Doc space page manifest',
+  title: 'Space page manifest',
   description:
     'Page manifest of a space, no bodies, by cursor. No cursor lists every visible page; the syncCursor of a walk lists only later changes. The file mount is the CLI: orboto wiki mount <space> <dir> [--watch].',
   inputSchema: z.object({
@@ -394,16 +394,16 @@ export function makeSpaceManifestHandler(client: OrbotoClient) {
 }
 
 export const createDocToolConfig = {
-  title: 'Create a doc page',
+  title: 'Create a doc',
   description:
-    'Create a new wiki page in `spaceId` with the supplied Markdown body. Unlike orboto_ingest_url / orboto_ingest_file (which derive content from an external source), this is the plain "I have the Markdown, make me a page" path. Title is required; content is optional (creates an empty page). Returns the new doc row including its UUID and its human-readable doc key (e.g. ORB-D12). Status pills: `:badge[LABEL]{tone=success}`, tones neutral, info, success, warning, danger, accent (an unknown tone reads as neutral), label 1 to 24 characters.',
+    'Create a wiki page in `spaceId` from Markdown. Unlike orboto_ingest_url / orboto_ingest_file (which derive content from an external source), this is the plain "I have the Markdown, make me a page" path. Title is required; content is optional (creates an empty page). Returns the new doc row including its UUID and its human-readable doc key (e.g. ORB-D12). Status pills: `:badge[LABEL]{tone=success}`, tones neutral, info, success, warning, danger, accent (an unknown tone reads as neutral), label 1 to 24 characters.',
   inputSchema: z.object({
     spaceId: z.string().min(1).describe(SPACE_REF_PARAM),
     title: z.string().min(1).max(255),
     content: z.string().optional().describe('Markdown (GFM); omitted: a blank page. Pills: `:badge[LABEL]{tone=success}`.'),
-    parentDocId: z.string().uuid().nullable().optional().describe('Nest under another doc.'),
+    parentDocId: z.string().uuid().nullable().optional().describe(PARENT_DOC_PARAM),
     visibility: z.enum(['public', 'workspace', 'members', 'specific']).optional().describe('Defaults to "workspace".'),
-    icon: z.string().nullish().describe('Single emoji shown in the tree.'),
+    icon: z.string().nullish().describe(EMOJI_PARAM),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -436,7 +436,7 @@ export function makeCreateDocHandler(client: OrbotoClient) {
 }
 
 export const updateDocToolConfig = {
-  title: 'Update a doc page',
+  title: 'Update a doc',
   description:
     'Patch a doc; content is appended unless replace. ORB-2468: title, visibility, parent and icon are set as given; content goes in as a new section (identical content twice is a no-op); replace: true replaces the whole page and the answer names the revision holding the previous body plus its restore command. Every body or title change snapshots a revision; orboto_restore_doc_revision rolls back. For one passage or section use orboto_edit_doc. Status pills as in orboto_create_doc.',
   inputSchema: z.object({
@@ -492,7 +492,7 @@ export function makeUpdateDocHandler(client: OrbotoClient) {
 }
 
 export const deleteDocToolConfig = {
-  title: 'Delete a doc page',
+  title: 'Delete a doc',
   description:
     'DESTRUCTIVE - removes the page from the tree. Revisions are NOT auto-cascaded; the API keeps them so an admin could in principle resurrect from history, but the page itself is gone from listings. System-generated primer docs refuse deletion (the regenerator re-creates them). Returns success silently; 404 is also silent (idempotent).',
   inputSchema: z.object({
@@ -513,12 +513,12 @@ export function makeDeleteDocHandler(client: OrbotoClient) {
 }
 
 export const moveDocToolConfig = {
-  title: 'Move a doc page',
+  title: 'Move a doc',
   description:
     'Reparent a doc, change its sort order, or move it into a different space. All three target fields are optional but at least one must be supplied. Distinct from orboto_update_doc\'s parentDocId because the API endpoint emits a different WS event for the tree-rebuild path connected clients care about.',
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
-    parentDocId: z.string().uuid().nullable().optional().describe('null = top-level; UUID = nest under that doc.'),
+    parentDocId: z.string().uuid().nullable().optional().describe('null = top-level.'),
     spaceId: z.string().uuid().optional().describe('Target space (member of both). The parent must be in it, else the doc lands top-level.'),
     sortOrder: z.number().int().optional(),
   }).shape,

@@ -7,7 +7,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 
 export const feedbackReplyToolConfig = {
-  title: 'Reply to feedback report',
+  title: 'Reply to feedback',
   description: 'Post the operator\'s public reply on a feedback ticket. Synced to the tenant. Refuses secrets.',
   inputSchema: z.object({
     ticketKey: z.string().min(1).max(64),

@@ -185,13 +185,13 @@ function writeResult(answer: WriteAnswer, label: string): CallToolResult {
 }
 
 export const primerFactListToolConfig = {
-  title: 'List project primer facts',
+  title: 'List primer facts',
   description:
     'List the structured project facts feeding the AI primer, each with author, session and evidence. Read them before adding an observation. Workspace facts are merged in unless includeWorkspace=false.',
   inputSchema: z.object({
     projectKey: z.string().min(1),
     category: PrimerFactCategoryEnum.optional().describe(
-      'Filter by category. Omit for all categories.',
+      'Category; omit for all.',
     ),
     source: PrimerFactSourceEnum.optional().describe(
       'manual, agent_observed (an agent) or imported.',
@@ -243,7 +243,7 @@ export function makePrimerFactListHandler(client: OrbotoClient) {
 }
 
 export const primerFactAddToolConfig = {
-  title: 'Record a project primer fact',
+  title: 'Record a primer fact',
   description:
     'Record a project fact with your evidence; it is live at once in every session primer. Use it for a version, convention, deployment quirk or architecture decision, CLAUDE.md / AGENTS.md conventions too (the primer rarely reads them). Workspace facts are person-written (403 workspace_needs_person). CLI: orboto primer-fact add <KEY> --category <c> --key <k> --value "<v>" --evidence "<how>".'
     + LIVE_CONTRACT
@@ -380,7 +380,7 @@ export const primerFactSupersedeToolConfig = {
   description:
     'Replace a wrong fact by id instead of deleting it; the old one stays in orboto_primer_fact_history. Workspace facts are person-written (403); an already superseded fact answers 409 already_superseded. Same live, pinned and size rules as orboto_primer_fact_add.',
   inputSchema: z.object({
-    oldFactId: z.string().min(1).describe('UUID of the fact being replaced.'),
+    oldFactId: z.string().min(1).describe('UUID of the replaced fact.'),
     category: PrimerFactCategoryEnum,
     key: z.string().min(1).max(120),
     value: z.string().min(1).max(8000).describe('Corrected Markdown body.'),
@@ -483,7 +483,7 @@ export const primerFactDeleteToolConfig = {
   description:
     'Hard-delete a fact. Prefer orboto_primer_fact_supersede when the fact is being replaced; only delete when the fact was wrong from the start or no longer relevant. Writes an audit-log entry; the row itself is gone (no soft-delete). A person deletes: a bot account or an agent key gets 403 errors.primer_facts.delete_needs_person (CLI: orboto primer-fact delete).',
   inputSchema: z.object({
-    factId: z.string().min(1).describe('UUID of the fact to delete.'),
+    factId: z.string().min(1).describe('Fact UUID.'),
     reason: z.string().max(500).optional().describe(
       'Kept in the audit log.',
     ),

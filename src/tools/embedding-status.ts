@@ -36,7 +36,7 @@ interface EmbeddingStatusResponse {
 }
 
 export const embeddingStatusToolConfig = {
-  title: 'Embedding pipeline status',
+  title: 'Embedding status',
   description:
     'Operator diagnostic for AI search / embeddings. Returns the configured provider/model + vector dimensions, coverage (embedded vs total, and how many are PENDING - never-embedded / stale - per tickets / comments / docs and overall; a doc counts as embedded once its whole body is embedded in chunks, with the chunk progress as detail), the circuit-breaker state (tripped + reason + consecutive failures), and when the last embedding was written. Use this to diagnose why semantic search / duplicate detection / ask-docs are stale or empty - e.g. a tripped breaker, a stuck queue, or a provider that stopped responding. Deeper than orboto_ai_status (which only says whether embeddings are configured). Requires admin:ai:read - returns 403 for non-admin callers.',
   inputSchema: z.object({}).shape,

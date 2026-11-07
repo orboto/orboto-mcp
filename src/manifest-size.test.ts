@@ -137,6 +137,18 @@ afterEach(() => { vi.restoreAllMocks(); });
  * a client assumes anyway (56 tools, -1,288 chars, no hint lost; every other
  * hint stays as declared), so full = 168,794 over HTTP, 606 chars free;
  * curated = 38,583.
+ * ORB-2843 added `orboto_space_manifest` (+574) and ORB-2850 gave
+ * `orboto_embedding_status` three output fields (+207): each fit under the
+ * ceiling alone, both together did not (develop 59c60d047: full = 169,637,
+ * stdio = 169,584).
+ * ORB-2871 won the headroom back without dropping a parameter, an enum value or
+ * a bound: 87 titles, 57 first sentences (6 of them summary overrides in
+ * tool-docs.ts) and 168 parameter texts (128 shortened, 40 dropped where the
+ * name or the schema says it) lost what the name, the schema or the rest of the
+ * description already says, and the space, parent doc and emoji texts became
+ * shared constants (full = 164,487 from 169,637, stdio = 164,547 from 169,584,
+ * curated = 37,683 from 38,583; 4,853 chars free under the full ceiling on the
+ * larger stdio build).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

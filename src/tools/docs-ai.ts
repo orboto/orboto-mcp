@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import { KNOWLEDGE_DATA_NOTICE, SEMANTIC_DEGRADED_LINE, askTimingClause, reviewerFlaggedLine, rewriteDeadline, type AskReview, type AskTimings } from './shared.js';
+import { KNOWLEDGE_DATA_NOTICE, PARENT_DOC_PARAM, SEMANTIC_DEGRADED_LINE, SPACE_UUID_PARAM, askTimingClause, reviewerFlaggedLine, rewriteDeadline, type AskReview, type AskTimings } from './shared.js';
 
 interface AskDocsCitation {
   index: number;
@@ -52,7 +52,7 @@ export const askDocsToolConfig = {
     'Ask the wiki a natural-language question via the workspace\'s RAG pipeline. Returns an `answer` (Markdown) + `citations` array `[{index, title, link, spaceName}]`. The model is the workspace\'s configured AI provider; retrieval requires the embedding provider too - call `orboto_ai_status` to verify both before relying on this. Restrict to a single doc space with `spaceId` when scoping a query (e.g. "only the runbooks space"). At most 6 passages reach the model. Latency is dominated by retrieval + LLM round-trip; expect 2-10s. It answers within its deadline (25 s hosted, 120 s on a local provider; the operator can change it) or fails naming the phase that did not finish (retrieval or model); then search with `orboto_search_docs`. A "Reviewer flagged" line means the reviewer called claims in the answer invented or ran out of time: treat the answer as a draft.',
   inputSchema: z.object({
     question: z.string().min(3),
-    spaceId: z.string().min(1).optional().describe('Limit RAG retrieval to one doc space - key (e.g. ORB-S1), name, or UUID.'),
+    spaceId: z.string().min(1).optional().describe('Limit retrieval to one space: key, name or UUID.'),
     limit: z.number().int().min(1).max(20).optional().describe('Passages (default 5; model reads up to 6).'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
@@ -96,13 +96,13 @@ export function makeAskDocsHandler(client: OrbotoClient) {
 }
 
 export const ingestUrlToolConfig = {
-  title: 'Ingest a public URL into a wiki space',
+  title: 'Ingest a URL into a wiki space',
   description:
-    'Fetch a public URL, run Readability extraction, store the result as a Markdown doc in `spaceId`. Optionally nest under `parentDocId` to keep the tree tidy. Sets `readabilityFallback: true` when the page didn\'t look like a recognisable article (the body falls back to full-page text - a flag the caller should surface to the operator for review).',
+    'Fetch a public URL, extract it with Readability, store a Markdown doc in `spaceId`. Optionally nest under `parentDocId` to keep the tree tidy. Sets `readabilityFallback: true` when the page didn\'t look like a recognisable article (the body falls back to full-page text - a flag the caller should surface to the operator for review).',
   inputSchema: z.object({
     url: z.string().url(),
-    spaceId: z.string().uuid().describe('Target doc space - find IDs via `orboto_list_doc_spaces`.'),
-    parentDocId: z.string().uuid().optional().describe('Optional parent doc to nest under.'),
+    spaceId: z.string().uuid().describe(SPACE_UUID_PARAM),
+    parentDocId: z.string().uuid().optional().describe(PARENT_DOC_PARAM),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -151,8 +151,8 @@ export const ingestFileToolConfig = {
     'Upload a file (PDF / DOCX / Markdown / plain text) into `spaceId` via multipart. The model passes the bytes as a base64 `contentBase64` field (so this works without local FS access on the agent side). Use `filename` to give the doc a meaningful title - the backend sniffs the mimetype but also uses the filename for display. Optional `parentDocId` nests under an existing doc. The uploaded file is ALSO attached to the doc it produces (ORB-2167): the response names `attachmentId`, `orboto_list_doc_attachments` lists it and `orboto_get_attachment` downloads the original bytes, so the extracted text and its source stay together.',
   inputSchema: z.object({
     spaceId: z.string().uuid(),
-    filename: z.string().min(1).describe('Display filename, e.g. "adr-12.pdf".'),
-    contentBase64: z.string().min(1).describe('File content, base64-encoded.'),
+    filename: z.string().min(1),
+    contentBase64: z.string().min(1),
     parentDocId: z.string().uuid().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },

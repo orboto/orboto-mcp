@@ -26,9 +26,9 @@ interface ListResponse {
 }
 
 export const listAdminTranslationsToolConfig = {
-  title: 'List auto-translated tickets for review',
+  title: 'List auto-translated tickets',
   description:
-    'List tickets the AI auto-translate flow rewrote, sorted newest-updated first. Default surface is the pending queue (tickets the admin has not yet approved). Pass `status: "all"` to include reviewed rows too. Returns up to `limit` (default 25) rows + a `nextCursor` for paging. Requires `admin:translation_review`.',
+    'List tickets the AI auto-translate flow rewrote, newest-updated first. Default surface is the pending queue (tickets the admin has not yet approved). Pass `status: "all"` to include reviewed rows too. Returns up to `limit` (default 25) rows + a `nextCursor` for paging. Requires `admin:translation_review`.',
   inputSchema: z.object({
     status: z.enum(['pending', 'all']).optional().describe('Default: pending.'),
     limit: z.number().int().min(1).max(100).optional().describe('Default: 25.'),
@@ -66,9 +66,9 @@ export function makeListAdminTranslationsHandler(client: OrbotoClient) {
 export const approveTranslationToolConfig = {
   title: 'Approve an auto-translated ticket',
   description:
-    'Approve a ticket the AI auto-translate flow rewrote: stamps the reviewer and the time. Idempotent - re-approving the same row simply refreshes the timestamp + reviewer. 409 if the ticket was never auto-translated. Requires `admin:translation_review`.',
+    'Approve an auto-translated ticket: stamps the reviewer and the time. Idempotent - re-approving the same row simply refreshes the timestamp + reviewer. 409 if the ticket was never auto-translated. Requires `admin:translation_review`.',
   inputSchema: z.object({
-    ticketId: z.string().uuid().describe('UUID of the ticket to approve.'),
+    ticketId: z.string().uuid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -91,7 +91,7 @@ export const revertTranslationToolConfig = {
   description:
     'Restore the pre-translation title + description from the audit comment and clear the auto-translate marker + prior approval. Use when the AI got the translation wrong and the operator wants to start over. 409 if the ticket was never auto-translated. Requires `admin:translation_review`.',
   inputSchema: z.object({
-    ticketId: z.string().uuid().describe('UUID of the ticket to revert.'),
+    ticketId: z.string().uuid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };

@@ -39,7 +39,7 @@ interface OperationDetail {
 }
 
 export const apiSearchToolConfig = {
-  title: 'Search the orboto REST API catalog',
+  title: 'Search the REST API catalog',
   description:
     'Discover REST API endpoints on demand - the escape hatch that keeps the WHOLE orboto API '
     + 'reachable without a named tool per endpoint. Two modes: pass `query` (free text, e.g. '
@@ -52,8 +52,7 @@ export const apiSearchToolConfig = {
       .describe('Free-text search; mutually exclusive with path.'),
     path: z.string().max(300).optional()
       .describe('Path for detail mode, e.g. "/projects/{id}". Needs method.'),
-    method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).optional()
-      .describe('Method for detail mode.'),
+    method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).optional(),
     limit: z.number().int().min(1).max(20).default(8),
   }).shape,
   annotations: { readOnlyHint: true },

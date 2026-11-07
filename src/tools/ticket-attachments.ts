@@ -38,9 +38,9 @@ function isImage(mimetype: string): boolean {
 }
 
 export const listTicketAttachmentsToolConfig = {
-  title: 'List attachments on a ticket',
+  title: 'List ticket attachments',
   description:
-    'List a ticket\'s attachments newest-first: id, filename, type, size, download URL. Use the returned id with orboto_get_attachment to actually view an image or fetch the bytes. Empty list = no attachments. Input is the ticket key like "ACME-42".',
+    'List a ticket\'s attachments newest-first with download URLs. Use the returned id with orboto_get_attachment to actually view an image or fetch the bytes. Empty list = no attachments. Input is the ticket key like "ACME-42".',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
   }).shape,
@@ -84,7 +84,7 @@ export function makeListTicketAttachmentsHandler(client: OrbotoClient) {
 }
 
 export const getAttachmentToolConfig = {
-  title: 'View or fetch an attachment\'s bytes',
+  title: 'Fetch an attachment',
   description:
     'Fetch an attachment\'s content by id (from orboto_list_ticket_attachments or orboto_get_ticket). For an image, the model receives an image content block so it actually SEES the screenshot, plus a text line with filename and size. For a non-image, the model gets a text block with metadata and, for small files, the base64 content; large binaries point at the skill\'s download-attachment shortcut. Works for ticket, doc, and comment attachments (the id is global). Enforces the same project/space access check as listing the attachment.',
   inputSchema: z.object({

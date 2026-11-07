@@ -16,7 +16,7 @@ interface QueryResponse {
 export const queryToolConfig = {
   title: 'Run an OQL / JQL query',
   description:
-    'Run a typed OQL (or Jira-shaped JQL) query and return matching tickets. '
+    'Run an OQL (or Jira-style JQL) query for matching tickets. '
     + 'OQL grammar: `[FIND tickets WHERE] field operator value [AND|OR ...] [ORDER BY ...] [LIMIT n]` (the frame is an optional alias). '
     + 'Supported fields: key, status, statusName, statusCategory, priority, type, assignee, reporter, reporterType, assigneeType, labels, milestone, version, project, isPrivate, dueDate, startDate, createdAt, updatedAt, closedAt, estimatedTimeMinutes, loggedMinutes, parentKey. '
     + 'reporterType / assigneeType are guest|internal (`reporterType = guest OR assigneeType = guest` finds all guest tickets). '
@@ -29,11 +29,11 @@ export const queryToolConfig = {
     + 'Use it when orboto_list_tickets / orboto_my_tickets cannot express the filter. '
     + 'A 429 is retried at most twice, then returned with structuredContent rateLimited, retryAfterSeconds, limitPerMinute.',
   inputSchema: z.object({
-    oql: z.string().min(1).max(8000).describe('The query string.'),
+    oql: z.string().min(1).max(8000),
     syntax: z.enum(['oql', 'jql']).default('oql').describe('"jql" accepts Jira syntax.'),
     cursor: z.string().optional().describe(CURSOR_PARAM),
     limit: z.number().int().min(1).max(100).default(25),
-    verbose: z.boolean().default(false).describe('true = full rows; default is the decision fields only.'),
+    verbose: z.boolean().default(false).describe('true = full rows, else decision fields.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

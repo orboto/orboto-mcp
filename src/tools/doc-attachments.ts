@@ -67,7 +67,7 @@ export const uploadDocAttachmentToolConfig = {
     `Upload a doc attachment from \`contentBase64\` (up to about 25 KB; a bigger file needs orboto_upload_link). ${UPLOAD_DOC_TAIL} The local stdio server also takes \`filePath\`.`,
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
-    filename: z.string().min(1).describe('Display filename, e.g. "diagram.png".'),
+    filename: z.string().min(1),
     contentBase64: z.string().min(1),
     altText: z.string().optional().describe('Image alt text; default filename.'),
     embed: z.boolean().optional().describe('Append the Markdown line to the doc body.'),
@@ -139,7 +139,7 @@ export function makeUploadDocAttachmentHandler(client: OrbotoClient, opts: { loc
 export const listDocAttachmentsToolConfig = {
   title: 'List doc attachments',
   description:
-    'List a doc\'s attachments newest-first with stable download URLs. Empty list = no attachments.',
+    'List a doc\'s attachments newest-first with download URLs. Empty list = no attachments.',
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
   }).shape,

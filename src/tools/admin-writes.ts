@@ -60,11 +60,11 @@ function rewrite403(action: string): (err: unknown) => never {
 }
 
 export const listUsersToolConfig = {
-  title: 'List workspace users (admin)',
+  title: 'List users (admin)',
   description:
     'Return the workspace user directory. Super-admin only. Useful for AI agents that need to look up an email beyond their visible project members (e.g. to assign someone who isn\'t on the current project yet). Imported placeholder users (`*@imported.ghost`) are hidden by default; set `showGhosts=true` to include them.',
   inputSchema: z.object({
-    search: z.string().optional().describe('Substring match against fullName + email.'),
+    search: z.string().optional().describe('Substring of fullName or email.'),
     limit: z.number().int().min(1).max(100).default(50),
     showGhosts: z.boolean().optional().describe('Include the `*@imported.ghost` users of project imports.'),
   }).shape,
@@ -116,11 +116,11 @@ export function makeListUsersHandler(client: OrbotoClient) {
 }
 
 export const getAuditLogToolConfig = {
-  title: 'Read the workspace audit log (admin)',
+  title: 'Read the audit log (admin)',
   description:
     'Recent audit events: admin actions, role changes, ticket deletions, federation handshakes. Super-admin only. Filter by actor or entity to narrow the window.',
   inputSchema: z.object({
-    actorEmail: z.string().email().optional().describe('Filter to one actor.'),
+    actorEmail: z.string().email().optional(),
     entityType: z.string().optional().describe('e.g. "user", "project", "ticket", "federation_link".'),
     limit: z.number().int().min(1).max(100).default(50),
   }).shape,
@@ -176,11 +176,11 @@ export function makeGetAuditLogHandler(client: OrbotoClient) {
 }
 
 export const triggerBackupToolConfig = {
-  title: 'Run a configured backup job now (admin)',
+  title: 'Run a backup job now (admin)',
   description:
     'Manually trigger a backup job by name. Resolves to the job\'s UUID via /admin/backup/jobs and POSTs to the run endpoint. Super-admin only.',
   inputSchema: z.object({
-    jobName: z.string().min(1).describe('Name of an existing backup job (configured at /admin/backup).'),
+    jobName: z.string().min(1).describe('Backup job name (configured at /admin/backup).'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };

@@ -38,11 +38,11 @@ interface LinkView {
 }
 
 export const listCrossProjectLinksToolConfig = {
-  title: 'List cross-project links on a ticket',
+  title: 'List cross-project links',
   description:
     'Every cross-project link of the ticket, outgoing and incoming. Each row carries the other end\'s project key, ticket key, title, and current status, so the model can see the linked work\'s state without a follow-up tool call. ACL-filtered: rows whose other-end project the caller cannot read are dropped silently.',
   inputSchema: z.object({
-    ticketKey: z.string().min(3).describe('Ticket key (e.g. "ORB-42") or UUID.'),
+    ticketKey: z.string().min(3).describe('Key or UUID.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -73,7 +73,7 @@ export function makeListCrossProjectLinksHandler(client: OrbotoClient) {
 export const addCrossProjectLinkToolConfig = {
   title: 'Add a cross-project link',
   description:
-    'Create a formal relation between two tickets in different projects. The caller must be a member of both projects and read both tickets. Relation types: counterpart (parallel work, bidirectional), depends_on (this waits for the other), blocks (the other waits for this), related (loose). statusSyncEnabled=true (default off) auto-closes the other end of a counterpart link when one moves to done; it needs ticket:edit and ticket:change_status in both projects (403 otherwise). A close by a user lacking those grants or read access on the far end leaves it open, audited and notified.',
+    'Relate two tickets in different projects. The caller must be a member of both projects and read both tickets. Relation types: counterpart (parallel work, bidirectional), depends_on (this waits for the other), blocks (the other waits for this), related (loose). statusSyncEnabled=true (default off) auto-closes the other end of a counterpart link when one moves to done; it needs ticket:edit and ticket:change_status in both projects (403 otherwise). A close by a user lacking those grants or read access on the far end leaves it open, audited and notified.',
   inputSchema: z.object({
     sourceTicketKey: z.string().min(3),
     targetTicketKey: z.string().min(3),
@@ -102,7 +102,7 @@ export function makeAddCrossProjectLinkHandler(client: OrbotoClient) {
 }
 
 export const updateCrossProjectLinkToolConfig = {
-  title: 'Toggle status-sync on a cross-project link',
+  title: 'Toggle a link\'s status sync',
   description:
     'Flip statusSyncEnabled on an existing cross-project link. Enabling needs ticket:edit and ticket:change_status in both projects (403 otherwise); disabling is always allowed. On a counterpart link the other end auto-closes when one moves to done, if the closing user holds those grants and read access there. Other relation types ignore the flag.',
   inputSchema: z.object({

@@ -32,8 +32,8 @@ export const raciToolConfig = {
     "Read a project's RACI matrix (tickets x members, cells = R/A/C/I). `milestone` scopes to one milestone; `epicsOnly` narrows rows to epics. RACI is OPT-IN per project: only use this when the project has RACI enabled (check `raciEnabled` on orboto_get_project / the primer). Do NOT raise or suggest RACI on projects that haven't enabled it. Returns empty when RACI is off.",
   inputSchema: z.object({
     projectKey: z.string().min(1),
-    milestone: z.string().optional().describe('Milestone name to scope the matrix.'),
-    epicsOnly: z.boolean().optional().describe('Only include epics as rows.'),
+    milestone: z.string().optional().describe('Milestone name.'),
+    epicsOnly: z.boolean().optional(),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -91,8 +91,8 @@ export const setRaciToolConfig = {
   description:
     "Set a person's RACI role: R Responsible, A Accountable (max one per ticket), C Consulted, I Informed. RACI is OPT-IN per project: only use this when the project has RACI enabled (`raciEnabled` true) - do NOT suggest or set RACI on projects that haven't opted in. Resolves the user by email within the ticket's project. Requires ticket:manage_raci. A second Accountable is rejected with the current holder's name.",
   inputSchema: z.object({
-    ticketKey: z.string().min(3).describe('Ticket key (e.g. "ORB-42").'),
-    userEmail: z.string().email().describe('Email of a project member.'),
+    ticketKey: z.string().min(3),
+    userEmail: z.string().email().describe('A project member.'),
     role: z.enum(ROLES),
     override: z.boolean().optional(),
     reason: z.string().trim().min(1).max(2000).optional(),

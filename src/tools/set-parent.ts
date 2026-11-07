@@ -9,7 +9,7 @@ import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveTicketByKey, type TicketRow } from './shared.js';
 
 export const setParentToolConfig = {
-  title: 'Set or clear a ticket\'s parent',
+  title: 'Set or clear a parent',
   description:
     'Re-parent an existing ticket. Pass `parentTicketKey` to make this ticket a sub-ticket of another, or pass `parentTicketKey: null` to detach from any parent (back to top-level). Both tickets must live in the same project. Cycle detection + self-parenting are rejected by the API. Symmetric to `orboto_set_milestone` - use this rather than `orboto_update_ticket` for parent moves.',
   inputSchema: z.object({

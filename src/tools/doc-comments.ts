@@ -32,7 +32,7 @@ interface CommentPage {
 export const listDocCommentsToolConfig = {
   title: 'List doc comments',
   description:
-    'List a doc page\'s comments, oldest first, so replies read top-down. Each row carries the author name + content + resolved state. Cursor-paged - pass `cursor` from the previous call\'s nextCursor to walk older pages.',
+    'List a doc\'s comments, oldest first, so replies read top-down. Each row carries the author name + content + resolved state. Cursor-paged - pass `cursor` from the previous call\'s nextCursor to walk older pages.',
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
     limit: z.number().int().min(1).max(100).optional(),
@@ -112,17 +112,17 @@ export function makeListDocCommentsHandler(client: OrbotoClient) {
 }
 
 export const postDocCommentToolConfig = {
-  title: 'Comment on a doc page',
+  title: 'Comment on a doc',
   description:
     'Add a comment to a doc page. Pass `parentCommentId` to reply (the API flattens reply chains past one level so a reply-of-reply lands as a sibling of the original reply). Optional `anchor` (`{text, before, after}`) attaches the comment to a specific highlight in the body - the frontend uses the surrounding context to re-locate the anchor even after the doc has been edited. Mention a person with the markup `@[Full Name](user:<uuid>)` - the UUIDs come from `orboto_list_users`. The response reports `mentions` (tokens that resolved to a user, who is then notified) and `unresolvedMentions` (tokens that named nobody); a mention is never silently dropped.',
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
     content: z.string().min(1).max(4000),
-    parentCommentId: z.string().uuid().optional().describe('Reply to an existing comment.'),
+    parentCommentId: z.string().uuid().optional().describe('Reply to this comment.'),
     anchor: z.object({
-      text: z.string().min(1).max(400).describe('Highlighted text the comment anchors to.'),
-      before: z.string().max(80).describe('Text before the highlight, for re-anchoring.'),
-      after: z.string().max(80).describe('Text after the highlight, for re-anchoring.'),
+      text: z.string().min(1).max(400).describe('Highlighted text it anchors to.'),
+      before: z.string().max(80).describe('Text before the highlight.'),
+      after: z.string().max(80).describe('Text after the highlight.'),
     }).optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },

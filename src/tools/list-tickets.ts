@@ -29,8 +29,7 @@ export const listTicketsToolConfig = {
     specState: TicketSpecStateSchema.optional(),
     statusCategory: z
       .enum(['todo', 'in_progress', 'in_review', 'done', 'wont_fix'])
-      .optional()
-      .describe('One workflow category.'),
+      .optional(),
     open: z
       .boolean()
       .optional()

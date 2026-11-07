@@ -73,12 +73,12 @@ export function makeListMilestonesHandler(client: OrbotoClient) {
 }
 
 export const getMilestoneToolConfig = {
-  title: 'Get milestone details',
+  title: 'Get a milestone',
   description:
-    'Return milestone metadata plus a ticket count per status.',
+    'Milestone metadata plus a ticket count per status.',
   inputSchema: z.object({
     projectKey: z.string().min(1),
-    milestone: z.string().min(1).describe('Key ("ORB-M3"), name, or UUID. Name matching normalises HTML entities/case/whitespace.'),
+    milestone: z.string().min(1).describe('Key ("ORB-M3"), name or UUID; a name matches ignoring case, whitespace and HTML entities.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -141,9 +141,9 @@ export const createMilestoneToolConfig = {
     'Create a milestone in a project. `startDate` + `endDate` are optional - omit them (or pass null) for a milestone with no dates. The caller must have `milestone:create`.',
   inputSchema: z.object({
     projectKey: z.string().min(1),
-    name: z.string().min(1).describe('Milestone name (unique within the project).'),
-    startDate: z.string().regex(DATE_RE).nullable().optional().describe('YYYY-MM-DD or null.'),
-    endDate: z.string().regex(DATE_RE).nullable().optional().describe('YYYY-MM-DD or null.'),
+    name: z.string().min(1).describe('Unique within the project.'),
+    startDate: z.string().regex(DATE_RE).nullable().optional(),
+    endDate: z.string().regex(DATE_RE).nullable().optional(),
     isPrivate: z.boolean().optional().describe('Project members only. Default: false.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -233,7 +233,7 @@ export const closeMilestoneToolConfig = {
   inputSchema: z.object({
     projectKey: z.string().min(1),
     milestone: z.string().min(1).describe('Milestone name or UUID.'),
-    archive: z.boolean().optional().describe('true archives (status=archived) instead of completing.'),
+    archive: z.boolean().optional().describe('true archives instead of completing.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -265,7 +265,7 @@ export function makeCloseMilestoneHandler(client: OrbotoClient) {
 }
 
 export const updateMilestoneToolConfig = {
-  title: 'Update a milestone\'s fields',
+  title: 'Update a milestone',
   description:
     'Patch a milestone\'s fields (at least one). `customerSummary` is the customer-facing text shown in the customer project report instead of any internal text. Use `orboto_close_milestone` to flip status to completed/archived - this tool intentionally does NOT touch the status field so closing remains a clear semantic operation.',
   inputSchema: z.object({

@@ -41,7 +41,7 @@ function scheduleLine(s: TicketScheduleRow): string {
 }
 
 export const listTicketSchedulesToolConfig = {
-  title: 'List a ticket\'s scheduled sessions',
+  title: 'List scheduled sessions',
   description:
     'List the working sessions scheduled on a ticket. Active sessions only by default; pass includeCancelled=true for history. Returns each session\'s id, title, window and attendee count - get the id here before cancelling one with orboto_cancel_ticket_session.',
   inputSchema: z.object({
@@ -69,18 +69,18 @@ export function makeListTicketSchedulesHandler(client: OrbotoClient) {
 }
 
 export const scheduleTicketSessionToolConfig = {
-  title: 'Schedule a working session on a ticket',
+  title: 'Schedule a working session',
   description:
-    'Schedule a working session ("scope review", "design crit") on a ticket. Drops a plan-block on every orboto attendee and emails each attendee an iCal invite. startsAt/endsAt are ISO 8601 datetimes. attendeeUserIds are orboto user UUIDs (from orboto_list_users); externalEmails are non-orboto guests who get the invite but no plan-block. Title defaults to "Working session: <TICKET-KEY>".',
+    'Schedule a working session on a ticket. Drops a plan-block on every orboto attendee and emails each attendee an iCal invite. startsAt/endsAt are ISO 8601 datetimes. attendeeUserIds are orboto user UUIDs (from orboto_list_users); externalEmails are non-orboto guests who get the invite but no plan-block. Title defaults to "Working session: <TICKET-KEY>".',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    startsAt: z.string().datetime().describe('ISO 8601 start datetime.'),
-    endsAt: z.string().datetime().describe('ISO 8601 end datetime (must be after startsAt).'),
+    startsAt: z.string().datetime(),
+    endsAt: z.string().datetime().describe('Must be after startsAt.'),
     title: z.string().optional(),
-    location: z.string().optional().describe('Free text - Zoom URL, room name, "remote".'),
+    location: z.string().optional().describe('Zoom URL, room, "remote".'),
     notes: z.string().optional(),
-    attendeeUserIds: z.array(z.string().uuid()).max(500).optional().describe('orboto attendee user UUIDs.'),
-    externalEmails: z.array(z.string().email()).max(500).optional().describe('External (non-orboto) guest emails.'),
+    attendeeUserIds: z.array(z.string().uuid()).max(500).optional().describe('Attendee user UUIDs.'),
+    externalEmails: z.array(z.string().email()).max(500).optional().describe('External guest emails.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -113,7 +113,7 @@ export function makeScheduleTicketSessionHandler(client: OrbotoClient) {
 }
 
 export const cancelTicketSessionToolConfig = {
-  title: 'Cancel a scheduled working session',
+  title: 'Cancel a scheduled session',
   description:
     'Cancel a working session on a ticket. Removes every attendee\'s plan-block and emails an iCal cancellation to all attendees. Get the scheduleId from orboto_list_ticket_schedules.',
   inputSchema: z.object({

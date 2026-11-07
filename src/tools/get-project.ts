@@ -24,9 +24,9 @@ interface MemberRow {
 }
 
 export const getProjectToolConfig = {
-  title: 'Get project details',
+  title: 'Get a project',
   description:
-    'Return a single project with its milestones, labels, and members. Input is the project key like "ACME" (case-insensitive).',
+    'A project with its milestones, labels and members. Input is the project key like "ACME" (case-insensitive).',
   inputSchema: z.object({
     projectKey: z.string().min(1),
   }).shape,

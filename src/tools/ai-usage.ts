@@ -17,10 +17,10 @@ interface AiUsageResponse {
 export const aiUsageToolConfig = {
   title: 'AI usage',
   description:
-    'Operator diagnostic: AI calls, tokens and errors over a date range (default 30 days). Returns totals (calls, tokens in / out, error count) plus per-user, per-operation and per-day breakdowns and the AI-Chat slice (conversation count + top chat users). Use this to see spend / call volume / which operations run most / how many calls are erroring. Aggregates only - not the per-row error messages. Pair with orboto_embedding_status (pipeline health) and orboto_ai_status (is AI configured). Requires admin:ai:read - 403 for non-admin callers.',
+    'Operator diagnostic: AI calls, tokens and errors over a date range. Returns totals (calls, tokens in / out, error count) plus per-user, per-operation and per-day breakdowns and the AI-Chat slice (conversation count + top chat users). Use this to see spend / call volume / which operations run most / how many calls are erroring. Aggregates only - not the per-row error messages. Pair with orboto_embedding_status (pipeline health) and orboto_ai_status (is AI configured). Requires admin:ai:read - 403 for non-admin callers.',
   inputSchema: z.object({
-    start: z.string().optional().describe('Range start, YYYY-MM-DD (inclusive). Defaults to 30 days ago.'),
-    end: z.string().optional().describe('Range end, YYYY-MM-DD (inclusive). Defaults to today.'),
+    start: z.string().optional().describe('Inclusive, YYYY-MM-DD. Default 30 days ago.'),
+    end: z.string().optional().describe('Inclusive, YYYY-MM-DD. Default today.'),
   }).shape,
   outputSchema: z.object({
     calls: z.number(),

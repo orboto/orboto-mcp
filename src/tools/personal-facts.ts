@@ -18,8 +18,8 @@ function text(t: string, structured?: Record<string, unknown>): CallToolResult {
 const CATEGORY = z.enum(['tech_stack', 'conventions', 'deployment', 'architecture', 'integrations', 'gotchas', 'commands', 'other']);
 
 export const personalFactListToolConfig = {
-  title: 'List my personal AI preferences',
-  description: 'List the calling user\'s own personal primer facts (their AI preferences). Privacy-strict - only your own facts, never another user\'s. These load into the project primer for your sessions only when you have enabled the opt-in in Profile -> AI Preferences. Wraps GET /users/me/primer-facts.',
+  title: 'List personal AI preferences',
+  description: 'List your own personal primer facts (AI preferences). Privacy-strict - only your own facts, never another user\'s. These load into the project primer for your sessions only when you have enabled the opt-in in Profile -> AI Preferences. Wraps GET /users/me/primer-facts.',
   inputSchema: z.object({}).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -33,10 +33,10 @@ export function makePersonalFactListHandler(client: OrbotoClient) {
 
 export const personalFactAddToolConfig = {
   title: 'Add a personal AI preference',
-  description: 'Record a personal primer fact for the calling user. Examples: communication style, coding convention. Owner-scoped. Wraps POST /users/me/primer-facts.',
+  description: 'Record a personal primer fact. Examples: communication style, coding convention. Owner-scoped. Wraps POST /users/me/primer-facts.',
   inputSchema: z.object({
-    category: CATEGORY.describe('Closest category (e.g. conventions for communication/coding style).'),
-    key: z.string().min(1).max(100).describe('Short machine-readable key, e.g. "tone".'),
+    category: CATEGORY.describe('Closest category.'),
+    key: z.string().min(1).max(100).describe('Short key, e.g. "tone".'),
     value: z.string().min(1).max(4000),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -50,7 +50,7 @@ export function makePersonalFactAddHandler(client: OrbotoClient) {
 
 export const personalFactUpdateToolConfig = {
   title: 'Update a personal AI preference',
-  description: 'Update one of the calling user\'s personal primer facts. Owner-scoped - you can only edit your own. Wraps PATCH /users/me/primer-facts/:id.',
+  description: 'Update a personal primer fact. Owner-scoped - you can only edit your own. Wraps PATCH /users/me/primer-facts/:id.',
   inputSchema: z.object({
     id: z.string().uuid(),
     category: CATEGORY.optional(),
@@ -69,7 +69,7 @@ export function makePersonalFactUpdateHandler(client: OrbotoClient) {
 
 export const personalFactDeleteToolConfig = {
   title: 'Delete a personal AI preference',
-  description: 'Delete one of the calling user\'s personal primer facts. Owner-scoped. Wraps DELETE /users/me/primer-facts/:id.',
+  description: 'Delete a personal primer fact. Owner-scoped. Wraps DELETE /users/me/primer-facts/:id.',
   inputSchema: z.object({ id: z.string().uuid() }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };

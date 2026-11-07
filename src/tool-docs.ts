@@ -19,20 +19,20 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_get_ticket:
     'Fetch a ticket by key: fields, checklists, comments.',
   orboto_requirements_spec:
-    'Generate a structured requirements spec for a project or milestone from its tickets.',
+    'Requirements spec of a project or milestone from its tickets.',
   orboto_update_doc_space:
-    'Update a doc space\'s name, description, icon, project binding or access mode by space id.',
+    'Update a doc space\'s name, description, icon, project binding or access mode.',
   orboto_search_docs:
-    'Full-text search over doc/wiki pages with snippets, filtered by space or project.',
+    'Full-text search over doc/wiki pages with snippets, by space or project.',
   orboto_critical_path:
-    'Compute the critical path (blocking dependency chain) for a project or milestone.',
+    'Critical path (blocking dependency chain) of a project or milestone.',
   /** ORB-2237 - shortened summaries that pay for `orboto_feedback_reply`; each tool's full text stays in `getToolDoc`. */
   orboto_agent_broadcast:
-    'Fan-out a message to every agent in a workspace, project or topic scope.',
+    'Message every agent in a workspace, project or topic scope.',
   orboto_api_search:
     'Discover REST API endpoints on demand - the escape hatch for any orboto endpoint.',
   orboto_get_doc:
-    'Return a doc\'s content (Markdown) plus its backlinks.',
+    'A doc\'s Markdown content plus its backlinks.',
   orboto_primer_fact_list:
     'List structured project facts feeding the AI primer.',
   orboto_bulk_move_tickets:

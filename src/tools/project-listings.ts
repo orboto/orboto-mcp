@@ -22,7 +22,7 @@ interface LabelRow {
 }
 
 export const listTicketStatusesToolConfig = {
-  title: 'List a project\'s ticket statuses',
+  title: 'List ticket statuses',
   description:
     'Return the project\'s workflow rows - `{id, name, category, color, sortOrder, isTerminal}`. The `category` is the broad bucket (todo / in_progress / in_review / done / wont_fix); `name` is the workspace\'s display label (e.g. "Code Review"). Use the `id` to do typed transitions through `orboto_update_ticket` when the standard category-based move is too coarse.',
   inputSchema: z.object({
@@ -58,7 +58,7 @@ export function makeListTicketStatusesHandler(client: OrbotoClient) {
 }
 
 export const listLabelsToolConfig = {
-  title: 'List a project\'s labels',
+  title: 'List labels',
   description:
     'Return the project\'s label catalogue - `{id, name, color}`. Labels must be referenced by exact name when assigning via `orboto_create_ticket` (the API errors on unknown names rather than auto-creating); use this tool to discover what\'s available before assigning.',
   inputSchema: z.object({
@@ -85,7 +85,7 @@ export function makeListLabelsHandler(client: OrbotoClient) {
 }
 
 export const createLabelToolConfig = {
-  title: 'Create a project label',
+  title: 'Create a label',
   description:
     'Create a project label for tickets. Closes the gap where `orboto_create_ticket` errors on an unknown label name (labels are not auto-created). Idempotent: if a label with the same name already exists, it is returned instead of erroring. Needs project:edit.',
   inputSchema: z.object({

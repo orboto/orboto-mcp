@@ -37,7 +37,7 @@ interface DocRow {
 export const listDocRevisionsToolConfig = {
   title: 'List doc revisions',
   description:
-    'Return saved revisions for a doc page, newest-first. Each row carries the revision id, title at snapshot time, editor user id, and editedAt timestamp; the body content is NOT in this list (use orboto_get_doc_revision to fetch one). Cursor-paged - pass `cursor` to walk older pages.',
+    'List a doc\'s saved revisions, newest first. Each row carries the revision id, title at snapshot time, editor user id, and editedAt timestamp; the body content is NOT in this list (use orboto_get_doc_revision to fetch one). Cursor-paged - pass `cursor` to walk older pages.',
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
     limit: z.number().int().min(1).max(100).optional().describe('Default 25.'),
@@ -87,9 +87,9 @@ export function makeListDocRevisionsHandler(client: OrbotoClient) {
 }
 
 export const getDocRevisionToolConfig = {
-  title: 'Get a single doc revision',
+  title: 'Get a doc revision',
   description:
-    'Return the full content + title of one saved revision. Use this to diff against the current doc before deciding whether to restore.',
+    'Full content + title of one saved revision. Use this to diff against the current doc before deciding whether to restore.',
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
     revisionId: z.string().uuid(),

@@ -60,7 +60,7 @@ export function makeReviewFingerprintHandler(client: OrbotoClient) {
 }
 
 export const reviewPolicyCheckToolConfig = {
-  title: 'Check a ticket\'s review policy',
+  title: 'Check a review policy',
   description:
     'Consult a ticket\'s structural review policy BEFORE spawning a review session or invoking a model. Called with no diff context (the common case, right after picking up a ticket) it resolves the per-ticket override or a deliveryMode-only rule; passing `paths`/`linesChanged` (from `orboto_review_fingerprint`) additionally matches path/size-scoped rules and, if `fingerprint` is passed too, checks whether a VALID approval already covers this exact diff - so a low-risk ticket, or one already reviewed at this fingerprint, can close without spawning a reviewer. `riskLevel: "required"` with `source: "fail_safe"` means the policy engine itself errored - treat that as "review required", never as "no review needed".',
   inputSchema: z.object({
@@ -101,7 +101,7 @@ export const reviewApprovalRecordToolConfig = {
     ticketKey: z.string().min(3),
     fingerprint: z.string().min(8).describe('From orboto_review_fingerprint.'),
     decision: z.enum(['approved', 'rejected']),
-    note: z.string().max(2000).optional().describe('Optional review comment.'),
+    note: z.string().max(2000).optional(),
     filesChanged: z.number().int().nonnegative().optional(),
     linesAdded: z.number().int().nonnegative().optional(),
     linesRemoved: z.number().int().nonnegative().optional(),

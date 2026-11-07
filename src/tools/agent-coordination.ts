@@ -170,7 +170,7 @@ function presenceLine(s: PresenceRow): string {
 }
 
 export const agentPresenceToolConfig = {
-  title: 'Workspace agent presence',
+  title: 'Agent presence',
   description:
     'Active agent instances. The orboto_who set from GET /v1/agent/who?include=inventory: lane workers and reviewers, inbox, MCP and runner connections. Each row: sessionId, account, kind (agent | human by credential), owner or acts-as, status, lane, declared scope, member project count, connection types, wake (on_call: nothing wakes it), state (live | quiet | orphaned | unknown_origin), origin (host, repo, pid, harness, client), current ticket. Filters run on the server: email, sessionId (id or 8+ character prefix), projectKey (sessions declared on it), role, kind, wake, state; 4 rows a page, nextCursor continues (cursor). A projectKey that is unknown or not visible to you answers so in one line, with no rows. Operators (admin:agents:read or admin:system:read) see the workspace, others their own sessions and those on their projects, a foreign row redacted. The full inventory row: `orboto agents --json`.',
   inputSchema: z.object({
@@ -309,7 +309,7 @@ export const agentNotifyToolConfig = {
 };
 
 export const agentBroadcastToolConfig = {
-  title: 'Scoped broadcast to other agents',
+  title: 'Broadcast to agents',
   description:
     'Fan-out to every agent in a scope: workspace (all internal members), project (members of scopeId = project UUID) or topic (any string). Each recipient gets an inbox copy (orboto_messages, ackable); live subscribers also get a resources/updated push on orboto://broadcast/<scope>/<scope_id>. The scope replay keeps agent_broadcast_retention_days (default 7).',
   inputSchema: z.object({

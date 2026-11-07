@@ -50,10 +50,10 @@ export const listAgentDriftToolConfig = {
   description:
     'List agent drift events newest first, with aggregate metrics. A drift event is a commit with no ticket key and no timer, or a ticket transition without a summary comment. Filter by `userId`, `driftType` (untracked_commit | transition_without_summary), `from`/`to` ISO dates, and `resolved`. The response `enabled` flag is false when the operator has not turned drift detection on. Requires `admin:agent_drift:read`.',
   inputSchema: z.object({
-    userId: z.string().uuid().optional().describe('Filter to one user.'),
+    userId: z.string().uuid().optional(),
     driftType: z.enum(['untracked_commit', 'transition_without_summary']).optional(),
-    from: z.string().optional().describe('ISO timestamp lower bound (detected_at).'),
-    to: z.string().optional().describe('ISO timestamp upper bound (detected_at).'),
+    from: z.string().optional().describe('ISO timestamp, lower bound on detected_at.'),
+    to: z.string().optional().describe('ISO timestamp, upper bound on detected_at.'),
     resolved: z.boolean().optional().describe('true = only resolved, false = only open.'),
     limit: z.number().int().min(1).max(200).optional().describe('Default: 50.'),
     cursor: z.string().optional().describe(CURSOR_PARAM),
@@ -105,7 +105,7 @@ export const resolveAgentDriftToolConfig = {
   description:
     'Mark one agent drift event handled (stamps resolved_at). Idempotent. 404 if the id is unknown. Requires `admin:agent_drift:write`.',
   inputSchema: z.object({
-    id: z.string().uuid().describe('UUID of the drift event to resolve.'),
+    id: z.string().uuid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };

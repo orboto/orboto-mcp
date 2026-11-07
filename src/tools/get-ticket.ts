@@ -75,7 +75,7 @@ interface AttachmentRow {
 interface CursorPage<T> { items: T[]; nextCursor: string | null }
 
 export const getTicketToolConfig = {
-  title: 'Get ticket details',
+  title: 'Get a ticket',
   description:
     'A ticket\'s decision card: description, status, priority, milestone, assignees, labels, dates, checklist progress, parent, open dependency edges and COUNTS of what is omitted (`include` opts blocks in). Comments: newest first, 3 newest in full, older shortened; `full` all, `commentId` one. Input: ticket key like "ACME-42".',
   inputSchema: z.object({

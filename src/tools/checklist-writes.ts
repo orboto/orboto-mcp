@@ -112,8 +112,8 @@ function makeToggleHandler(client: OrbotoClient, completed: boolean) {
 const toggleInputSchema = z.object({
   ticketKey: z.string().min(3),
   item: z.union([
-    z.number().int().min(1).describe('1-based index across all checklists'),
-    z.string().describe('Item UUID, if you have it'),
+    z.number().int().min(1).describe('1-based index across checklists'),
+    z.string().describe('Item UUID.'),
   ]),
 }).shape;
 
@@ -164,10 +164,10 @@ export const addCheckToolConfig = {
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     content: z.string().min(1).max(2000),
-    listTitle: z.string().optional().describe('Target checklist title. Default: first checklist on the ticket.'),
-    linkedTicketKey: z.string().optional().describe('Make this item track another ticket\'s done status.'),
+    listTitle: z.string().optional().describe('Checklist title; default: the first.'),
+    linkedTicketKey: z.string().optional().describe('Track another ticket\'s done status.'),
     assignee: z.string().optional().describe('Project member: email, full name or user id.'),
-    dueDate: z.string().optional().describe('Due date of this item, YYYY-MM-DD.'),
+    dueDate: z.string().optional().describe('YYYY-MM-DD.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -232,8 +232,8 @@ export const updateCheckToolConfig = {
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     item: z.union([
-      z.number().int().min(1).describe('1-based index across all checklists'),
-      z.string().describe('Item UUID, if you have it'),
+      z.number().int().min(1).describe('1-based index across checklists'),
+      z.string().describe('Item UUID.'),
     ]),
     content: z.string().min(1).max(2000).optional().describe('New item text.'),
     assignee: z.string().nullable().optional().describe('Project member (email, full name or user id); null unassigns.'),
@@ -275,7 +275,7 @@ export function makeUpdateCheckHandler(client: OrbotoClient) {
 }
 
 export const newChecklistToolConfig = {
-  title: 'Create a new checklist on a ticket',
+  title: 'Create a checklist',
   description:
     'Create a fresh checklist on a ticket. `triggersDone=true` gates the ticket\'s auto-done transition on this list (the ticket can\'t move to done until every item here is checked). Optional `items` seed the list with content in one call - saves a round-trip per item.',
   inputSchema: z.object({

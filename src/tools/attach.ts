@@ -38,7 +38,7 @@ export const attachToTicketToolConfig = {
     `Attach a file to a ticket from \`contentBase64\` (up to about 25 KB; a bigger file needs orboto_upload_link). ${ATTACH_TAIL} The local stdio server also takes \`filePath\`.`,
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    filename: z.string().min(1).describe('Display filename, e.g. "graph-q3.png".'),
+    filename: z.string().min(1),
     contentBase64: z.string().min(1),
     altText: z.string().optional().describe('Image alt text; default filename.'),
     embed: z.boolean().optional().describe('Also append the image line to the description.'),

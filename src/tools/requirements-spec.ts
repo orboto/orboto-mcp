@@ -23,7 +23,7 @@ const LOCALES = ['en', 'de', 'fr', 'it', 'es', 'sv'] as const;
 const OUTLINE_VARIANTS = ['neutral', 'industry', 'software'] as const;
 
 export const requirementsSpecToolConfig = {
-  title: 'Requirements specification (Pflichtenheft)',
+  title: 'Requirements specification',
   description:
     'Generate the requirements specification (Pflichtenheft) as Markdown - numbered functional requirements (FA-1, FA-1.1...) each traceable to its ticket and tagged muss/soll/kann from priority, plus non-functional requirements distilled from primer facts. '
     + '`outlineVariant`: "neutral" (default), "industry" (VDI-3694 naming/order), or "software" (IEEE-830 naming/order). '

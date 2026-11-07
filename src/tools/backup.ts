@@ -58,7 +58,7 @@ export function rethrowFullExportInProgress(err: unknown): never {
 }
 
 export const createFullBackupToolConfig = {
-  title: 'Create + download a full workspace backup',
+  title: 'Create a full backup',
   description:
     'Create an on-demand FULL workspace backup (database + storage) and return it as a base64 resource attachment - one call; a background run this tool polls, minutes on a large workspace. Rows and file references share one snapshot; a missing file fails the run, never a partial archive. With backup encryption on the attachment is the sealed archive, not a ZIP. While another full export runs it starts nothing and names that run. Requires admin:backup:export; scheduled jobs use orboto_trigger_backup.',
   inputSchema: z.object({}).shape,
@@ -95,7 +95,7 @@ export function makeCreateFullBackupHandler(client: OrbotoClient) {
 export const listBackupsToolConfig = {
   title: 'List backup runs',
   description:
-    'List recent backup runs (id, status, size, time); download one with orboto_download_backup. Requires admin:backup:read.',
+    'List recent backup runs; download one with orboto_download_backup. Requires admin:backup:read.',
   inputSchema: z.object({}).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -115,11 +115,11 @@ export function makeListBackupsHandler(client: OrbotoClient) {
 }
 
 export const downloadBackupToolConfig = {
-  title: 'Download a stored backup run',
+  title: 'Download a backup run',
   description:
-    'Download a stored backup run by run id as a base64 resource attachment. The id comes from orboto_list_backups; an encrypted run downloads sealed and needs its key to restore. Requires admin:backup:read.',
+    'Download a backup run by id as a base64 resource attachment. The id comes from orboto_list_backups; an encrypted run downloads sealed and needs its key to restore. Requires admin:backup:read.',
   inputSchema: z.object({
-    runId: z.string().uuid().describe('Backup run id from orboto_list_backups.'),
+    runId: z.string().uuid().describe('Run id from orboto_list_backups.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

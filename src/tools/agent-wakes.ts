@@ -46,8 +46,8 @@ export const agentWakesToolConfig = {
   inputSchema: z.object({
     stats: z.boolean().default(false).describe('Precision per session and per sender instead of rows.'),
     hours: z.number().int().min(1).max(720).optional().describe('Stats window, default 24.'),
-    sessionId: z.string().uuid().optional().describe('Narrow to one woken session.'),
-    project: z.string().min(1).max(64).optional().describe('Project key or UUID.'),
+    sessionId: z.string().uuid().optional().describe('The woken session.'),
+    project: z.string().min(1).max(64).optional().describe('Key or UUID.'),
     outcome: z.enum(['pending', 'handled', 'not_mine', 'obsolete', 'duplicate', 'expired']).optional(),
     limit: z.number().int().min(1).max(200).optional().describe('Default: 50.'),
     cursor: z.string().optional().describe(CURSOR_PARAM),

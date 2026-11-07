@@ -37,7 +37,7 @@ interface BulkTimeEntryResult {
 }
 
 export const timerStartToolConfig = {
-  title: 'Start a timer on a ticket',
+  title: 'Start a timer',
   description:
     'Start the user\'s stopwatch on a ticket. If a timer is already running on a different ticket, pass replace=true to auto-stop the previous one (its elapsed time is committed to time_entries before the new timer begins). Description becomes the time entry\'s note when this timer eventually stops. Needs time:log on the ticket\'s project (403 errors.time.log_permission_required) and a ticket you can read (404).',
   inputSchema: z.object({
@@ -125,15 +125,15 @@ export function makeTimerStopHandler(client: OrbotoClient) {
 }
 
 export const logTimeToolConfig = {
-  title: 'Log a time entry on a ticket',
+  title: 'Log a time entry',
   description:
-    'Book time directly for work done without a timer, such as 90 minutes last Tuesday. `loggedAt` defaults to now; pass an ISO datetime to back-date. Pass `dates` (YYYY-MM-DD list) to book the same entry on several days in one call (ORB-2056): all-or-nothing, a day inside an approved timesheet refuses the set and names the day, capacity warnings come back advisory.',
+    'Book time for work done without a timer. `loggedAt` defaults to now; pass an ISO datetime to back-date. Pass `dates` (YYYY-MM-DD list) to book the same entry on several days in one call (ORB-2056): all-or-nothing, a day inside an approved timesheet refuses the set and names the day, capacity warnings come back advisory.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    durationMinutes: z.number().int().positive().describe('Minutes, > 0.'),
+    durationMinutes: z.number().int().positive(),
     description: z.string().optional(),
-    loggedAt: z.string().datetime().optional().describe('ISO 8601. Default: now. Ignored when `dates` is set.'),
-    dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(200).optional().describe('Book this entry on each of these days (YYYY-MM-DD).'),
+    loggedAt: z.string().datetime().optional().describe('Default now. Ignored when `dates` is set.'),
+    dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(200).optional().describe('Book on each of these days (YYYY-MM-DD).'),
     time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional().describe('Wall-clock start for `dates`, workspace timezone. Default 09:00.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -184,9 +184,9 @@ export function makeLogTimeHandler(client: OrbotoClient) {
 }
 
 export const listTimeEntriesToolConfig = {
-  title: 'List a ticket\'s time entries',
+  title: 'List time entries',
   description:
-    'List a ticket\'s time entries, newest first: id, duration, date, agent label. Use this to FIND an over-tracked entry before fixing it with orboto_edit_time_entry / orboto_delete_time_entry.',
+    'List a ticket\'s time entries, newest first. Use this to FIND an over-tracked entry before fixing it with orboto_edit_time_entry / orboto_delete_time_entry.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     limit: z.number().int().positive().max(100).optional().describe('Default 25.'),
@@ -219,12 +219,12 @@ export const editTimeEntryToolConfig = {
   description:
     'Correct a time entry: duration, note, date or ticket. Use THIS (not orboto_log_time) to fix a wrong entry: log_time is additive and only makes the total worse. Get the entryId from orboto_list_time_entries (or an orboto_log_time response). Blocked if the entry is locked by an approved timesheet.',
   inputSchema: z.object({
-    ticketKey: z.string().min(3).describe('The ticket the entry currently belongs to.'),
+    ticketKey: z.string().min(3).describe('The entry\'s current ticket.'),
     entryId: z.string().uuid(),
     durationMinutes: z.number().int().positive().optional(),
     description: z.string().nullish(),
     loggedAt: z.string().datetime().optional(),
-    moveToTicketKey: z.string().min(3).optional().describe('Re-target the entry to a different ticket.'),
+    moveToTicketKey: z.string().min(3).optional().describe('Move the entry to another ticket.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };

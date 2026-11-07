@@ -80,19 +80,19 @@ export const WORK_ROLES = ['implementation', 'review', 'preflight', 'integration
 export const workLeaseSecondsParam = z.number().int().min(60).max(86_400).optional()
   .describe('Seconds without renewal; default 900.');
 export const workStartTimerParam = z.boolean().optional().describe('Default: true for implementation.');
-export const workAgentSessionTokenParam = z.string().optional().describe('Instance token; default this connection\'s.');
+export const workAgentSessionTokenParam = z.string().optional().describe('Default this connection\'s.');
 export const workOverrideParam = z.boolean().optional().describe('Bypass the spec gate; reason required. Never epics.');
 export const workTakeoverParam = z.boolean().optional().describe('Displace the lease holder (their session ends, time booked).');
 export const workStartRoleParam = z.enum(WORK_ROLES).optional()
   .describe('Default implementation; others attach, no reassignment; spec needs the bot spec tag.');
 export const workVerificationParam = z.object({
-  reviewOfSessionId: z.string().uuid().optional().describe('Exact independent implementation work session this review examined.'),
+  reviewOfSessionId: z.string().uuid().optional().describe('Independent implementation session this review examined.'),
   reviewVerdict: z.enum(['approved', 'rework']).optional().describe('Review outcome with reviewOfSessionId; never inferred from ticket status.'),
   build: z.boolean().optional(),
   tests: z.boolean().optional(),
   lint: z.boolean().optional(),
   notes: z.string().optional(),
-}).optional().describe('The gates you ran and what they said: the attestation a reviewer reads cold.');
+}).optional().describe('The gates you ran and what they said, for a reviewer.');
 
 /** Shared 409-body reader: the endpoint's body carries EITHER `holder`
  *  (a lease conflict) OR `claimConflicts` (a resource-claim conflict) -

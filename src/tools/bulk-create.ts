@@ -25,7 +25,7 @@ const TicketDraftSchema = z.object({
   type: z.enum(['task', 'bug', 'story', 'epic']).optional().describe('Default: task.'),
   priority: z.enum(['blocker', 'high', 'normal', 'low', 'trivial']).optional().describe('Default: normal.'),
   deliveryMode: z.enum(['implementation', 'docs', 'review', 'admin', 'epic']).optional(),
-  milestone: z.string().optional().describe('Key ("ORB-M3"), name, or UUID; overrides the call-level one.'),
+  milestone: z.string().optional().describe('Key ("ORB-M3"), name or UUID; overrides the call-level one.'),
   assigneeEmails: z.array(z.string().email()).max(100).optional(),
   labels: z.array(z.string()).max(100).optional().describe('Existing label names.'),
   parentTicketKey: z.string().optional(),
@@ -34,15 +34,15 @@ const TicketDraftSchema = z.object({
 });
 
 export const bulkCreateTicketsToolConfig = {
-  title: 'Create many tickets in one call',
+  title: 'Create many tickets',
   description:
     'Create up to 50 tickets in one call. It is the right tool whenever you are about to create more than ~3 tickets (milestone planning, epic breakdown, import). Per-draft error isolation: a rejected draft (bad label, language block, hard duplicate-block) is reported in `failed` while the rest are still created. Duplicate detection runs per draft and is reported compactly - one line per flagged draft in `duplicateFlags`; review those before treating them as new work. A call-level `milestone` / `parentTicketKey` applies to every draft unless the draft overrides it. Drafts are created in array order, so a draft can NOT reference a sibling draft as parent - create parents first (or in a first call).',
   inputSchema: z.object({
-    projectKey: z.string().min(1).describe('Project key - all drafts land here.'),
-    tickets: z.array(TicketDraftSchema).min(1).max(50).describe('The ticket drafts, created in order.'),
+    projectKey: z.string().min(1).describe('All drafts land here.'),
+    tickets: z.array(TicketDraftSchema).min(1).max(50).describe('Drafts, created in order.'),
     milestone: z.string().optional().describe('Applied to every draft without its own.'),
     parentTicketKey: z.string().optional().describe('Applied to every draft without its own.'),
-    allowLanguageMismatch: z.boolean().optional().describe('Override the language block for every draft.'),
+    allowLanguageMismatch: z.boolean().optional().describe('Override the language block.'),
   }).shape,
   outputSchema: z.object({
     created: z.array(z.string()).describe('Keys, in draft order.'),
