@@ -130,8 +130,17 @@ export function useHttpOrigin(): void {
   cached = null;
 }
 
+/** ORB-2901 - a stdio origin with the host the machine has now: macOS renames the host with the network, the CLI beside this process reads it on every call. */
+function withCurrentHost(value: string): string {
+  const host = shortHost();
+  const params = new URLSearchParams(value);
+  if (!host || params.get('host') === host) return value;
+  params.set('host', host);
+  return params.toString();
+}
+
 /** The header value every request of this process sends. */
 export function originHeader(): string {
   if (!cached || cached.mode !== mode) cached = { mode, value: mode === 'http' ? httpOrigin() : stdioOrigin() };
-  return cached.value;
+  return cached.mode === 'http' ? cached.value : withCurrentHost(cached.value);
 }
