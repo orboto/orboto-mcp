@@ -48,6 +48,13 @@ describe('orboto_update_project', () => {
     expect(cleared.structuredContent).toMatchObject({ noLaneReason: null });
   });
 
+  it('ORB-2889 replaces the browser allowed hosts and returns them', async () => {
+    const calls = stub([{ json: PROJ }, { json: { ...PROJ, browserAllowedHosts: ['studio.youtube.com'] } }]);
+    const res = await makeUpdateProjectHandler(client)({ projectKey: 'ACME', patch: { browserAllowedHosts: ['studio.youtube.com'] } });
+    expect(calls[1]).toMatchObject({ method: 'PATCH', body: { browserAllowedHosts: ['studio.youtube.com'] } });
+    expect(res.structuredContent).toMatchObject({ browserAllowedHosts: ['studio.youtube.com'] });
+  });
+
   it('PATCHes only the supplied fields', async () => {
     const calls = stub([
       { json: PROJ },

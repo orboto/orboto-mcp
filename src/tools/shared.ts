@@ -77,6 +77,7 @@ export interface ProjectRow {
   status: string;
   language?: string | null;
   noLaneReason?: string | null;
+  browserAllowedHosts?: string[];
   raciEnabled?: boolean;
   customerId?: string | null;
   internal?: boolean;

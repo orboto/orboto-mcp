@@ -35,6 +35,8 @@ export const updateProjectToolConfig = {
       language: z.enum(LOCALE_CODES).nullable().optional()
         .describe('Content language; null inherits workspace.'),
       noLaneReason: z.string().nullable().optional(),
+      browserAllowedHosts: z.array(z.string().max(253)).max(50).optional()
+        .describe('Hosts its orboto browser sessions may act on beyond the default; replaces the list, [] clears.'),
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -53,6 +55,7 @@ export function makeUpdateProjectHandler(client: OrbotoClient) {
       customerId?: string | null;
       language?: LocaleCode | null;
       noLaneReason?: string | null;
+      browserAllowedHosts?: string[];
     };
   }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, projectKey);
@@ -71,6 +74,7 @@ export function makeUpdateProjectHandler(client: OrbotoClient) {
         status: updated.status,
         language: updated.language ?? null,
         noLaneReason: updated.noLaneReason ?? null,
+        browserAllowedHosts: updated.browserAllowedHosts ?? [],
         spec: updated.spec,
       },
     };
