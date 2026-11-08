@@ -197,6 +197,7 @@ import {
 } from './tools/admin-writes.js';
 import { laneControlToolConfig, makeLaneControlHandler, laneStopToolConfig, makeLaneStopHandler } from './tools/agent-lanes.js';
 import { browserGrantsToolConfig, makeBrowserGrantsHandler } from './tools/browser-grants.js';
+import { adminApiKeyListToolConfig, adminApiKeyRevokeToolConfig, makeAdminApiKeyListHandler, makeAdminApiKeyRevokeHandler } from './tools/admin-api-keys.js';
 import { freeBusyToolConfig, makeFreeBusyHandler } from './tools/free-busy.js';
 import {
   createFullBackupToolConfig, makeCreateFullBackupHandler,
@@ -587,6 +588,8 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_lane_pause', laneControlToolConfig, makeLaneControlHandler(client));
   reg('orboto_lane_stop', laneStopToolConfig, makeLaneStopHandler(client));
   reg('orboto_browser_grants', browserGrantsToolConfig, makeBrowserGrantsHandler(client));
+  reg('orboto_admin_api_key_list', adminApiKeyListToolConfig, makeAdminApiKeyListHandler(client));
+  reg('orboto_admin_api_key_revoke', adminApiKeyRevokeToolConfig, makeAdminApiKeyRevokeHandler(client));
   reg('orboto_create_full_backup', createFullBackupToolConfig, makeCreateFullBackupHandler(client));
   reg('orboto_list_backups', listBackupsToolConfig, makeListBackupsHandler(client));
   reg('orboto_download_backup', downloadBackupToolConfig, makeDownloadBackupHandler(client));
