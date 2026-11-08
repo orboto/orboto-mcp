@@ -5,8 +5,8 @@
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { AdminApiKeyRevokeResult } from '@orboto/shared-schema';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
+import type { AdminApiKeyRevokeResult } from './admin-api-key-result.js';
 
 const SORTS = ['requests', 'lastUsed', 'name', 'owner'] as const;
 const BY_VALUE = 'A found key value goes through `orboto admin api-keys revoke --key-stdin` or Admin -> API keys, never a tool argument.';
