@@ -481,7 +481,7 @@ export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides
 
     if (sessionId && !isInitializeRequest(body)) {
       const preflightClient = new OrbotoClient({ baseUrl, apiKey: token, userAgentSuffix });
-      let authValid = false;
+      let authValid: boolean;
       let callerEmail = '';
       let callerCredential: Credential;
       try {

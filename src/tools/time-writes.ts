@@ -74,6 +74,7 @@ export function makeTimerStartHandler(client: OrbotoClient) {
       if (err instanceof OrbotoApiError && err.status === 409) {
         throw new Error(
           'A timer is already running on a different ticket. Pass replace=true to commit its elapsed time and start fresh on this one.',
+          { cause: err },
         );
       }
       throw err;

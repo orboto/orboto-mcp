@@ -263,7 +263,7 @@ export async function withCacheLock<T>(
       try {
         if (Date.now() - statSync(lockPath).mtimeMs > staleMs) { unlinkSync(lockPath); continue; }
       } catch { continue; }
-      if (Date.now() > deadline) throw new Error('Another orboto-mcp process holds the OAuth cache lock.');
+      if (Date.now() > deadline) throw new Error('Another orboto-mcp process holds the OAuth cache lock.', { cause: e });
       await new Promise((r) => setTimeout(r, 25));
     }
   }

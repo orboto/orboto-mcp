@@ -47,7 +47,7 @@ export function makeSetParentHandler(client: OrbotoClient) {
       );
     } catch (err) {
       if (err instanceof OrbotoApiError && err.status === 400) {
-        throw new Error(`Re-parent rejected by the API: ${err.body || 'cycle or constraint violation'}.`);
+        throw new Error(`Re-parent rejected by the API: ${err.body || 'cycle or constraint violation'}.`, { cause: err });
       }
       throw err;
     }

@@ -214,7 +214,6 @@ async function measuredManifest(toolset?: Toolset, localFiles = false): Promise<
 describe('ORB-1521 - eager-load manifest size', () => {
   it('curated manifest stays under the ratchet ceiling', async () => {
     const { count, chars } = await measuredManifest();
-    // eslint-disable-next-line no-console
     console.log(`[manifest-size] curated: ${count} tools, ${chars} chars (~${estTokens(chars)} tokens)`);
     expect(count).toBeLessThanOrEqual(36);
     expect(chars).toBeLessThanOrEqual(CURATED_MAX_CHARS);
@@ -224,7 +223,6 @@ describe('ORB-1521 - eager-load manifest size', () => {
   it('full manifest remains available and an order of magnitude larger', async () => {
     const curated = await measuredManifest();
     const full = await measuredManifest('full');
-    // eslint-disable-next-line no-console
     console.log(`[manifest-size] full: ${full.count} tools, ${full.chars} chars (~${estTokens(full.chars)} tokens)`);
     expect(full.count).toBeGreaterThan(150);
     expect(full.chars).toBeLessThanOrEqual(FULL_MAX_CHARS);
@@ -251,7 +249,6 @@ describe('ORB-1805 - minimal manifest fits a small context window', () => {
   it('minimal: schemas + instructions stay under 3k estimated tokens', async () => {
     const { count, chars, instructionsChars } = await measuredManifest('minimal');
     const total = chars + instructionsChars;
-    // eslint-disable-next-line no-console
     console.log(
       `[manifest-size] minimal: ${count} tools, ${chars} chars (~${estTokens(chars)} tokens)`
       + ` + instructions ${instructionsChars} chars (~${estTokens(instructionsChars)} tokens)`

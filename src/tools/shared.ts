@@ -91,7 +91,7 @@ export async function resolveProjectByKey(
     return await client.get<ProjectRow>(`/projects/by-key/${encodeURIComponent(key)}`);
   } catch (err) {
     if (err instanceof OrbotoApiError && err.status === 404) {
-      throw new Error(`Project "${key}" not found (or not visible to your account).`);
+      throw new Error(`Project "${key}" not found (or not visible to your account).`, { cause: err });
     }
     throw err;
   }
@@ -272,7 +272,7 @@ export async function resolveTicketByKey(
     );
   } catch (err) {
     if (err instanceof OrbotoApiError && err.status === 404) {
-      throw new Error(`Ticket "${ticketKey}" not found in project "${project.key}".`);
+      throw new Error(`Ticket "${ticketKey}" not found in project "${project.key}".`, { cause: err });
     }
     throw err;
   }

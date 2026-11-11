@@ -301,7 +301,7 @@ export function makeNewChecklistHandler(client: OrbotoClient) {
       list = await client.post<Checklist>(`/tickets/${ticket.id}/checklists`, body);
     } catch (err) {
       if (err instanceof OrbotoApiError && err.status === 403) {
-        throw new Error(`Forbidden - you need ticket:edit on [${ticket.ticketKey}]'s project to add checklists.`);
+        throw new Error(`Forbidden - you need ticket:edit on [${ticket.ticketKey}]'s project to add checklists.`, { cause: err });
       }
       throw err;
     }

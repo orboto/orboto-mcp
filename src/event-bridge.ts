@@ -182,14 +182,12 @@ export class EventBridge {
     }, 30_000);
 
     try {
-      // eslint-disable-next-line no-constant-condition
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         lastFrame = Date.now();
         buf += decoder.decode(value, { stream: true });
         let idx;
-        // eslint-disable-next-line no-cond-assign
         while ((idx = buf.indexOf('\n\n')) !== -1) {
           const frame = buf.slice(0, idx);
           buf = buf.slice(idx + 2);

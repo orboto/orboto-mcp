@@ -271,7 +271,7 @@ export async function preflightMcpSession(client: OrbotoClient): Promise<{
     status = await client.get<StatusResponse>('/system/mcp/status');
   } catch (err) {
     if (err instanceof OrbotoApiError && err.status === 401) {
-      throw new Error('MCP preflight failed: the provided API key is invalid or expired.');
+      throw new Error('MCP preflight failed: the provided API key is invalid or expired.', { cause: err });
     }
     throw err;
   }

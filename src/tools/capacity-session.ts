@@ -43,7 +43,7 @@ export function capacityHoldPath(claimId: string): string {
 /** True while the marker names a live pid; a marker of a dead pid is removed, one another user owns is ignored. */
 export function capacityHoldAlive(claimId: string): boolean {
   const path = capacityHoldPath(claimId);
-  let pid = 0;
+  let pid: number;
   try {
     const info = statSync(path);
     if (typeof process.getuid === 'function' && info.uid !== process.getuid()) return false;
