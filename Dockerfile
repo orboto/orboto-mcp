@@ -12,15 +12,23 @@ COPY scripts/install-pnpm.mjs scripts/pnpm-release.json /tmp/pnpm-bootstrap/
 RUN node /tmp/pnpm-bootstrap/install-pnpm.mjs "$TARGETARCH" \
  && pnpm --version
 WORKDIR /app
+# ORB-2954 - pnpm 11 and newer verify the lockfile against registry metadata on
+# every install and deploy and cache the verdict in pnpm's cache directory, so
+# the install and deploy steps below mount that directory next to the store. The
+# env value keeps the `pnpm run` steps further down, which run without mounts, from
+# starting an implicit install when a manifest changed (verifyDepsBeforeRun).
+ENV PNPM_CONFIG_CACHE_DIR=/root/.cache/pnpm \
+    PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 # ORB-2804 - the lockfile names the drizzle-orm patch; the frozen install fails without the file.
 COPY patches ./patches
 COPY apps/mcp/package.json ./apps/mcp/
 COPY packages/shared-schema/package.json ./packages/shared-schema/
 
-# pnpm content-addressable store cache - same pattern as the API image.
+# pnpm store and cache directory mounts - same pattern as the API image.
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store,sharing=locked \
+    --mount=type=cache,id=pnpm-cache,target=/root/.cache/pnpm,sharing=locked \
     pnpm install --frozen-lockfile --prefer-offline
 
 COPY packages ./packages
@@ -40,7 +48,11 @@ RUN NODE_OPTIONS=--max-old-space-size=1024 pnpm --filter @orboto/mcp build
 # been rewired to its dist output above. ORB-2810 - the mcp tree has no
 # drizzle-orm, so the workspace's drizzle-orm patch is unused here and pnpm
 # stops with ERR_PNPM_UNUSED_PATCH without --config.allow-unused-patches.
-RUN pnpm --filter @orboto/mcp deploy --legacy --prod --config.allow-unused-patches=true /deploy/mcp
+# The mounts are the same as for the install: the deploy verifies the lockfile again and
+# reads the packages from the store; its resolution still asks the registry for metadata.
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store,sharing=locked \
+    --mount=type=cache,id=pnpm-cache,target=/root/.cache/pnpm,sharing=locked \
+    pnpm --filter @orboto/mcp deploy --legacy --prod --config.allow-unused-patches=true /deploy/mcp
 
 # ── runner ──────────────────────────────────────────────────────────────────
 FROM node:24.22.2-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS runner
