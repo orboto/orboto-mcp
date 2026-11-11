@@ -52,7 +52,7 @@ export const personalFactUpdateToolConfig = {
   title: 'Update a personal AI preference',
   description: 'Update a personal primer fact. Owner-scoped - you can only edit your own. Wraps PATCH /users/me/primer-facts/:id.',
   inputSchema: z.object({
-    id: z.string().uuid(),
+    id: z.guid(),
     category: CATEGORY.optional(),
     key: z.string().min(1).max(100).optional(),
     value: z.string().min(1).max(4000).optional(),
@@ -70,7 +70,7 @@ export function makePersonalFactUpdateHandler(client: OrbotoClient) {
 export const personalFactDeleteToolConfig = {
   title: 'Delete a personal AI preference',
   description: 'Delete a personal primer fact. Owner-scoped. Wraps DELETE /users/me/primer-facts/:id.',
-  inputSchema: z.object({ id: z.string().uuid() }).shape,
+  inputSchema: z.object({ id: z.guid() }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 export function makePersonalFactDeleteHandler(client: OrbotoClient) {

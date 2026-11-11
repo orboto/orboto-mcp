@@ -68,7 +68,7 @@ export const approveTranslationToolConfig = {
   description:
     'Approve an auto-translated ticket: stamps the reviewer and the time. Idempotent - re-approving the same row simply refreshes the timestamp + reviewer. 409 if the ticket was never auto-translated. Requires `admin:translation_review`.',
   inputSchema: z.object({
-    ticketId: z.string().uuid(),
+    ticketId: z.guid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -91,7 +91,7 @@ export const revertTranslationToolConfig = {
   description:
     'Restore the pre-translation title + description from the audit comment and clear the auto-translate marker + prior approval. Use when the AI got the translation wrong and the operator wants to start over. 409 if the ticket was never auto-translated. Requires `admin:translation_review`.',
   inputSchema: z.object({
-    ticketId: z.string().uuid(),
+    ticketId: z.guid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };

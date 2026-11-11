@@ -80,7 +80,7 @@ export const agentMessagesToolConfig = {
   title: 'Agent inbox and message work',
   description: 'Your inbox as THIS session sees it. It holds mail to this session, account mail inside your declared scope, broadcasts; sibling-session mail and own sends stay out (includeOwnSends lists your sends with recipient session, delivered/read state, thread), all:true is the account view in full (ORB-2136). Default: the newest 4 unread, newest first, a header plus 300 payload characters each, then `N unread, M older than 7 days`; limit and since (ISO time or message id) narrow it. Server-side filters (ORB-2548): direction sent (only your sends, any read state), threadId (that message and its answers), kind; nextCursor continues the page (cursor). Before orboto_session_start only account mail is listed; register to see mail addressed to your session (ORB-2347). messageWork carries durable work ownership (mutation schema: orboto_api_search) - claim before executing. ackIds (message ids) acks: it completes an unclaimed request; claimed work with open steps is refused until messageWork completes or blocks it. dismiss: not_mine hides it here and tells the sender, obsolete/duplicate close it for the account (note or duplicateOf required). Never leave mail you read and judged. Reply via orboto_agent_notify with threadId (toSessionRef = from.sessionId).',
   inputSchema: z.object({
-    messageWork: z.record(z.unknown()).optional()
+    messageWork: z.record(z.string(), z.unknown()).optional()
       .describe('Work envelope {messageId, mutation, cursor, limit, openOnly}.'),
     all: z.boolean().default(false),
     limit: z.number().int().min(1).max(200).optional(),
@@ -88,19 +88,19 @@ export const agentMessagesToolConfig = {
     project: z.string().min(1).max(64).optional().describe('Key/UUID; includes unscoped mail.'),
     includeOwnSends: z.boolean().default(false),
     direction: z.enum(['received', 'sent']).optional(),
-    threadId: z.string().uuid().optional(),
+    threadId: z.guid().optional(),
     kind: z.enum(['request', 'error', 'info', 'complete']).optional(),
     cursor: z.string().max(500).optional(),
-    ackIds: z.array(z.string().uuid()).max(200).optional(),
+    ackIds: z.array(z.guid()).max(200).optional(),
     dismiss: z.object({
-      ids: z.array(z.string().uuid()).min(1).max(200),
+      ids: z.array(z.guid()).min(1).max(200),
       reason: z.enum(['not_mine', 'obsolete', 'duplicate']),
       note: z.string().max(500).optional(),
-      duplicateOf: z.string().uuid().optional(),
+      duplicateOf: z.guid().optional(),
     }).optional().describe('Dismiss with a reason; obsolete/duplicate need note or duplicateOf.'),
   }).shape,
   outputSchema: z.object({
-    work: z.record(z.unknown()).optional(),
+    work: z.record(z.string(), z.unknown()).optional(),
     sessionId: z.string().nullable().optional(),
     messages: z.array(z.object({
       id: z.string(),

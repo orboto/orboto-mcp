@@ -19,7 +19,7 @@ export const sentryToolConfig = {
   inputSchema: z.object({
     action: z.enum(ACTIONS),
     projectKey: z.string().min(1),
-    connectionId: z.string().uuid().optional(),
+    connectionId: z.guid().optional(),
     orgSlug: z.string().optional(),
     projectSlug: z.string().optional(),
     clientSecret: z.string().optional(),

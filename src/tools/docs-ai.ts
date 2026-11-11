@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { KNOWLEDGE_DATA_NOTICE, PARENT_DOC_PARAM, SEMANTIC_DEGRADED_LINE, SPACE_UUID_PARAM, askTimingClause, reviewerFlaggedLine, rewriteDeadline, type AskReview, type AskTimings } from './shared.js';
+import { urlString } from '../zod-v3-formats.js';
 
 interface AskDocsCitation {
   index: number;
@@ -100,9 +101,9 @@ export const ingestUrlToolConfig = {
   description:
     'Fetch a public URL, extract it with Readability, store a Markdown doc in `spaceId`. Optionally nest under `parentDocId` to keep the tree tidy. Sets `readabilityFallback: true` when the page didn\'t look like a recognisable article (the body falls back to full-page text - a flag the caller should surface to the operator for review).',
   inputSchema: z.object({
-    url: z.string().url(),
-    spaceId: z.string().uuid().describe(SPACE_UUID_PARAM),
-    parentDocId: z.string().uuid().optional().describe(PARENT_DOC_PARAM),
+    url: urlString(),
+    spaceId: z.guid().describe(SPACE_UUID_PARAM),
+    parentDocId: z.guid().optional().describe(PARENT_DOC_PARAM),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -150,10 +151,10 @@ export const ingestFileToolConfig = {
   description:
     'Upload a file (PDF / DOCX / Markdown / plain text) into `spaceId` via multipart. The model passes the bytes as a base64 `contentBase64` field (so this works without local FS access on the agent side). Use `filename` to give the doc a meaningful title - the backend sniffs the mimetype but also uses the filename for display. Optional `parentDocId` nests under an existing doc. The uploaded file is ALSO attached to the doc it produces (ORB-2167): the response names `attachmentId`, `orboto_list_doc_attachments` lists it and `orboto_get_attachment` downloads the original bytes, so the extracted text and its source stay together.',
   inputSchema: z.object({
-    spaceId: z.string().uuid(),
+    spaceId: z.guid(),
     filename: z.string().min(1),
     contentBase64: z.string().min(1),
-    parentDocId: z.string().uuid().optional(),
+    parentDocId: z.guid().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };

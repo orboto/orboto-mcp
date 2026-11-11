@@ -175,7 +175,7 @@ export const createDocSpaceToolConfig = {
     name: z.string().min(1).max(100),
     type: z.enum(['global', 'project']).describe('Scope: workspace-wide or project-scoped.'),
     projectKey: z.string().min(1).optional().describe('Required when type=project (or pass projectId).'),
-    projectId: z.string().uuid().optional().describe('Alternative to projectKey.'),
+    projectId: z.guid().optional().describe('Alternative to projectKey.'),
     description: z.string().nullish(),
     icon: z.string().nullish().describe(EMOJI_PARAM),
     slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional().describe('Default: derived from name.'),
@@ -224,14 +224,14 @@ export const updateDocSpaceToolConfig = {
   description:
     'Patch a space\'s name / description / icon / slug, and (ORB-1080) its visibility settings: `visibility` (workspace = every internal member, restricted = explicit allowlist via memberIds), `guestsVisible` (external users see the space only when true). Visibility fields require space-management rights (global spaces: super-admin; project spaces: project:edit) - plain membership gets a 403 for those. `isPublic` is deprecated (replaced by guestsVisible). `type` and `projectId` are immutable; auto-generated primer spaces refuse name/slug edits.',
   inputSchema: z.object({
-    spaceId: z.string().uuid().describe(SPACE_UUID_PARAM),
+    spaceId: z.guid().describe(SPACE_UUID_PARAM),
     name: z.string().min(1).max(100).optional(),
     description: z.string().nullish(),
     icon: z.string().nullish(),
     isPublic: z.boolean().optional().describe('DEPRECATED - use guestsVisible.'),
     visibility: z.enum(['workspace', 'project_members', 'restricted']).optional().describe('workspace = every internal member, project_members = members with doc:view, restricted = allowlist. Needs manage rights.'),
     guestsVisible: z.boolean().optional().describe('Explicit guest (external user) opt-in. Requires manage rights.'),
-    memberIds: z.array(z.string().uuid()).max(5000).optional().describe('Replaces the restricted-space allowlist. Requires manage rights.'),
+    memberIds: z.array(z.guid()).max(5000).optional().describe('Replaces the restricted-space allowlist. Requires manage rights.'),
     slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -277,7 +277,7 @@ export const deleteDocSpaceToolConfig = {
   description:
     'DESTRUCTIVE - cascades through every doc in the space (pages are gone, not hidden). System-generated project primer spaces refuse deletion (they cascade only when the owning project is deleted). Needs `project:edit` on the space\'s project (global spaces: super-admin): 404 for a space the caller cannot see or that does not exist, 403 for one they cannot manage. Returns success silently; errors surface as an OrbotoApiError.',
   inputSchema: z.object({
-    spaceId: z.string().uuid(),
+    spaceId: z.guid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
@@ -401,7 +401,7 @@ export const createDocToolConfig = {
     spaceId: z.string().min(1).describe(SPACE_REF_PARAM),
     title: z.string().min(1).max(255),
     content: z.string().optional().describe('Markdown (GFM); omitted: a blank page. Pills: `:badge[LABEL]{tone=success}`.'),
-    parentDocId: z.string().uuid().nullable().optional().describe(PARENT_DOC_PARAM),
+    parentDocId: z.guid().nullable().optional().describe(PARENT_DOC_PARAM),
     visibility: z.enum(['public', 'workspace', 'members', 'specific']).optional().describe('Defaults to "workspace".'),
     icon: z.string().nullish().describe(EMOJI_PARAM),
   }).shape,
@@ -444,7 +444,7 @@ export const updateDocToolConfig = {
     title: z.string().min(1).max(255).optional(),
     content: z.string().optional().describe('Markdown to append (with replace: the whole body). Pills: `:badge[LABEL]{tone=success}`.'),
     replace: z.boolean().optional(),
-    parentDocId: z.string().uuid().nullable().optional(),
+    parentDocId: z.guid().nullable().optional(),
     visibility: z.enum(['public', 'workspace', 'members', 'specific']).optional(),
     icon: z.string().nullish(),
   }).shape,
@@ -518,8 +518,8 @@ export const moveDocToolConfig = {
     'Reparent a doc, change its sort order, or move it into a different space. All three target fields are optional but at least one must be supplied. Distinct from orboto_update_doc\'s parentDocId because the API endpoint emits a different WS event for the tree-rebuild path connected clients care about.',
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
-    parentDocId: z.string().uuid().nullable().optional().describe('null = top-level.'),
-    spaceId: z.string().uuid().optional().describe('Target space (member of both). The parent must be in it, else the doc lands top-level.'),
+    parentDocId: z.guid().nullable().optional().describe('null = top-level.'),
+    spaceId: z.guid().optional().describe('Target space (member of both). The parent must be in it, else the doc lands top-level.'),
     sortOrder: z.number().int().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -555,7 +555,7 @@ export const duplicateDocSpaceToolConfig = {
   description:
     'Fork a doc space along with its doc tree. Needs manage rights on the source space; only docs the caller can read are copied. The new space\'s name becomes `<source> (copy)`, parent-child relationships in the tree are preserved via UUID remap. Useful when an agent wants to iterate on a runbook space without mutating the original.',
   inputSchema: z.object({
-    spaceId: z.string().uuid(),
+    spaceId: z.guid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };

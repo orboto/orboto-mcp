@@ -41,7 +41,7 @@ export const updatePublicHolidayToolConfig = {
   description:
     'Correct a public holiday\'s typo or date, keeping the row id. Admin-only (`admin:absences:write`). Pass only the fields you want to change; at least one field is required.',
   inputSchema: z.object({
-    id: z.string().uuid(),
+    id: z.guid(),
     name: z.string().min(1).max(100).optional(),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     countryCode: z.string().max(10).nullable().optional(),
@@ -74,7 +74,7 @@ export const updateCompanyClosureToolConfig = {
   description:
     'Update a workspace-wide non-working block (company offsite, holiday shutdown). Admin-only (`admin:absences:write`). Pass only the fields you want to change; at least one field is required. If only one of `startDate`/`endDate` is passed, the other is left as-is - the API still validates start ≤ end after the partial patch.',
   inputSchema: z.object({
-    id: z.string().uuid(),
+    id: z.guid(),
     name: z.string().min(1).optional(),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -105,8 +105,8 @@ export const updateAbsenceToolConfig = {
   description:
     'Edit your own absence request before a reviewer acts on it. Locked once the status is `approved`, `rejected`, or `cancelled` - those transitions go through the approve / reject / cancel endpoints, not this one. Caller must be the absence owner or a super-admin. `durationDays` is recomputed automatically when dates move (uses the owner\'s working-day rules + holidays + closures).',
   inputSchema: z.object({
-    id: z.string().uuid(),
-    typeId: z.string().uuid().optional().describe('Absence-type id.'),
+    id: z.guid(),
+    typeId: z.guid().optional().describe('Absence-type id.'),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     note: z.string().nullish(),

@@ -38,7 +38,7 @@ export const apiCallToolConfig = {
     path: z.string().min(1).max(500)
       .describe('Route path, e.g. "/projects/<uuid>/milestones". No query string.'),
     query: boundedRecord(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string()).max(200)]), 100).optional(),
-    body: z.union([z.record(z.unknown()), z.array(z.unknown()), z.string(), z.number(), z.boolean()]).optional()
+    body: z.union([z.record(z.string(), z.unknown()), z.array(z.unknown()), z.string(), z.number(), z.boolean()]).optional()
       .describe('A real object/array, not a string.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },

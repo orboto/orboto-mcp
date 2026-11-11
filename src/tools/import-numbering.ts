@@ -139,8 +139,8 @@ export const importNumberingToolConfig = {
   title: 'Import numbering',
   description: 'Kept and renumbered source numbers of a staged import; merge flag. admin:import.',
   inputSchema: z.object({
-    token: z.string().uuid(),
-    projectId: z.string().uuid().optional(),
+    token: z.guid(),
+    projectId: z.guid().optional(),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -161,12 +161,12 @@ export const importApplyToolConfig = {
     'Queue a staged import. Into a project with tickets: refused with the collisions until the user gives confirmMerge and confirmProjectKey; never fill them. config: source credentials. admin:import.',
   inputSchema: z.object({
     adapter: z.string().min(1).max(64),
-    stagingToken: z.string().uuid(),
-    mapping: z.record(z.unknown()),
+    stagingToken: z.guid(),
+    mapping: z.record(z.string(), z.unknown()),
     projectKey: z.string().trim().max(10).optional(),
     confirmMerge: z.boolean().optional(),
     confirmProjectKey: z.string().trim().max(10).optional(),
-    config: z.record(z.unknown()).optional(),
+    config: z.record(z.string(), z.unknown()).optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };

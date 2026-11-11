@@ -23,7 +23,7 @@ export const portfolioSummaryToolConfig = {
     'Read a portfolio / program-level cross-project rollup. With no `portfolioId`, lists the portfolios you can see (id, name, project count). With a `portfolioId`, returns the aggregate rollup: per-project RAG (red/amber/green) health, overall progress (done/total tickets), effort hours, aggregate Earned Value (SPI/CPI across projects with a baseline), a per-currency budget rollup, and the at-risk milestones (overdue or soon-due) across the whole portfolio. '
     + 'Every figure is ACL-filtered server-side to only the projects you are a member of (super-admins see all) and the tickets / milestones / budgets you may see - so it never leaks a project you cannot otherwise access. Requires the admin:portfolio:read permission (you get a permission error otherwise).',
   inputSchema: z.object({
-    portfolioId: z.string().uuid().optional().describe('Portfolio UUID. Omit to list all portfolios you can see.'),
+    portfolioId: z.guid().optional().describe('Portfolio UUID. Omit to list all portfolios you can see.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

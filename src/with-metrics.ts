@@ -2,13 +2,14 @@
  * ORB-311 Phase F - wrap a tool handler so every dispatch logs to
  * `/admin/mcp/instrument` after the call completes.
  */
+import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from './orboto-client.js';
 import { type NudgeState, shouldNudge, prependNudge, shouldGate, gateResult, recordSessionStartResult } from './session-nudge.js';
 import { RequiredRulesError } from './required-rules.js';
 import { applyResponseBudget, TruncationBlockAdvertisedSchema } from './response-budget.js';
-import { buildStrictInputSchema, isRawShape } from './input-schema.js';
+import { buildStrictInputSchema, isRawShape, withZodV3JsonSchema } from './input-schema.js';
 import { captureToolDoc, summarizeToolDescription } from './tool-docs.js';
 import { postLogEntry, redactSecrets } from './mcp-instrument.js';
 import { envelopeStatus, metricsToolName } from './tail-labels.js';
@@ -167,11 +168,14 @@ export function registerWithMetrics(
     let cfg = config?.inputSchema && isRawShape(config.inputSchema)
       ? { ...config, inputSchema: buildStrictInputSchema(toolName, config.inputSchema, client, clientHint) }
       : config;
+    if (cfg?.inputSchema instanceof z.ZodType) cfg = { ...cfg, inputSchema: withZodV3JsonSchema(cfg.inputSchema, 'input') };
     if (cfg?.outputSchema && isRawShape(cfg.outputSchema)) {
       cfg = {
         ...cfg,
-        outputSchema: { ...cfg.outputSchema, __truncation: TruncationBlockAdvertisedSchema.optional() },
+        outputSchema: withZodV3JsonSchema(z.object({ ...cfg.outputSchema, __truncation: TruncationBlockAdvertisedSchema.optional() }), 'output'),
       };
+    } else if (cfg?.outputSchema instanceof z.ZodType) {
+      cfg = { ...cfg, outputSchema: withZodV3JsonSchema(cfg.outputSchema, 'output') };
     }
     if (typeof cfg?.description === 'string' && cfg.description.length > 0) {
       captureToolDoc(toolName, cfg.description);

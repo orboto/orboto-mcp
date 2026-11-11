@@ -118,7 +118,7 @@ export const postDocCommentToolConfig = {
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
     content: z.string().min(1).max(4000),
-    parentCommentId: z.string().uuid().optional().describe('Reply to this comment.'),
+    parentCommentId: z.guid().optional().describe('Reply to this comment.'),
     anchor: z.object({
       text: z.string().min(1).max(400).describe('Highlighted text it anchors to.'),
       before: z.string().max(80).describe('Text before the highlight.'),
@@ -171,7 +171,7 @@ export const resolveDocCommentToolConfig = {
     'Toggle a comment thread\'s resolved state. Pass `resolved=true` to fold the conversation, `resolved=false` to reopen. Always acts on the thread ROOT - resolving from a reply folds the whole conversation, same as the web UI.',
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
-    commentId: z.string().uuid(),
+    commentId: z.guid(),
     resolved: z.boolean(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -206,7 +206,7 @@ export const updateDocCommentToolConfig = {
     'Edit a doc comment\'s body. Author OR super-admin can edit; everyone else gets a 403. Doc-comments do not carry a revision history today (unlike ticket comments), so the prior content is overwritten in place. A no-op call (same content as before) returns the unchanged row.',
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
-    commentId: z.string().uuid(),
+    commentId: z.guid(),
     content: z.string().min(1).max(4000),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -235,7 +235,7 @@ export const deleteDocCommentToolConfig = {
     'DESTRUCTIVE - drops the comment + (via FK cascade) every reply under it. Only the author can delete their own comments; super-admins can delete anyone\'s. Returns success silently; 403 surfaces as an OrbotoApiError.',
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
-    commentId: z.string().uuid(),
+    commentId: z.guid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };

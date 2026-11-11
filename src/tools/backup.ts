@@ -119,7 +119,7 @@ export const downloadBackupToolConfig = {
   description:
     'Download a backup run by id as a base64 resource attachment. The id comes from orboto_list_backups; an encrypted run downloads sealed and needs its key to restore. Requires admin:backup:read.',
   inputSchema: z.object({
-    runId: z.string().uuid().describe('Run id from orboto_list_backups.'),
+    runId: z.guid().describe('Run id from orboto_list_backups.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

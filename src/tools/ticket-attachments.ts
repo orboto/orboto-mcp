@@ -88,7 +88,7 @@ export const getAttachmentToolConfig = {
   description:
     'Fetch an attachment\'s content by id (from orboto_list_ticket_attachments or orboto_get_ticket). For an image, the model receives an image content block so it actually SEES the screenshot, plus a text line with filename and size. For a non-image, the model gets a text block with metadata and, for small files, the base64 content; large binaries point at the skill\'s download-attachment shortcut. Works for ticket, doc, and comment attachments (the id is global). Enforces the same project/space access check as listing the attachment.',
   inputSchema: z.object({
-    attachmentId: z.string().uuid().describe('Attachment UUID from a list/get call.'),
+    attachmentId: z.guid().describe('Attachment UUID from a list/get call.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

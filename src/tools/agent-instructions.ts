@@ -42,9 +42,9 @@ export const listAgentInstructionsToolConfig = {
     'ADMIN tool: lists the rule BLOCKS at a scope for editing, not the rules to follow. Scopes: workspace needs admin:ai:read, project needs project:edit, personal is your own; blocks can be edited, toggled and reordered. This is NOT how you read the rules to follow. To LOAD the rules you must follow as an agent, call orboto_session_start instead - it returns the complete assembled rule set.',
   inputSchema: z.object({
     scope: z.enum(['workspace', 'customer', 'project', 'personal']).default('workspace'),
-    projectId: z.string().uuid().optional().describe('Required for scope=project.'),
-    customerId: z.string().uuid().optional().describe('Required for scope=customer.'),
-    blockId: z.string().uuid().optional().describe('Return THIS block in full; the list carries excerpts + contentChars only.'),
+    projectId: z.guid().optional().describe('Required for scope=project.'),
+    customerId: z.guid().optional().describe('Required for scope=customer.'),
+    blockId: z.guid().optional().describe('Return THIS block in full; the list carries excerpts + contentChars only.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -104,8 +104,8 @@ export const createAgentInstructionToolConfig = {
     title: z.string().min(1).max(120),
     body: z.string().min(1).max(8000),
     scope: z.enum(['workspace', 'customer', 'project', 'personal']).default('workspace'),
-    projectId: z.string().uuid().optional().describe('Required for scope=project.'),
-    customerId: z.string().uuid().optional().describe('Required for scope=customer.'),
+    projectId: z.guid().optional().describe('Required for scope=project.'),
+    customerId: z.guid().optional().describe('Required for scope=customer.'),
     enabled: z.boolean().optional(),
     mustRead: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
@@ -140,7 +140,7 @@ export const updateAgentInstructionToolConfig = {
     'Patch a rule block: title, body, enabled or sortOrder. Works on default AND custom blocks (defaults keep their builtinKey and can be reset later). Needs admin:ai:write.'
     + AGENTS_PROPOSE + RULE_WRITING_CONTRACT,
   inputSchema: z.object({
-    id: z.string().uuid(),
+    id: z.guid(),
     title: z.string().min(1).max(120).optional(),
     body: z.string().min(1).max(8000).optional(),
     enabled: z.boolean().optional(),
@@ -175,7 +175,7 @@ export const resetAgentInstructionToolConfig = {
   title: 'Reset a rule block',
   description:
     'Restore a seeded DEFAULT rule block (one with a builtinKey) to its shipped text. No-op for custom blocks. Needs admin:ai:write.' + AGENTS_PROPOSE,
-  inputSchema: z.object({ id: z.string().uuid() }).shape,
+  inputSchema: z.object({ id: z.guid() }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
@@ -190,7 +190,7 @@ export const deleteAgentInstructionToolConfig = {
   title: 'Delete a custom rule block',
   description:
     'Delete a CUSTOM rule block. Default (builtin) blocks cannot be deleted - disable them via update instead. Needs admin:ai:write.' + AGENTS_PROPOSE,
-  inputSchema: z.object({ id: z.string().uuid() }).shape,
+  inputSchema: z.object({ id: z.guid() }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 

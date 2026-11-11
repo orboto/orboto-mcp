@@ -184,7 +184,7 @@ export const deleteDocAttachmentToolConfig = {
     'DESTRUCTIVE - drops the file row + deletes the underlying S3 object. Does NOT rewrite the doc body, so embedded Markdown lines pointing at the deleted URL will surface as broken images / links. Walk those by hand if needed.',
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
-    attachmentId: z.string().uuid(),
+    attachmentId: z.guid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };

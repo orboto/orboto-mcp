@@ -62,7 +62,7 @@ export const approvalDecideToolConfig = {
     ticketKey: z.string().min(3),
     decision: z.enum(['approve', 'reject']),
     comment: z.string().optional().describe('Recorded on the vote and sent to the requester.'),
-    requestId: z.string().uuid().optional().describe('Needed when several requests are pending.'),
+    requestId: z.guid().optional().describe('Needed when several requests are pending.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };

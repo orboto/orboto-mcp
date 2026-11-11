@@ -33,7 +33,7 @@ export const ruleProposeToolConfig = {
     body: z.string().min(1).max(8000),
     scope: z.enum(SCOPES).default('workspace'),
     projectKey: z.string().min(1).max(32).optional(),
-    customerId: z.string().uuid().optional(),
+    customerId: z.guid().optional(),
     reason: z.string().min(1).max(1000).optional(),
     allowOversize: z.boolean().optional(),
     oversizeReason: z.string().min(10).max(500).optional(),
@@ -69,8 +69,8 @@ export const ruleProposalsToolConfig = {
   inputSchema: z.object({
     status: z.enum(['pending', 'candidate', 'accepted', 'rejected', 'all']).default('pending'),
     scope: z.enum(SCOPES).optional(),
-    projectId: z.string().uuid().optional(),
-    customerId: z.string().uuid().optional(),
+    projectId: z.guid().optional(),
+    customerId: z.guid().optional(),
     mine: z.boolean().optional(),
     limit: z.number().int().min(1).max(100).optional(),
     cursor: z.string().optional(),
@@ -107,7 +107,7 @@ export const ruleProposalAcceptToolConfig = {
   title: 'Accept a rule proposal',
   description: 'Adopt a rule candidate or pending proposal, as proposed or edited. Only a person with rule rights on its scope, on their explicit instruction; a bot or agent key gets 403 errors.agent_rules.review_needs_person. must-read stays off unless set.',
   inputSchema: z.object({
-    proposalId: z.string().uuid(),
+    proposalId: z.guid(),
     title: z.string().min(1).max(120).optional(),
     body: z.string().min(1).max(8000).optional(),
     mustRead: z.boolean().optional(),
@@ -138,7 +138,7 @@ export const ruleProposalRejectToolConfig = {
   title: 'Reject a rule proposal',
   description: 'Dismiss a candidate or reject a pending proposal; the reason stays on it. Only a person with rule rights on its scope, on their explicit instruction; a bot or agent key gets 403 errors.agent_rules.review_needs_person.',
   inputSchema: z.object({
-    proposalId: z.string().uuid(),
+    proposalId: z.guid(),
     reason: z.string().min(3).max(1000),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },

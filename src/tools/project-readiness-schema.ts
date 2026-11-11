@@ -12,12 +12,12 @@ export const ProjectReadinessItemSchema = z.object({
   detail: z.string().optional().describe('The stored decision text behind the reason, e.g. why a project needs no headless lane.'),
   fix: ProjectReadinessFixSchema,
   alternatives: z.array(ProjectReadinessFixSchema).optional().describe('Other ways to resolve the item, offered next to fix.'),
-  connectionId: z.string().uuid().optional().describe('git_connection: the connection the reason is about, the one closest to ready.'),
+  connectionId: z.guid().optional().describe('git_connection: the connection the reason is about, the one closest to ready.'),
   pending: z.boolean().optional().describe('git_connection: true when reason is probe_pending, a connection no probe has checked yet; status stays missing, ready stays false, and fix probes it now.'),
   nextProbeAt: z.string().optional().describe('With pending: the start of the next fleet probe cycle, which reaches the connection within that cycle; fix probes it now.'),
 });
 export const ProjectReadinessSchema = z.object({
-  projectId: z.string().uuid(), projectKey: z.string(), ready: z.boolean(), language: z.string(),
+  projectId: z.guid(), projectKey: z.string(), ready: z.boolean(), language: z.string(),
   ticketScope: z.literal('visible'),
   items: z.array(ProjectReadinessItemSchema),
 });

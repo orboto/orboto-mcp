@@ -12,6 +12,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { resolveTicketByKey } from './shared.js';
+import { isoDateTime } from '../zod-v3-formats.js';
 
 interface ScheduleAttendee { userId: string; email: string }
 interface TicketScheduleRow {
@@ -74,12 +75,12 @@ export const scheduleTicketSessionToolConfig = {
     'Schedule a working session on a ticket. Drops a plan-block on every orboto attendee and emails each attendee an iCal invite. startsAt/endsAt are ISO 8601 datetimes. attendeeUserIds are orboto user UUIDs (from orboto_list_users); externalEmails are non-orboto guests who get the invite but no plan-block. Title defaults to "Working session: <TICKET-KEY>".',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    startsAt: z.string().datetime(),
-    endsAt: z.string().datetime().describe('Must be after startsAt.'),
+    startsAt: isoDateTime(),
+    endsAt: isoDateTime().describe('Must be after startsAt.'),
     title: z.string().optional(),
     location: z.string().optional().describe('Zoom URL, room, "remote".'),
     notes: z.string().optional(),
-    attendeeUserIds: z.array(z.string().uuid()).max(500).optional().describe('Attendee user UUIDs.'),
+    attendeeUserIds: z.array(z.guid()).max(500).optional().describe('Attendee user UUIDs.'),
     externalEmails: z.array(z.string().email()).max(500).optional().describe('External guest emails.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -118,7 +119,7 @@ export const cancelTicketSessionToolConfig = {
     'Cancel a working session on a ticket. Removes every attendee\'s plan-block and emails an iCal cancellation to all attendees. Get the scheduleId from orboto_list_ticket_schedules.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    scheduleId: z.string().uuid(),
+    scheduleId: z.guid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };

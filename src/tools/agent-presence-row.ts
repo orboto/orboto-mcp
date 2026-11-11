@@ -4,7 +4,7 @@ import { AgentSessionScopeSchema } from './agent-session-scope.js';
 
 /** ORB-2548 - one presence row as orboto_agent_presence returns it; the full inventory row is `orboto agents --json` and `GET /v1/agent/who?include=inventory`. */
 export const AgentPresenceRowSchema = z.object({
-  sessionId: z.string().uuid(),
+  sessionId: z.guid(),
   userEmail: z.string(),
   userFullName: z.string().nullable(),
   kind: AgentInventoryKindSchema,

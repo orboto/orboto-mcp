@@ -1,99 +1,91 @@
-/** ORB-2670 - GHSA-mrhx-c7xc-m3w5: an array over its `.max()` / `.length()` or a `boundedRecord` over its key limit fails with one issue before any element is parsed. */
+/** ORB-2670, ORB-2973 - GHSA-mrhx-c7xc-m3w5: zod 4.6.6 and newer fail an array over a leading `.max()` / `.length()` with one issue before any element is parsed; `boundedRecord` does the same for a record over its key limit. */
 import * as zod from 'zod';
-import type { KeySchema, ParseInput, ParseReturnType, ZodType, ZodTypeAny } from 'zod';
 
-type ZodRuntime = Pick<typeof zod, 'INVALID' | 'ZodArray' | 'ZodIssueCode' | 'ZodRecord' | 'addIssueToContext'>;
-type Limit = { value: number; message?: string } | null;
-type ArrayInternals = { _def: { maxLength: Limit; exactLength: Limit }; _getOrReturnCtx: ZodType['_getOrReturnCtx'] };
-type RecordInternals = { _def: { maxKeys?: number }; _getOrReturnCtx: ZodType['_getOrReturnCtx'] };
-type ParseFn<T> = (this: T, input: ParseInput) => ParseReturnType<unknown>;
-
-const INSTALLED = Symbol.for('orboto.zodCollectionBounds');
+type AnyDef = Record<string, unknown> & { type?: string; checks?: zod.core.$ZodCheck<never>[] };
+type RecordKey = zod.core.$ZodRecordKey;
+type BoundedKey<K extends RecordKey> = K extends { _zod: { def: { type: 'enum' | 'literal' } } } ? K & zod.core.$partial : K;
+type BoundedRecordDef = zod.core.$ZodRecordDef & { maxKeys: number };
 
 function exceedsKeyLimit(data: unknown, maxKeys: number): boolean {
   return !!data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length > maxKeys;
 }
 
-/** Patches one zod module instance; a CommonJS program that also loads this ESM module passes its own `zod` too. */
-export function installZodCollectionBounds(runtime: ZodRuntime = zod): void {
-  const { INVALID, ZodArray, ZodIssueCode, ZodRecord, addIssueToContext } = runtime;
-  const arrayProto = ZodArray.prototype as unknown as { _parse: ParseFn<ArrayInternals>; [INSTALLED]?: true };
-  if (arrayProto[INSTALLED]) return;
-  const parseArray = arrayProto._parse;
-  arrayProto._parse = function boundedArrayParse(this: ArrayInternals, input: ParseInput) {
-    const limit = this._def.exactLength ?? this._def.maxLength;
-    if (limit && Array.isArray(input.data) && input.data.length > limit.value) {
-      addIssueToContext(this._getOrReturnCtx(input), {
-        code: ZodIssueCode.too_big,
-        maximum: limit.value,
-        type: 'array',
-        inclusive: true,
-        exact: limit === this._def.exactLength,
-        message: limit.message,
-      });
-      return INVALID;
+const initRecord: (inst: zod.ZodRecord, def: BoundedRecordDef) => void = zod.ZodRecord.init;
+
+type RecordPayload = zod.core.ParsePayload;
+
+/** A key outside an enum or literal key set is one `invalid_value` issue at that key, as zod 3 read it, where zod 4 reports the record's unrecognized keys. */
+function readUnrecognizedKeysAsInvalid(payload: RecordPayload, inst: zod.ZodRecord, keyType: zod.core.$ZodType, values: Set<zod.core.util.Primitive>): RecordPayload {
+  payload.issues = payload.issues.flatMap((issue) => (issue.code === 'unrecognized_keys' && issue.inst === inst
+    ? issue.keys.map((key): zod.core.$ZodRawIssue => ({ code: 'invalid_value', values: [...values], input: key, path: [key], inst: keyType, continue: true }))
+    : [issue]));
+  return payload;
+}
+
+const ZodBoundedRecord = zod.core.$constructor('ZodBoundedRecord', (inst: zod.ZodRecord, def: BoundedRecordDef) => {
+  initRecord(inst, def);
+  const parseRecord = inst._zod.parse;
+  const keyValues = (def.keyType as { _zod: { values?: Set<zod.core.util.Primitive> } })._zod.values;
+  inst._zod.parse = (payload, ctx) => {
+    if (!exceedsKeyLimit(payload.value, def.maxKeys)) {
+      const parsed = parseRecord(payload, ctx);
+      if (!keyValues) return parsed;
+      return parsed instanceof Promise
+        ? parsed.then((done) => readUnrecognizedKeysAsInvalid(done, inst, def.keyType, keyValues))
+        : readUnrecognizedKeysAsInvalid(parsed, inst, def.keyType, keyValues);
     }
-    return parseArray.call(this, input);
+    payload.issues.push({
+      code: 'custom',
+      message: `Object must contain at most ${def.maxKeys} key(s)`,
+      params: { maxKeys: def.maxKeys },
+      input: payload.value,
+      inst,
+      continue: false,
+    });
+    return payload;
   };
-  arrayProto[INSTALLED] = true;
-
-  const recordProto = ZodRecord.prototype as unknown as { _parse: ParseFn<RecordInternals>; [INSTALLED]?: true };
-  const parseRecord = recordProto._parse;
-  recordProto._parse = function boundedRecordParse(this: RecordInternals, input: ParseInput) {
-    const maxKeys = this._def.maxKeys;
-    if (maxKeys !== undefined && exceedsKeyLimit(input.data, maxKeys)) {
-      addIssueToContext(this._getOrReturnCtx(input), {
-        code: ZodIssueCode.custom,
-        message: `Object must contain at most ${maxKeys} key(s)`,
-        params: { maxKeys },
-      });
-      return INVALID;
-    }
-    return parseRecord.call(this, input);
+  const toJsonSchema = inst._zod.processJSONSchema;
+  const keys = keyValues;
+  inst._zod.processJSONSchema = (ctx, json, params) => {
+    toJsonSchema?.(ctx, json, params);
+    json.maxProperties = def.maxKeys;
+    if (!keys) return;
+    json.properties = Object.fromEntries([...keys].map((key) => [String(key), json.additionalProperties as zod.core.JSONSchema.JSONSchema]));
+    json.required = [...keys].map(String);
+    json.additionalProperties = false;
   };
-  recordProto[INSTALLED] = true;
-}
+});
 
-type InstalledRuntime = Pick<ZodRuntime, 'ZodArray' | 'ZodRecord'>;
-
-export function zodCollectionBoundsInstalled(runtime: InstalledRuntime = zod): boolean {
-  const marked = (proto: unknown) => (proto as { [INSTALLED]?: true })[INSTALLED] === true;
-  return marked(runtime.ZodArray.prototype) && marked(runtime.ZodRecord.prototype);
-}
-
-/** Throws unless this module's zod and every passed instance carry the installed bounds. */
-export function assertZodCollectionBounds(...runtimes: InstalledRuntime[]): void {
-  if ([zod, ...runtimes].every((runtime) => zodCollectionBoundsInstalled(runtime))) return;
-  throw new Error('zod collection bounds are not installed: call installZodCollectionBounds() for the ESM zod and installZodCollectionBounds(zod) for a CommonJS one before routes or tools register (ORB-2670, GHSA-mrhx-c7xc-m3w5).');
-}
-
-export function boundedRecord<K extends KeySchema, V extends ZodTypeAny>(
+/** A record of at most `maxKeys` keys; an enum or literal key stays partial and is documented with one required property per key, as zod-to-json-schema documented it under zod 3. */
+export function boundedRecord<K extends RecordKey, V extends zod.core.$ZodType>(
   keySchema: K,
   valueSchema: V,
   maxKeys: number,
-): zod.ZodRecord<K, V> {
-  const base = zod.ZodRecord.create(keySchema, valueSchema);
-  return new zod.ZodRecord({ ...base._def, maxKeys } as typeof base._def);
+): zod.ZodRecord<BoundedKey<K>, V> {
+  const def: BoundedRecordDef = { type: 'record', keyType: keySchema, valueType: valueSchema, partial: true, maxKeys };
+  return new ZodBoundedRecord(def) as unknown as zod.ZodRecord<BoundedKey<K>, V>;
 }
 
-type AnyDef = Record<string, unknown> & { typeName?: string };
-
 function defOf(schema: unknown): AnyDef {
-  return ((schema as { _def?: AnyDef })?._def ?? {}) as AnyDef;
+  return ((schema as { _zod?: { def?: AnyDef } })?._zod?.def ?? {}) as AnyDef;
 }
 
 function isPassthrough(schema: unknown): boolean {
-  const typeName = defOf(schema).typeName;
-  return typeName === 'ZodUnknown' || typeName === 'ZodAny';
+  const type = defOf(schema).type;
+  return type === 'unknown' || type === 'any';
+}
+
+function hasSizeCap(def: AnyDef): boolean {
+  return zod.core.util.sizeCaps(def.checks).length > 0;
 }
 
 function entriesCanFail(def: AnyDef): boolean {
   const key = defOf(def.keyType);
-  const plainKey = key.typeName === 'ZodString' && (key.checks as unknown[] | undefined)?.length === 0;
+  const plainKey = key.type === 'string' && !key.checks?.length;
   return !(isPassthrough(def.valueType) && plainKey);
 }
 
-/** Paths of every array, record, catchall, set, map and tuple rest whose unbounded entries can each fail. */
+/** Paths of every array, record, catchall, set, map and tuple rest whose unbounded entries can each fail; an array or set counts as bounded only when its size cap leads its checks, the only place zod enforces it before the elements. */
 export function findUnboundedCollections(schema: unknown, path = '$'): string[] {
   const found: string[] = [];
   const seen = new Set<unknown>();
@@ -101,69 +93,64 @@ export function findUnboundedCollections(schema: unknown, path = '$'): string[] 
     if (!node || typeof node !== 'object' || seen.has(node)) return;
     seen.add(node);
     const def = defOf(node);
-    switch (def.typeName) {
-      case 'ZodArray':
-        if (!def.maxLength && !def.exactLength && !isPassthrough(def.type)) found.push(at);
-        walk(def.type, `${at}[]`);
+    switch (def.type) {
+      case 'array':
+        if (!hasSizeCap(def) && !isPassthrough(def.element)) found.push(at);
+        walk(def.element, `${at}[]`);
         return;
-      case 'ZodRecord':
+      case 'record':
         if (def.maxKeys === undefined && entriesCanFail(def)) found.push(at);
         walk(def.keyType, `${at}{key}`);
         walk(def.valueType, `${at}{}`);
         return;
-      case 'ZodSet':
-        if (!def.maxSize) found.push(at);
+      case 'set':
+        if (!hasSizeCap(def)) found.push(at);
         walk(def.valueType, `${at}[]`);
         return;
-      case 'ZodMap':
+      case 'map':
         found.push(at);
         walk(def.keyType, `${at}{key}`);
         walk(def.valueType, `${at}{}`);
         return;
-      case 'ZodTuple':
+      case 'tuple':
         (def.items as unknown[]).forEach((item, i) => walk(item, `${at}[${i}]`));
         if (def.rest) {
           found.push(`${at}[...]`);
           walk(def.rest, `${at}[...]`);
         }
         return;
-      case 'ZodObject': {
-        const shape = (def.shape as () => Record<string, unknown>)();
-        for (const [key, child] of Object.entries(shape)) walk(child, `${at}.${key}`);
-        if (defOf(def.catchall).typeName !== 'ZodNever') {
+      case 'object': {
+        for (const [key, child] of Object.entries(def.shape as Record<string, unknown>)) walk(child, `${at}.${key}`);
+        if (def.catchall && defOf(def.catchall).type !== 'never') {
           if (!isPassthrough(def.catchall)) found.push(`${at}.*`);
           walk(def.catchall, `${at}.*`);
         }
         return;
       }
-      case 'ZodUnion':
-      case 'ZodDiscriminatedUnion':
+      case 'union':
         for (const option of def.options as Iterable<unknown>) walk(option, at);
         return;
-      case 'ZodIntersection':
+      case 'intersection':
         walk(def.left, at);
         walk(def.right, at);
         return;
-      case 'ZodLazy':
+      case 'lazy':
         walk((def.getter as () => unknown)(), at);
         return;
-      case 'ZodEffects':
-        walk(def.schema, at);
-        return;
-      case 'ZodPipeline':
+      case 'pipe':
         walk(def.in, at);
         walk(def.out, at);
         return;
-      case 'ZodBranded':
-        walk(def.type, at);
-        return;
-      case 'ZodOptional':
-      case 'ZodNullable':
-      case 'ZodDefault':
-      case 'ZodCatch':
-      case 'ZodReadonly':
-      case 'ZodPromise':
-        walk(def.innerType ?? def.type, at);
+      case 'optional':
+      case 'nullable':
+      case 'default':
+      case 'prefault':
+      case 'nonoptional':
+      case 'catch':
+      case 'readonly':
+      case 'promise':
+      case 'success':
+        walk(def.innerType, at);
         return;
       default:
         return;

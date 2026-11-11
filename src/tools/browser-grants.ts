@@ -28,7 +28,7 @@ export const browserGrantsToolConfig = {
     'List, grant or revoke the use of your paired browser by an agent account you own, without the Allow click. A grant to yourself or for a closed ticket is refused (422): your own sessions approve themselves. The grantee acts in the signed-in browser unwatched for the lifetime (session, ticket: until that work session ends, 8h to 30d, forever; a session or ticket grant lapses after 8h without a start); grant needs id = the pairing (orboto browser pairings), grantee and lifetime; revoke needs id = the grant. Only the browser\'s owner grants; the grantor or admin:system:write revokes; all lists every grant (admin:system:read).',
   inputSchema: z.object({
     action: z.enum(['list', 'grant', 'revoke']).optional(),
-    id: z.string().uuid().optional(),
+    id: z.guid().optional(),
     grantee: z.string().optional(),
     lifetime: z.enum(LIFETIMES).optional(),
     ticketKey: z.string().optional(),

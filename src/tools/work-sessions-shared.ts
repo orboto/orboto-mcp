@@ -86,7 +86,7 @@ export const workTakeoverParam = z.boolean().optional().describe('Displace the l
 export const workStartRoleParam = z.enum(WORK_ROLES).optional()
   .describe('Default implementation; others attach, no reassignment; spec needs the bot spec tag.');
 export const workVerificationParam = z.object({
-  reviewOfSessionId: z.string().uuid().optional().describe('Independent implementation session this review examined.'),
+  reviewOfSessionId: z.guid().optional().describe('Independent implementation session this review examined.'),
   reviewVerdict: z.enum(['approved', 'rework']).optional().describe('Review outcome with reviewOfSessionId; never inferred from ticket status.'),
   build: z.boolean().optional(),
   tests: z.boolean().optional(),

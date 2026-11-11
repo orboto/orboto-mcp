@@ -2,8 +2,9 @@
  * ORB-244 Phase A/B - MCP server factory.
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
 import { VERSION } from './version.js';
-import { assertZodCollectionBounds, installZodCollectionBounds } from './zod-bounds.js';
+import { zodV3Locale } from './zod-v3-compat.js';
 import { SubscribeRequestSchema, UnsubscribeRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoClient, type OrbotoClientConfig } from './orboto-client.js';
 import { registerOrbotoResources } from './resources.js';
@@ -382,8 +383,7 @@ export function withoutDefaultHints<T>(config: T): T {
 }
 
 export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<McpServer> {
-  installZodCollectionBounds();
-  assertZodCollectionBounds();
+  z.config(zodV3Locale());
   const client = new OrbotoClient(opts);
   const toolset = resolveToolset(opts.toolset, process.env.ORBOTO_MCP_TOOLSET);
 

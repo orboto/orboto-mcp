@@ -134,7 +134,7 @@ export const searchDocsToolConfig = {
   inputSchema: z.object({
     q: z.string().min(1).max(10_000).describe('Search terms; distinctive words rank higher.'),
     projectKey: z.string().min(1).optional(),
-    spaceId: z.string().uuid().optional().describe(SPACE_UUID_PARAM),
+    spaceId: z.guid().optional().describe(SPACE_UUID_PARAM),
     limit: z.number().int().positive().max(100).default(20),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
@@ -201,7 +201,7 @@ export const editDocToolConfig = {
       newString: z.string().describe('May be empty to delete.'),
       replaceAll: z.boolean().optional().describe('Replace every occurrence instead of requiring exactly one.'),
     })).min(1).max(100).describe('Applied sequentially; edit N sees the result of edits 0..N-1.'),
-    baseRevisionId: z.string().uuid().optional().describe('Revision id you last saw (optimistic lock); omit to always apply.'),
+    baseRevisionId: z.guid().optional().describe('Revision id you last saw (optimistic lock); omit to always apply.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -237,7 +237,7 @@ export const editDocSectionToolConfig = {
       op: z.enum(['replace', 'append', 'insertAfter']).describe('replace body / append to body / insert directly below the heading line.'),
       content: z.string().describe('Markdown.'),
     })).min(1).max(100).describe('Applied sequentially after any string edits.'),
-    baseRevisionId: z.string().uuid().optional().describe('Revision id you last saw (optimistic lock); omit to always apply.'),
+    baseRevisionId: z.guid().optional().describe('Revision id you last saw (optimistic lock); omit to always apply.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };

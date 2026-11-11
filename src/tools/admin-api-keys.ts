@@ -42,7 +42,7 @@ export const adminApiKeyRevokeToolConfig = {
   title: 'Revoke an API key (admin)',
   description: `Revoke any account's API key by id (admin:users:write): requests with it get 401 at once, the revoke is audited and the owner is told, with \`reason\` when given. Ids come from orboto_admin_api_key_list. ${BY_VALUE}`,
   inputSchema: z.object({
-    id: z.string().uuid(),
+    id: z.guid(),
     reason: z.string().max(500).optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },

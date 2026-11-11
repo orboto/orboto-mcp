@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import type { OrbotoClient } from './orboto-client.js';
 import { postLogEntry, redactSecrets } from './mcp-instrument.js';
+import { zodV3JsonSchema, zodV3JsonSchemaOverride } from './zod-v3-compat.js';
 
 /**
  * alias -> canonical. Applied to every tool, guarded by the tool's own
@@ -125,29 +126,24 @@ interface ParamDoc {
 /** Peel ZodOptional / ZodDefault / ZodNullable to name the underlying
  *  type; everything else maps to a short lowercase type name so the
  *  block stays compact (this is for a tool-calling model, not a schema
- *  viewer). */
-function describeZodType(schema: z.ZodTypeAny): string {
-  const def = (schema as unknown as {
-    _def: { typeName: string; innerType?: z.ZodTypeAny; values?: unknown[] };
-  })._def;
-  switch (def.typeName) {
-    case 'ZodOptional':
-    case 'ZodDefault':
-    case 'ZodNullable':
+ *  viewer). The names are the zod 3 ones the block always carried: a
+ *  refinement or a transform reads `effects` (ORB-2973). */
+function describeZodType(schema: z.ZodType): string {
+  const def = schema.def as { type: string; innerType?: z.ZodType; checks?: Array<{ _zod: { def: { check: string } } }>; discriminator?: string };
+  if (def.type === 'pipe' || def.checks?.some((check) => check._zod.def.check === 'custom')) return 'effects';
+  switch (def.type) {
+    case 'optional':
+    case 'default':
+    case 'nullable':
       return def.innerType ? describeZodType(def.innerType) : 'unknown';
-    case 'ZodString': return 'string';
-    case 'ZodNumber': return 'number';
-    case 'ZodBoolean': return 'boolean';
-    case 'ZodArray': return 'array';
-    case 'ZodObject': return 'object';
-    case 'ZodEnum': return `enum(${(def.values as string[] ?? []).join('|')})`;
-    case 'ZodUnion': return 'union';
-    default: return def.typeName.replace(/^Zod/, '').toLowerCase() || 'unknown';
+    case 'enum': return `enum(${(schema as z.ZodEnum).options.join('|')})`;
+    case 'union': return def.discriminator === undefined ? 'union' : 'discriminatedunion';
+    default: return def.type;
   }
 }
 
 function describeShape(shape: z.ZodRawShape): ParamDoc[] {
-  return Object.entries(shape)
+  return (Object.entries(shape) as Array<[string, z.ZodType]>)
     .map(([name, schema]) => ({
       name,
       type: describeZodType(schema),
@@ -165,7 +161,8 @@ function describeShape(shape: z.ZodRawShape): ParamDoc[] {
 function buildTeachingError(
   toolName: string,
   shape: z.ZodRawShape,
-  issues: z.ZodIssue[],
+  issues: z.core.$ZodIssue[],
+  value: unknown,
 ): string {
   const validNames = Object.keys(shape);
 
@@ -173,7 +170,7 @@ function buildTeachingError(
   const missing: string[] = [];
   for (const issue of issues) {
     if (issue.code === 'unrecognized_keys') unrecognized.push(...issue.keys);
-    if (issue.code === 'invalid_type' && issue.received === 'undefined' && issue.path.length === 1) {
+    if (issue.code === 'invalid_type' && issue.path.length === 1 && (value as Record<PropertyKey, unknown> | null)?.[issue.path[0]] === undefined) {
       missing.push(String(issue.path[0]));
     }
   }
@@ -205,7 +202,8 @@ function buildTeachingError(
 
 /**
  * Wrap a raw tool shape into the strict + alias-resolving schema the SDK
- * validates against. Returns a schema whose `.shape` is stamped so
+ * validates against. Returns a schema whose `.shape` and `def.shape` (read by the
+ * SDK for a zod 4 schema) are stamped so
  * tools/list advertisement stays identical to the plain object form.
  *
  * @see ORB-1817
@@ -215,7 +213,7 @@ export function buildStrictInputSchema(
   shape: z.ZodRawShape,
   client?: OrbotoClient,
   clientHint?: string,
-): z.ZodTypeAny {
+): z.ZodType {
   const inner = z.object(shape).strict();
   const effects = z.preprocess((value) => {
     const start = Date.now();
@@ -223,7 +221,7 @@ export function buildStrictInputSchema(
     const parsed = inner.safeParse(aliased);
     if (parsed.success) return aliased;
 
-    const message = buildTeachingError(toolName, shape, parsed.error.issues);
+    const message = buildTeachingError(toolName, shape, parsed.error.issues, aliased);
     if (client) {
       void postLogEntry(client, {
         toolName,
@@ -236,8 +234,23 @@ export function buildStrictInputSchema(
     }
     throw new Error(message);
   }, inner);
+  effects._zod.toJSONSchema = renderAsZodV3(inner, 'input');
   (effects as unknown as { shape: z.ZodRawShape }).shape = inner.shape;
+  (effects.def as unknown as { shape: z.ZodRawShape }).shape = inner.shape;
   return effects;
+}
+
+function renderAsZodV3(source: z.ZodType, io: 'input' | 'output'): () => z.core.JSONSchema.BaseSchema {
+  return () => {
+    const { $schema: _draft, ...schema } = z.toJSONSchema(source, { target: 'draft-7', io, override: zodV3JsonSchemaOverride });
+    return zodV3JsonSchema(schema);
+  };
+}
+
+/** Advertise a tool schema in tools/list as zod-to-json-schema rendered it under zod 3 (ORB-2973). */
+export function withZodV3JsonSchema<T extends z.ZodType>(schema: T, io: 'input' | 'output'): T {
+  if (!schema._zod.toJSONSchema) schema._zod.toJSONSchema = renderAsZodV3(schema.clone({ ...schema._zod.def }), io);
+  return schema;
 }
 
 /** True when the value is a raw shape (plain record of zod schemas), not a schema instance. */

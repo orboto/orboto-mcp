@@ -5,7 +5,7 @@ import { mcpInstanceToken } from './shared.js';
 export const agentMessageWorkToolConfig = {
   title: 'Handle message work',
   description: 'List, inspect or mutate durable message work (mutation schema: orboto_api_search). Only request/error mail carries work; an ack completes it unless somebody claimed it.',
-  inputSchema: z.object({ messageId: z.string().uuid().optional(), mutation: z.record(z.unknown()).optional(),
+  inputSchema: z.object({ messageId: z.guid().optional(), mutation: z.record(z.string(), z.unknown()).optional(),
     cursor: z.string().optional(), limit: z.number().int().min(1).max(100).default(25), openOnly: z.boolean().default(true) }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
 };

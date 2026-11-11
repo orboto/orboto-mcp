@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveTicketByKey } from './shared.js';
+import { isoDateTime } from '../zod-v3-formats.js';
 
 interface ActiveTimer {
   id: string;
@@ -133,7 +134,7 @@ export const logTimeToolConfig = {
     ticketKey: z.string().min(3),
     durationMinutes: z.number().int().positive(),
     description: z.string().optional(),
-    loggedAt: z.string().datetime().optional().describe('Default now. Ignored when `dates` is set.'),
+    loggedAt: isoDateTime().optional().describe('Default now. Ignored when `dates` is set.'),
     dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(200).optional().describe('Book on each of these days (YYYY-MM-DD).'),
     time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional().describe('Wall-clock start for `dates`, workspace timezone. Default 09:00.'),
   }).shape,
@@ -221,10 +222,10 @@ export const editTimeEntryToolConfig = {
     'Correct a time entry: duration, note, date or ticket. Use THIS (not orboto_log_time) to fix a wrong entry: log_time is additive and only makes the total worse. Get the entryId from orboto_list_time_entries (or an orboto_log_time response). Blocked if the entry is locked by an approved timesheet.',
   inputSchema: z.object({
     ticketKey: z.string().min(3).describe('The entry\'s current ticket.'),
-    entryId: z.string().uuid(),
+    entryId: z.guid(),
     durationMinutes: z.number().int().positive().optional(),
     description: z.string().nullish(),
-    loggedAt: z.string().datetime().optional(),
+    loggedAt: isoDateTime().optional(),
     moveToTicketKey: z.string().min(3).optional().describe('Move the entry to another ticket.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -257,7 +258,7 @@ export const deleteTimeEntryToolConfig = {
     'Delete a time entry. Use it for a bogus over-tracked entry that should not exist at all (prefer orboto_edit_time_entry when it should just have a different duration). You can delete your own; deleting another user\'s needs the `time:delete_others` permission. Blocked if locked by an approved timesheet. Get the entryId from orboto_list_time_entries.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    entryId: z.string().uuid(),
+    entryId: z.guid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };

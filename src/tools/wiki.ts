@@ -11,6 +11,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { SEMANTIC_DEGRADED_LINE, askTimingClause, replacedLines, reviewerFlaggedLine, rewriteDeadline, type AskReview, type AskTimings, type ReplacedRevision, DOC_ID_PARAM, PARENT_DOC_PARAM, SPACE_UUID_PARAM } from './shared.js';
 import { resolveDocId } from './docs.js';
+import { urlString } from '../zod-v3-formats.js';
 
 function text(t: string, structured?: Record<string, unknown>): CallToolResult {
   return { content: [{ type: 'text', text: t }], ...(structured ? { structuredContent: structured } : {}) };
@@ -21,9 +22,9 @@ export const wikiIngestUrlToolConfig = {
   description:
     'Fetch a public URL, extract its article as Markdown, create a SOURCE doc in the space. On an LLM-Wiki space the ingest worker writes pages at once (auto-apply) or parks every ingest plan, stale re-ingests included, for review (review-gate; orboto_wiki_runs apply or reject); lint merges always apply directly, with receipt and undo. Wraps POST /spaces/:id/docs/ingest-url.',
   inputSchema: z.object({
-    spaceId: z.string().uuid().describe(SPACE_UUID_PARAM),
-    url: z.string().url().max(2048),
-    parentDocId: z.string().uuid().optional().describe(PARENT_DOC_PARAM),
+    spaceId: z.guid().describe(SPACE_UUID_PARAM),
+    url: urlString().max(2048),
+    parentDocId: z.guid().optional().describe(PARENT_DOC_PARAM),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -42,7 +43,7 @@ export const wikiAskToolConfig = {
     'Retrieval-augmented Q&A over the docs corpus, optionally scoped to one space. Returns an answer with numbered citations linking back to source docs and where the time went. At most 6 passages reach the model. Answers within its deadline (25 s hosted, 120 s on a local provider; the operator can change it) or fails naming the phase that did not finish (retrieval or model); then search with orboto_search_docs. A "Reviewer flagged" line means the reviewer called claims in the answer invented or ran out of time: treat the answer as a draft. Requires both a chat AND an embedding provider (check orboto_ai_status). Wraps POST /ai/ask-docs.',
   inputSchema: z.object({
     question: z.string().min(1).max(2000),
-    spaceId: z.string().uuid().optional().describe('One space; omit for the whole corpus.'),
+    spaceId: z.guid().optional().describe('One space; omit for the whole corpus.'),
     limit: z.number().int().min(1).max(20).optional().describe('Passages (default 5; model reads up to 6).'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
@@ -66,7 +67,7 @@ export const wikiLintToolConfig = {
   description:
     'Lint an LLM-Wiki space for inconsistencies. It merges a duplicate page (same title or near-identical text) into the older one, whose stub keeps the key and smart links valid, queues a re-ingest from newer sources for a stale page instead of filing it, and finds orphan pages, missing cross-references, unprocessed sources and, when AI is configured, contradictions and undocumented concepts. Returns the open issues with a suggested fix, the merges and re-ingests, and a receipt with its undo for every merge. Wraps POST /spaces/:id/llm-wiki/lint.',
   inputSchema: z.object({
-    spaceId: z.string().uuid(),
+    spaceId: z.guid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -108,9 +109,9 @@ export const wikiPlanUpdateToolConfig = {
   description:
     'Turn a natural-language instruction into page operations (create/patch/append) WITHOUT writing anything. Returns a planId valid for 15 minutes plus the proposed ops, and droppedOps: ops whose target page matched no docId, doc key or title. Review the ops, then call orboto_wiki_apply_plan to commit. Wraps POST /spaces/:id/docs/plan-update.',
   inputSchema: z.object({
-    spaceId: z.string().uuid(),
+    spaceId: z.guid(),
     instruction: z.string().min(1).max(4000),
-    sourceDocId: z.string().uuid().optional().describe('A source doc to draw content from.'),
+    sourceDocId: z.guid().optional().describe('A source doc to draw content from.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: false },
 };
@@ -130,8 +131,8 @@ export const wikiApplyPlanToolConfig = {
   description:
     'Commit the page operations from a plan created by orboto_wiki_plan_update. Applies every op atomically (each page edit is snapshotted for rollback), then rebuilds the index doc of the space and appends a line to its log doc. A patch op rewrites its page at once, even when it drops most of it (replace: true is accepted and not required); each rewritten page comes back in replaced with the revision and the restore command, and every write carries its receipt. Fails with 410 if the plan has expired (>15 min) or was already applied. Wraps POST /spaces/:id/docs/apply-plan.',
   inputSchema: z.object({
-    spaceId: z.string().uuid(),
-    planId: z.string().uuid().describe('From orboto_wiki_plan_update.'),
+    spaceId: z.guid(),
+    planId: z.guid().describe('From orboto_wiki_plan_update.'),
     replace: z.boolean().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -152,9 +153,9 @@ export const wikiRecordToolConfig = {
   description:
     'Plan and apply a wiki edit in one step. Use it mid-task to capture a fact or update a page without the two-step review loop. Internally calls plan-update then apply-plan. For a reviewable change, use orboto_wiki_plan_update instead.',
   inputSchema: z.object({
-    spaceId: z.string().uuid(),
+    spaceId: z.guid(),
     instruction: z.string().min(1).max(4000),
-    sourceDocId: z.string().uuid().optional(),
+    sourceDocId: z.guid().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -199,11 +200,11 @@ export const wikiSaveAnswerToolConfig = {
   description:
     'Save an answer (as from orboto_wiki_ask) as a wiki page linking its citations. Idempotent per (space, question): re-saving the same question updates the page instead of duplicating it. A re-save rewrites the saved page at once, even when it drops most of it (replace: true is accepted and not required); an update names the revision it replaced and the restore command. Wraps POST /ai/save-answer-to-wiki.',
   inputSchema: z.object({
-    spaceId: z.string().uuid(),
+    spaceId: z.guid(),
     question: z.string().min(3).max(1000),
     answer: z.string().min(1).max(50_000),
     title: z.string().max(200).optional().describe('Defaults to the question.'),
-    parentDocId: z.string().uuid().optional(),
+    parentDocId: z.guid().optional(),
     citations: z.array(z.object({ docId: z.string().min(1).describe(DOC_ID_PARAM), title: z.string() })).max(50).optional().describe('From orboto_wiki_ask.'),
     replace: z.boolean().optional(),
   }).shape,
@@ -249,7 +250,7 @@ export const wikiRunsToolConfig = {
   inputSchema: z.object({
     spaceId: z.string().min(1),
     action: z.enum(['list', 'show', 'retry', 'apply', 'reject']).optional(),
-    runId: z.string().uuid().optional(),
+    runId: z.guid().optional(),
     status: z.enum(['pending_review', 'applied', 'failed', 'skipped', 'queued', 'rejected']).optional(),
     reason: z.string().max(2000).optional().describe('Required for reject.'),
   }).shape,

@@ -18,7 +18,7 @@ export const connectorToolConfig = {
   inputSchema: z.object({
     action: z.enum(ACTIONS),
     projectKey: z.string(),
-    linkId: z.string().uuid().optional(),
+    linkId: z.guid().optional(),
     ticketKey: z.string().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },

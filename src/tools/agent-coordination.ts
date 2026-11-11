@@ -30,7 +30,7 @@ export const agentHeartbeatToolConfig = {
     sessionToken: z.string().nullable().optional(),
     scope: AgentSessionScopeInputSchema.optional(),
     status: z.enum(['idle', 'working', 'blocked']).optional(),
-    workingOnTicketId: z.string().uuid().nullable().optional(),
+    workingOnTicketId: z.guid().nullable().optional(),
     capabilities: z.array(z.string()).max(200).optional(),
     clientInfo: z.object({
       name: z.string().optional(),
@@ -38,13 +38,13 @@ export const agentHeartbeatToolConfig = {
       host: z.string().optional(),
       user_agent: z.string().optional(),
     }).optional(),
-    startedBy: z.string().uuid().optional(),
+    startedBy: z.guid().optional(),
   }).shape,
   outputSchema: z.object({
     sessionToken: z.string(),
-    sessionId: z.string().uuid(),
+    sessionId: z.guid(),
     scope: AgentSessionScopeSchema.nullable(),
-    startedBy: z.string().uuid().nullable().optional(),
+    startedBy: z.guid().nullable().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -286,7 +286,7 @@ export const agentNotifyToolConfig = {
     outcome: z.string().optional(),
     body: z.string().optional(),
     payload: z.record(z.string(), z.unknown()).optional(),
-    threadId: z.string().uuid().optional(),
+    threadId: z.guid().optional(),
     project: z.string().min(1).max(64).optional(),
     senderRef: z.string().min(1).max(128).optional(),
     toSessionRef: z.string().min(1).max(200).optional(),
@@ -297,8 +297,8 @@ export const agentNotifyToolConfig = {
   }).shape,
   outputSchema: z.object({
     ok: z.literal(true),
-    messageId: z.string().uuid(),
-    toSessionId: z.string().uuid().nullable(),
+    messageId: z.guid(),
+    toSessionId: z.guid().nullable(),
     routedTo: z.enum(NOTIFY_ROUTED_TO),
     routingNote: z.string().optional(),
     recipients: z.array(z.string()).optional(),
@@ -317,7 +317,7 @@ export const agentBroadcastToolConfig = {
     scopeId: z.string().default(''),
     message: z.record(z.string(), z.unknown()),
   }).shape,
-  outputSchema: z.object({ id: z.string().uuid() }).shape,
+  outputSchema: z.object({ id: z.guid() }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 

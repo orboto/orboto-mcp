@@ -92,7 +92,7 @@ export const getDocRevisionToolConfig = {
     'Full content + title of one saved revision. Use this to diff against the current doc before deciding whether to restore.',
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
-    revisionId: z.string().uuid(),
+    revisionId: z.guid(),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
@@ -126,7 +126,7 @@ export const restoreDocRevisionToolConfig = {
     'Roll back the doc to the saved revision. The API snapshots the CURRENT body to a fresh revision row first, so the restore itself is also undoable. Returns the post-restore doc state.',
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
-    revisionId: z.string().uuid(),
+    revisionId: z.guid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };

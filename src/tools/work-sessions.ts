@@ -391,7 +391,7 @@ export const workSessionFinishToolConfig = {
   description:
     'End a work session: timer booked, lease released, evidence recorded. The timer is stopped and booked, the (ticket, role) lease is released for the next agent, and the evidence you pass (commit sha + which gates you ran) is recorded on the session. Idempotent - finishing an already-finished session succeeds and still absorbs late evidence, so a retrying harness never has to distinguish "already done" from "failed". This does NOT close the ticket; ticket status is a separate, deliberate decision (use orboto_close_ticket once the acceptance criteria are verified). Prefer orboto_work_finish (ORB-1612) for an `implementation` session that is actually done - it does this AND the ticket transition AND the completion note in one call.',
   inputSchema: z.object({
-    sessionId: z.string().uuid().describe(WORK_SESSION_ID_PARAM),
+    sessionId: z.guid().describe(WORK_SESSION_ID_PARAM),
     outcome: z.enum(['finished', 'cancelled']).optional()
       .describe('Default `finished`; `cancelled` = abandoned, time still booked.'),
     commitSha: z.string().optional().describe('The commit this session produced, when it produced one.'),
@@ -457,7 +457,7 @@ export const workFinishToolConfig = {
   description:
     'The one-call ticket exit, sibling of orboto_work_start. Does everything orboto_work_session_finish does (stops and books the session\'s EXACT timer, releases the lease and every resource claim, idles your presence) PLUS: records a commitSha as an ATTESTATION when git ingestion has not seen it yet (never blocks - verification reconciles asynchronously once the webhook/backfill lands, so a lagging git connection can never wedge a ticket in review for hours), transitions the ticket per the ORB-1608 deliveryMode policy, and posts the completion note. Only an `implementation`-role session with outcome `finished` drives the ticket (default target category `done`) - `review`/`preflight`/`integration` sessions attach without reassigning the ticket (ORB-1609) and a `cancelled` outcome never auto-closes a ticket nobody actually finished; both still book time and free the lease. Idempotent: finishing an already-finished session, or one whose ticket is already at the target category, is a no-op result - not an error. A blocked transition (approval gate, dependency blocker, missing permission) is non-fatal: the session still finished, `ticketTransitioned` comes back false, and the ticket is left for a human or a follow-up call.',
   inputSchema: z.object({
-    sessionId: z.string().uuid().describe('From orboto_work_start / orboto_work_session_start.'),
+    sessionId: z.guid().describe('From orboto_work_start / orboto_work_session_start.'),
     outcome: z.enum(['finished', 'cancelled']).optional()
       .describe('`finished` (default) moves the ticket; `cancelled` = abandoned: time booked, ticket untouched.'),
     commitSha: z.string().optional().describe('The commit produced; an attestation, verified once git ingestion catches up.'),
@@ -563,7 +563,7 @@ export const workSessionClaimsAddToolConfig = {
   description:
     'Declare more resource claims on a session you hold, leaving lease and timer alone. Use this when you did not know the files/resources you would touch at start time, or need to widen scope mid-task. Same conflict rule as start: `write` claims conflict with any OVERLAPPING active write claim workspace-wide; `read` claims never conflict. Default `onConflict: "reject"` fails the WHOLE call (nothing is added) and names every conflicting holder; `queue` accepts the conflicting ones as `state: "waiting"`.',
   inputSchema: z.object({
-    sessionId: z.string().uuid().describe(WORK_SESSION_ID_PARAM),
+    sessionId: z.guid().describe(WORK_SESSION_ID_PARAM),
     claims: z.array(z.object(ResourceClaimShape)).min(1).max(50)
       .describe('Claims to add: path = repo-relative glob, named = exclusive exact id.'),
     onConflict: z.enum(['reject', 'queue']).optional().describe('Default `reject`.'),
@@ -621,7 +621,7 @@ export const workSessionClaimsReleaseToolConfig = {
   description:
     'Drop some or all resource claims; the session, lease and timer stay. Releasing a granted write claim immediately runs a grant pass, so the earliest queued waiter for that resource is promoted as part of this call - useful once you know you are done touching a subtree but are not done with the ticket. Omit `claims` to release everything the session holds.',
   inputSchema: z.object({
-    sessionId: z.string().uuid().describe(WORK_SESSION_ID_PARAM),
+    sessionId: z.guid().describe(WORK_SESSION_ID_PARAM),
     claims: z.array(z.object({ kind: z.enum(['path', 'named']), value: z.string().min(1).max(500) })).max(500).optional()
       .describe('Claims to release, matched by kind+value; omit to release ALL.'),
   }).shape,

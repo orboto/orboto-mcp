@@ -15,7 +15,7 @@ afterEach(() => { vi.restoreAllMocks(); delete process.env.ORBOTO_MCP_TOOLSET; }
 
 const ChannelNotification = z.object({
   method: z.literal(CHANNEL_METHOD),
-  params: z.object({ content: z.string(), meta: z.record(z.string()) }),
+  params: z.object({ content: z.string(), meta: z.record(z.string(), z.string()) }),
 });
 
 function sse(frames: unknown[]): Response {

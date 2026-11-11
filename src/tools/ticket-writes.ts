@@ -600,7 +600,7 @@ export const commentToolConfig = {
     ticketKey: z.string().min(3),
     text: z.string().min(1),
     isInternal: z.boolean().optional().describe('Default false: guests can read.'),
-    attachmentDraftIds: z.array(z.string().uuid()).max(20).optional().describe('Private /attachment-drafts/tickets/:ticketId uploads only.'),
+    attachmentDraftIds: z.array(z.guid()).max(20).optional().describe('Private /attachment-drafts/tickets/:ticketId uploads only.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -641,7 +641,7 @@ export const updateCommentToolConfig = {
     'Edit the text of a comment you authored (super-admins can edit any). Markdown. The prior text is snapshotted into the comment\'s revision history. Pass the commentId - from orboto_comment\'s response or orboto_get_ticket.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    commentId: z.string().uuid(),
+    commentId: z.guid(),
     text: z.string().min(1).describe('New comment body.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -669,7 +669,7 @@ export const deleteCommentToolConfig = {
     'Delete a comment. You can always delete your own; deleting another user\'s comment needs the `comment:delete_others` permission in the project (super-admins always can). Pass the commentId - from orboto_comment\'s response or orboto_get_ticket.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    commentId: z.string().uuid(),
+    commentId: z.guid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };

@@ -107,7 +107,7 @@ export const updateCrossProjectLinkToolConfig = {
     'Flip statusSyncEnabled on an existing cross-project link. Enabling needs ticket:edit and ticket:change_status in both projects (403 otherwise); disabling is always allowed. On a counterpart link the other end auto-closes when one moves to done, if the closing user holds those grants and read access there. Other relation types ignore the flag.',
   inputSchema: z.object({
     sourceTicketKey: z.string().min(3),
-    linkId: z.string().uuid(),
+    linkId: z.guid(),
     statusSyncEnabled: z.boolean(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -137,7 +137,7 @@ export const removeCrossProjectLinkToolConfig = {
     'DESTRUCTIVE - drops the cross-project link between two tickets. Caller must be a member of both source and target projects (or super-admin). The underlying tickets are unaffected; only the relation row is deleted.',
   inputSchema: z.object({
     sourceTicketKey: z.string().min(3),
-    linkId: z.string().uuid(),
+    linkId: z.guid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };

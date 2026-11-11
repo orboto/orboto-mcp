@@ -26,7 +26,7 @@ export const gitProbeToolConfig = {
     'Check a git connection with its host now. The probe checks the credential, the reachability and the webhook deliveries and stores the result, so readiness judges it at once instead of at the next fleet probe, up to 10 minutes later. Needs project:edit, audited. An ssh-poll or switched-off connection answers 422.',
   inputSchema: z.object({
     projectKey: z.string().min(1),
-    connectionId: z.string().uuid(),
+    connectionId: z.guid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };

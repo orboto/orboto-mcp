@@ -1,12 +1,17 @@
 import { z } from 'zod';
 import { AgentSessionScopeSchema } from './agent-session-scope.js';
+import { isoDateTime } from '../zod-v3-formats.js';
+
+type Output<S> = S extends { _output: infer O } ? O : never;
+type Input<S> = S extends { _input: infer I } ? I : never;
+const typedIO = <S>(schema: S) => schema as unknown as z.ZodType<Output<S>, Input<S>>;
 const WorkSessionResourceClaimSchema = z.object({
   kind: z.enum(['path', 'named']), value: z.string().min(1).max(500), mode: z.enum(['read', 'write']),
   state: z.enum(['granted', 'waiting']).optional(), requestedAt: z.string().optional(), grantedAt: z.string().optional(),
 });
 
 /** ORB-2209 - one account reference, shared by `actsAs` and `owner`. */
-const AgentAccountRefSchema = z.object({ id: z.string().uuid(), name: z.string().nullable(), email: z.string() });
+const AgentAccountRefSchema = z.object({ id: z.guid(), name: z.string().nullable(), email: z.string() });
 
 export const AgentInventoryKindSchema = z.enum(['agent', 'human']);
 export const AgentConnectionTypeSchema = z.enum(['api_key', 'oauth', 'lane', 'external_token', 'live_events', 'web', 'channel']);
@@ -22,11 +27,11 @@ export const AGENT_WAKE_LABELS: Record<AgentSessionWake, string> = {
   lane: 'reachable as a lane',
   on_call: 'reads mail only on its own calls',
 };
-export const AgentInventoryProjectSchema = z.object({ id: z.string().uuid(), key: z.string(), name: z.string() });
+export const AgentInventoryProjectSchema = z.object({ id: z.guid(), key: z.string(), name: z.string() });
 
 /** ORB-2769 - one verdict of the subagent limit gate a Claude Code hook took before an Agent call. */
 export const AgentLimitDecisionSchema = z.object({
-  at: z.string().datetime({ offset: true }),
+  at: isoDateTime({ offset: true }),
   agent: z.string().max(64).optional().describe('The subagent that asked to start another one; absent for the main session.'),
   model: z.string().max(64).optional(),
   window: z.string().max(64).optional().describe('The window that gates the model, such as `Opus weekly` or `7-day`.'),
@@ -48,8 +53,8 @@ export const AgentLimitGateSchema = z.object({
 export type AgentLimitGate = z.infer<typeof AgentLimitGateSchema>;
 export type AgentLimitDecision = z.infer<typeof AgentLimitDecisionSchema>;
 
-export const AgentInventoryEntrySchema = z.object({
-  userId: z.string().uuid(),
+export const AgentInventoryEntryObjectSchema = z.object({
+  userId: z.guid(),
   userEmail: z.string(),
   userFullName: z.string().nullable(),
   kind: AgentInventoryKindSchema,
@@ -58,16 +63,16 @@ export const AgentInventoryEntrySchema = z.object({
   actsAs: AgentAccountRefSchema.nullable(),
   owner: AgentAccountRefSchema.nullable(),
   autonomyPaused: z.boolean(),
-  sessionId: z.string().uuid(),
+  sessionId: z.guid(),
   status: z.string(),
-  lane: z.object({ id: z.string().uuid(), name: z.string(), role: z.string(), paused: z.boolean() }).nullable(),
+  lane: z.object({ id: z.guid(), name: z.string(), role: z.string(), paused: z.boolean() }).nullable(),
   projects: z.array(AgentInventoryProjectSchema),
   connections: z.array(AgentInventoryConnectionSchema),
   /** ORB-2584 - whether mail wakes the session (channel, stream, lane) or it reads mail only on its own calls (`on_call`). */
   wake: AgentSessionWakeSchema.optional(),
-  workingOnTicket: z.object({ id: z.string().uuid(), key: z.string().nullable(), title: z.string(), projectKey: z.string().nullable() }).nullable(),
+  workingOnTicket: z.object({ id: z.guid(), key: z.string().nullable(), title: z.string(), projectKey: z.string().nullable() }).nullable(),
   workSessions: z.array(z.object({
-    ticketId: z.string().uuid(), ticketKey: z.string().nullable(), role: z.string(), leaseUntil: z.string(),
+    ticketId: z.guid(), ticketKey: z.string().nullable(), role: z.string(), leaseUntil: z.string(),
     resourceClaims: z.array(WorkSessionResourceClaimSchema),
   })),
   capabilities: z.array(z.string()),
@@ -102,7 +107,9 @@ export const AgentInventoryEntrySchema = z.object({
   createdAt: z.string(),
 });
 
-export const AgentInventorySchema = z.array(AgentInventoryEntrySchema);
+export const AgentInventoryEntrySchema = typedIO(AgentInventoryEntryObjectSchema);
+
+export const AgentInventorySchema = typedIO(z.array(AgentInventoryEntrySchema));
 export type AgentInventoryEntry = z.infer<typeof AgentInventoryEntrySchema>;
 export type AgentInventoryConnection = z.infer<typeof AgentInventoryConnectionSchema>;
 export type AgentConnectionType = z.infer<typeof AgentConnectionTypeSchema>;
