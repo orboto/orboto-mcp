@@ -53,6 +53,8 @@ export const TAIL_LABELS: readonly TailLabel[] = [
   { method: 'PUT', path: new RegExp(`^/admin/agents/identities/${SEG}/query-rate-limit$`), label: 'orboto_agent_query_rate_limit' },
   { method: 'POST', path: /^\/knowledge\/import-local$/, label: 'orboto_knowledge_import_local' },
   { method: 'POST', path: new RegExp(`^/docs/${SEG}/merge-into$`), label: 'orboto_wiki_merge' },
+  { method: 'GET', path: /^\/users\/me\/(notification-channels|notification-channel-subscriptions|push\/subscriptions|push\/config)$/, label: 'orboto_notification_channels' },
+  { method: 'POST', path: new RegExp(`^/users/me/(notification-channels/${SEG}/verify|push/test)$`), label: 'orboto_notification_channel_test' },
 ];
 
 /** The metrics label of one tool call: the stand-in tool name for a labelled api_call, else the tool name itself. */
