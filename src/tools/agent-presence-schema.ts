@@ -42,6 +42,7 @@ export const AgentLimitDecisionSchema = z.object({
   target: z.string().max(64).optional().describe('The login profile that has room; the gate never switches a login.'),
   fallback: z.string().max(32).optional().describe('The model a Fable subagent moves to: only `opus`.'),
   resetsAt: z.string().max(40).optional(),
+  waitUntil: z.string().max(40).optional().describe('ORB-3051 - the reset a window at its threshold waits for within the reset grace instead of a switch.'),
   detail: z.string().max(400).optional(),
 });
 
