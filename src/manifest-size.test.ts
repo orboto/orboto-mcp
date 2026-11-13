@@ -151,6 +151,10 @@ afterEach(() => { vi.restoreAllMocks(); });
  * shared constants (full = 164,487 from 169,637, stdio = 164,547 from 169,584,
  * curated = 37,683 from 38,583; 4,853 chars free under the full ceiling on the
  * larger stdio build).
+ * ORB-3013 added `orboto_ci_status`, `orboto_ci_log` and `orboto_ci_artifacts`
+ * (full tier only) inside the ceiling: `repository` and a bare
+ * `connectionId` pick the connection and their first sentences say what the
+ * tool reads, not how (full = 169,348 on the stdio build, 52 chars free).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
