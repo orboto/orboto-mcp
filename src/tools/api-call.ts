@@ -23,6 +23,39 @@ interface ProxyEnvelope {
   matchedRoute: string;
 }
 
+/** ORB-3068 - mirror of VAULT_PLAINTEXT_ROUTES in apps/api/src/services/vault-passthrough.ts (drift test in api-call.test.ts); refused here too, so an older server never answers one. */
+export const VAULT_PLAINTEXT_ROUTES = [
+  'POST /credentials/:id/reveal',
+  'POST /credentials/:id/totp',
+  'POST /credentials/:id/file',
+  'POST /credentials/browser-login',
+  'POST /credentials/:id/browser-login/recovery-code',
+  'POST /credentials/browser-login/passkey',
+] as const;
+
+const VAULT_PLAINTEXT_PATHS = VAULT_PLAINTEXT_ROUTES.map((route) => new RegExp(`^${route.split(' ')[1].replace(/:[^/]+/g, '[^/]+')}$`, 'i'));
+
+export const VAULT_PASSTHROUGH_REFUSAL = 'HTTP 403 errors.credential.passthrough_refused - a vault secret never leaves through orboto_api_call, '
+  + 'where it would land in a model transcript. Use the credential without seeing it: `orboto ssh --credential KEY` or '
+  + '`orboto credential ssh-agent KEY` for an SSH key, `orboto browser login --credential KEY` for a site login. '
+  + 'A person who needs the value reveals it on the credential page.';
+
+function normalisedPath(path: string): string {
+  const segments = path.split('/').map((segment) => segment.replace(/;.*$/, '')).filter((segment) => segment !== '' && segment !== '.');
+  return `/${segments.join('/')}`;
+}
+
+/** Every spelling a server could resolve: the raw path and its percent-decoded form, each with empty, `.` and `;` parts dropped. */
+function pathCandidates(path: string): string[] {
+  let decoded = path;
+  try { decoded = decodeURIComponent(path); } catch { /* keep the raw spelling */ }
+  return [normalisedPath(path), normalisedPath(decoded)];
+}
+
+export function isVaultPlaintextPath(path: string): boolean {
+  return pathCandidates(path).some((candidate) => VAULT_PLAINTEXT_PATHS.some((pattern) => pattern.test(candidate)));
+}
+
 export const apiCallToolConfig = {
   title: 'Call a REST endpoint',
   description:
@@ -32,6 +65,8 @@ export const apiCallToolConfig = {
     + 'HTTP status + body verbatim, so react to a 403/404/422 as data. Auth/OAuth/setup/webhook '
     + 'paths are blocked at the proxy. Over an OAuth connection, API keys, OAuth clients, sign-in factors and passwords '
     + 'need the web login (403 errors.auth.oauth_credential_route_refused). '
+    + 'A vault route that answers with a plaintext or a second factor (reveal, totp, file, browser-login) is refused '
+    + '(403 errors.credential.passthrough_refused); credential metadata stays readable. '
     + 'Prefer named tools when one exists - they are more ergonomic.',
   inputSchema: z.object({
     method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
@@ -51,6 +86,9 @@ export function makeApiCallHandler(client: OrbotoClient) {
     query?: Record<string, string | number | boolean | string[]>;
     body?: unknown;
   }, extra?: unknown): Promise<CallToolResult> => {
+    if (isVaultPlaintextPath(input.path)) {
+      return { isError: true, content: [{ type: 'text', text: VAULT_PASSTHROUGH_REFUSAL }] };
+    }
     let body = input.body;
     if (typeof body === 'string') {
       try { body = JSON.parse(body); } catch { /* pass through */ }

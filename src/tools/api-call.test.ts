@@ -1,6 +1,8 @@
 /**
  * ORB-1519 - unit tests for `orboto_api_call`.
  */
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';
 import { makeApiCallHandler } from './api-call.js';
@@ -119,5 +121,56 @@ describe('orboto_api_call', () => {
     expect(seen[0]['x-orboto-agent-session']).toBe('mcp-abc123');
     await makeApiCallHandler(client)({ method: 'GET', path: '/v1/agent/messages' });
     expect(seen[1]['x-orboto-agent-session']).toMatch(/^agent-/);
+  });
+});
+
+describe('ORB-3068 - orboto_api_call never carries vault plaintext', () => {
+  const SECRET_PATHS = [
+    '/credentials/c1/reveal',
+    '/credentials/c1/totp',
+    '/credentials/c1/file',
+    '/credentials/browser-login',
+    '/credentials/c1/browser-login/recovery-code',
+    '/credentials/browser-login/passkey',
+    '/credentials/c1/reveal/',
+    '/credentials/c1/%72eveal',
+    '/Credentials/c1/Reveal',
+    '/credentials/a%2Fb/reveal',
+    '/credentials/c1/reveal%2F',
+    '//credentials/c1/reveal',
+    '/credentials//c1/reveal',
+    '/credentials/c1/./reveal',
+    '/credentials/c1/reveal;x',
+    '/%63redentials/c1/reveal',
+  ];
+
+  it('refuses every secret-returning vault route before it reaches the server, naming only ways that never hand over the plaintext', async () => {
+    const calls = stub([]);
+    for (const path of SECRET_PATHS) {
+      const res = await makeApiCallHandler(client)({ method: 'POST', path, body: {} });
+      expect(res.isError, path).toBe(true);
+      const text = (res.content[0] as { text: string }).text;
+      expect(text, path).toContain('errors.credential.passthrough_refused');
+      expect(text).not.toContain('orboto credential reveal');
+      expect(text).toContain('orboto ssh --credential');
+      expect(text).toContain('orboto browser login --credential');
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it('still proxies the credential metadata', async () => {
+    const calls = stub([{
+      json: { status: 200, contentType: 'application/json', body: { key: 'k', hasTotp: true }, encoding: 'json', truncated: false, matchedRoute: '/credentials/{id}' },
+    }]);
+    const res = await makeApiCallHandler(client)({ method: 'GET', path: '/credentials/c1' });
+    expect(res.isError).toBeUndefined();
+    expect(calls[0].body).toMatchObject({ method: 'GET', path: '/credentials/c1' });
+  });
+
+  it('VAULT_PLAINTEXT_ROUTES is the API list', async () => {
+    const { VAULT_PLAINTEXT_ROUTES } = await import('./api-call.js');
+    const source = await readFile(fileURLToPath(new URL('../../../api/src/services/vault-passthrough.ts', import.meta.url)), 'utf8');
+    const block = /export const VAULT_PLAINTEXT_ROUTES = \[([\s\S]*?)\] as const/.exec(source)![1];
+    expect([...block.matchAll(/'([^']+)'/g)].map((m) => m[1]).sort()).toEqual([...VAULT_PLAINTEXT_ROUTES].sort());
   });
 });
