@@ -41,6 +41,39 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
     'Resolve doc/ticket/milestone/project smart-link references to their title + URL.',
   orboto_admin_translation_revert:
     'Restore the pre-translation title + description and clear the translation marker.',
+  /** ORB-3078 - shortened summaries that pay for `orboto_credential_agent_access`; each tool's full text stays in `getToolDoc`. */
+  orboto_browser_standing_allows:
+    'List or revoke the standing allows (Always allow in the side panel) of a browser session.',
+  orboto_admin_api_key_revoke:
+    'Revoke any account\'s API key by id (admin:users:write); audited, the owner is told.',
+  orboto_delete_ticket:
+    'DESTRUCTIVE, IRREVERSIBLE hard-delete of a ticket by key, with its history.',
+  orboto_lane_rereview:
+    'Ask a review lane to review a ticket\'s current delivery again.',
+  orboto_browser_grants:
+    'Lend your paired browser to an agent account you own; list or revoke grants.',
+  orboto_wiki_plan_update:
+    'Turn an instruction into wiki page operations WITHOUT writing anything.',
+  orboto_session_digest:
+    'What this session (or sessionId) did: tickets, commits, receipts, claims, mail.',
+  orboto_set_raci:
+    'Set a person\'s RACI role on a ticket (R, A: one per ticket, C, I).',
+  orboto_primer_fact_supersede:
+    'Replace a wrong fact by id; the old one stays in its history.',
+  orboto_review_policy_check:
+    'Read a ticket\'s review policy BEFORE spawning a review session or a model.',
+  orboto_get_attachment:
+    'Fetch an attachment\'s content by id.',
+  orboto_admin_api_key_list:
+    'Every API key with owner, prefix, use, expiry and flags (admin:audit:read).',
+  orboto_list_ticket_statuses:
+    'The project\'s workflow statuses with category and order.',
+  orboto_get_audit_log:
+    'Recent audit events: admin actions, role changes, deletions, federation.',
+  orboto_primer_fact_history:
+    'A fact and the versions it replaced, newest first.',
+  orboto_wiki_ingest_url:
+    'Fetch a public URL as Markdown into a SOURCE doc of the space.',
 };
 
 /** Runtime registry: tool name -> full guidance text, captured at

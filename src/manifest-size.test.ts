@@ -155,6 +155,13 @@ afterEach(() => { vi.restoreAllMocks(); });
  * (full tier only) inside the ceiling: `repository` and a bare
  * `connectionId` pick the connection and their first sentences say what the
  * tool reads, not how (full = 169,348 on the stdio build, 52 chars free).
+ * ORB-3078 added `orboto_credential_agent_access` (+730, full tier only)
+ * inside the ceiling: its parameters carry no texts (the full description
+ * behind orboto_help names them) and 16 summary overrides in tool-docs.ts pay
+ * for it, each tool's full text kept (full = 169,386 on the stdio build, 14
+ * chars free; curated = 37,919). The tool then became read-only (list and
+ * candidates, a person edits the list): full = 169,287 on the stdio build,
+ * 113 chars free; curated = 37,919.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
