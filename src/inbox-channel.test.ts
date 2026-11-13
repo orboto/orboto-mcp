@@ -128,6 +128,7 @@ describe('InboxChannel', () => {
     expect(first.method).toBe(CHANNEL_METHOD);
     expect(first.params.meta.id).toBe('m1');
     expect(fetchFn.mock.calls[0][1].headers['x-orboto-agent-session']).toBe('mcp-proc');
+    expect(fetchFn.mock.calls[0][1].headers['User-Agent']).toMatch(/^orboto-mcp\//);
     expect(String(fetchFn.mock.calls[0][0])).toContain('/v1/agent/messages/stream?since=2026-09-18T10%3A00%3A00.000Z');
     expect(channel.stats).toMatchObject({ delivered: 1, digested: 2 });
 

@@ -10,7 +10,7 @@ import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { buildOrbotoMcpServer } from './server.js';
 import { resolveToolset, type Toolset } from './toolset.js';
-import { OrbotoClient, preflightMcpSession } from './orboto-client.js';
+import { OrbotoApiError, OrbotoClient, preflightMcpSession } from './orboto-client.js';
 import type { OAuthTokenProviderLike } from './orboto-client.js';
 import { EventBridge } from './event-bridge.js';
 import { bindSessionInstance, mcpInstanceToken, releaseSessionInstance, stableClientInstance } from './tools/shared.js';
@@ -214,6 +214,24 @@ export async function closeAllMcpSessions(
   return closed;
 }
 
+/** ORB-3061 - 401 reasons the api gives for an account or credential that will not come back; an expired access token is left out because the session's bearer can be one rotation behind the client's. */
+const FINAL_AUTH_REFUSALS = [
+  'Invalid API key', 'API key expired', 'User disabled', 'API access not permitted for this user', 'Account disabled',
+  'Session revoked', 'OAuth access token revoked', 'OAuth access token not recognised', 'Delegated access revoked', 'mcp:use permission required',
+];
+
+/** True when a status poll failed with a 401 whose reason is final, so the session is closed instead of kept for the next poll. */
+export function isFinalAuthRefusal(err: unknown): boolean {
+  if (!(err instanceof OrbotoApiError) || err.status !== 401) return false;
+  let reason = '';
+  try {
+    reason = String((JSON.parse(err.body) as { error?: unknown }).error ?? '');
+  } catch {
+    return false;
+  }
+  return FINAL_AUTH_REFUSALS.some((final) => reason.startsWith(final));
+}
+
 /** Read the request body as JSON. Fails hard on empty body for POSTs
  *  that need one; MCP clients always send a body on /mcp.
  *  ORB-1576 - byte cap: the auth check runs AFTER the body is buffered,
@@ -346,9 +364,11 @@ export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides
   async function pollKillSwitch(): Promise<void> {
     if (sessions.size === 0) return;
     const userDisabled: McpSession[] = [];
+    const permissionRevoked: McpSession[] = [];
+    const credentialEnded: McpSession[] = [];
     for (const session of sessions.values()) {
       try {
-        const status = await session.client.get<{ enabled: boolean; userMcpEnabled: boolean }>(
+        const status = await session.client.get<{ enabled: boolean; mcpUseGranted: boolean; userMcpEnabled: boolean }>(
           '/system/mcp/status',
         );
         if (!status.enabled) {
@@ -358,10 +378,23 @@ export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides
           );
           return;
         }
-        if (!status.userMcpEnabled) userDisabled.push(session);
-      } catch {
-        // This session's token may be expired/invalid - try the next.
+        if (!status.mcpUseGranted) permissionRevoked.push(session);
+        else if (!status.userMcpEnabled) userDisabled.push(session);
+      } catch (err) {
+        if (isFinalAuthRefusal(err)) credentialEnded.push(session);
       }
+    }
+    if (credentialEnded.length > 0) {
+      await closeAllMcpSessions(
+        credentialEnded,
+        'your account or the credential of this session no longer has access.',
+      );
+    }
+    if (permissionRevoked.length > 0) {
+      await closeAllMcpSessions(
+        permissionRevoked,
+        'your account no longer holds the mcp:use permission.',
+      );
     }
     if (userDisabled.length > 0) {
       await closeAllMcpSessions(

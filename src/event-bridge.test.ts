@@ -218,4 +218,8 @@ describe('ORB-2132 - the bridge identifies its tool session', () => {
   it('omits the header when no instance token is known', async () => {
     expect(await connectOnce({})).not.toHaveProperty('x-orboto-agent-session');
   });
+
+  it('ORB-3061 - names itself orboto-mcp in the user agent, so the api applies the MCP access gate to the stream', async () => {
+    expect((await connectOnce({}))['User-Agent']).toMatch(/^orboto-mcp\//);
+  });
 });

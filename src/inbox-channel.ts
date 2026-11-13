@@ -8,6 +8,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { RESTART_REQUESTED_NOTICE, writeRestartRequest } from './session-restart.js';
 import { confirmScope, rememberedScope } from './session-scope-memory.js';
 import { originHeader } from './session-origin.js';
+import { VERSION } from './version.js';
 import type { AgentSessionScope } from './tools/agent-session-scope.js';
 
 export { RESTART_REQUESTED_NOTICE };
@@ -373,7 +374,7 @@ export class InboxChannel {
     const bearer = this.opts.tokenProvider ? await this.opts.tokenProvider.getAccessToken() : (this.opts.apiKey ?? '');
     const res = await fetchFn(url, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${bearer}`, Accept: 'text/event-stream', 'x-orboto-agent-session': this.opts.instanceToken, 'x-orboto-origin': originHeader() },
+      headers: { Authorization: `Bearer ${bearer}`, Accept: 'text/event-stream', 'User-Agent': `orboto-mcp/${VERSION}`, 'x-orboto-agent-session': this.opts.instanceToken, 'x-orboto-origin': originHeader() },
       signal: this.abort.signal,
     });
     if (!res.ok || !res.body) throw new Error(`inbox stream handshake failed (status=${res.status})`);

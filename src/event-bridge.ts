@@ -5,6 +5,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { OAuthTokenProviderLike } from './orboto-client.js';
 import { originHeader } from './session-origin.js';
+import { VERSION } from './version.js';
 
 const HEARTBEAT_GRACE_MS = 90_000;
 const OVERFLOW_THRESHOLD = 100;
@@ -161,6 +162,7 @@ export class EventBridge {
       headers: {
         Authorization: `Bearer ${bearer}`,
         Accept: 'text/event-stream',
+        'User-Agent': `orboto-mcp/${VERSION}`,
         ...(this.opts.instanceToken ? { 'x-orboto-agent-session': this.opts.instanceToken } : {}),
         'x-orboto-origin': originHeader(),
       },

@@ -13,10 +13,13 @@ import {
   closeAllMcpSessions,
   classifyUnknownSession,
   clientInfoLabel,
+  isFinalAuthRefusal,
   type McpSession,
   type McpSessionStore,
   type McpServerInternals,
 } from './http-transport.js';
+import { ciWindow } from './test/ci-window.js';
+import { OrbotoApiError } from './orboto-client.js';
 
 let server: Server | null = null;
 afterEach(() => { server?.close(); server = null; });
@@ -154,6 +157,7 @@ function fakeApi(opts: { enabled?: boolean; mcpUseGranted?: boolean; userMcpEnab
     mcpUseGranted: opts.mcpUseGranted ?? true,
     userMcpEnabled: opts.userMcpEnabled ?? true,
     seenAuth: [] as string[],
+    statusRefusal: null as string | null,
     capacityReleased: [] as Array<{ id: string; session: string }>,
   };
   const api = createNodeServer((req, res) => {
@@ -163,6 +167,11 @@ function fakeApi(opts: { enabled?: boolean; mcpUseGranted?: boolean; userMcpEnab
       if ((req.headers.authorization ?? '') === 'Bearer invalid') {
         res.writeHead(401, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ error: 'invalid token' }));
+        return;
+      }
+      if (state.statusRefusal) {
+        res.writeHead(401, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: state.statusRefusal }));
         return;
       }
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -438,5 +447,106 @@ describe('ORB-1470 - per-session bearer follows the client\'s token rotation', (
     state.seenAuth.length = 0;
     await session.client.get('/system/mcp/status');
     expect(state.seenAuth).toContain('Bearer orb_tok_v2');
+  });
+});
+
+describe('ORB-3061 - an open session ends when its user loses mcp:use', () => {
+  let api: Server | null = null;
+
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    if (server) {
+      const internals = (server as unknown as { __mcp?: McpServerInternals }).__mcp;
+      for (const s of internals?.sessions.values() ?? []) {
+        try { await s.transport.close(); } catch { /* ignore */ }
+      }
+    }
+    await new Promise<void>((r) => (api ? api.close(() => r()) : r()));
+    api = null;
+  });
+
+  async function startPolling(fake: ReturnType<typeof fakeApi>, store: McpSessionStore) {
+    vi.stubEnv('ORBOTO_MCP_KILLSWITCH_POLL_MS', '20');
+    api = fake.api;
+    await new Promise<void>((r) => api!.listen(0, '127.0.0.1', r));
+    const { port: apiPort } = api!.address() as AddressInfo;
+    server = createHttpServer({ baseUrl: `http://127.0.0.1:${apiPort}`, sessionStore: store });
+    await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r));
+    const { port } = server!.address() as AddressInfo;
+    return { base: `http://127.0.0.1:${port}`, internals: (server as unknown as { __mcp: McpServerInternals }).__mcp };
+  }
+
+  function post(base: string, body: string, headers: Record<string, string>): Promise<Response> {
+    return fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...headers },
+      body,
+    });
+  }
+
+  it('the poll closes the session and its next call is refused instead of served', async () => {
+    const fake = fakeApi();
+    const store = fakeStore();
+    const { base, internals } = await startPolling(fake, store.store);
+    const initRes = await post(base, INIT_BODY, { authorization: 'Bearer orb_erin' });
+    const sid = initRes.headers.get('mcp-session-id')!;
+    await initRes.text();
+    const live = await post(base, NON_INIT, { authorization: 'Bearer orb_erin', 'mcp-session-id': sid });
+    expect(live.status).toBe(200);
+    await live.text();
+
+    fake.state.mcpUseGranted = false;
+    await vi.waitFor(() => expect(internals.sessions.has(sid)).toBe(false), { timeout: ciWindow(5_000), interval: 10 });
+
+    const next = await post(base, NON_INIT, { authorization: 'Bearer orb_erin', 'mcp-session-id': sid });
+    expect(next.status).toBe(404);
+    await next.text();
+    expect(internals.sessions.size).toBe(0);
+  });
+
+  it('a status 401 with a final reason (account disabled, token revoked) closes the session', async () => {
+    const fake = fakeApi();
+    const store = fakeStore();
+    const { base, internals } = await startPolling(fake, store.store);
+    const initRes = await post(base, INIT_BODY, { authorization: 'Bearer orb_gina' });
+    const sid = initRes.headers.get('mcp-session-id')!;
+    await initRes.text();
+    fake.state.statusRefusal = 'OAuth access token revoked';
+    await vi.waitFor(() => expect(internals.sessions.has(sid)).toBe(false), { timeout: ciWindow(5_000), interval: 10 });
+  });
+
+  it('a status 401 for an expired access token keeps the session, whose client presents a fresh one', async () => {
+    const fake = fakeApi();
+    const store = fakeStore();
+    const { base, internals } = await startPolling(fake, store.store);
+    const initRes = await post(base, INIT_BODY, { authorization: 'Bearer orb_hank' });
+    const sid = initRes.headers.get('mcp-session-id')!;
+    await initRes.text();
+    fake.state.statusRefusal = 'OAuth access token expired';
+    const polls = fake.state.seenAuth.length;
+    await vi.waitFor(() => expect(fake.state.seenAuth.length).toBeGreaterThan(polls + 2), { timeout: ciWindow(5_000), interval: 10 });
+    expect(internals.sessions.has(sid)).toBe(true);
+  });
+
+  it('isFinalAuthRefusal reads only final 401 reasons', () => {
+    const err = (status: number, error: string) => new OrbotoApiError(status, JSON.stringify({ error }), '/system/mcp/status');
+    expect(isFinalAuthRefusal(err(401, 'Account disabled'))).toBe(true);
+    expect(isFinalAuthRefusal(err(401, 'Invalid API key'))).toBe(true);
+    expect(isFinalAuthRefusal(err(401, 'Delegated access revoked: the bot holds authority its owner does not'))).toBe(true);
+    expect(isFinalAuthRefusal(err(401, 'OAuth access token expired'))).toBe(false);
+    expect(isFinalAuthRefusal(err(403, 'Account disabled'))).toBe(false);
+    expect(isFinalAuthRefusal(new Error('network down'))).toBe(false);
+  });
+
+  it('a session whose user keeps every gate stays open across polls', async () => {
+    const fake = fakeApi();
+    const store = fakeStore();
+    const { base, internals } = await startPolling(fake, store.store);
+    const initRes = await post(base, INIT_BODY, { authorization: 'Bearer orb_frank' });
+    const sid = initRes.headers.get('mcp-session-id')!;
+    await initRes.text();
+    const polls = fake.state.seenAuth.length;
+    await vi.waitFor(() => expect(fake.state.seenAuth.length).toBeGreaterThan(polls + 2), { timeout: ciWindow(5_000), interval: 10 });
+    expect(internals.sessions.has(sid)).toBe(true);
   });
 });
