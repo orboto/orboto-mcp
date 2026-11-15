@@ -66,7 +66,7 @@ export const listUsersToolConfig = {
   inputSchema: z.object({
     search: z.string().optional().describe('Substring of fullName or email.'),
     limit: z.number().int().min(1).max(100).default(50),
-    showGhosts: z.boolean().optional().describe('Include the `*@imported.ghost` users of project imports.'),
+    showGhosts: z.boolean().optional().describe('Include `*@imported.ghost` import users.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

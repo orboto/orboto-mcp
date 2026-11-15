@@ -37,7 +37,7 @@ export const laneControlToolConfig = {
 export const laneStopToolConfig = {
   title: 'Stop an agent lane now',
   description:
-    'Stop a lane now: its runner interrupts the running turn at its next heartbeat, releases the work session and marks the task interrupted; the lane stays paused until resume. The heartbeat is the runner\'s poll interval. The next run of that task is a new attempt that first inspects the saved effects; orboto_lane_pause waits for the turn boundary instead. Needs admin:agent_lanes:write, audited as agent_lane.stopped.',
+    'Stop a lane now: its runner interrupts the running turn at its next heartbeat, releases the work session; the lane stays paused until resume. The heartbeat is the runner\'s poll interval. The next run of that task is a new attempt that first inspects the saved effects; orboto_lane_pause waits for the turn boundary instead. Needs admin:agent_lanes:write, audited as agent_lane.stopped.',
   inputSchema: z.object({
     lane: z.string().trim().min(1).max(64).describe(LANE_PARAM),
     reason: z.string().trim().max(500).optional().describe(REASON_PARAM),

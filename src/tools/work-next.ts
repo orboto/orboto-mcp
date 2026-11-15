@@ -71,7 +71,7 @@ export const workNextToolConfig = {
     onConflict: z.enum(['reject', 'queue']).optional()
       .describe('Applies to the winning candidate\'s `resourceClaims`; default `reject`.'),
     peek: z.boolean().optional()
-      .describe('Look without reserving (no lease, timer or quota); returns `candidate` or the empty reason.'),
+      .describe('Look without reserving; returns `candidate` or the empty reason.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };

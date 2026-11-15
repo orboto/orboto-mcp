@@ -50,7 +50,7 @@ export const attachToTicketToolConfig = {
 export const attachToTicketLocalToolConfig = {
   ...attachToTicketToolConfig,
   description:
-    `Attach a file to a ticket by \`filePath\` (this local server reads it, up to 50 MB) or \`contentBase64\` (up to about 25 KB). ${ATTACH_TAIL} Without file access, orboto_upload_link mints a browser link for the person.`,
+    `Attach a file to a ticket: \`filePath\` (read by this local server, up to 50 MB) or \`contentBase64\` (about 25 KB). ${ATTACH_TAIL} Without file access, orboto_upload_link mints a browser link for the person.`,
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     filePath: z.string().min(1).optional(),

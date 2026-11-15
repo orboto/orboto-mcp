@@ -78,7 +78,7 @@ export const getMilestoneToolConfig = {
     'Milestone metadata plus a ticket count per status.',
   inputSchema: z.object({
     projectKey: z.string().min(1),
-    milestone: z.string().min(1).describe('Key ("ORB-M3"), name or UUID; a name matches ignoring case, whitespace and HTML entities.'),
+    milestone: z.string().min(1).describe('Key ("ORB-M3"), name (case and whitespace ignored) or UUID.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

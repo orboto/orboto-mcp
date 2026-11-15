@@ -199,7 +199,7 @@ export const editDocToolConfig = {
     edits: z.array(z.object({
       oldString: z.string().min(1).describe('Exact substring to replace. Must be unique in the doc unless replaceAll.'),
       newString: z.string().describe('May be empty to delete.'),
-      replaceAll: z.boolean().optional().describe('Replace every occurrence instead of requiring exactly one.'),
+      replaceAll: z.boolean().optional(),
     })).min(1).max(100).describe('Applied sequentially; edit N sees the result of edits 0..N-1.'),
     baseRevisionId: z.guid().optional().describe('Revision id you last saw (optimistic lock); omit to always apply.'),
   }).shape,
@@ -234,7 +234,7 @@ export const editDocSectionToolConfig = {
     docId: z.string().min(1).describe(DOC_ID_PARAM),
     sectionOps: z.array(z.object({
       headingPath: z.array(z.string().min(1)).min(1).max(20).describe('Heading breadcrumb, top-down; exact, case-sensitive.'),
-      op: z.enum(['replace', 'append', 'insertAfter']).describe('replace body / append to body / insert directly below the heading line.'),
+      op: z.enum(['replace', 'append', 'insertAfter']).describe('replace / append to the body / insert below the heading.'),
       content: z.string().describe('Markdown.'),
     })).min(1).max(100).describe('Applied sequentially after any string edits.'),
     baseRevisionId: z.guid().optional().describe('Revision id you last saw (optimistic lock); omit to always apply.'),

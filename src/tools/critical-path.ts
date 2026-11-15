@@ -41,7 +41,7 @@ export const criticalPathToolConfig = {
   inputSchema: z.object({
     projectKey: z.string().min(1),
     milestone: z.string().optional().describe('Milestone name; omit for the whole project.'),
-    includeClosedMilestones: z.boolean().optional().describe('Include tickets of completed/archived milestones (default false).'),
+    includeClosedMilestones: z.boolean().optional(),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

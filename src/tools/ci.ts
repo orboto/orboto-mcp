@@ -53,7 +53,7 @@ export function makeCiStatusHandler(client: OrbotoClient) {
 
 export const ciLogToolConfig = {
   title: 'CI job log',
-  description: `Log of a CI job (jobId) or of a run's jobs (runId; failed=true: red only), last ${MCP_LOG_TAIL} lines by default. tail sets the line count, contains keeps lines with that literal text. A provider without a job log API (Forgejo before 16) answers errors.ci.job_logs_unsupported with the reason. Needs ticket:edit.`,
+  description: `Log of a CI job (jobId) or of a run's jobs (runId; failed=true: red only), last ${MCP_LOG_TAIL} lines. tail sets the line count, contains keeps lines with that literal text. A provider without a job log API (Forgejo before 16) answers errors.ci.job_logs_unsupported with the reason. Needs ticket:edit.`,
   inputSchema: z.object({
     ...connection,
     jobId: z.string().regex(/^\d{1,20}$/).optional(),

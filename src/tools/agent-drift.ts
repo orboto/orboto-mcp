@@ -52,8 +52,8 @@ export const listAgentDriftToolConfig = {
   inputSchema: z.object({
     userId: z.guid().optional(),
     driftType: z.enum(['untracked_commit', 'transition_without_summary']).optional(),
-    from: z.string().optional().describe('ISO timestamp, lower bound on detected_at.'),
-    to: z.string().optional().describe('ISO timestamp, upper bound on detected_at.'),
+    from: z.string().optional().describe('ISO lower bound on detected_at.'),
+    to: z.string().optional().describe('ISO upper bound on detected_at.'),
     resolved: z.boolean().optional().describe('true = only resolved, false = only open.'),
     limit: z.number().int().min(1).max(200).optional().describe('Default: 50.'),
     cursor: z.string().optional().describe(CURSOR_PARAM),

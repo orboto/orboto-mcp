@@ -33,7 +33,7 @@ export const checkSimilarToolConfig = {
     projectKey: z.string().min(1),
     title: z.string().min(1),
     description: z.string().optional().describe('Proposed description - improves recall.'),
-    limit: z.number().int().min(1).max(10).optional().describe('Max candidates. Default 5.'),
+    limit: z.number().int().min(1).max(10).optional().describe('Default 5.'),
     parentTicketKey: z.string().optional().describe('Intended parent; makes the check hierarchy-aware.'),
     forType: z.string().optional().describe('Intended type (task/bug/story/epic).'),
   }).shape,

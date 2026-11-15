@@ -37,13 +37,13 @@ export interface SecretExposure {
 export const secretExposuresToolConfig = {
   title: 'Agent secret exposures',
   description:
-    'Super-admin list of the agent secret guard incidents: a secret an agent tool output held, redacted before the model read it, or reported only when it came from a failed Claude Code call whose output no hook can rewrite (stage tool_failure; the model has read that value) (class, masked preview, tool, harness, host, reporter, project, the vault credential marked due for rotation). Skill reference admin.md "Agent secret exposures". Resolving is person-only: Admin -> Security -> Secret exposures or `orboto admin secret-exposures resolve`.',
+    'Agent secret guard incidents (super-admin): class, masked preview, tool, project, credential due for rotation. A secret an agent tool output held was redacted before the model read it; a failed Claude Code call (stage tool_failure) is only reported, since no hook can rewrite it and the model has read the value. Filters: state (open or resolved), projectId, session (an agent or harness session id), limit (default 50, at most 200), cursor (nextCursor of the previous page). Skill reference admin.md "Agent secret exposures". Resolving is person-only: Admin -> Security -> Secret exposures or `orboto admin secret-exposures resolve`.',
   inputSchema: z.object({
-    state: z.enum(['open', 'resolved']).optional().describe('Only open or only resolved incidents.'),
-    projectId: z.string().uuid().optional().describe('Only incidents of this project.'),
-    session: z.string().min(1).max(200).optional().describe('An agent session id or a harness session id.'),
-    limit: z.number().int().min(1).max(200).optional().describe('Page size (default 50).'),
-    cursor: z.string().min(1).max(2000).optional().describe('nextCursor of the previous page.'),
+    state: z.enum(['open', 'resolved']).optional(),
+    projectId: z.string().uuid().optional(),
+    session: z.string().min(1).max(200).optional(),
+    limit: z.number().int().min(1).max(200).optional(),
+    cursor: z.string().min(1).max(2000).optional(),
   }).shape,
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 };

@@ -162,6 +162,12 @@ afterEach(() => { vi.restoreAllMocks(); });
  * chars free; curated = 37,919). The tool then became read-only (list and
  * candidates, a person edits the list): full = 169,287 on the stdio build,
  * 113 chars free; curated = 37,919.
+ * ORB-3090 added `orboto_secret_exposures` (+1,130, full tier only) inside the
+ * ceiling: the tool's parameters carry no texts and its first sentence is
+ * short (the description behind orboto_help names the filters), and 33 texts
+ * of other tools lost what the name, the schema or a sibling tool already
+ * says (full = 169,282 over HTTP and 169,324 on the stdio build, 76 chars
+ * free; before the diet 170,357 and 170,417; curated = 37,848).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

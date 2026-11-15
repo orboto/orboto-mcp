@@ -65,17 +65,19 @@ function describe(s: WorkSessionRow): string {
   return `  - ${key} [${s.role}] ${who} - lease until ${s.leaseUntil}${s.commitSha ? ` (commit ${s.commitSha.slice(0, 8)})` : ''}`;
 }
 
+const AS_IN_SESSION_START = 'As in orboto_work_session_start.';
+
 export const workStartToolConfig = {
   title: 'Start a work session with its context',
   description:
     'Claim a ticket lease with its rules and work context. Includes the primer, enriched ticket, checklists, dependencies, git health and live sessions. Exactly one active lease per ticket and role across the workspace. Resource claims are atomic with the lease; conflicts name the holder and leave no partial session. Prefer this for pickup; use orboto_work_session_start for renewal when context is already loaded. Spec-tagged bots may use role=spec to prepare the build order. Worker bots need a ready specification, or override=true with a reason; enabled epics cannot be overridden.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
-    role: workStartRoleParam,
+    role: workStartRoleParam.describe(AS_IN_SESSION_START),
     leaseSeconds: workLeaseSecondsParam,
-    override: workOverrideParam,
+    override: workOverrideParam.describe(AS_IN_SESSION_START),
     reason: z.string().trim().min(1).max(2000).optional(),
-    takeover: workTakeoverParam,
+    takeover: workTakeoverParam.describe(AS_IN_SESSION_START),
     startTimer: workStartTimerParam,
     agentSessionToken: workAgentSessionTokenParam,
     resourceClaims: z.array(z.object(ResourceClaimShape)).max(50).optional()
@@ -395,7 +397,7 @@ export const workSessionFinishToolConfig = {
     outcome: z.enum(['finished', 'cancelled']).optional()
       .describe('Default `finished`; `cancelled` = abandoned, time still booked.'),
     commitSha: z.string().optional().describe('The commit this session produced, when it produced one.'),
-    verification: workVerificationParam,
+    verification: workVerificationParam.describe('As in orboto_work_finish.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -463,7 +465,7 @@ export const workFinishToolConfig = {
     commitSha: z.string().optional().describe('The commit produced; an attestation, verified once git ingestion catches up.'),
     verification: workVerificationParam,
     targetCategory: z.enum(['todo', 'in_progress', 'in_review', 'done', 'wont_fix']).optional()
-      .describe('Default `done`; `in_review` for human review. Implementation sessions with outcome `finished` only.'),
+      .describe('Default `done`; `in_review` for human review (implementation, outcome `finished`).'),
     note: z.string().optional().describe('Completion note on the ticket; generated when omitted.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -528,9 +530,9 @@ export const workSessionsToolConfig = {
   description:
     'Visible work leases and specification tasks waiting for ticket replies. Check before picking up work. An active implementation lease owns the ticket; a finished session with waitingForAnswers is parked, not a live lease. Includes task and question ids across accounts.',
   inputSchema: z.object({
-    ticketKey: z.string().optional().describe('Scope to one ticket. Omit to list every live session you can see.'),
-    scope: z.enum(['mine', 'all']).optional().describe('`mine` = only my own sessions. Default `all`. Ignored when ticketKey is set.'),
-    includeClosed: z.boolean().optional().describe('With ticketKey: also finished/expired sessions (its work history).'),
+    ticketKey: z.string().optional().describe('One ticket; omit for every live session you can see.'),
+    scope: z.enum(['mine', 'all']).optional().describe('`mine` = my own sessions; default `all`; ignored with ticketKey.'),
+    includeClosed: z.boolean().optional().describe('With ticketKey: also finished or expired sessions.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

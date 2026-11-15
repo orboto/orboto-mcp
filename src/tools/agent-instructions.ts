@@ -44,7 +44,7 @@ export const listAgentInstructionsToolConfig = {
     scope: z.enum(['workspace', 'customer', 'project', 'personal']).default('workspace'),
     projectId: z.guid().optional().describe('Required for scope=project.'),
     customerId: z.guid().optional().describe('Required for scope=customer.'),
-    blockId: z.guid().optional().describe('Return THIS block in full; the list carries excerpts + contentChars only.'),
+    blockId: z.guid().optional().describe('Return this block in full; the list has excerpts only.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };

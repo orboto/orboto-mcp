@@ -79,7 +79,7 @@ export const uploadDocAttachmentToolConfig = {
 export const uploadDocAttachmentLocalToolConfig = {
   ...uploadDocAttachmentToolConfig,
   description:
-    `Upload a doc attachment by \`filePath\` (this local server reads it, up to 50 MB) or \`contentBase64\` (up to about 25 KB). ${UPLOAD_DOC_TAIL} Without file access, orboto_upload_link mints a browser link for the person.`,
+    `Upload a doc attachment: \`filePath\` (read by this local server, up to 50 MB) or \`contentBase64\` (about 25 KB). ${UPLOAD_DOC_TAIL} Without file access, orboto_upload_link mints a browser link for the person.`,
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
     filePath: z.string().min(1).optional(),
