@@ -168,6 +168,12 @@ afterEach(() => { vi.restoreAllMocks(); });
  * of other tools lost what the name, the schema or a sibling tool already
  * says (full = 169,282 over HTTP and 169,324 on the stdio build, 76 chars
  * free; before the diet 170,357 and 170,417; curated = 37,848).
+ * ORB-3100 added `estimate` to orboto_create_ticket, orboto_update_ticket,
+ * orboto_bulk_create_tickets and orboto_bulk_update_tickets inside the
+ * ceiling: the server parses and bounds the text, so the parameters carry no
+ * constraints, and the describes of `parentTicketKey` and
+ * `duplicateJustification` went, the names say it (full = 169,344 over HTTP
+ * and 169,386 on the stdio build, 14 chars free; curated = 37,881).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

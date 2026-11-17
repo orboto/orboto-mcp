@@ -118,7 +118,7 @@ async function resolveBatch(
 export const bulkPatchTicketsToolConfig = {
   title: 'Patch many tickets',
   description:
-    'PATCH every ticket in `ticketKeys` or `query` with the same `patch` body. The patch shape mirrors `orboto_update_ticket`: title, description, type, priority, dueDate, startDate, isPrivate, estimatedTimeMinutes. To move many tickets between status categories, use `orboto_bulk_move_tickets` instead. Returns `{successful, failed, skipped, dryRun}` so the caller can branch on partial failures.',
+    'PATCH every ticket in `ticketKeys` or `query` with the same `patch` body. The patch shape mirrors `orboto_update_ticket`: title, description, type, priority, dueDate, startDate, isPrivate, estimate, estimatedTimeMinutes. To move many tickets between status categories, use `orboto_bulk_move_tickets` instead. Returns `{successful, failed, skipped, dryRun}` so the caller can branch on partial failures.',
   inputSchema: z.object({
     ticketKeys: TICKET_KEY_ARRAY,
     query: QUERY_SOURCE,
@@ -132,6 +132,7 @@ export const bulkPatchTicketsToolConfig = {
       startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
       isPrivate: z.boolean().optional(),
       estimatedTimeMinutes: z.number().int().nonnegative().optional(),
+      estimate: z.string().optional(),
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
     dryRun: z.boolean().optional().describe('Check access to every ticket without patching.'),
   }).shape,

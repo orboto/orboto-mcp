@@ -91,3 +91,61 @@ it('ticket close and ticket move report the booked timer, and --keep-timer sends
     await rm(dir, { recursive: true, force: true });
   }
 }, ciWindow(60_000));
+
+it('ORB-3100 - ticket create --dry-run sends the estimate to the pre-flight and prints the estimate verdict', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'orboto-3100-wrapper-'));
+  const bodies: Array<Record<string, unknown>> = [];
+  const verdict = (severity: string, message: string, blocked: boolean) => ({
+    ok: !blocked, severity, blockedBy: blocked ? ['estimate'] : [],
+    verdicts: {
+      language: { severity: 'ok', message: 'language ok' }, type: { severity: 'ok', message: 'type ok' }, labels: { severity: 'ok', message: 'labels ok' },
+      duplicates: { severity: 'ok', message: 'no duplicates', candidates: [] }, estimate: { severity, required: blocked, minutes: blocked ? null : 120, message },
+    },
+  });
+  const server = createServer(async (req, res) => {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    res.setHeader('Content-Type', 'application/json');
+    if (req.url === '/projects') res.end(JSON.stringify([{ id: PROJECT, key: 'ORB' }]));
+    else if (req.method === 'POST' && req.url === `/projects/${PROJECT}/tickets/preflight`) {
+      const sent = JSON.parse(body) as Record<string, unknown>;
+      bodies.push(sent);
+      res.end(JSON.stringify(sent.estimate ? verdict('ok', 'Estimate 120 minutes.', false) : verdict('block', 'An agent account must estimate a task: pass --estimate.', true)));
+    } else { res.statusCode = 404; res.end(JSON.stringify({ error: `unexpected ${req.method} ${req.url}` })); }
+  });
+  try {
+    await mkdir(join(dir, 'skills/orboto'), { recursive: true });
+    await cp(new URL('../../../../skills/orboto/scripts', import.meta.url), join(dir, 'skills/orboto/scripts'), { recursive: true });
+    await new Promise<void>((ok) => server.listen(0, '127.0.0.1', ok));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Fixture address missing');
+    const origin = `http://127.0.0.1:${address.port}`;
+    const run = (args: string[]) => new Promise<{ code: number | null; out: string; err: string }>((ok, no) => {
+      const child = spawn(process.execPath, [join(dir, 'skills/orboto/scripts/orboto.mjs'), ...args], {
+        cwd: dir, env: hermeticSpawnEnv({ home: hermeticHome('mcp-wrapper'), baseUrl: origin, token: 'orb_fixture', env: { ORBOTO_DAEMON: '', ORBOTO_AGENT_SESSION: 'fixture' } }),
+        timeout: childWindow(),
+      });
+      let out = '', err = '';
+      child.stdout.on('data', (chunk: Buffer) => { out += chunk.toString(); });
+      child.stderr.on('data', (chunk: Buffer) => { err += chunk.toString(); });
+      child.on('error', no);
+      child.on('close', (code) => ok({ code, out, err }));
+      child.stdin.end('');
+    });
+
+    const given = await run(['ticket', 'create', 'ORB', 'Wire the export button', '--dry-run', '--estimate', '2h']);
+    expect(given.code).toBe(0);
+    expect(bodies[0]).toMatchObject({ title: 'Wire the export button', estimate: '2h' });
+    expect(given.err).toContain('estimate: Estimate 120 minutes.');
+
+    const missing = await run(['ticket', 'create', 'ORB', 'Wire the export button', '--dry-run']);
+    expect(missing.code).toBe(1);
+    expect(bodies[1]).not.toHaveProperty('estimate');
+    expect(missing.err).toContain('estimate: An agent account must estimate a task: pass --estimate.');
+    expect(missing.err).toContain('Pre-flight blocked (estimate)');
+  } finally {
+    server.closeAllConnections();
+    if (server.listening) await new Promise<void>((ok, no) => server.close((err) => err ? no(err) : ok()));
+    await rm(dir, { recursive: true, force: true });
+  }
+}, ciWindow(60_000));

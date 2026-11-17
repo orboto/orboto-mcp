@@ -54,6 +54,31 @@ const TICKET = {
   estimatedTimeMinutes: 0, dueDate: null, isPrivate: false,
 };
 
+describe('orboto_create_ticket and orboto_update_ticket estimate (ORB-3100)', () => {
+  it('sends the estimate text on create and shows the stored minutes', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: { ...TICKET, ticketKey: 'ACME-12', title: 'Export', estimatedTimeMinutes: 90 } },
+    ]);
+    const res = await makeCreateTicketHandler(client)({ projectKey: 'ACME', title: 'Export', estimate: '1h30m' });
+    expect(calls[1].body).toMatchObject({ title: 'Export', estimate: '1h30m' });
+    expect((res.content[0] as { text: string }).text).toContain('Created: [ACME-12] Export (To Do, estimate 1h 30m)');
+    expect((res.structuredContent as { estimatedTimeMinutes: number }).estimatedTimeMinutes).toBe(90);
+  });
+
+  it('passes the estimate text through an update patch', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: { ...TICKET, estimatedTimeMinutes: 120 } },
+    ]);
+    const res = await makeUpdateTicketHandler(client)({ ticketKey: 'ACME-1', patch: { estimate: '2h' } });
+    expect(calls.at(-1)?.method).toBe('PATCH');
+    expect(calls.at(-1)?.body).toEqual({ estimate: '2h' });
+    expect((res.content[0] as { text: string }).text).toContain('estimate 2h');
+  });
+});
+
 describe('orboto_create_ticket', () => {
   it('creates with body fields, no extra calls when no labels/assignees', async () => {
     const calls = stub([
@@ -376,6 +401,31 @@ describe('orboto_create_ticket', () => {
     const structured = res.structuredContent as { preflight: { ok: boolean; blockedBy: string[] } };
     expect(structured.preflight.ok).toBe(false);
     expect(structured.preflight.blockedBy).toEqual(['labels']);
+  });
+
+  it('dryRun sends the estimate and prints its verdict (ORB-3100)', async () => {
+    const calls = stub([
+      { json: PROJ },
+      {
+        json: {
+          ok: false,
+          severity: 'block',
+          blockedBy: ['estimate'],
+          verdicts: {
+            language: { severity: 'ok', code: null, detected: null, expected: 'en', enforced: false, message: 'Language matches.' },
+            type: { severity: 'ok', value: 'task', allowed: ['epic', 'story', 'task', 'bug'], message: 'Type "task" is valid.' },
+            labels: { severity: 'ok', requested: [], resolved: [], unknown: [], ambiguous: [], available: [], message: 'No labels requested.' },
+            duplicates: { severity: 'ok', threshold: 0, topSimilarity: 0, mode: 'tsvector', message: 'No similar tickets found - safe to create.', candidates: [] },
+            estimate: { severity: 'block', required: true, minutes: null, message: 'An agent account must estimate a task: pass --estimate.' },
+          },
+        },
+      },
+    ]);
+    const res = await makeCreateTicketHandler(client)({ projectKey: 'ACME', title: 'Wire the export button', estimate: '2h', dryRun: true });
+    expect(calls[1].body).toMatchObject({ estimate: '2h' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Pre-flight BLOCKED for ACME (estimate)');
+    expect(text).toContain('estimate: An agent account must estimate a task');
   });
 });
 

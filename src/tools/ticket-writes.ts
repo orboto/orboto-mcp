@@ -1,4 +1,4 @@
-import { specReleaseInfo, MILESTONE_REF_PARAM } from './shared.js';
+import { specReleaseInfo, MILESTONE_REF_PARAM, formatEstimateMinutes } from './shared.js';
 import { TicketSpecStateSchema, isAlreadyAssigned, type TicketSpecState } from './spec-schemas.js';
 /**
  * ORB-244 Phase C Group 1 - ticket mutation tools.
@@ -54,7 +54,8 @@ async function resolveMilestoneId(
 /** Render the "ticket created/updated" line every mutation tool ends
  *  with - keeps responses uniform and easy to chain. */
 function ticketSummaryText(action: string, t: TicketRow): string {
-  return `${action}: [${t.ticketKey}] ${t.title} (${t.statusName ?? t.status})`;
+  const estimate = t.estimatedTimeMinutes > 0 ? `, estimate ${formatEstimateMinutes(t.estimatedTimeMinutes)}` : '';
+  return `${action}: [${t.ticketKey}] ${t.title} (${t.statusName ?? t.status}${estimate})`;
 }
 
 function ticketStructured(t: TicketRow) {
@@ -70,6 +71,7 @@ function ticketStructured(t: TicketRow) {
     deliveryMode: t.deliveryMode ?? 'implementation',
     dueDate: t.dueDate,
     isPrivate: t.isPrivate,
+    estimatedTimeMinutes: t.estimatedTimeMinutes ?? 0,
   };
 }
 
@@ -78,6 +80,7 @@ export const createTicketToolConfig = {
   description:
     'Create a ticket in a project. Creating more than ~3 tickets? Use `orboto_bulk_create_tickets` instead - one call, one compact response. Returns the new ticket\'s key (e.g. "ACME-42") so callers can chain follow-ups. **Read the new key from `structuredContent.createdTicketKey` (ORB-1176) - never from `similarWarnings[].ticketKey`, which are OTHER, possibly-duplicate tickets.** The caller must have `ticket:create` on the project. **Duplicate-detection safety-net (ORB-831):** if `similarWarnings` appears in the response with one or more entries, the ticket WAS created but you should review whether to close it as a duplicate of the listed ticket(s) instead. The warnings are advisory - never blocking - but each entry is a ticket the system thinks the new one overlaps with. Prefer `orboto_check_similar` BEFORE creating when you want a dry-run. **Deferred check under load (ORB-1437):** if `duplicateCheckDeferred: true` appears, the project was under a create burst so the duplicate-check was run in the background instead of inline - `similarWarnings` is then empty because it did NOT run synchronously, which is NOT the same as "no duplicates found". A strong match, if any, is posted as an advisory comment on the new ticket a moment later; check the ticket comments before treating it as new work. **Duplicate-check recall (ORB-1121):** when you search/check-similar first, results rank by term co-occurrence - a long, solution-framed title with rare terms can return 0 hits even when a short, symptom-framed dup sharing one distinctive token exists. Probe with a single distinctive STABLE token (file/component/error-string fragment), keep queries SHORT, and search the SYMPTOM not your fix; a 0-result long query is not "no dup". **Language-mismatch warning (ORB-890):** if `languageWarning` appears, the ticket was written in a language different from the workspace default. Consider rewriting in the expected language so search + duplicate-detection stay consistent. Non-blocking. **Before a mass-create (ORB-989):** call `orboto_whoami` first - its `workspaceLocale` field is the language you should write every ticket in. If the same `languageWarning` repeats, write the rest of the batch in the workspace language and continue. **Strict mode (ORB-990):** if the workspace enforces ticket language, a mismatch is rejected (the tool returns a `blocked` result, not a created ticket) - rewrite in the workspace language, or set `allowLanguageMismatch: true` only when the language is genuinely intentional. **Hard duplicate-block (ORB-1471, ORB-2185):** a workspace can REFUSE a create - the tool returns `duplicateBlocked` (no ticket) with the candidates. ONLY an AI-embedding match at/above the threshold against an OPEN ticket blocks; a text match and a closed match stay warnings, and a text match is printed WITHOUT a percentage because a text rank is relative, not a similarity. Extend one of the candidates, or retry with `allowDuplicate: true` AND a `duplicateJustification` (saved as a comment). `duplicateCheckDegraded: true` = the block was on but only text candidates existed, so nothing could be compared and the create went through unchecked. '
     + '**Pre-flight (ORB-2162):** `dryRun: true` runs the same language, type, label and duplicate checks the write runs and returns their verdicts WITHOUT creating anything - `structuredContent.preflight` carries `ok`, `severity`, `blockedBy` and one verdict per check, each with the exact message the real create would answer with. Use it when a create would otherwise cost a round trip to fix the payload afterwards; re-send the same arguments without `dryRun` once the verdicts are clean. '
+    + '**Estimate (ORB-3100):** an agent account must pass `estimate` (your own time) for a story, task or bug, else 400 `errors.tickets.estimate_required`. '
     + '**Parameter notes.** `deliveryMode` (ORB-1608) is the role-aware commit policy that replaced the blanket one-commit-per-ticket rule: implementation/docs expect exactly one linked commit (closing without one is a non-blocking warning); review/admin/epic never expect one - reviews are read-only, admin work carries external evidence, epics derive completion from their children; unset defaults to "epic" when type=epic, else "implementation". `milestone` takes a key ("ORB-M3"), a name, or a UUID and is looked up in the project including closed milestones - unknown or ambiguous is an error, so pass the key/UUID when a name repeats. `labels` and `assigneeEmails` attach ATOMICALLY inside the create (ORB-1416): an unknown label or non-member email rolls the whole create back with a 400, leaving no orphan ticket - there is no separate attach call to retry.',
   inputSchema: z.object({
     projectKey: z.string().min(1),
@@ -92,13 +95,14 @@ export const createTicketToolConfig = {
     milestone: z.string().optional().describe(MILESTONE_REF_PARAM),
     assigneeEmails: z.array(z.string().email()).max(100).optional().describe('Project-member emails.'),
     labels: z.array(z.string()).max(100).optional(),
-    parentTicketKey: z.string().optional().describe('Makes this a sub-ticket.'),
+    parentTicketKey: z.string().optional(),
     dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     isPrivate: z.boolean().optional(),
     allowLanguageMismatch: z.boolean().optional().describe('Override the language block.'),
     allowDuplicate: z.boolean().optional().describe('Override the duplicate block.'),
-    duplicateJustification: z.string().optional().describe('Why this is not a duplicate.'),
+    duplicateJustification: z.string().optional(),
     dryRun: z.boolean().optional().describe('Pre-flight only: return the verdicts, create nothing.'),
+    estimate: z.string().optional().describe('2h, 1h30m, 1.5d'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -117,6 +121,7 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
     allowLanguageMismatch?: boolean;
     allowDuplicate?: boolean; duplicateJustification?: string;
     dryRun?: boolean;
+    estimate?: string;
   }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, input.projectKey);
 
@@ -130,6 +135,7 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
         ...(input.type ? { type: input.type } : {}),
         ...(input.labels && input.labels.length > 0 ? { labelNames: input.labels } : {}),
         ...(parentTicketId ? { parentTicketId } : {}),
+        ...(input.estimate ? { estimate: input.estimate } : {}),
       });
       return preflightResult(preflight, input.projectKey);
     }
@@ -144,6 +150,7 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
       ...(input.reason ? { reason: input.reason } : {}),
       ...(input.specState ? { specState: input.specState } : {}),
       ...(input.deliveryMode ? { deliveryMode: input.deliveryMode } : {}),
+      ...(input.estimate ? { estimate: input.estimate } : {}),
     };
     if (input.allowDuplicate && input.duplicateJustification) body.duplicateJustification = input.duplicateJustification;
     if (input.dueDate) body.dueDate = input.dueDate;
@@ -253,6 +260,7 @@ interface TicketPreflight {
     type: PreflightVerdict & { value: string | null; allowed: string[] };
     labels: PreflightVerdict & { unknown: string[]; ambiguous: Array<{ name: string; matches: string[] }>; resolved: string[]; available: string[] };
     duplicates: PreflightVerdict & { threshold: number; topSimilarity: number; candidates: SimilarWarning[] };
+    estimate?: PreflightVerdict & { required: boolean; minutes: number | null };
   };
 }
 
@@ -271,6 +279,7 @@ function preflightResult(preflight: TicketPreflight, projectKey: string): CallTo
     `  ${icon[preflight.verdicts.type.severity]} type: ${preflight.verdicts.type.message}`,
     `  ${icon[preflight.verdicts.labels.severity]} labels: ${preflight.verdicts.labels.message}`,
     `  ${icon[preflight.verdicts.duplicates.severity]} duplicates: ${preflight.verdicts.duplicates.message}`,
+    ...(preflight.verdicts.estimate ? [`  ${icon[preflight.verdicts.estimate.severity]} estimate: ${preflight.verdicts.estimate.message}`] : []),
   ];
   for (const c of preflight.verdicts.duplicates.candidates) {
     lines.push(`      - [${c.ticketKey ?? c.id.slice(0, 8)}] "${c.title}" (${formatSimilarity(c)})`);
@@ -416,7 +425,7 @@ function formatSimilarity(w: SimilarWarning): string {
 export const updateTicketToolConfig = {
   title: 'Update a ticket',
   description:
-    'Patch one or more fields on a ticket. Patchable: title, description, customerSummary, type, priority, specState, deliveryMode, dueDate, startDate, isPrivate, estimatedTimeMinutes. `customerSummary` is the customer-facing text shown in the customer project report instead of the internal description; null or empty falls back to an AI distillation or the title. `deliveryMode` is the role-aware commit policy (ORB-1608) - see `orboto_create_ticket` for the mode semantics. Use `orboto_move_ticket` for status, `orboto_set_milestone` for milestone, and `orboto_assign` / `orboto_unassign` for members.',
+    'Patch one or more fields on a ticket. Patchable: title, description, customerSummary, type, priority, specState, deliveryMode, dueDate, startDate, isPrivate, estimate (`2h`, `1.5d`), estimatedTimeMinutes. `customerSummary` is the customer-facing text shown in the customer project report instead of the internal description; null or empty falls back to an AI distillation or the title. `deliveryMode` is the role-aware commit policy (ORB-1608) - see `orboto_create_ticket` for the mode semantics. Use `orboto_move_ticket` for status, `orboto_set_milestone` for milestone, and `orboto_assign` / `orboto_unassign` for members.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     patch: z.object({
@@ -431,6 +440,7 @@ export const updateTicketToolConfig = {
       startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
       isPrivate: z.boolean().optional(),
       estimatedTimeMinutes: z.number().int().nonnegative().optional(),
+      estimate: z.string().optional(),
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
     allowLanguageMismatch: z.boolean().optional().describe('Retry a language block.'),
   }).shape,

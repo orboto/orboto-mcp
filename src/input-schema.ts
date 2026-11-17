@@ -45,7 +45,7 @@ const ID_LIKE_CANONICALS = ['ticketKey', 'docId', 'milestone', 'commentId'] as c
 /** The flat fields orboto_update_ticket folds into `patch` (ORB-1692 #3). */
 const UPDATE_TICKET_PATCH_KEYS = [
   'title', 'description', 'customerSummary', 'type', 'priority',
-  'deliveryMode', 'dueDate', 'startDate', 'isPrivate', 'estimatedTimeMinutes',
+  'deliveryMode', 'dueDate', 'startDate', 'isPrivate', 'estimatedTimeMinutes', 'estimate',
 ] as const;
 
 function applyAliases(toolName: string, shape: z.ZodRawShape, value: unknown): unknown {

@@ -6,6 +6,7 @@
  * ratchet, ORB-1863) without a cycle back into work-sessions.ts.
  */
 import { z } from 'zod';
+import type { AgentEstimateCalibration } from './estimate-calibration.js';
 
 /** ORB-1610 - `state`/`requestedAt` are optional in the wire shape only
  *  for backwards compatibility with pre-ORB-1610 rows; every claim this
@@ -117,6 +118,8 @@ export interface StartTicket {
   statusName?: string;
   priority: string;
   type: string;
+  estimatedTimeMinutes?: number;
+  loggedMinutes?: number;
 }
 
 export interface StartChecklistItem {
@@ -155,4 +158,5 @@ export interface StartBundleResponse {
   dependencies: { blockedBy: StartDependencyEdge[]; blocks: StartDependencyEdge[] };
   gitHealth: GitConnectionHealth[];
   siblingSessions: WorkSessionRow[];
+  estimateCalibration?: AgentEstimateCalibration;
 }

@@ -31,6 +31,7 @@ const TicketDraftSchema = z.object({
   parentTicketKey: z.string().optional(),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   isPrivate: z.boolean().optional(),
+  estimate: z.string().optional(),
 });
 
 export const bulkCreateTicketsToolConfig = {
@@ -102,6 +103,7 @@ export function makeBulkCreateTicketsHandler(client: OrbotoClient) {
           ...(draft.dueDate ? { dueDate: draft.dueDate } : {}),
           ...(draft.labels?.length ? { labelNames: draft.labels } : {}),
           ...(draft.assigneeEmails?.length ? { assigneeEmails: draft.assigneeEmails } : {}),
+          ...(draft.estimate ? { estimate: draft.estimate } : {}),
         };
         const milestoneRef = draft.milestone ?? input.milestone;
         if (milestoneRef) body.milestoneId = await resolveMilestone(milestoneRef);

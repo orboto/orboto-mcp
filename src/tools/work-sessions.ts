@@ -166,7 +166,9 @@ export function makeWorkStartHandler(client: OrbotoClient) {
       lines.push('', `## Ticket: ${res.ticket.ticketKey ?? args.ticketKey}`);
       lines.push(res.ticket.title);
       lines.push(`Status: ${res.ticket.statusName ?? res.ticket.status}  Priority: ${res.ticket.priority}  Type: ${res.ticket.type}`);
+      if ((res.ticket.estimatedTimeMinutes ?? 0) > 0) lines.push(`Estimate: ${res.ticket.estimatedTimeMinutes} min, booked ${res.ticket.loggedMinutes ?? 0} min.`);
       if (res.ticket.description) lines.push('', res.ticket.description);
+      if (res.estimateCalibration?.summary) lines.push('', '## Estimate calibration', res.estimateCalibration.summary);
 
       lines.push('', '## Checklists');
       if (res.checklists.length === 0) {
@@ -217,6 +219,7 @@ export function makeWorkStartHandler(client: OrbotoClient) {
           dependencies: res.dependencies,
           gitHealth: res.gitHealth,
           siblingSessions: res.siblingSessions,
+          ...(res.estimateCalibration ? { estimateCalibration: res.estimateCalibration } : {}),
         },
       };
     } catch (err) {

@@ -113,6 +113,27 @@ describe('orboto_work_start', () => {
     expect((res.structuredContent as { ticket: { ticketKey: string } }).ticket.ticketKey).toBe('ACME-42');
   });
 
+  it('ORB-3100 - shows the estimate and the calibration of agent work, both populations named', async () => {
+    const summary = 'agent estimate vs agent actual: actual = 0.6 x estimate (median over 2 tickets, confidence low, too few samples to rely on).\nhuman estimate vs agent actual: actual = 0.01 x estimate (median over 517 tickets, confidence high).';
+    stub([
+      { json: [PROJ] },
+      { json: TICKET },
+      {
+        json: {
+          ...BUNDLE,
+          ticket: { ...BUNDLE.ticket, estimatedTimeMinutes: 120, loggedMinutes: 30 },
+          estimateCalibration: { projectId: 'p1', windowDays: 90, populations: [], summary },
+        },
+      },
+    ]);
+    const res = await makeWorkStartHandler(client)({ ticketKey: 'ACME-42' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Estimate: 120 min, booked 30 min.');
+    expect(text).toContain('## Estimate calibration');
+    expect(text).toContain('human estimate vs agent actual');
+    expect((res.structuredContent as { estimateCalibration: { windowDays: number } }).estimateCalibration.windowDays).toBe(90);
+  });
+
   it('caches the rules hash across calls on the same connection and sends it back', async () => {
     const handler = makeWorkStartHandler(client);
 

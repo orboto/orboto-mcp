@@ -60,6 +60,13 @@ export function reviewerFlaggedLine(review: AskReview | null | undefined): strin
 /** ORB-2766 - the line a strict find prints when no query embedding ranked the search, so no hit can be strict. */
 export const STRICT_NO_EMBEDDING_LINE = 'no query embedding (no provider, breaker open or too slow): strict finds nothing, strict false returns full-text hits';
 
+/** ORB-3100 - an estimate in hours and minutes, `2h 30m`. */
+export function formatEstimateMinutes(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return [h > 0 ? `${h}h` : '', m > 0 || h === 0 ? `${m}m` : ''].filter(Boolean).join(' ');
+}
+
 export type ReplacedRevision = { docId: string; revisionId: string; restoreCommand: string };
 
 /** ORB-2468 - the pages a write replaced, each with the revision holding the previous body and its restore command. */
