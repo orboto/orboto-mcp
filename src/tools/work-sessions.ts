@@ -455,21 +455,23 @@ interface FinishWorkResponse {
   ticketStatusCategory: string | null;
   deliveryModeWarning?: { code: string; message: string };
   noteCommented: boolean;
+  ticketMoveRefused?: string;
 }
 
 export const workFinishToolConfig = {
   title: 'Finish a work session and close the ticket',
   description:
-    'The one-call ticket exit, sibling of orboto_work_start. Does everything orboto_work_session_finish does (stops and books the session\'s EXACT timer, releases the lease and every resource claim, idles your presence) PLUS: records a commitSha as an ATTESTATION when git ingestion has not seen it yet (never blocks - verification reconciles asynchronously once the webhook/backfill lands, so a lagging git connection can never wedge a ticket in review for hours), transitions the ticket per the ORB-1608 deliveryMode policy, and posts the completion note. Only an `implementation`-role session with outcome `finished` drives the ticket (default target category `done`) - `review`/`preflight`/`integration` sessions attach without reassigning the ticket (ORB-1609) and a `cancelled` outcome never auto-closes a ticket nobody actually finished; both still book time and free the lease. Idempotent: finishing an already-finished session, or one whose ticket is already at the target category, is a no-op result - not an error. A blocked transition (approval gate, dependency blocker, missing permission) is non-fatal: the session still finished, `ticketTransitioned` comes back false, and the ticket is left for a human or a follow-up call.',
+    'The one-call ticket exit, sibling of orboto_work_start. Does everything orboto_work_session_finish does (stops and books the session\'s EXACT timer, releases the lease and every resource claim, idles your presence) PLUS: records a commitSha as an ATTESTATION when git ingestion has not seen it yet (never blocks; git verification catches up later), transitions the ticket per the ORB-1608 deliveryMode policy, and posts the completion note. Only an `implementation`-role session with outcome `finished` drives the ticket (default target category `done`) - `review`/`preflight`/`integration` sessions attach without reassigning the ticket (ORB-1609) and a `cancelled` outcome never auto-closes a ticket nobody actually finished; both still book time and free the lease. Idempotent: finishing again, or on a ticket already at the target category, is a no-op, not an error. A refused transition (approval gate, blocker, permission, an agent close without booked time) is non-fatal: the session finished, `ticketTransitioned` is false, `ticketMoveRefused` names the refusal.',
   inputSchema: z.object({
     sessionId: z.guid().describe('From orboto_work_start / orboto_work_session_start.'),
     outcome: z.enum(['finished', 'cancelled']).optional()
-      .describe('`finished` (default) moves the ticket; `cancelled` = abandoned: time booked, ticket untouched.'),
-    commitSha: z.string().optional().describe('The commit produced; an attestation, verified once git ingestion catches up.'),
+      .describe('`cancelled` = abandoned: time booked, ticket untouched.'),
+    commitSha: z.string().optional().describe('The commit produced (attested).'),
     verification: workVerificationParam,
     targetCategory: z.enum(['todo', 'in_progress', 'in_review', 'done', 'wont_fix']).optional()
-      .describe('Default `done`; `in_review` for human review (implementation, outcome `finished`).'),
+      .describe('Default `done`; `in_review` for human review.'),
     note: z.string().optional().describe('Completion note on the ticket; generated when omitted.'),
+    noTime: z.string().optional().describe('Reason for no booked time.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -482,6 +484,7 @@ export function makeWorkFinishHandler(client: OrbotoClient) {
     verification?: Record<string, unknown>;
     targetCategory?: string;
     note?: string;
+    noTime?: string;
   }): Promise<CallToolResult> => {
     const res = await client.post<FinishWorkResponse>(
       `/work-sessions/${args.sessionId}/finish-work`,
@@ -491,6 +494,7 @@ export function makeWorkFinishHandler(client: OrbotoClient) {
         ...(args.verification ? { verification: args.verification } : {}),
         ...(args.targetCategory ? { targetCategory: args.targetCategory } : {}),
         ...(args.note ? { note: args.note } : {}),
+        ...(args.noTime ? { noTimeReason: args.noTime } : {}),
       },
     );
     const bookedByPhrase = describeBookedBy(res.bookedBy);
@@ -509,6 +513,13 @@ export function makeWorkFinishHandler(client: OrbotoClient) {
         ? `Ticket moved to ${res.ticketStatusCategory}.`
         : `Ticket left at ${res.ticketStatusCategory ?? 'its current status'} - not transitioned this call.`,
     );
+    if (res.ticketMoveRefused === 'errors.tickets.done_needs_time_timer_running') {
+      lines.push(`⛔ The ticket stays: your running timer has not booked yet (it counts after 30 seconds). Let it run and call orboto_work_finish again, or give a reason there is no time (noTime); do not log the same time by hand. ${res.ticketMoveRefused}.`);
+    } else if (res.ticketMoveRefused === 'errors.tickets.done_needs_time') {
+      lines.push('⛔ The ticket stays: an agent account moves into done only with booked time (orboto_log_time, then call orboto_work_finish again) or a reason there is none (call orboto_work_finish again with noTime, or orboto_close_ticket with noTime). errors.tickets.done_needs_time.');
+    } else if (res.ticketMoveRefused) {
+      lines.push(`⛔ The ticket move was refused: ${res.ticketMoveRefused}.`);
+    }
     if (res.deliveryModeWarning) lines.push(`⚠ ${res.deliveryModeWarning.message}`);
     lines.push(res.noteCommented ? 'Completion note posted.' : 'No completion note posted (nothing new to report).');
     return {
@@ -523,6 +534,7 @@ export function makeWorkFinishHandler(client: OrbotoClient) {
         ticketStatusCategory: res.ticketStatusCategory,
         deliveryModeWarning: res.deliveryModeWarning ?? null,
         noteCommented: res.noteCommented,
+        ticketMoveRefused: res.ticketMoveRefused ?? null,
       },
     };
   };

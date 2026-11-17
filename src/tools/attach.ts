@@ -35,7 +35,7 @@ const ATTACH_TAIL =
 export const attachToTicketToolConfig = {
   title: 'Attach a file to a ticket',
   description:
-    `Attach a file to a ticket from \`contentBase64\` (up to about 25 KB; a bigger file needs orboto_upload_link). ${ATTACH_TAIL} The local stdio server also takes \`filePath\`.`,
+    `Attach a file to a ticket from \`contentBase64\` (up to 25 KB; bigger: orboto_upload_link). ${ATTACH_TAIL} The local stdio server also takes \`filePath\`.`,
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     filename: z.string().min(1),
@@ -50,7 +50,7 @@ export const attachToTicketToolConfig = {
 export const attachToTicketLocalToolConfig = {
   ...attachToTicketToolConfig,
   description:
-    `Attach a file to a ticket: \`filePath\` (read by this local server, up to 50 MB) or \`contentBase64\` (about 25 KB). ${ATTACH_TAIL} Without file access, orboto_upload_link mints a browser link for the person.`,
+    `Attach a file to a ticket: \`filePath\` (read locally, up to 50 MB) or \`contentBase64\` (25 KB). ${ATTACH_TAIL} Without file access, orboto_upload_link mints a browser link for the person.`,
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     filePath: z.string().min(1).optional(),

@@ -92,6 +92,69 @@ it('ticket close and ticket move report the booked timer, and --keep-timer sends
   }
 }, ciWindow(60_000));
 
+it('ORB-3101 - ticket close --comment asks the close gate first, posts nothing when it refuses and reports the minutes the close booked', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'orboto-3101-wrapper-'));
+  const calls: string[] = [];
+  let refuse = true;
+  const server = createServer(async (req, res) => {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    const url = req.url ?? '';
+    res.setHeader('Content-Type', 'application/json');
+    if (url === '/projects') res.end(JSON.stringify([{ id: PROJECT, key: 'ORB' }]));
+    else if (url === `/projects/${PROJECT}/tickets/by-key/ORB-7`) res.end(JSON.stringify({ id: TICKET, ticketKey: 'ORB-7' }));
+    else if (url === `/projects/${PROJECT}/ticket-statuses`) res.end(JSON.stringify([{ id: DONE, category: 'done' }]));
+    else if (req.method === 'POST' && url === `/tickets/${TICKET}/comments`) { calls.push('comment'); res.statusCode = 201; res.end(JSON.stringify({ id: '44444444-4444-4444-8444-444444444444' })); }
+    else if (req.method === 'PATCH' && url === `/projects/${PROJECT}/tickets/${TICKET}`) {
+      const patch = JSON.parse(body) as { doneGateOnly?: boolean };
+      if (patch.doneGateOnly) {
+        calls.push('gate');
+        if (refuse) { res.statusCode = 409; res.end(JSON.stringify({ error: 'An agent account moves a ticket to Done only with booked time on it.', errorKey: 'errors.tickets.done_needs_time' })); return; }
+        res.end(JSON.stringify({ id: TICKET, ticketKey: 'ORB-7' }));
+        return;
+      }
+      calls.push('close');
+      res.end(JSON.stringify({ id: TICKET, ticketKey: 'ORB-7', statusName: 'Done', timerStopped: true, timerMinutes: 12, workSessionsFinished: 1 }));
+    } else if (url.startsWith('/time/timer?')) res.end('null');
+    else { res.statusCode = 404; res.end(JSON.stringify({ error: `unexpected ${req.method} ${url}` })); }
+  });
+  try {
+    await mkdir(join(dir, 'skills/orboto'), { recursive: true });
+    await cp(new URL('../../../../skills/orboto/scripts', import.meta.url), join(dir, 'skills/orboto/scripts'), { recursive: true });
+    await new Promise<void>((ok) => server.listen(0, '127.0.0.1', ok));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Fixture address missing');
+    const origin = `http://127.0.0.1:${address.port}`;
+    const run = (args: string[]) => new Promise<{ code: number | null; out: string; err: string }>((ok, no) => {
+      const child = spawn(process.execPath, [join(dir, 'skills/orboto/scripts/orboto.mjs'), ...args], {
+        cwd: dir, env: hermeticSpawnEnv({ home: hermeticHome('mcp-wrapper'), baseUrl: origin, token: 'orb_fixture', env: { ORBOTO_DAEMON: '', ORBOTO_AGENT_SESSION: 'fixture' } }),
+        timeout: childWindow(),
+      });
+      let out = '', err = '';
+      child.stdout.on('data', (chunk: Buffer) => { out += chunk.toString(); });
+      child.stderr.on('data', (chunk: Buffer) => { err += chunk.toString(); });
+      child.on('error', no);
+      child.on('close', (code) => ok({ code, out, err }));
+      child.stdin.end('');
+    });
+
+    const refused = await run(['ticket', 'close', 'ORB-7', '--comment', 'wrap-up']);
+    expect(refused.code).not.toBe(0);
+    expect(calls).toEqual(['gate']);
+
+    refuse = false;
+    calls.length = 0;
+    const closed = await run(['ticket', 'close', 'ORB-7', '--comment', 'wrap-up']);
+    expect(closed.code).toBe(0);
+    expect(calls).toEqual(['gate', 'comment', 'close']);
+    expect(JSON.parse(closed.out)).toMatchObject({ ticketKey: 'ORB-7', commented: true, timerStopped: true, timerMinutes: 12, workSessionsFinished: 1 });
+  } finally {
+    server.closeAllConnections();
+    if (server.listening) await new Promise<void>((ok, no) => server.close((err) => err ? no(err) : ok()));
+    await rm(dir, { recursive: true, force: true });
+  }
+}, ciWindow(60_000));
+
 it('ORB-3100 - ticket create --dry-run sends the estimate to the pre-flight and prints the estimate verdict', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'orboto-3100-wrapper-'));
   const bodies: Array<Record<string, unknown>> = [];
@@ -143,6 +206,45 @@ it('ORB-3100 - ticket create --dry-run sends the estimate to the pre-flight and 
     expect(bodies[1]).not.toHaveProperty('estimate');
     expect(missing.err).toContain('estimate: An agent account must estimate a task: pass --estimate.');
     expect(missing.err).toContain('Pre-flight blocked (estimate)');
+  } finally {
+    server.closeAllConnections();
+    if (server.listening) await new Promise<void>((ok, no) => server.close((err) => err ? no(err) : ok()));
+    await rm(dir, { recursive: true, force: true });
+  }
+}, ciWindow(60_000));
+
+it('ORB-3101 - ticket check names a held done move without sending the agent to timer log while its timer runs', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'orboto-3101-check-'));
+  const ITEM = '55555555-5555-4555-8555-555555555555';
+  const server = createServer(async (req, res) => {
+    for await (const chunk of req) void chunk;
+    res.setHeader('Content-Type', 'application/json');
+    if (req.method === 'PATCH' && req.url === `/checklist-items/${ITEM}`) res.end(JSON.stringify({ item: { content: 'verify', effectiveCompleted: true }, autoTransitioned: null, autoDoneRefused: 'errors.tickets.done_needs_time' }));
+    else { res.statusCode = 404; res.end(JSON.stringify({ error: `unexpected ${req.method} ${req.url}` })); }
+  });
+  try {
+    await mkdir(join(dir, 'skills/orboto'), { recursive: true });
+    await cp(new URL('../../../../skills/orboto/scripts', import.meta.url), join(dir, 'skills/orboto/scripts'), { recursive: true });
+    await new Promise<void>((ok) => server.listen(0, '127.0.0.1', ok));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Fixture address missing');
+    const origin = `http://127.0.0.1:${address.port}`;
+    const out = await new Promise<string>((ok, no) => {
+      const child = spawn(process.execPath, [join(dir, 'skills/orboto/scripts/orboto.mjs'), 'ticket', 'check', 'ORB-7', ITEM], {
+        cwd: dir, env: hermeticSpawnEnv({ home: hermeticHome('mcp-wrapper'), baseUrl: origin, token: 'orb_fixture', env: { ORBOTO_DAEMON: '', ORBOTO_AGENT_SESSION: 'fixture' } }),
+        timeout: childWindow(),
+      });
+      let text = '', err = '';
+      child.stdout.on('data', (chunk: Buffer) => { text += chunk.toString(); });
+      child.stderr.on('data', (chunk: Buffer) => { err += chunk.toString(); });
+      child.on('error', no);
+      child.on('close', (code) => code === 0 ? ok(text) : no(new Error(`Wrapper exit ${code}: ${err}`)));
+      child.stdin.end('');
+    });
+    expect(out).toContain('NOT moved to Done (errors.tickets.done_needs_time)');
+    expect(out).toContain('counts once it has run 30 seconds');
+    expect(out).toContain('ticket close ORB-7 --no-time "<reason>"');
+    expect(out).not.toContain('timer log');
   } finally {
     server.closeAllConnections();
     if (server.listening) await new Promise<void>((ok, no) => server.close((err) => err ? no(err) : ok()));

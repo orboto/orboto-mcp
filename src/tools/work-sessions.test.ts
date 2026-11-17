@@ -233,6 +233,53 @@ describe('ORB-1612 - orboto_work_finish', () => {
     expect((res.content[0] as { text: string }).text).toContain('Ticket left at todo - not transitioned this call.');
   });
 
+  it('ORB-3101 - names the refused move into done with both ways out and sends noTime as noTimeReason', async () => {
+    const calls = stub([
+      {
+        json: {
+          session: { ...SESSION, status: 'finished' },
+          durationMinutes: 0, changed: true, ticketTransitioned: false, ticketStatusCategory: 'in_progress', noteCommented: true,
+          ticketMoveRefused: 'errors.tickets.done_needs_time',
+        },
+      },
+      {
+        json: {
+          session: { ...SESSION, status: 'finished' },
+          durationMinutes: 0, changed: false, ticketTransitioned: true, ticketStatusCategory: 'done', noteCommented: false,
+        },
+      },
+    ]);
+    const refused = await makeWorkFinishHandler(client)({ sessionId: 'ws1' });
+    const text = (refused.content[0] as { text: string }).text;
+    expect(text).toContain('The ticket stays');
+    expect(text).toContain('errors.tickets.done_needs_time');
+    expect(text).toContain('orboto_log_time');
+    expect(text).toContain('noTime');
+    expect(refused.isError).toBeUndefined();
+    expect((refused.structuredContent as { ticketMoveRefused: string | null }).ticketMoveRefused).toBe('errors.tickets.done_needs_time');
+    expect(calls[0].body).not.toHaveProperty('noTimeReason');
+    const declared = await makeWorkFinishHandler(client)({ sessionId: 'ws1', noTime: 'config check only' });
+    expect(calls[1].body).toMatchObject({ noTimeReason: 'config check only' });
+    expect((declared.structuredContent as { ticketMoveRefused: string | null }).ticketMoveRefused).toBeNull();
+  });
+
+  it('ORB-3101 - tells a running timer to run on and never to log the time a second time', async () => {
+    stub([
+      {
+        json: {
+          session: { ...SESSION, status: 'finished' },
+          durationMinutes: 0, changed: true, ticketTransitioned: false, ticketStatusCategory: 'in_progress', noteCommented: true,
+          ticketMoveRefused: 'errors.tickets.done_needs_time_timer_running',
+        },
+      },
+    ]);
+    const refused = await makeWorkFinishHandler(client)({ sessionId: 'ws1' });
+    const text = (refused.content[0] as { text: string }).text;
+    expect(text).toContain('Let it run');
+    expect(text).toContain('errors.tickets.done_needs_time_timer_running');
+    expect(text).not.toContain('orboto_log_time, then');
+  });
+
   it('treats an idempotent no-op re-run as success with no note', async () => {
     stub([
       {

@@ -93,17 +93,20 @@ function makeToggleHandler(client: OrbotoClient, completed: boolean) {
     const { itemId, checklists } = await resolveItemId(client, ticket.id, item);
     const before = checklists.flatMap((c) => c.items).find((i) => i.id === itemId);
 
-    await client.patch(`/checklist-items/${itemId}`, { isCompleted: completed });
+    const res = await client.patch<{ autoDoneRefused?: string }>(`/checklist-items/${itemId}`, { isCompleted: completed });
+    const held = res?.autoDoneRefused;
     return {
       content: [{
         type: 'text',
-        text: `${completed ? 'Checked' : 'Unchecked'} on [${ticket.ticketKey}]: ${before?.content ?? '(item)'}`,
+        text: `${completed ? 'Checked' : 'Unchecked'} on [${ticket.ticketKey}]: ${before?.content ?? '(item)'}`
+          + (held ? `\nThe ticket stays: ${held} - an agent account moves it to done only with booked time on it (a running timer of yours counts once it has run 30 seconds) or a reason (orboto_close_ticket with noTime).` : ''),
       }],
       structuredContent: {
         ticketKey: ticket.ticketKey,
         itemId,
         completed,
         content: before?.content ?? null,
+        ...(held ? { autoDoneRefused: held } : {}),
       },
     };
   };

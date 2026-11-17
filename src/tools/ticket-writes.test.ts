@@ -79,6 +79,37 @@ describe('orboto_create_ticket and orboto_update_ticket estimate (ORB-3100)', ()
   });
 });
 
+describe('orboto_move_ticket and orboto_close_ticket noTime (ORB-3101)', () => {
+  it('sends the reason as noTimeReason on a move and a close, and nothing for a blank one', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: { ...TICKET, status: 'DONE' } },
+      { json: PROJ },
+      { json: TICKET },
+      { json: { ...TICKET, status: 'DONE' } },
+      { json: PROJ },
+      { json: TICKET },
+      { json: { ...TICKET, status: 'DONE' } },
+    ]);
+    await makeMoveTicketHandler(client)({ ticketKey: 'ACME-1', statusCategory: 'done', noTime: 'reviewed only' });
+    expect(calls[2].body).toEqual({ status: 'DONE', noTimeReason: 'reviewed only' });
+    await makeCloseTicketHandler(client)({ ticketKey: 'ACME-1', noTime: ' docs only ' });
+    expect(calls[5].body).toEqual({ status: 'DONE', noTimeReason: 'docs only' });
+    await makeCloseTicketHandler(client)({ ticketKey: 'ACME-1', noTime: '  ' });
+    expect(calls[8].body).toEqual({ status: 'DONE' });
+  });
+
+  it('surfaces the typed refusal of an agent close without time', async () => {
+    stub([
+      { json: PROJ },
+      { json: TICKET },
+      { ok: false, status: 409, json: { error: 'An agent account moves a ticket to Done only with time on it: ... --no-time "<reason>" (field noTimeReason).', errorKey: 'errors.tickets.done_needs_time', errorParams: { flag: '--no-time', field: 'noTimeReason' } } },
+    ]);
+    await expect(makeCloseTicketHandler(client)({ ticketKey: 'ACME-1' })).rejects.toThrow(/noTimeReason/);
+  });
+});
+
 describe('orboto_create_ticket', () => {
   it('creates with body fields, no extra calls when no labels/assignees', async () => {
     const calls = stub([
@@ -518,18 +549,46 @@ describe('orboto_move_ticket', () => {
 });
 
 describe('orboto_close_ticket', () => {
-  it('posts the closing comment BEFORE the status move (audit-trail order)', async () => {
+  it('runs the close gate, then posts the closing comment, then moves the status (ORB-3101)', async () => {
     const calls = stub([
       { json: PROJ },                                          // resolveTicketByKey: project
       { json: TICKET },                                        // resolveTicketByKey: ticket
+      { json: TICKET },
       { json: { id: 'c1', content: 'wrap-up', isInternal: false, createdAt: 'now' } },
-      { json: { ...TICKET, status: 'DONE', statusName: 'Done', statusCategory: 'done' } },
+      { json: { ...TICKET, status: 'DONE', statusName: 'Done', statusCategory: 'done', timerStopped: true, timerMinutes: 12 } },
     ]);
-    await makeCloseTicketHandler(client)({ ticketKey: 'ACME-1', comment: 'wrap-up' });
-    expect(calls[2].url).toContain('/tickets/t1/comments');
-    expect(calls[2].method).toBe('POST');
-    expect(calls[3].method).toBe('PATCH');
-    expect(calls[3].body).toEqual({ status: 'DONE' });
+    const res = await makeCloseTicketHandler(client)({ ticketKey: 'ACME-1', comment: 'wrap-up' });
+    expect(calls[2].method).toBe('PATCH');
+    expect(calls[2].body).toEqual({ status: 'DONE', doneGateOnly: true });
+    expect(calls[3].url).toContain('/tickets/t1/comments');
+    expect(calls[3].method).toBe('POST');
+    expect(calls[4].method).toBe('PATCH');
+    expect(calls[4].body).toEqual({ status: 'DONE' });
+    expect((res.content[0] as { text: string }).text).toContain('Timer stopped: 12 min booked.');
+    expect(res.structuredContent).toMatchObject({ timerStopped: true, timerMinutes: 12 });
+  });
+
+  it('posts no comment and moves nothing when the close gate refuses the close (ORB-3101)', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: TICKET },
+      { ok: false, status: 409, json: { error: 'An agent account moves a ticket to Done only with time on it.', errorKey: 'errors.tickets.done_needs_time', errorParams: { flag: '--no-time', field: 'noTimeReason' } } },
+    ]);
+    await expect(makeCloseTicketHandler(client)({ ticketKey: 'ACME-1', comment: 'wrap-up' })).rejects.toThrow(/done_needs_time|time/);
+    expect(calls).toHaveLength(3);
+    expect(calls.some((c) => c.url.includes('/comments'))).toBe(false);
+  });
+
+  it('sends the declaration and keepTimer with the gate call (ORB-3101)', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: TICKET },
+      { json: { id: 'c1', content: 'wrap-up', isInternal: false, createdAt: 'now' } },
+      { json: { ...TICKET, status: 'DONE' } },
+    ]);
+    await makeCloseTicketHandler(client)({ ticketKey: 'ACME-1', comment: 'wrap-up', noTime: ' docs only ', keepTimer: true });
+    expect(calls[2].body).toEqual({ status: 'DONE', doneGateOnly: true, keepTimer: true, noTimeReason: 'docs only' });
   });
 
   it('skips the comment call when none provided', async () => {

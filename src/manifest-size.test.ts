@@ -174,6 +174,17 @@ afterEach(() => { vi.restoreAllMocks(); });
  * constraints, and the describes of `parentTicketKey` and
  * `duplicateJustification` went, the names say it (full = 169,344 over HTTP
  * and 169,386 on the stdio build, 14 chars free; curated = 37,881).
+ * ORB-3101 added `noTime` to orboto_move_ticket, orboto_close_ticket,
+ * orboto_bulk_move_tickets and orboto_bulk_close_tickets inside the ceiling:
+ * the move title and the close, bulk-close, credential_agent_access, attach
+ * and doc-attachment upload first sentences (both builds) shrank to pay for
+ * it (full = 169,353 over HTTP and 169,393 on the stdio build, 7 chars free;
+ * curated = 37,901).
+ * ORB-3101 gave `orboto_work_finish` `noTime` inside the ceiling: only the
+ * first sentence of a description reaches the manifest, so the outcome,
+ * commitSha and targetCategory parameter describes shrank to pay for it
+ * (full = 169,302 over HTTP and 169,342 on the stdio build, 58 chars free;
+ * curated = 37,901).
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

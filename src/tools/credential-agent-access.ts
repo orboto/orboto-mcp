@@ -7,7 +7,7 @@ import type { CredentialAgentAccess } from './credential-agent-access-result.js'
 export const credentialAgentAccessToolConfig = {
   title: 'Credential agent access',
   description:
-    'Which agents may reveal a credential: list = the entries, candidates = accounts that can, with agent keys and OAuth clients; q searches name or e-mail. An agent key or bot account without an entry gets 403; people never need one. credential takes a key or id. Needs manage. Read only: a person edits the list on the credential page or with `orboto credential agent-access`, never a model.',
+    'Which agents may reveal a credential: list = entries, candidates = accounts that can (agent keys, OAuth clients); q searches name or e-mail. An agent key or bot account without an entry gets 403; people never need one. credential takes a key or id. Needs manage. Read only: a person edits the list on the credential page or with `orboto credential agent-access`, never a model.',
   inputSchema: z.object({
     action: z.enum(['list', 'candidates']).optional(),
     credential: z.string(),

@@ -64,7 +64,7 @@ const UPLOAD_DOC_TAIL =
 export const uploadDocAttachmentToolConfig = {
   title: 'Upload a doc attachment',
   description:
-    `Upload a doc attachment from \`contentBase64\` (up to about 25 KB; a bigger file needs orboto_upload_link). ${UPLOAD_DOC_TAIL} The local stdio server also takes \`filePath\`.`,
+    `Upload a doc attachment from \`contentBase64\` (up to 25 KB; bigger: orboto_upload_link). ${UPLOAD_DOC_TAIL} The local stdio server also takes \`filePath\`.`,
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
     filename: z.string().min(1),
@@ -79,7 +79,7 @@ export const uploadDocAttachmentToolConfig = {
 export const uploadDocAttachmentLocalToolConfig = {
   ...uploadDocAttachmentToolConfig,
   description:
-    `Upload a doc attachment: \`filePath\` (read by this local server, up to 50 MB) or \`contentBase64\` (about 25 KB). ${UPLOAD_DOC_TAIL} Without file access, orboto_upload_link mints a browser link for the person.`,
+    `Upload a doc attachment: \`filePath\` (read locally, up to 50 MB) or \`contentBase64\` (25 KB). ${UPLOAD_DOC_TAIL} Without file access, orboto_upload_link mints a browser link for the person.`,
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
     filePath: z.string().min(1).optional(),

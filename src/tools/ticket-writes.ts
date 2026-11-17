@@ -1,4 +1,4 @@
-import { specReleaseInfo, MILESTONE_REF_PARAM, formatEstimateMinutes } from './shared.js';
+import { specReleaseInfo, MILESTONE_REF_PARAM, formatEstimateMinutes, noTimeBody, runDoneGate } from './shared.js';
 import { TicketSpecStateSchema, isAlreadyAssigned, type TicketSpecState } from './spec-schemas.js';
 /**
  * ORB-244 Phase C Group 1 - ticket mutation tools.
@@ -481,13 +481,14 @@ export function makeUpdateTicketHandler(client: OrbotoClient) {
 }
 
 export const moveTicketToolConfig = {
-  title: 'Move a ticket between status categories',
+  title: 'Move a ticket',
   description:
-    'Move a ticket to a status category. The API picks the project\'s first status with it. Needs `ticket:change_status`. Moving to `in_review` or `done` without a just-posted summary comment returns a non-blocking `summaryWarning` (ORB-1332): post what changed, the commit SHA and how to verify; `orboto_close_ticket` with a `comment` avoids it. Moving an `implementation`/`docs` ticket to `done` with zero linked commits returns a non-blocking `deliveryModeWarning` (ORB-1608/1642), omitted without a git connection; its codes are explained on `orboto_close_ticket`. **Timer (ORB-2687):** `in_review`, `done` and `wont_fix` stop and book your own running timer on the ticket (a close also finishes your work sessions); `keepTimer: true` keeps them.',
+    'Move a ticket to a status category. The API picks the project\'s first status with it. Needs `ticket:change_status`. Moving to `in_review` or `done` without a just-posted summary comment returns a non-blocking `summaryWarning` (ORB-1332): post what changed, the commit SHA and how to verify; `orboto_close_ticket` with a `comment` avoids it. Moving an `implementation`/`docs` ticket to `done` with zero linked commits returns a non-blocking `deliveryModeWarning` (ORB-1608/1642), omitted without a git connection; its codes are explained on `orboto_close_ticket`. **Timer (ORB-2687):** `in_review`, `done` and `wont_fix` stop and book your own running timer on the ticket (a close also finishes your work sessions); `keepTimer: true` keeps them. **Agent close gate (ORB-3101):** an agent account moves into `done` only with booked time on the ticket (your timer books with the move) or `noTime`, the reason there is none; otherwise `errors.tickets.done_needs_time`.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     statusCategory: z.enum(STATUS_CATEGORIES),
     keepTimer: z.boolean().optional(),
+    noTime: z.string().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -512,13 +513,13 @@ function timerStructured(r: CloseTimerFields) {
 }
 
 export function makeMoveTicketHandler(client: OrbotoClient) {
-  return async ({ ticketKey, statusCategory, keepTimer }: {
-    ticketKey: string; statusCategory: StatusCategory; keepTimer?: boolean;
+  return async ({ ticketKey, statusCategory, keepTimer, noTime }: {
+    ticketKey: string; statusCategory: StatusCategory; keepTimer?: boolean; noTime?: string;
   }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
     const updated = await client.patch<TicketRow & CloseTimerFields & { summaryWarning?: SummaryWarning; deliveryModeWarning?: DeliveryModeWarning }>(
       `/projects/${ticket.projectId}/tickets/${ticket.id}`,
-      { status: CATEGORY_TO_LEGACY[statusCategory], ...(keepTimer ? { keepTimer: true } : {}) },
+      { status: CATEGORY_TO_LEGACY[statusCategory], ...(keepTimer ? { keepTimer: true } : {}), ...noTimeBody(noTime) },
     );
     const timer = timerLine(updated);
     return withDeliveryModeWarning(withSummaryWarning({
@@ -531,26 +532,26 @@ export function makeMoveTicketHandler(client: OrbotoClient) {
 export const closeTicketToolConfig = {
   title: 'Close a ticket',
   description:
-    'Move a ticket to `done`, optionally posting a closing comment first. More than ~3 tickets? Use `orboto_bulk_close_tickets`. A `comment` doubles as the transition summary and suppresses the ORB-1332 `summaryWarning` (no comment and none in the last few minutes returns it, non-blocking). **Timer (ORB-2687):** the close stops and books your own running timer and finishes your own work sessions on the ticket (answers `timerStopped`, `timerMinutes`); `keepTimer: true` keeps both. Other users\' and sessions\' timers are never touched. **Delivery-mode warning (ORB-1608/1642):** an `implementation`/`docs` ticket closed with zero linked commits returns a non-blocking `deliveryModeWarning`, omitted when the project has no git connection. `no_commit_linked` = healthy connection, link a commit or change deliveryMode via `orboto_update_ticket`; `git_delivery_failing` = the connection looks unhealthy, check it first.',
+    'Move a ticket to `done`, optionally after a closing comment. More than ~3 tickets? Use `orboto_bulk_close_tickets`. A `comment` doubles as the transition summary and suppresses the ORB-1332 `summaryWarning` (no comment and none in the last few minutes returns it, non-blocking). **Timer (ORB-2687):** the close stops and books your own running timer and finishes your own work sessions on the ticket (answers `timerStopped`, `timerMinutes`); `keepTimer: true` keeps both. Other users\' and sessions\' timers are never touched. **Agent close gate (ORB-3101):** an agent account moves into `done` only with booked time on the ticket (your timer books with the move) or `noTime`, the reason there is none; otherwise `errors.tickets.done_needs_time`. **Delivery-mode warning (ORB-1608/1642):** an `implementation`/`docs` ticket closed with zero linked commits returns a non-blocking `deliveryModeWarning`, omitted when the project has no git connection. `no_commit_linked` = healthy connection, link a commit or change deliveryMode via `orboto_update_ticket`; `git_delivery_failing` = the connection looks unhealthy, check it first.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     comment: z.string().min(1).optional().describe('Transition summary.'),
     keepTimer: z.boolean().optional(),
+    noTime: z.string().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeCloseTicketHandler(client: OrbotoClient) {
-  return async ({ ticketKey, comment, keepTimer }: {
-    ticketKey: string; comment?: string; keepTimer?: boolean;
+  return async ({ ticketKey, comment, keepTimer, noTime }: {
+    ticketKey: string; comment?: string; keepTimer?: boolean; noTime?: string;
   }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
-    if (comment) {
-      await client.post(`/tickets/${ticket.id}/comments`, { content: comment });
-    }
+    if (comment) await runDoneGate(client, ticket, { ...(keepTimer ? { keepTimer: true } : {}), ...noTimeBody(noTime) });
+    if (comment) await client.post(`/tickets/${ticket.id}/comments`, { content: comment });
     const updated = await client.patch<TicketRow & CloseTimerFields & { summaryWarning?: SummaryWarning; deliveryModeWarning?: DeliveryModeWarning }>(
       `/projects/${ticket.projectId}/tickets/${ticket.id}`,
-      { status: 'DONE', ...(keepTimer ? { keepTimer: true } : {}) },
+      { status: 'DONE', ...(keepTimer ? { keepTimer: true } : {}), ...noTimeBody(noTime) },
     );
     const timer = timerLine(updated);
     return withDeliveryModeWarning(withSummaryWarning({

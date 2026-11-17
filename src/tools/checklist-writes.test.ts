@@ -45,6 +45,35 @@ const SAMPLE_LIST = {
   ],
 };
 
+describe('orboto_check - a held done move (ORB-3101)', () => {
+  it('names the refusal and both ways out when an agent account completes a done-checklist without booked time', async () => {
+    stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: [SAMPLE_LIST] },
+      { json: { item: { id: 'i1' }, autoTransitioned: null, autoDoneRefused: 'errors.tickets.done_needs_time' } },
+    ]);
+    const res = await makeCheckHandler(client)({ ticketKey: 'ACME-1', item: 1 });
+    expect((res.content[0] as { text: string }).text).toContain('The ticket stays: errors.tickets.done_needs_time');
+    expect((res.content[0] as { text: string }).text).toContain('noTime');
+    expect((res.content[0] as { text: string }).text).toContain('counts once it has run 30 seconds');
+    expect((res.content[0] as { text: string }).text).not.toContain('orboto_log_time');
+    expect(res.structuredContent).toMatchObject({ completed: true, autoDoneRefused: 'errors.tickets.done_needs_time' });
+  });
+
+  it('prints nothing about a hold when the toggle moved nothing and refused nothing', async () => {
+    stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: [SAMPLE_LIST] },
+      { json: { item: { id: 'i1' }, autoTransitioned: null } },
+    ]);
+    const res = await makeCheckHandler(client)({ ticketKey: 'ACME-1', item: 1 });
+    expect((res.content[0] as { text: string }).text).not.toContain('The ticket stays');
+    expect((res.structuredContent as Record<string, unknown>).autoDoneRefused).toBeUndefined();
+  });
+});
+
 describe('orboto_check / orboto_uncheck', () => {
   it('check resolves a 1-based index → item UUID, then PATCHes isCompleted=true', async () => {
     const calls = stub([

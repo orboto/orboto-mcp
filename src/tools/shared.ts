@@ -67,6 +67,21 @@ export function formatEstimateMinutes(minutes: number): string {
   return [h > 0 ? `${h}h` : '', m > 0 || h === 0 ? `${m}m` : ''].filter(Boolean).join(' ');
 }
 
+/** ORB-3101 - the PATCH field an agent's `noTime` reason travels in; blank sends nothing. */
+export function noTimeBody(noTime: string | undefined): { noTimeReason?: string } {
+  const reason = noTime?.trim();
+  return reason ? { noTimeReason: reason } : {};
+}
+
+/** ORB-3101 - reads the agent close gate before the closing comment is posted, so a refused close posts nothing; the gate writes nothing, the close that follows books the timer. */
+export async function runDoneGate(
+  client: OrbotoClient,
+  ticket: { id: string; projectId: string },
+  body: { keepTimer?: boolean; noTimeReason?: string },
+): Promise<void> {
+  await client.patch(`/projects/${ticket.projectId}/tickets/${ticket.id}`, { status: 'DONE', doneGateOnly: true, ...body });
+}
+
 export type ReplacedRevision = { docId: string; revisionId: string; restoreCommand: string };
 
 /** ORB-2468 - the pages a write replaced, each with the revision holding the previous body and its restore command. */

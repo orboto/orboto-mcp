@@ -170,10 +170,27 @@ describe('orboto_bulk_move_tickets keepTimer (ORB-2687)', () => {
   });
 });
 
-describe('orboto_bulk_close_tickets', () => {
-  it('POSTs comment before PATCH when comment is set', async () => {
+describe('orboto_bulk_move_tickets and orboto_bulk_close_tickets noTime (ORB-3101)', () => {
+  it('sends the reason as noTimeReason with every status PATCH', async () => {
     const calls = stub([
       ...resolveOK(1),
+      { json: ticket(1) },
+      ...resolveOK(2),
+      { json: { ...ticket(2), status: 'DONE' } },
+    ]);
+    await makeBulkMoveTicketsHandler(client)({ ticketKeys: ['ACME-1'], statusCategory: 'done', noTime: 'duplicates' });
+    await makeBulkCloseTicketsHandler(client)({ ticketKeys: ['ACME-2'], noTime: 'config only' });
+    const patches = calls.filter((c) => c.method === 'PATCH');
+    expect(patches[0].body).toEqual({ status: 'DONE', noTimeReason: 'duplicates' });
+    expect(patches[1].body).toEqual({ status: 'DONE', noTimeReason: 'config only' });
+  });
+});
+
+describe('orboto_bulk_close_tickets', () => {
+  it('runs the close gate, then POSTs the comment, then PATCHes when comment is set', async () => {
+    const calls = stub([
+      ...resolveOK(1),
+      { json: ticket(1) },                                                            // gate
       { json: { id: 'c1', content: 'closed', isInternal: false, createdAt: 'now' } }, // POST comment
       { json: { ...ticket(1), status: 'DONE' } },                                     // PATCH
     ]);
@@ -181,11 +198,28 @@ describe('orboto_bulk_close_tickets', () => {
       ticketKeys: ['ACME-1'],
       comment: 'closing the loop',
     });
+    const gateCall = calls.find((c) => c.method === 'PATCH');
     const commentCall = calls.find((c) => c.url.includes('/comments'));
-    const patchCall = calls.find((c) => c.method === 'PATCH');
+    const patchCall = calls.filter((c) => c.method === 'PATCH')[1];
     expect(commentCall).toBeDefined();
+    expect(gateCall?.body).toEqual({ status: 'DONE', doneGateOnly: true });
     expect(patchCall?.body).toEqual({ status: 'DONE' });
+    expect(calls.indexOf(gateCall!)).toBeLessThan(calls.indexOf(commentCall!));
     expect(calls.indexOf(commentCall!)).toBeLessThan(calls.indexOf(patchCall!));
+  });
+
+  it('posts no comment on a ticket whose close the gate refuses and still closes the others (ORB-3101)', async () => {
+    const calls = stub([
+      ...resolveOK(1),
+      ...resolveOK(2),
+      { ok: false, status: 409, json: { error: 'needs time', errorKey: 'errors.tickets.done_needs_time' } },
+      { json: ticket(2) },
+      { json: { id: 'c2', content: 'closed', isInternal: false, createdAt: 'now' } },
+      { json: { ...ticket(2), status: 'DONE' } },
+    ]);
+    await makeBulkCloseTicketsHandler(client)({ ticketKeys: ['ACME-1', 'ACME-2'], comment: 'closing the loop' });
+    expect(calls.filter((c) => c.url.includes('/comments'))).toHaveLength(1);
+    expect(calls.filter((c) => c.url.includes('/comments'))[0].url).toContain('/tickets/t2/comments');
   });
 
   it('ORB-2687 - keepTimer is sent with every close PATCH and omitted by default', async () => {
