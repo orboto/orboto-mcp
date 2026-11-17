@@ -741,6 +741,21 @@ describe('orboto_get_timer', () => {
     expect(sc.timer.ticketTitle).toBe('Bug');
   });
 
+  it('ORB-3102 - ticketKey reads the session\'s timer on that ticket; several claim timers are counted in leaseTimers', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: { id: 't9', projectId: 'p1', ticketKey: 'ACME-9', title: 'Nine' } },
+      { json: { id: 'tm9', userId: 'u1', ticketId: 't9', ticketTitle: 'Nine', startedAt: new Date().toISOString(), pausedAt: null, accumulatedSeconds: 0, description: null, leaseId: 'l9' } },
+    ]);
+    await makeGetTimerHandler(client)({ ticketKey: 'ACME-9' });
+    expect(calls[2]).toContain('/time/timer?ticketId=t9');
+
+    stub([{ json: { id: 'tm1', userId: 'u1', ticketId: 't1', startedAt: new Date().toISOString(), pausedAt: null, accumulatedSeconds: 0, description: null, leaseTimers: 3 } }]);
+    const res = await makeGetTimerHandler(client)();
+    expect((res.content[0] as { text: string }).text).toContain('This session runs 3 claim timers; pass ticketKey to read one.');
+    expect(res.structuredContent).toMatchObject({ timer: { leaseTimers: 3 } });
+  });
+
   it('ORB-2550 - names who runs the timer and in which agent session', async () => {
     const startedAt = new Date().toISOString();
     stub([{ json: { id: 'tm2', userId: 'u1', ticketId: 't1', startedAt, pausedAt: null, accumulatedSeconds: 0, description: null, userEmail: 'claude@orboto.io', userFullName: 'Claude Agent', agentSessionId: 's-1', agentSessionLabel: 'claude-code#0b0c3a1e' } }]);

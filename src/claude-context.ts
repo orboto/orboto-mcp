@@ -31,6 +31,11 @@ export interface ClaudeUsageSample {
   usedPercent: number;
   costUsd: number;
   weightedTokens: number;
+  /** ORB-3102 - the session's cumulative token split; absent where the status line did not follow it from its baseline. */
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
   profile?: string;
   model?: string;
   resetsAt?: string;

@@ -517,6 +517,10 @@ export function makeWorkFinishHandler(client: OrbotoClient) {
       lines.push(`⛔ The ticket stays: your running timer has not booked yet (it counts after 30 seconds). Let it run and call orboto_work_finish again, or give a reason there is no time (noTime); do not log the same time by hand. ${res.ticketMoveRefused}.`);
     } else if (res.ticketMoveRefused === 'errors.tickets.done_needs_time') {
       lines.push('⛔ The ticket stays: an agent account moves into done only with booked time (orboto_log_time, then call orboto_work_finish again) or a reason there is none (call orboto_work_finish again with noTime, or orboto_close_ticket with noTime). errors.tickets.done_needs_time.');
+    } else if (res.ticketMoveRefused === 'errors.work_sessions.ticket_moved_since_finish') {
+      lines.push('⛔ The ticket stays: this session was already finished and the ticket is not in the status that finish left it in (a session finished before this release has no record of it), so this repeat does not move it. Move it yourself (orboto_move_ticket) only if it should still change. errors.work_sessions.ticket_moved_since_finish.');
+    } else if (res.ticketMoveRefused === 'errors.work_sessions.ended_without_finish') {
+      lines.push('⛔ The ticket stays: this session had already ended without a finish (it expired or was released), so this call did not move it. Move it yourself (orboto_move_ticket) only if it should still change. errors.work_sessions.ended_without_finish.');
     } else if (res.ticketMoveRefused) {
       lines.push(`⛔ The ticket move was refused: ${res.ticketMoveRefused}.`);
     }

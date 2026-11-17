@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { resolveTicketByKey } from './shared.js';
 
 /** Matches ActiveTimerSchema in @orboto/shared-schema. */
 interface ActiveTimer {
@@ -23,19 +24,22 @@ interface ActiveTimer {
   userEmail?: string | null;
   userFullName?: string | null;
   agentSessionLabel?: string | null;
+  /** ORB-3102 - on a read without a ticket: how many timers the session runs, when it is more than one. */
+  leaseTimers?: number;
 }
 
 export const getTimerToolConfig = {
   title: 'Get current timer',
   description:
-    'Return your running stopwatch, or null when none runs. The lane is resolved from this session\'s instance token, so a timer started by `orboto_claim` / `orboto_timer_start` in the same checkout reads back (ORB-2137); `laneFallback: true` means the timer was matched as the account\'s only running one because this instance\'s lane was empty - another instance started it. The answer names who runs the timer and its agent session (ORB-2550); the fallback never takes the timer of a session another harness process owns (409 `errors.time.timer_of_other_session` on stop).',
-  inputSchema: z.object({}).shape,
+    'Return your running stopwatch, or null. The lane is resolved from this session\'s instance token, so a timer started by `orboto_claim` / `orboto_timer_start` in the same checkout reads back; `laneFallback: true` means it was matched as the account\'s only running one because this instance\'s lane was empty. Names who runs it and its agent session; the fallback never takes the timer of a session another harness process owns (409 `errors.time.timer_of_other_session` on stop). ticketKey: your timer on that ticket; a session runs one claim timer per ticket, `leaseTimers` counts them.',
+  inputSchema: z.object({ ticketKey: z.string().optional() }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeGetTimerHandler(client: OrbotoClient) {
-  return async (): Promise<CallToolResult> => {
-    const timer = await client.get<ActiveTimer | null>('/time/timer');
+  return async ({ ticketKey }: { ticketKey?: string } = {}): Promise<CallToolResult> => {
+    const ticketId = ticketKey ? (await resolveTicketByKey(client, ticketKey)).id : undefined;
+    const timer = await client.get<ActiveTimer | null>(ticketId ? `/time/timer?ticketId=${ticketId}` : '/time/timer');
     if (!timer) {
       return {
         content: [{ type: 'text', text: 'No active timer.' }],
@@ -58,6 +62,7 @@ export function makeGetTimerHandler(client: OrbotoClient) {
       `Owner: ${timer.userFullName ?? timer.userEmail ?? timer.userId}${timer.agentSessionLabel ? `, session ${timer.agentSessionLabel}` : ', no agent session'}`,
       isPaused ? `Paused: ${timer.pausedAt}` : null,
       timer.laneFallback ? 'Matched via the single-active-timer fallback - another instance started it.' : null,
+      timer.leaseTimers ? `This session runs ${timer.leaseTimers} claim timers; pass ticketKey to read one.` : null,
       timer.description ? `Note: ${timer.description}` : null,
     ].filter((l): l is string => l !== null).join('\n');
 
@@ -75,6 +80,7 @@ export function makeGetTimerHandler(client: OrbotoClient) {
           totalSeconds,
           paused: isPaused,
           laneFallback: timer.laneFallback === true,
+          leaseTimers: timer.leaseTimers ?? null,
           userId: timer.userId,
           userEmail: timer.userEmail ?? null,
           agentSessionId: timer.agentSessionId ?? null,

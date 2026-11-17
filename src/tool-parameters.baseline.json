@@ -1106,7 +1106,9 @@
     }
   },
   "orboto_get_timer": {
-    "params": [],
+    "params": [
+      "ticketKey"
+    ],
     "required": [],
     "enums": {}
   },
@@ -1984,7 +1986,9 @@
     "enums": {}
   },
   "orboto_timer_stop": {
-    "params": [],
+    "params": [
+      "ticketKey"
+    ],
     "required": [],
     "enums": {}
   },

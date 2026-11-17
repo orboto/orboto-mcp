@@ -28,6 +28,62 @@ interface TimeEntry {
   loggedAt: string;
   agentLabel?: string | null;
   isAgentWork?: boolean;
+  source?: TimeEntrySource | null;
+}
+
+/** ORB-3102 - mirrors `TimeEntrySourceEnum` of shared-schema, pinned by the drift test. */
+export const TIME_ENTRY_SOURCES = ['lease', 'timer', 'manual'] as const;
+export type TimeEntrySource = (typeof TIME_ENTRY_SOURCES)[number];
+
+/** ORB-3102 - mirrors `AgentUsageTotalsSchema` of shared-schema. */
+export interface AgentUsageTotals {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheWriteTokens: number | null;
+  weightedTokens: number;
+  costUsd: number;
+  reports: number;
+}
+
+/** ORB-3101 - mirrors `DoneWithoutTimeSchema` of shared-schema. */
+export interface DoneWithoutTime {
+  reason: string;
+  at: string;
+  accountId: string | null;
+  accountEmail: string | null;
+  accountName: string | null;
+  agentSession: string | null;
+  status: string | null;
+  automatic: boolean;
+  source: string | null;
+}
+
+/** ORB-3102 - mirrors `TicketAgentTimeSchema` of shared-schema (`GET /tickets/:id/agent-time`). */
+export interface TicketAgentTime {
+  ticketId: string;
+  minutes: { total: number; lease: number; timer: number; manual: number; unrecorded: number };
+  declaredNone: DoneWithoutTime | null;
+  usage: AgentUsageTotals | null;
+  leases: Array<{
+    id: string; userId: string; userEmail: string | null; userFullName: string | null; agentSessionId: string | null; agentLabel: string | null;
+    startedAt: string; endedAt: string | null; stoppedBy: 'finish' | 'transition' | 'lane_stop' | 'expiry' | 'idle_cap' | null;
+    bookedMinutes: number; accruedMinutes: number; timeEntryId: string | null; continuesLeaseId: string | null; usage: AgentUsageTotals | null;
+  }>;
+}
+
+/** ORB-3101 - the line naming a done-without-time declaration: who declared it, when and why; empty when there is none. */
+export function declaredNoneLine(declared: DoneWithoutTime | null): string[] {
+  if (!declared) return [];
+  const who = declared.agentSession ?? declared.accountName ?? declared.accountEmail ?? 'an agent account';
+  return [`No time booked: ${who} moved it to ${declared.status ?? 'done'} on ${declared.at} without time - "${declared.reason}"`];
+}
+
+/** ORB-3102 - the usage line of a ticket: "no usage reported" is not zero. */
+export function usageLine(usage: AgentUsageTotals | null): string {
+  if (!usage) return 'no usage reported';
+  const part = (label: string, value: number | null) => `${label} ${value ?? 'not reported'}`;
+  return `${usage.weightedTokens} weighted tokens (${part('in', usage.inputTokens)}, ${part('out', usage.outputTokens)}, ${part('cache read', usage.cacheReadTokens)}, ${part('cache write', usage.cacheWriteTokens)}), $${usage.costUsd.toFixed(2)}`;
 }
 
 interface BulkTimeEntryResult {
@@ -40,11 +96,11 @@ interface BulkTimeEntryResult {
 export const timerStartToolConfig = {
   title: 'Start a timer',
   description:
-    'Start the user\'s stopwatch on a ticket. If a timer is already running on a different ticket, pass replace=true to auto-stop the previous one (its elapsed time is committed to time_entries before the new timer begins). Description becomes the time entry\'s note when this timer eventually stops. Needs time:log on the ticket\'s project (403 errors.time.log_permission_required) and a ticket you can read (404).',
+    'Start the user\'s stopwatch on a ticket. If a timer is already running on a different ticket, pass replace=true to auto-stop the previous one (its time is booked first). Description becomes the time entry\'s note when this timer eventually stops. Needs time:log on the ticket\'s project (403 errors.time.log_permission_required) and a ticket you can read (404).',
   inputSchema: z.object({
-    ticketKey: z.string().min(3),
-    description: z.string().optional().describe('Note for the time entry; set at start, not at stop.'),
-    replace: z.boolean().optional().describe('Stop+commit a running timer first (default: 409).'),
+    ticketKey: z.string(),
+    description: z.string().optional().describe('Entry note, set at start.'),
+    replace: z.boolean().optional().describe('Commit a running timer first (default 409).'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -84,17 +140,21 @@ export function makeTimerStartHandler(client: OrbotoClient) {
 }
 
 export const timerStopToolConfig = {
-  title: 'Stop the running timer',
+  title: 'Stop a timer',
   description:
-    'Stop the user\'s stopwatch. The API commits a time_entries row using the description set at start (or pause/resume), then deletes the active-timer record. Returns the duration in minutes; bookingRefused: true means the timer ran but booked nothing because you can no longer read the ticket or lost time:log on its project.',
-  inputSchema: z.object({}).shape,
+    'Stop the user\'s stopwatch. The API commits a time_entries row using the description set at start (or pause/resume), then deletes the active-timer record. Returns the duration in minutes; bookingRefused: true means the timer ran but booked nothing because you can no longer read the ticket or lost time:log on its project. ticketKey: your timer on that ticket.',
+  inputSchema: z.object({
+    ticketKey: z.string().optional(),
+  }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
 export function makeTimerStopHandler(client: OrbotoClient) {
-  return async (): Promise<CallToolResult> => {
+  return async ({ ticketKey }: { ticketKey?: string } = {}): Promise<CallToolResult> => {
+    const body: Record<string, unknown> = {};
+    if (ticketKey) body.ticketId = (await resolveTicketByKey(client, ticketKey)).id;
     try {
-      const res = await client.post<{ durationMinutes: number; stopped?: boolean; laneFallback?: boolean; bookingRefused?: boolean }>('/time/timer/stop', {});
+      const res = await client.post<{ durationMinutes: number; stopped?: boolean; laneFallback?: boolean; bookingRefused?: boolean }>('/time/timer/stop', body);
       if (res.stopped === false) {
         return {
           content: [{ type: 'text', text: 'No active timer to stop.' }],
@@ -131,12 +191,12 @@ export const logTimeToolConfig = {
   description:
     'Book time for work done without a timer. `loggedAt` defaults to now; pass an ISO datetime to back-date. Pass `dates` (YYYY-MM-DD list) to book the same entry on several days in one call (ORB-2056): all-or-nothing, a day inside an approved timesheet refuses the set and names the day, capacity warnings come back advisory.',
   inputSchema: z.object({
-    ticketKey: z.string().min(3),
+    ticketKey: z.string(),
     durationMinutes: z.number().int().positive(),
     description: z.string().optional(),
     loggedAt: isoDateTime().optional().describe('Default now. Ignored when `dates` is set.'),
     dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(200).optional().describe('Book on each of these days (YYYY-MM-DD).'),
-    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional().describe('Wall-clock start for `dates`, workspace timezone. Default 09:00.'),
+    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional().describe('Start for `dates`, workspace timezone. Default 09:00.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -188,9 +248,9 @@ export function makeLogTimeHandler(client: OrbotoClient) {
 export const listTimeEntriesToolConfig = {
   title: 'List time entries',
   description:
-    'List a ticket\'s time entries, newest first. Use this to FIND an over-tracked entry before fixing it with orboto_edit_time_entry / orboto_delete_time_entry.',
+    'List a ticket\'s time entries, newest first. Each carries its source; the answer adds the minutes per source, the running agent leases and the tokens and cost agents reported (not reported is not zero). Use this to FIND an over-tracked entry before fixing it with orboto_edit_time_entry / orboto_delete_time_entry.',
   inputSchema: z.object({
-    ticketKey: z.string().min(3),
+    ticketKey: z.string(),
     limit: z.number().int().positive().max(100).optional().describe('Default 25.'),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
@@ -199,19 +259,29 @@ export const listTimeEntriesToolConfig = {
 export function makeListTimeEntriesHandler(client: OrbotoClient) {
   return async ({ ticketKey, limit }: { ticketKey: string; limit?: number }): Promise<CallToolResult> => {
     const ticket = await resolveTicketByKey(client, ticketKey);
-    const page = await client.get<{ items: TimeEntry[]; nextCursor: string | null }>(
-      `/tickets/${ticket.id}/time-entries?limit=${limit ?? 25}`,
-    );
+    const page = await client.get<{ items: TimeEntry[]; nextCursor: string | null }>(`/tickets/${ticket.id}/time-entries?limit=${limit ?? 25}`);
+    const agentTime = await client.get<TicketAgentTime>(`/tickets/${ticket.id}/agent-time`).catch(() => null);
     const lines = page.items.map((e) => {
       const agentMark = e.agentLabel ? ` [${e.agentLabel}]` : (e.isAgentWork ? ' [agent]' : '');
-      return `- ${e.durationMinutes} min - ${e.loggedAt}${agentMark}${e.description ? ` - ${e.description}` : ''} (id ${e.id})`;
+      const source = e.source ? ` (${e.source})` : '';
+      return `- ${e.durationMinutes} min${source} - ${e.loggedAt}${agentMark}${e.description ? ` - ${e.description}` : ''} (id ${e.id})`;
     });
+    const runningLeases = (agentTime?.leases ?? []).filter((l) => !l.endedAt).map((l) => ({
+      agentLabel: l.agentLabel, userEmail: l.userEmail, startedAt: l.startedAt, accruedMinutes: l.accruedMinutes, usage: l.usage,
+    }));
+    const running = runningLeases.map((l) => `${l.agentLabel ?? l.userEmail} ${l.accruedMinutes} min so far`);
+    const summary = agentTime ? [
+      `${agentTime.minutes.total} min booked: lease ${agentTime.minutes.lease}, timer ${agentTime.minutes.timer}, manual ${agentTime.minutes.manual}, unrecorded ${agentTime.minutes.unrecorded}`,
+      ...declaredNoneLine(agentTime.declaredNone),
+      `Agent usage: ${usageLine(agentTime.usage)}`,
+      ...(running.length ? [`Running agent leases: ${running.join(', ')}`] : []),
+    ] : ['Agent time could not be read for this ticket.'];
     return {
       content: [{
         type: 'text',
-        text: page.items.length ? `Time entries on [${ticket.ticketKey}]:\n${lines.join('\n')}` : `No time entries on [${ticket.ticketKey}].`,
+        text: [page.items.length ? `Time entries on [${ticket.ticketKey}]:\n${lines.join('\n')}` : `No time entries on [${ticket.ticketKey}].`, ...summary].join('\n'),
       }],
-      structuredContent: { ticketKey: ticket.ticketKey, entries: page.items, nextCursor: page.nextCursor },
+      structuredContent: { ticketKey: ticket.ticketKey, entries: page.items, nextCursor: page.nextCursor, ...(agentTime ? { agentTime: { minutes: agentTime.minutes, declaredNone: agentTime.declaredNone, usage: agentTime.usage, runningLeases } } : {}) },
     };
   };
 }
@@ -221,12 +291,12 @@ export const editTimeEntryToolConfig = {
   description:
     'Correct a time entry: duration, note, date or ticket. Use THIS (not orboto_log_time) to fix a wrong entry: log_time is additive and only makes the total worse. Get the entryId from orboto_list_time_entries (or an orboto_log_time response). Blocked if the entry is locked by an approved timesheet.',
   inputSchema: z.object({
-    ticketKey: z.string().min(3).describe('The entry\'s current ticket.'),
+    ticketKey: z.string().describe('The entry\'s current ticket.'),
     entryId: z.guid(),
     durationMinutes: z.number().int().positive().optional(),
     description: z.string().nullish(),
     loggedAt: isoDateTime().optional(),
-    moveToTicketKey: z.string().min(3).optional().describe('Move the entry to another ticket.'),
+    moveToTicketKey: z.string().optional().describe('Move the entry to another ticket.'),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
@@ -257,7 +327,7 @@ export const deleteTimeEntryToolConfig = {
   description:
     'Delete a time entry. Use it for a bogus over-tracked entry that should not exist at all (prefer orboto_edit_time_entry when it should just have a different duration). You can delete your own; deleting another user\'s needs the `time:delete_others` permission. Blocked if locked by an approved timesheet. Get the entryId from orboto_list_time_entries.',
   inputSchema: z.object({
-    ticketKey: z.string().min(3),
+    ticketKey: z.string(),
     entryId: z.guid(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },

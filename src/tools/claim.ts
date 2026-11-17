@@ -22,6 +22,7 @@ interface ActiveTimer {
   ticketId: string;
   ticketTitle?: string;
   startedAt: string;
+  leaseId?: string | null;
 }
 
 interface TicketWithAssignees extends Omit<TicketRow, 'assignees'> {
@@ -39,7 +40,7 @@ const CATEGORY_TO_LEGACY = {
 export const claimToolConfig = {
   title: 'Claim a ticket',
   description:
-    'Assign yourself, move to in_progress and start a timer. Repeated claims recheck the specification gate. Worker bots need ready, or override=true with a reason; enabled epics are blocked. sole removes other assignees after the gate passes. force permits reopening done tickets. noTimer skips time tracking. On human accounts a different active timer is stopped first and its elapsed time booked to that ticket. Bot timers are per instance and never auto-stop each other: agentSessionToken defaults to this MCP connection; own both start and stop. The server attributes the timer to the session of this connection only (ORB-2550): a token that is not its own is refused 403, a session another harness process owns 409.',
+    'Assign yourself, move to in_progress and start a timer. Repeated claims recheck the specification gate. Worker bots need ready, or override=true with a reason; enabled epics are blocked. sole removes other assignees after the gate passes. force permits reopening done tickets. noTimer skips time tracking. On human accounts a different active timer is stopped first and its elapsed time booked to that ticket. Agent claims open one lease timer per ticket, accruing side by side. agentSessionToken defaults to this connection. The server attributes the timer to the session of this connection only (ORB-2550): a token that is not its own is refused 403, a session another harness process owns 409.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     override: z.boolean().optional().describe("Spec override; reason required."),
@@ -102,22 +103,20 @@ export function makeClaimHandler(client: OrbotoClient) {
     if (!noTimer) {
       try {
         if (effectiveToken) {
-          await client.post('/time/timer/start', { ticketId: current.id, agentSessionToken: effectiveToken });
+          await client.post('/time/timer/start', { ticketId: current.id, agentSessionToken: effectiveToken, lease: true });
           timerStarted = true;
         } else {
         const active = await client.get<ActiveTimer | null>('/time/timer').catch(() => null);
-        if (active && active.ticketId && active.ticketId !== current.id) {
+        if (active && active.ticketId && active.ticketId !== current.id && !active.leaseId) {
           const other = active.ticketTitle ? `"${active.ticketTitle}"` : active.ticketId;
-          await client.post('/time/timer/stop', {
-            note: `Auto-stopped by claim of ${finalTicket.ticketKey ?? current.id}`,
-          }).catch(() => {
+          await client.post('/time/timer/stop', {}).catch(() => {
             timerWarning = `Failed to stop timer on ${other}; new timer not started.`;
           });
         } else if (active && active.ticketId === current.id) {
           timerStarted = true;
         }
         if (!timerStarted && !timerWarning) {
-          await client.post('/time/timer/start', { ticketId: current.id });
+          await client.post('/time/timer/start', { ticketId: current.id, lease: true });
           timerStarted = true;
         }
         }
@@ -163,7 +162,7 @@ export function makeClaimHandler(client: OrbotoClient) {
 export const unclaimToolConfig = {
   title: 'Unclaim a ticket',
   description:
-    'Inverse of `orboto_claim`: unassign yourself and move the ticket back to `todo`. Idempotent - if the caller wasn\'t an assignee, the unassign step is a no-op and the status move still happens. Does not stop a running timer (use `orboto_timer_stop` if you want that side-effect; staying separate avoids surprising the next claimant).',
+    'Inverse of `orboto_claim`: unassign yourself and move the ticket back to `todo`. Idempotent - if the caller wasn\'t an assignee, the unassign step is a no-op and the status move still happens. Ends your claim timer on the ticket and books it.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
   }).shape,

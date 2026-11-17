@@ -280,6 +280,44 @@ describe('ORB-1612 - orboto_work_finish', () => {
     expect(text).not.toContain('orboto_log_time, then');
   });
 
+  it('ORB-3102 - names a repeat that did not move a ticket no longer in the status the finish left it in', async () => {
+    stub([
+      {
+        json: {
+          session: { ...SESSION, status: 'finished' },
+          durationMinutes: 0, changed: false, ticketTransitioned: false, ticketStatusCategory: 'in_progress', noteCommented: false,
+          ticketMoveRefused: 'errors.work_sessions.ticket_moved_since_finish',
+        },
+      },
+    ]);
+    const refused = await makeWorkFinishHandler(client)({ sessionId: 'ws1' });
+    const text = (refused.content[0] as { text: string }).text;
+    expect(text).toContain('is not in the status that finish left it in');
+    expect(text).toContain('orboto_move_ticket');
+    expect(text).toContain('errors.work_sessions.ticket_moved_since_finish');
+    expect(refused.isError).toBeUndefined();
+    expect((refused.structuredContent as { ticketMoveRefused: string | null }).ticketMoveRefused).toBe('errors.work_sessions.ticket_moved_since_finish');
+  });
+
+  it('ORB-3102 - names a call that did not move a ticket because its session had ended without a finish', async () => {
+    stub([
+      {
+        json: {
+          session: { ...SESSION, status: 'expired' },
+          durationMinutes: 0, changed: false, ticketTransitioned: false, ticketStatusCategory: 'in_progress', noteCommented: false,
+          ticketMoveRefused: 'errors.work_sessions.ended_without_finish',
+        },
+      },
+    ]);
+    const refused = await makeWorkFinishHandler(client)({ sessionId: 'ws1' });
+    const text = (refused.content[0] as { text: string }).text;
+    expect(text).toContain('had already ended without a finish');
+    expect(text).toContain('orboto_move_ticket');
+    expect(text).not.toContain('Let it run');
+    expect(refused.isError).toBeUndefined();
+    expect((refused.structuredContent as { ticketMoveRefused: string | null }).ticketMoveRefused).toBe('errors.work_sessions.ended_without_finish');
+  });
+
   it('treats an idempotent no-op re-run as success with no note', async () => {
     stub([
       {

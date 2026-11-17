@@ -185,6 +185,14 @@ afterEach(() => { vi.restoreAllMocks(); });
  * commitSha and targetCategory parameter describes shrank to pay for it
  * (full = 169,302 over HTTP and 169,342 on the stdio build, 58 chars free;
  * curated = 37,901).
+ * ORB-3102 gave `orboto_timer_stop` and `orboto_get_timer` an optional
+ * `ticketKey` and `orboto_list_time_entries` the source and agent time in its
+ * answer inside the ceiling, no new tool: the first sentences stayed short
+ * (the rest sits behind orboto_help), `ticketKey` of the stop lost its
+ * `.min(3)` and a few time parameter texts shrank. Rebased onto the ORB-3101
+ * ledger above, the `.min(3)` of the five time tools that carry a ticket key
+ * went too (the API answers a malformed key with a 404): full = 169,266 over
+ * HTTP and 169,306 on the stdio build, 94 chars free; curated = 37,878.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

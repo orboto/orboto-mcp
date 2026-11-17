@@ -72,7 +72,7 @@ describe('orboto_claim', () => {
     expect(calls[6]).toMatchObject({
       method: 'POST',
       url: 'https://orboto.example.com/time/timer/start',
-      body: { ticketId: 't1' },
+      body: { ticketId: 't1', lease: true },
     });
     expect(res.structuredContent).toMatchObject({
       ticketKey: 'ACME-1',
@@ -179,6 +179,42 @@ describe('orboto_claim', () => {
       timerStarted: false,
     });
     expect((res.structuredContent as { timerWarning: string }).timerWarning).toMatch(/timer is already running/i);
+  });
+});
+
+describe('orboto_claim - ORB-3102 lease', () => {
+  it('leaves a lease timer of the session on another ticket running and opens its own lease', async () => {
+    const calls = stub([
+      { json: ME },
+      { json: PROJ },
+      { json: TICKET_TODO },
+      { json: {} },
+      { json: { ...TICKET_TODO, status: 'IN_PROGRESS', statusName: 'In Progress', statusCategory: 'in_progress' } },
+      { json: { id: 'tm0', ticketId: 't9', startedAt: '2026-05-14T15:00:00Z', leaseId: 'l9' } },
+      { json: { id: 'tm1', ticketId: 't1', startedAt: '2026-05-14T16:00:00Z', leaseId: 'l1' } },
+    ]);
+    const res = await makeClaimHandler(client)({ ticketKey: 'ACME-1' });
+    expect(calls.some((c) => c.url.includes('/time/timer/stop'))).toBe(false);
+    expect(calls[6]).toMatchObject({ method: 'POST', url: 'https://orboto.example.com/time/timer/start', body: { ticketId: 't1', lease: true } });
+    expect(res.structuredContent).toMatchObject({ timerStarted: true, timerWarning: null });
+  });
+});
+
+describe('orboto_claim - ORB-3102 person timer on another ticket', () => {
+  it('stops the person\'s explicit timer without a note, because the stop route takes none', async () => {
+    const calls = stub([
+      { json: ME },
+      { json: PROJ },
+      { json: TICKET_TODO },
+      { json: {} },
+      { json: { ...TICKET_TODO, status: 'IN_PROGRESS', statusName: 'In Progress', statusCategory: 'in_progress' } },
+      { json: { id: 'tm0', ticketId: 't9', ticketTitle: 'Other', startedAt: '2026-05-14T15:00:00Z' } },
+      { json: { durationMinutes: 5, stopped: true } },
+      { json: { id: 'tm1', ticketId: 't1', startedAt: '2026-05-14T16:00:00Z', leaseId: 'l1' } },
+    ]);
+    await makeClaimHandler(client)({ ticketKey: 'ACME-1' });
+    expect(calls[6]).toMatchObject({ method: 'POST', url: 'https://orboto.example.com/time/timer/stop' });
+    expect(calls[6].body).toEqual({});
   });
 });
 

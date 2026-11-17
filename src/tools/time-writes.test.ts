@@ -1,11 +1,12 @@
 /**
  * ORB-244 Phase C Group 2 - time-tracking tool tests.
  */
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';
 import {
   makeTimerStartHandler, makeTimerStopHandler, makeLogTimeHandler,
-  makeListTimeEntriesHandler, makeEditTimeEntryHandler, makeDeleteTimeEntryHandler,
+  makeListTimeEntriesHandler, makeEditTimeEntryHandler, makeDeleteTimeEntryHandler, TIME_ENTRY_SOURCES,
 } from './time-writes.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -87,6 +88,14 @@ describe('orboto_timer_stop', () => {
     expect(sc.alreadyStopped).toBe(true);
   });
 
+  it('ORB-3102 - ticketKey stops the session timer on that ticket', async () => {
+    const calls = stub([{ json: PROJ }, { json: TICKET }, { json: { durationMinutes: 12, stopped: true, laneFallback: false } }]);
+    const res = await makeTimerStopHandler(client)({ ticketKey: 'ACME-1' });
+    expect(calls[2]).toMatchObject({ method: 'POST', body: { ticketId: 't1' } });
+    expect(calls[2].url).toContain('/time/timer/stop');
+    expect(res.structuredContent).toEqual({ durationMinutes: 12 });
+  });
+
   it('ORB-2632 - says nothing was booked when the API refused the booking', async () => {
     stub([{ json: { durationMinutes: 0, stopped: true, laneFallback: false, bookingRefused: true } }]);
     const res = await makeTimerStopHandler(client)();
@@ -148,11 +157,117 @@ describe('orboto_list_time_entries / edit / delete (ORB-1292)', () => {
       { json: PROJ },
       { json: TICKET },
       { json: { items: [{ id: 'e1', ticketId: 't1', userId: 'u1', durationMinutes: 476, loggedAt: 'now' }], nextCursor: null } },
+      { json: { ticketId: 't1', minutes: { total: 476, lease: 0, timer: 0, manual: 476, unrecorded: 0 }, usage: null, leases: [] } },
     ]);
     const res = await makeListTimeEntriesHandler(client)({ ticketKey: 'ACME-1' });
     expect(calls[2].method).toBe('GET');
     expect(calls[2].url).toContain('/tickets/t1/time-entries');
+    expect(calls[3].url).toContain('/tickets/t1/agent-time');
     expect((res.structuredContent as { entries: unknown[] }).entries).toHaveLength(1);
+    expect((res.content[0] as { text: string }).text).toContain('Agent usage: no usage reported');
+  });
+
+  it('ORB-3102 - names each entry\'s source, the minutes per source, the reported usage and the running leases', async () => {
+    stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: { items: [{ id: 'e1', ticketId: 't1', userId: 'u1', durationMinutes: 40, loggedAt: 'now', source: 'lease', agentLabel: 'claude-code#ab12' }], nextCursor: null } },
+      { json: {
+        ticketId: 't1', minutes: { total: 40, lease: 40, timer: 0, manual: 0, unrecorded: 0 },
+        usage: { inputTokens: 10, outputTokens: 2, cacheReadTokens: 100, cacheWriteTokens: null, weightedTokens: 35, costUsd: 1.25, reports: 3 },
+        leases: [{ id: 'l1', userId: 'u1', userEmail: null, userFullName: null, agentSessionId: 's1', agentLabel: 'claude-code#ab12', startedAt: 'now', endedAt: null, stoppedBy: null, bookedMinutes: 0, accruedMinutes: 7, timeEntryId: null, continuesLeaseId: null, usage: null }],
+      } },
+    ]);
+    const res = await makeListTimeEntriesHandler(client)({ ticketKey: 'ACME-1' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('40 min (lease)');
+    expect(text).toContain('40 min booked: lease 40, timer 0, manual 0');
+    expect(text).toContain('Agent usage: 35 weighted tokens (in 10, out 2, cache read 100, cache write not reported), $1.25');
+    expect(text).toContain('Running agent leases: claude-code#ab12 7 min so far');
+    const structured = res.structuredContent as { agentTime: { usage: { costUsd: number }; minutes: { lease: number }; runningLeases: unknown[]; leases?: unknown } };
+    expect(structured.agentTime.usage.costUsd).toBe(1.25);
+    expect(structured.agentTime.minutes.lease).toBe(40);
+    expect(structured.agentTime.runningLeases).toHaveLength(1);
+    expect(structured.agentTime.leases).toBeUndefined();
+  });
+
+  it('ORB-3102 - the structured answer carries no more than the running leases, however many leases the ticket has', async () => {
+    const lease = (n: number) => ({ id: `l${n}`, userId: 'u1', userEmail: null, userFullName: null, agentSessionId: 's1', agentLabel: `a#${n}`, startedAt: 'now', endedAt: n === 0 ? null : 'later', stoppedBy: n === 0 ? null : 'finish', bookedMinutes: 5, accruedMinutes: 5, timeEntryId: null, continuesLeaseId: null, usage: null });
+    stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: { items: [], nextCursor: null } },
+      { json: { ticketId: 't1', minutes: { total: 1000, lease: 1000, timer: 0, manual: 0, unrecorded: 0 }, usage: null, leases: Array.from({ length: 200 }, (_, n) => lease(n)) } },
+    ]);
+    const res = await makeListTimeEntriesHandler(client)({ ticketKey: 'ACME-1' });
+    const structured = res.structuredContent as { agentTime: { runningLeases: unknown[] } };
+    expect(structured.agentTime.runningLeases).toHaveLength(1);
+    expect(JSON.stringify(res.structuredContent).length).toBeLessThan(2000);
+  });
+
+  it('ORB-3102 - mirrors the time entry sources of shared-schema', () => {
+    const shared = readFileSync(new URL('../../../../packages/shared-schema/src/activity.ts', import.meta.url), 'utf8');
+    expect(shared).toContain(`TimeEntrySourceEnum = z.enum([${TIME_ENTRY_SOURCES.map((v) => `'${v}'`).join(', ')}])`);
+    expect(shared).toContain('declaredNone: DoneWithoutTimeSchema.nullable()');
+    expect(TIME_ENTRY_SOURCES).not.toContain('declared_none');
+  });
+
+  it('ORB-3102 - carries exactly the fields of the shared agent-time schemas, none added and none missing', () => {
+    const shared = readFileSync(new URL('../../../../packages/shared-schema/src/activity.ts', import.meta.url), 'utf8');
+    const local = readFileSync(new URL('./time-writes.ts', import.meta.url), 'utf8');
+    const block = (src: string, start: string) => {
+      const from = src.indexOf(start);
+      expect(from, start).toBeGreaterThan(-1);
+      return src.slice(from, src.indexOf('\n}', from));
+    };
+    const keys = (text: string, indent: number) => [...text.matchAll(new RegExp(`^ {${indent}}(\\w+)\\??: `, 'gm'))].map((m) => m[1]!).sort();
+    const inline = (text: string) => [...text.matchAll(/(\w+)\??: /g)].map((m) => m[1]!).sort();
+
+    expect(keys(block(local, 'export interface AgentUsageTotals'), 2)).toEqual(keys(block(shared, 'export const AgentUsageTotalsSchema'), 2));
+    expect(keys(block(local, 'export interface DoneWithoutTime '), 2)).toEqual(keys(block(shared, 'export const DoneWithoutTimeSchema'), 2));
+    const agentTime = block(local, 'export interface TicketAgentTime');
+    expect(keys(agentTime, 2)).toEqual(keys(block(shared, 'export const TicketAgentTimeSchema'), 2));
+    expect(inline(/minutes: \{([^}]*)\}/.exec(agentTime)![1]!)).toEqual(keys(/minutes: z\.object\(\{([\s\S]*?)\n {2}\}\)/.exec(block(shared, 'export const TicketAgentTimeSchema'))![1]!, 4));
+    expect(inline(/leases: Array<\{([\s\S]*?)\}>/.exec(agentTime)![1]!)).toEqual(keys(block(shared, 'export const AgentTicketLeaseSchema'), 2));
+  });
+
+  it('ORB-3102 - lists the entries when the agent-time call fails, naming that and leaving the agent time out', async () => {
+    stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: { items: [{ id: 'e1', ticketId: 't1', userId: 'u1', durationMinutes: 25, loggedAt: 'now', source: 'manual' }], nextCursor: null } },
+      { ok: false, status: 500, json: { errorKey: 'errors.common.internal' } },
+    ]);
+    const res = await makeListTimeEntriesHandler(client)({ ticketKey: 'ACME-1' });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('25 min (manual)');
+    expect(text).toContain('Agent time could not be read for this ticket.');
+    expect(text).not.toContain('Agent usage');
+    const structured = res.structuredContent as { entries: unknown[]; agentTime?: unknown };
+    expect(structured.entries).toHaveLength(1);
+    expect('agentTime' in structured).toBe(false);
+  });
+
+  it('ORB-3101 - names the declaration of an agent that moved the ticket into done without time, from the activity, and says nothing when time is booked', async () => {
+    const declared = { reason: 'research only', at: '2026-11-17T10:00:00.000Z', accountId: 'u1', accountEmail: 'bot@x.test', accountName: null, agentSession: 'claude-code#ab12', status: 'Done', automatic: false, source: null };
+    stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: { items: [], nextCursor: null } },
+      { json: { ticketId: 't1', minutes: { total: 0, lease: 0, timer: 0, manual: 0, unrecorded: 0 }, declaredNone: declared, usage: null, leases: [] } },
+    ]);
+    const res = await makeListTimeEntriesHandler(client)({ ticketKey: 'ACME-1' });
+    expect((res.content[0] as { text: string }).text).toContain('No time booked: claude-code#ab12 moved it to Done on 2026-11-17T10:00:00.000Z without time - "research only"');
+    expect((res.structuredContent as { agentTime: { declaredNone: unknown } }).agentTime.declaredNone).toEqual(declared);
+
+    stub([
+      { json: PROJ },
+      { json: TICKET },
+      { json: { items: [], nextCursor: null } },
+      { json: { ticketId: 't1', minutes: { total: 30, lease: 30, timer: 0, manual: 0, unrecorded: 0 }, declaredNone: null, usage: null, leases: [] } },
+    ]);
+    const booked = await makeListTimeEntriesHandler(client)({ ticketKey: 'ACME-1' });
+    expect((booked.content[0] as { text: string }).text).not.toContain('No time booked');
   });
 
   it('edit PATCHes the entry by id with the new duration', async () => {
