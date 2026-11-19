@@ -71,6 +71,18 @@ describe('orboto_connector', () => {
     ]);
   });
 
+  it('names a Jira Data Center instance the connector cannot reach (ORB-3123)', async () => {
+    const since = '2026-11-19T08:00:00.000Z';
+    const dc = { ...link, provider: 'jira_dc', siteUrl: 'https://jira.example.test/jira', webhookMode: 'poll', unreachableSince: since };
+    stub([
+      { json: project }, { json: [dc] },
+      { json: project }, { json: { healthy: false, reasons: ['site_unreachable', 'failing'], state: 'live', siteUrl: dc.siteUrl, unreachableSince: since, linkedIssues: 4, outbox: { pending: 2, failed: 0, dead: 0 } } },
+    ]);
+    const handler = makeConnectorHandler(client);
+    expect((await handler({ action: 'list', projectKey: 'ALPHA' })).content[0]).toMatchObject({ text: expect.stringContaining(`jira_dc https://jira.example.test/jira ALPHA state=live unreachable since ${since} auth=api_token webhooks=poll`) });
+    expect((await handler({ action: 'health', projectKey: 'ALPHA', linkId })).content[0]).toMatchObject({ text: `needs attention: site_unreachable, failing - https://jira.example.test/jira unreachable since ${since} - state=live mirrored=4 outbox pending=2 failed=0 dead=0` });
+  });
+
   it('fails before any connector request when a field is missing', async () => {
     const calls = stub([{ json: project }, { json: project }]);
     await expect(makeConnectorHandler(client)({ action: 'source_link', projectKey: 'ALPHA' })).rejects.toThrow('source_link needs ticketKey');

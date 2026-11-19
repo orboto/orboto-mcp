@@ -2,7 +2,8 @@
  * ORB-2719 - `orboto_connector`: what an agent needs from an add-on link (is a
  * ticket mirrored and which fields the source owns, the links, their health, a
  * reconcile). Linking, settings, the delivery log, retry, webhooks and unlink
- * are operator tail endpoints reached through orboto_api_call.
+ * are operator tail endpoints reached through orboto_api_call. ORB-3123: health
+ * names a source instance the connector cannot reach, list a poll-only link.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -26,10 +27,11 @@ export const connectorToolConfig = {
 
 type Args = { action: Action; projectKey: string; linkId?: string; ticketKey?: string };
 
-interface Link { id: string; projectId: string; provider: string; siteUrl: string; externalProjectKey: string; scopeFilter: string; authKind: string; state: string; enabled: boolean; webhookMode: string; lastWebhookAt: string | null; lastPollAt: string | null; lastError: string | null; consecutiveFailures: number }
+interface Link { id: string; projectId: string; provider: string; siteUrl: string; externalProjectKey: string; scopeFilter: string; authKind: string; state: string; enabled: boolean; webhookMode: string; lastWebhookAt: string | null; lastPollAt: string | null; lastError: string | null; consecutiveFailures: number; unreachableSince?: string | null }
 
 function line(l: Link): string {
-  return `- ${l.id} ${l.provider} ${l.siteUrl} ${l.externalProjectKey} state=${l.state}${l.enabled ? '' : ' paused'} auth=${l.authKind} webhooks=${l.webhookMode} scope=${l.scopeFilter || '(whole project)'} last webhook=${l.lastWebhookAt ?? 'never'} last poll=${l.lastPollAt ?? 'never'}${l.lastError ? ` error=${l.lastError}` : ''}`;
+  const unreachable = l.unreachableSince ? ` unreachable since ${l.unreachableSince}` : '';
+  return `- ${l.id} ${l.provider} ${l.siteUrl} ${l.externalProjectKey} state=${l.state}${l.enabled ? '' : ' paused'}${unreachable} auth=${l.authKind} webhooks=${l.webhookMode} scope=${l.scopeFilter || '(whole project)'} last webhook=${l.lastWebhookAt ?? 'never'} last poll=${l.lastPollAt ?? 'never'}${l.lastError ? ` error=${l.lastError}` : ''}`;
 }
 
 function text(result: Record<string, unknown>, summary: string): CallToolResult {
@@ -54,8 +56,9 @@ export function makeConnectorHandler(client: OrbotoClient) {
     }
     need('linkId');
     if (args.action === 'health') {
-      const h = await client.get<Record<string, unknown> & { healthy: boolean; reasons: string[]; state: string; linkedIssues: number; outbox: { pending: number; failed: number; dead: number } }>(`/projects/${project.id}/connectors/${args.linkId}/health`);
-      return text(h, `${h.healthy ? 'healthy' : `needs attention: ${h.reasons.join(', ')}`} - state=${h.state} mirrored=${h.linkedIssues} outbox pending=${h.outbox.pending} failed=${h.outbox.failed} dead=${h.outbox.dead}`);
+      const h = await client.get<Record<string, unknown> & { healthy: boolean; reasons: string[]; state: string; siteUrl?: string; unreachableSince?: string | null; linkedIssues: number; outbox: { pending: number; failed: number; dead: number } }>(`/projects/${project.id}/connectors/${args.linkId}/health`);
+      const unreachable = h.unreachableSince ? ` - ${h.siteUrl ?? 'the source'} unreachable since ${h.unreachableSince}` : '';
+      return text(h, `${h.healthy ? 'healthy' : `needs attention: ${h.reasons.join(', ')}`}${unreachable} - state=${h.state} mirrored=${h.linkedIssues} outbox pending=${h.outbox.pending} failed=${h.outbox.failed} dead=${h.outbox.dead}`);
     }
     const out = await client.post<{ reconciled: number; imported: number; unlinked: number }>(`/projects/${project.id}/connectors/${args.linkId}/sync`, {});
     return text(out, `Reconciled ${out.reconciled}, imported ${out.imported}, unlinked ${out.unlinked}.`);
