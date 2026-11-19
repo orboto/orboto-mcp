@@ -83,6 +83,17 @@ describe('orboto_connector', () => {
     expect((await handler({ action: 'health', projectKey: 'ALPHA', linkId })).content[0]).toMatchObject({ text: `needs attention: site_unreachable, failing - https://jira.example.test/jira unreachable since ${since} - state=live mirrored=4 outbox pending=2 failed=0 dead=0` });
   });
 
+  it('lists an OpenProject link whose webhook an administrator enters and names it unconfirmed until it delivers (ORB-3122)', async () => {
+    const op = { ...link, provider: 'openproject', siteUrl: 'https://openproject.example.test/op', externalProjectKey: 'payments', webhookMode: 'manual_signed', authKind: 'oauth' };
+    stub([
+      { json: project }, { json: [op] },
+      { json: project }, { json: { healthy: false, reasons: ['webhook_unconfirmed'], state: 'live', siteUrl: op.siteUrl, unreachableSince: null, linkedIssues: 2, outbox: { pending: 0, failed: 0, dead: 0 } } },
+    ]);
+    const handler = makeConnectorHandler(client);
+    expect((await handler({ action: 'list', projectKey: 'ALPHA' })).content[0]).toMatchObject({ text: expect.stringContaining('openproject https://openproject.example.test/op payments state=live auth=oauth webhooks=manual_signed') });
+    expect((await handler({ action: 'health', projectKey: 'ALPHA', linkId })).content[0]).toMatchObject({ text: 'needs attention: webhook_unconfirmed - state=live mirrored=2 outbox pending=0 failed=0 dead=0' });
+  });
+
   it('fails before any connector request when a field is missing', async () => {
     const calls = stub([{ json: project }, { json: project }]);
     await expect(makeConnectorHandler(client)({ action: 'source_link', projectKey: 'ALPHA' })).rejects.toThrow('source_link needs ticketKey');

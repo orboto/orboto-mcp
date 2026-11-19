@@ -4,6 +4,8 @@
  * reconcile). Linking, settings, the delivery log, retry, webhooks and unlink
  * are operator tail endpoints reached through orboto_api_call. ORB-3123: health
  * names a source instance the connector cannot reach, list a poll-only link.
+ * ORB-3122: an OpenProject link lists its webhook as manual_signed, entered by an
+ * OpenProject administrator; health says webhook_unconfirmed until it delivers.
  */
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
