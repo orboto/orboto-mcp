@@ -158,7 +158,7 @@ export function makeImportNumberingHandler(client: OrbotoClient) {
 export const importApplyToolConfig = {
   title: 'Apply import',
   description:
-    'Queue a staged import. Into a project with tickets: refused with the collisions until the user gives confirmMerge and confirmProjectKey; never fill them. config: source credentials. admin:import.',
+    'Queue a staged import. Into a project with tickets: refused with the collisions until the user gives confirmMerge and confirmProjectKey; never fill them. config: source credentials (not needed after orboto_import_stage, which kept them sealed). admin:import.',
   inputSchema: z.object({
     adapter: z.string().min(1).max(64),
     stagingToken: z.guid(),

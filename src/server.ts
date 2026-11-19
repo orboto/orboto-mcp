@@ -214,6 +214,11 @@ import {
   importApplyToolConfig, makeImportApplyHandler,
 } from './tools/import-numbering.js';
 import {
+  importStageToolConfig, makeImportStageHandler,
+  importStagingToolConfig, makeImportStagingHandler,
+  importCancelToolConfig, makeImportCancelHandler,
+} from './tools/import-staging.js';
+import {
   primerFactListToolConfig, makePrimerFactListHandler,
   primerFactAddToolConfig, makePrimerFactAddHandler,
   primerFactUpdateToolConfig, makePrimerFactUpdateHandler,
@@ -378,10 +383,20 @@ export function assembleInstructions(head: string, workingRules: string, budget 
   return `${head}\n\n${RULES_HEADING}${kept}${TRUNCATION_MARKER}`;
 }
 
-/** ORB-2837 - the listed annotations leave out `idempotentHint: false`, the MCP default, so the manifest carries no hint a client already assumes. */
+/**
+ * ORB-2837 - the listed annotations leave out `idempotentHint: false`, the MCP default, so the manifest carries no hint a client already
+ * assumes. ORB-3121 - a read-only tool lists neither `idempotentHint` nor `destructiveHint`: the MCP spec gives both meaning only when
+ * `readOnlyHint` is false.
+ */
 export function withoutDefaultHints<T>(config: T): T {
   const annotations = (config as { annotations?: Record<string, unknown> } | undefined)?.annotations;
-  if (!annotations || annotations.idempotentHint !== false) return config;
+  if (!annotations) return config;
+  if (annotations.readOnlyHint === true) {
+    if (!('idempotentHint' in annotations) && !('destructiveHint' in annotations)) return config;
+    const { idempotentHint: _idempotent, destructiveHint: _destructive, ...readOnly } = annotations;
+    return { ...config, annotations: readOnly };
+  }
+  if (annotations.idempotentHint !== false) return config;
   const { idempotentHint: _default, ...rest } = annotations;
   return { ...config, annotations: rest };
 }
@@ -605,6 +620,9 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_download_backup', downloadBackupToolConfig, makeDownloadBackupHandler(client));
   reg('orboto_import_numbering', importNumberingToolConfig, makeImportNumberingHandler(client));
   reg('orboto_import_apply', importApplyToolConfig, makeImportApplyHandler(client));
+  reg('orboto_import_stage', importStageToolConfig, makeImportStageHandler(client));
+  reg('orboto_import_staging', importStagingToolConfig, makeImportStagingHandler(client));
+  reg('orboto_import_cancel', importCancelToolConfig, makeImportCancelHandler(client));
 
   reg('orboto_primer_fact_list', primerFactListToolConfig, makePrimerFactListHandler(client));
   reg('orboto_primer_fact_add', primerFactAddToolConfig, makePrimerFactAddHandler(client));

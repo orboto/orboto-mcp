@@ -92,7 +92,7 @@ describe('orboto_credential_agent_access', () => {
     expect(await listed()).toBeUndefined();
     const tool = await listed('full');
     expect(tool?.title).toBe('Credential agent access');
-    expect(tool?.annotations).toMatchObject({ readOnlyHint: true, idempotentHint: true });
+    expect(tool?.annotations).toEqual({ readOnlyHint: true });
     expect(tool?.annotations?.destructiveHint).not.toBe(true);
   });
 });

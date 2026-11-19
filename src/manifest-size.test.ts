@@ -193,6 +193,15 @@ afterEach(() => { vi.restoreAllMocks(); });
  * ledger above, the `.min(3)` of the five time tools that carry a ticket key
  * went too (the API answers a malformed key with a 404): full = 169,266 over
  * HTTP and 169,306 on the stdio build, 94 chars free; curated = 37,878.
+ * ORB-3121 added `orboto_import_stage`, `orboto_import_staging` and
+ * `orboto_import_cancel` (+1,388, full tier only) inside the ceiling: their
+ * parameters carry no texts and a read-only tool lists neither
+ * `idempotentHint` nor `destructiveHint` (the MCP spec gives both meaning only
+ * when `readOnlyHint` is false; 79 + 6 hints, -1,882 chars, every write hint
+ * kept): full = 168,775 over HTTP and 168,815 on the stdio build, 585 chars
+ * free; curated = 37,614. The cancel tool then learned the discard of a
+ * staged import (+44 in its first sentence): 168,859 on the stdio build, 541
+ * chars free.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

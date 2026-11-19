@@ -121,9 +121,29 @@ describe('ORB-2837 - listed annotations leave out the MCP default idempotentHint
   it('drops only idempotentHint false and keeps every other hint', () => {
     expect(withoutDefaultHints({ title: 't', annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false } }))
       .toEqual({ title: 't', annotations: { readOnlyHint: false, destructiveHint: true } });
-    const kept = { annotations: { readOnlyHint: true, idempotentHint: true } };
+    const kept = { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true } };
     expect(withoutDefaultHints(kept)).toBe(kept);
     expect(withoutDefaultHints({ title: 'x' })).toEqual({ title: 'x' });
+  });
+
+  it('ORB-3121 - a read-only tool lists neither idempotentHint nor destructiveHint (meaningful only on a write, per the MCP spec)', async () => {
+    expect(withoutDefaultHints({ annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false } }))
+      .toEqual({ annotations: { readOnlyHint: true, openWorldHint: false } });
+    const bare = { annotations: { readOnlyHint: true } };
+    expect(withoutDefaultHints(bare)).toBe(bare);
+    const server = await buildOrbotoMcpServer({ baseUrl: 'http://127.0.0.1:1', apiKey: 'orb_test', toolset: 'full' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'read-only-hints', version: '0' });
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const { tools } = await client.listTools();
+      const readOnly = tools.filter((tool) => tool.annotations?.readOnlyHint === true);
+      expect(readOnly.length).toBeGreaterThan(50);
+      expect(readOnly.filter((tool) => 'idempotentHint' in (tool.annotations ?? {}) || 'destructiveHint' in (tool.annotations ?? {})).map((tool) => tool.name)).toEqual([]);
+    } finally {
+      await client.close();
+      await server.close();
+    }
   });
 
   it('no listed tool carries idempotentHint false and the grants tool is listed with its hints', async () => {
