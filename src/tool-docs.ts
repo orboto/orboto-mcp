@@ -15,7 +15,7 @@ export const SUMMARY_MAX_CHARS = 220;
  */
 const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_create_full_backup:
-    'Start a full-workspace backup job; returns the job id to poll via orboto_list_backups.',
+    'Start a full-workspace backup job; poll its id with orboto_list_backups.',
   orboto_get_ticket:
     'Fetch a ticket by key: fields, checklists, comments.',
   orboto_requirements_spec:
@@ -30,7 +30,7 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_agent_broadcast:
     'Message every agent in a workspace, project or topic scope.',
   orboto_api_search:
-    'Discover REST API endpoints on demand - the escape hatch for any orboto endpoint.',
+    'Find REST endpoints on demand: the escape hatch for any orboto endpoint.',
   orboto_get_doc:
     'A doc\'s Markdown content plus its backlinks.',
   orboto_primer_fact_list:
@@ -38,9 +38,9 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_bulk_move_tickets:
     'Move every matching ticket to the same status category.',
   orboto_resolve_doc_smart_links:
-    'Resolve doc/ticket/milestone/project smart-link references to their title + URL.',
+    'Resolve doc, ticket, milestone and project smart links to title + URL.',
   orboto_admin_translation_revert:
-    'Restore the pre-translation title + description and clear the translation marker.',
+    'Restore the pre-translation title and description; clears the marker.',
   /** ORB-3078 - shortened summaries that pay for `orboto_credential_agent_access`; each tool's full text stays in `getToolDoc`. */
   orboto_browser_standing_allows:
     'List or revoke the standing allows (Always allow in the side panel) of a browser session.',
@@ -74,6 +74,39 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
     'A fact and the versions it replaced, newest first.',
   orboto_wiki_ingest_url:
     'Fetch a public URL as Markdown into a SOURCE doc of the space.',
+  /** ORB-3117 - shortened summaries that pay for `orboto_ai_reviewer`; each tool's full text stays in `getToolDoc`. */
+  orboto_credential_agent_access:
+    'Which agents may reveal a credential: list = entries, candidates = accounts that can; q searches name or e-mail.',
+  orboto_ci_status:
+    'CI runs of a commit, branch, tag or PR: verdicts and the jobs that did not end green.',
+  orboto_ingest_file:
+    'Upload a PDF, DOCX, Markdown or text file into `spaceId`.',
+  orboto_update_company_closure:
+    'Update a workspace-wide non-working block (offsite, shutdown).',
+  orboto_reset_agent_instruction:
+    'Restore a seeded rule block (one with a builtinKey) to its shipped text.',
+  orboto_close_milestone:
+    'Close a milestone: `completed` (default) or `archived` (archive=true).',
+  orboto_secret_exposures:
+    'Agent secret guard incidents (super-admin): class, masked preview, tool, project, credential to rotate.',
+  orboto_upload_link:
+    'Single-use upload link for a ticket or doc; give its URL to the person (up to 50 MB, no login).',
+  orboto_ingest_url:
+    'Store a public URL as a Markdown doc in `spaceId` (Readability extract).',
+  orboto_work_session_claims_add:
+    'Add resource claims to a session you hold; lease and timer stay.',
+  orboto_wiki_save_answer:
+    'Save an orboto_wiki_ask answer as a wiki page linking its citations.',
+  orboto_unclaim:
+    'Unassign yourself and move the ticket back to `todo`.',
+  orboto_primer_fact_add:
+    'Record a project fact with your evidence; live at once in every session primer.',
+  orboto_edit_doc:
+    'Change a doc by exact string replacement; send only the diff.',
+  orboto_project_readiness:
+    'Setup checks before autonomous work: ok, missing or n/a, each with its fix.',
+  orboto_review_approval_record:
+    'Record your review verdict against an orboto_review_fingerprint fingerprint.',
 };
 
 /** Runtime registry: tool name -> full guidance text, captured at

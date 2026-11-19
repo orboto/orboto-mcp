@@ -229,7 +229,7 @@ export const updateDocSpaceToolConfig = {
     description: z.string().nullish(),
     icon: z.string().nullish(),
     isPublic: z.boolean().optional().describe('DEPRECATED - use guestsVisible.'),
-    visibility: z.enum(['workspace', 'project_members', 'restricted']).optional().describe('workspace = every internal member, project_members = members with doc:view, restricted = allowlist. Needs manage rights.'),
+    visibility: z.enum(['workspace', 'project_members', 'restricted']).optional().describe('workspace = every member, project_members = doc:view members, restricted = allowlist; needs manage rights.'),
     guestsVisible: z.boolean().optional().describe('Guest (external user) opt-in; needs manage rights.'),
     memberIds: z.array(z.guid()).max(5000).optional().describe('Replaces the restricted allowlist; needs manage rights.'),
     slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional(),
@@ -519,7 +519,7 @@ export const moveDocToolConfig = {
   inputSchema: z.object({
     docId: z.string().min(1).describe(DOC_ID_PARAM),
     parentDocId: z.guid().nullable().optional().describe('null = top-level.'),
-    spaceId: z.guid().optional().describe('Target space (member of both). The parent must be in it, else the doc lands top-level.'),
+    spaceId: z.guid().optional().describe('Target space (member of both); a parent outside it makes the doc top-level.'),
     sortOrder: z.number().int().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },

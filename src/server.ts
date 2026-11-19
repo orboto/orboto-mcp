@@ -18,6 +18,7 @@ import { aiStatusToolConfig, makeAiStatusHandler } from './tools/ai-status.js';
 import { draftCustomerReplyToolConfig, makeDraftCustomerReplyHandler } from './tools/customer-draft.js';
 import { embeddingStatusToolConfig, makeEmbeddingStatusHandler } from './tools/embedding-status.js';
 import { aiUsageToolConfig, makeAiUsageHandler } from './tools/ai-usage.js';
+import { aiReviewerToolConfig, makeAiReviewerHandler } from './tools/ai-reviewer.js';
 import { secretScanToolConfig, makeSecretScanHandler } from './tools/secret-scan.js';
 import { secretExposuresToolConfig, makeSecretExposuresHandler } from './tools/secret-exposures.js';
 import { sessionStartToolConfig, makeSessionStartHandler } from './tools/session-start.js';
@@ -455,6 +456,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_draft_customer_reply', draftCustomerReplyToolConfig, makeDraftCustomerReplyHandler(client));
   reg('orboto_embedding_status', embeddingStatusToolConfig, makeEmbeddingStatusHandler(client));
   reg('orboto_ai_usage', aiUsageToolConfig, makeAiUsageHandler(client));
+  reg('orboto_ai_reviewer', aiReviewerToolConfig, makeAiReviewerHandler(client));
   reg('orboto_secret_scan', secretScanToolConfig, makeSecretScanHandler(client));
   reg('orboto_secret_exposures', secretExposuresToolConfig, makeSecretExposuresHandler(client));
   reg('orboto_session_start', sessionStartToolConfig, makeSessionStartHandler(client, { channel: opts.channel }));

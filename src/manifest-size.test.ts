@@ -202,6 +202,15 @@ afterEach(() => { vi.restoreAllMocks(); });
  * free; curated = 37,614. The cancel tool then learned the discard of a
  * staged import (+44 in its first sentence): 168,859 on the stdio build, 541
  * chars free.
+ * ORB-3117 added `orboto_ai_reviewer` (+343, full tier only) inside the
+ * ceiling: it declares no idempotentHint (a read-only tool), its first
+ * sentence is short, and 16 new and 4 shorter summary overrides in
+ * tool-docs.ts plus the docs visibility and move spaceId texts pay for it,
+ * each tool's full text kept. Rebased onto ORB-3102: full = 169,283 over
+ * HTTP and 169,323 on the stdio build, 77 chars free; curated = 37,862.
+ * Rebased onto ORB-3121, its description naming the tie rule and the
+ * unverified reason (summary unchanged): full = 168,836 over HTTP and
+ * 168,876 on the stdio build, 524 chars free; curated = 37,598.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
