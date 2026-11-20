@@ -56,6 +56,37 @@ export function isVaultPlaintextPath(path: string): boolean {
   return pathCandidates(path).some((candidate) => VAULT_PLAINTEXT_PATHS.some((pattern) => pattern.test(candidate)));
 }
 
+/** ORB-3147 - mirror of ACCOUNT_LINK_ROUTES in apps/api/src/services/account-access-email.ts (drift test in api-call.test.ts): their set-password link never reaches the transcript, also from an older server. */
+export const ACCOUNT_LINK_ROUTES = [
+  'POST /admin/users/:userId/access-email',
+  'POST /admin/users/access-email',
+  'POST /admin/users/:userId/password-reset-link',
+  'PATCH /admin/users/:userId',
+] as const;
+
+const ACCOUNT_LINK_MATCHERS = ACCOUNT_LINK_ROUTES.map((route) => {
+  const [method, path] = route.split(' ');
+  return { method, pattern: new RegExp(`^${path.replace(/:[^/]+/g, '[^/]+')}$`, 'i') };
+});
+
+export function isAccountLinkCall(method: string, path: string): boolean {
+  return pathCandidates(path).some((candidate) => ACCOUNT_LINK_MATCHERS.some((m) => m.method === method && m.pattern.test(candidate)));
+}
+
+function withoutResetUrls(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutResetUrls);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'resetUrl').map(([key, v]) => [key, withoutResetUrls(v)]));
+  return value;
+}
+
+/** Drops every `resetUrl` from the answer of an account-link route; a text body loses the value of the field. */
+function withheldLinks(envelope: ProxyEnvelope, method: string, path: string): ProxyEnvelope {
+  if (!isAccountLinkCall(method, path)) return envelope;
+  if (envelope.encoding === 'json') return { ...envelope, body: withoutResetUrls(envelope.body) };
+  if (envelope.encoding === 'utf8') return { ...envelope, body: String(envelope.body ?? '').replace(/"resetUrl"\s*:\s*"[^"]*"/g, '"resetUrl":"[withheld]"') };
+  return envelope;
+}
+
 export const apiCallToolConfig = {
   title: 'Call a REST endpoint',
   description:
@@ -67,6 +98,7 @@ export const apiCallToolConfig = {
     + 'need the web login (403 errors.auth.oauth_credential_route_refused). '
     + 'A vault route that answers with a plaintext or a second factor (reveal, totp, file, browser-login) is refused '
     + '(403 errors.credential.passthrough_refused); credential metadata stays readable. '
+    + 'The set-password link of an access email or reset link (`resetUrl`) is withheld; a person hands one over from Admin -> Users. '
     + 'Prefer named tools when one exists - they are more ergonomic.',
   inputSchema: z.object({
     method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
@@ -93,12 +125,13 @@ export function makeApiCallHandler(client: OrbotoClient) {
     if (typeof body === 'string') {
       try { body = JSON.parse(body); } catch { /* pass through */ }
     }
-    const envelope = await client.post<ProxyEnvelope>('/system/api-proxy', {
+    const answered = await client.post<ProxyEnvelope>('/system/api-proxy', {
       method: input.method,
       path: input.path,
       ...(input.query ? { query: input.query } : {}),
       ...(body !== undefined ? { body } : {}),
     }, { instanceToken: mcpInstanceToken(undefined, extra as { sessionId?: string } | undefined) });
+    const envelope = withheldLinks(answered, input.method, input.path);
 
     const bodyText = envelope.encoding === 'json'
       ? JSON.stringify(envelope.body, null, 1)

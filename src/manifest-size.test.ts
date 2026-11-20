@@ -211,6 +211,19 @@ afterEach(() => { vi.restoreAllMocks(); });
  * Rebased onto ORB-3121, its description naming the tie rule and the
  * unverified reason (summary unchanged): full = 168,836 over HTTP and
  * 168,876 on the stdio build, 524 chars free; curated = 37,598.
+ * ORB-3147 added `orboto_admin_user_access` (full tier only) inside the
+ * ceiling: the access email for up to 100 accounts and the reset link for
+ * one, its parameters carry no texts or string bounds (the API bounds them),
+ * it declares destructiveHint true (it mails people and deletes their older
+ * unused access links, so a client confirms it), and the upload link title
+ * shrank: full = 169,357 over HTTP and 169,397 on the stdio build, 3 chars
+ * free; curated = 37,590. It then bought room back: 71 wire summaries in
+ * tool-docs.ts say the same facts in fewer words (each full text stays in
+ * `getToolDoc`), three more titles shortened, and the 16 output schemas no
+ * longer repeat what the truncation handle is for, which
+ * orboto_response_expand's `handle` parameter and every truncated response
+ * say: full = 167,811 over HTTP and 167,851 on the stdio build, 1,549 chars
+ * free; curated = 37,049.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

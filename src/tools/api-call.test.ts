@@ -174,3 +174,39 @@ describe('ORB-3068 - orboto_api_call never carries vault plaintext', () => {
     expect([...block.matchAll(/'([^']+)'/g)].map((m) => m[1]).sort()).toEqual([...VAULT_PLAINTEXT_ROUTES].sort());
   });
 });
+
+describe('ORB-3147 - orboto_api_call never carries a set-password link', () => {
+  const LINK = 'https://orboto.example/auth/reset-password/secret-3147';
+  const envelope = (matchedRoute: string, body: unknown, encoding = 'json') => ({ json: { status: 200, contentType: 'application/json', body, encoding, truncated: false, matchedRoute } });
+
+  it('drops resetUrl from every answer of the access email, reset link and reactivation routes, whatever path spelling', async () => {
+    const cases: Array<[string, string, unknown]> = [
+      ['POST', '/admin/users/u1/access-email', { userId: 'u1', status: 'not_sent', resetUrl: LINK }],
+      ['POST', '/admin/users/access-email', { results: [{ userId: 'u1', status: 'not_sent', resetUrl: LINK }], sent: 0, notSent: 1, skipped: 0 }],
+      ['POST', '/admin/users/u1/password-reset-link', { sent: false, expiresAt: 'x', resetUrl: LINK }],
+      ['PATCH', '/admin/users/u1', { id: 'u1', accessEmail: { status: 'not_sent', resetUrl: LINK } }],
+      ['POST', '/Admin/Users/u1/%61ccess-email/', { resetUrl: LINK }],
+    ];
+    for (const [method, path, body] of cases) {
+      stub([envelope(path, body)]);
+      const res = await makeApiCallHandler(client)({ method: method as 'POST', path, body: {} });
+      expect(JSON.stringify(res), path).not.toContain('secret-3147');
+    }
+    stub([envelope('/admin/users/{userId}/access-email', `{"status":"not_sent","resetUrl":"${LINK}"}`, 'utf8')]);
+    const text = await makeApiCallHandler(client)({ method: 'POST', path: '/admin/users/u1/access-email', body: {} });
+    expect(JSON.stringify(text)).not.toContain('secret-3147');
+  });
+
+  it('leaves other answers as they are', async () => {
+    stub([envelope('/admin/users/{userId}', { id: 'u1', resetUrl: 'kept' })]);
+    const res = await makeApiCallHandler(client)({ method: 'GET', path: '/admin/users/u1' });
+    expect(res.structuredContent).toMatchObject({ body: { resetUrl: 'kept' } });
+  });
+
+  it('ACCOUNT_LINK_ROUTES is the API list', async () => {
+    const { ACCOUNT_LINK_ROUTES } = await import('./api-call.js');
+    const source = await readFile(fileURLToPath(new URL('../../../api/src/services/account-access-email.ts', import.meta.url)), 'utf8');
+    const block = /export const ACCOUNT_LINK_ROUTES = \[([\s\S]*?)\] as const/.exec(source)![1];
+    expect([...block.matchAll(/'([^']+)'/g)].map((m) => m[1]).sort()).toEqual([...ACCOUNT_LINK_ROUTES].sort());
+  });
+});

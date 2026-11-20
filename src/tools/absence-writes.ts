@@ -101,7 +101,7 @@ export function makeUpdateCompanyClosureHandler(client: OrbotoClient) {
 }
 
 export const updateAbsenceToolConfig = {
-  title: 'Edit a pending or draft absence request',
+  title: 'Edit a pending or draft absence',
   description:
     'Edit your own absence request before a reviewer acts on it. Locked once the status is `approved`, `rejected`, or `cancelled` - those transitions go through the approve / reject / cancel endpoints, not this one. Caller must be the absence owner or a super-admin. `durationDays` is recomputed automatically when dates move (uses the owner\'s working-day rules + holidays + closures).',
   inputSchema: z.object({

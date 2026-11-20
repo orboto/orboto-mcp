@@ -204,6 +204,7 @@ import { browserGrantsToolConfig, makeBrowserGrantsHandler } from './tools/brows
 import { credentialAgentAccessToolConfig, makeCredentialAgentAccessHandler } from './tools/credential-agent-access.js';
 import { browserStandingToolConfig, makeBrowserStandingHandler } from './tools/browser-standing.js';
 import { adminApiKeyListToolConfig, adminApiKeyRevokeToolConfig, makeAdminApiKeyListHandler, makeAdminApiKeyRevokeHandler } from './tools/admin-api-keys.js';
+import { adminUserAccessToolConfig, makeAdminUserAccessHandler } from './tools/admin-user-access.js';
 import { freeBusyToolConfig, makeFreeBusyHandler } from './tools/free-busy.js';
 import {
   createFullBackupToolConfig, makeCreateFullBackupHandler,
@@ -617,6 +618,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_browser_standing_allows', browserStandingToolConfig, makeBrowserStandingHandler(client));
   reg('orboto_admin_api_key_list', adminApiKeyListToolConfig, makeAdminApiKeyListHandler(client));
   reg('orboto_admin_api_key_revoke', adminApiKeyRevokeToolConfig, makeAdminApiKeyRevokeHandler(client));
+  reg('orboto_admin_user_access', adminUserAccessToolConfig, makeAdminUserAccessHandler(client));
   reg('orboto_create_full_backup', createFullBackupToolConfig, makeCreateFullBackupHandler(client));
   reg('orboto_list_backups', listBackupsToolConfig, makeListBackupsHandler(client));
   reg('orboto_download_backup', downloadBackupToolConfig, makeDownloadBackupHandler(client));

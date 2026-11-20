@@ -283,13 +283,12 @@ export const TruncationBlockSchema = z.object({
 });
 
 /**
- * ORB-1805 - what registerWithMetrics actually advertises.
+ * ORB-1805 - what registerWithMetrics actually advertises; what the handle is for is said once, on
+ * orboto_response_expand's `handle` parameter, and in every truncated response (ORB-3147).
  *
  * @see ORB-1738
  */
-export const TruncationBlockAdvertisedSchema = z.object({ handle: z.string() })
-  .passthrough()
-  .describe('Handle for orboto_response_expand.');
+export const TruncationBlockAdvertisedSchema = z.object({ handle: z.string() }).passthrough();
 
 export interface TruncationBlock {
   handle: string;

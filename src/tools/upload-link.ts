@@ -16,7 +16,7 @@ interface UploadLinkResponse {
 }
 
 export const uploadLinkToolConfig = {
-  title: 'Mint an upload link',
+  title: 'Upload link',
   description:
     'Mint a single-use upload link for a ticket or doc; give its URL to the person (up to 50 MB, no login). For any file too big for `contentBase64` (about 25 KB). Pass `ticketKey` or `docId`. The link expires after `expiresInMinutes` (default 15, max 60), keeps the type policy and the storage quota, and is audited with your identity. A built-in agent browser cannot upload files, so do not open the link yourself. Mirrors `orboto attach link`.',
   inputSchema: z.object({

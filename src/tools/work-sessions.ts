@@ -68,7 +68,7 @@ function describe(s: WorkSessionRow): string {
 const AS_IN_SESSION_START = 'As in orboto_work_session_start.';
 
 export const workStartToolConfig = {
-  title: 'Start a work session with its context',
+  title: 'Start work with its context',
   description:
     'Claim a ticket lease with its rules and work context. Includes the primer, enriched ticket, checklists, dependencies, git health and live sessions. Exactly one active lease per ticket and role across the workspace. Resource claims are atomic with the lease; conflicts name the holder and leave no partial session. Prefer this for pickup; use orboto_work_session_start for renewal when context is already loaded. Spec-tagged bots may use role=spec to prepare the build order. Worker bots need a ready specification, or override=true with a reason; enabled epics cannot be overridden.',
   inputSchema: z.object({
@@ -459,7 +459,7 @@ interface FinishWorkResponse {
 }
 
 export const workFinishToolConfig = {
-  title: 'Finish a work session and close the ticket',
+  title: 'Finish work and close the ticket',
   description:
     'The one-call ticket exit, sibling of orboto_work_start. Does everything orboto_work_session_finish does (stops and books the session\'s EXACT timer, releases the lease and every resource claim, idles your presence) PLUS: records a commitSha as an ATTESTATION when git ingestion has not seen it yet (never blocks; git verification catches up later), transitions the ticket per the ORB-1608 deliveryMode policy, and posts the completion note. Only an `implementation`-role session with outcome `finished` drives the ticket (default target category `done`) - `review`/`preflight`/`integration` sessions attach without reassigning the ticket (ORB-1609) and a `cancelled` outcome never auto-closes a ticket nobody actually finished; both still book time and free the lease. Idempotent: finishing again, or on a ticket already at the target category, is a no-op, not an error. A refused transition (approval gate, blocker, permission, an agent close without booked time) is non-fatal: the session finished, `ticketTransitioned` is false, `ticketMoveRefused` names the refusal.',
   inputSchema: z.object({
