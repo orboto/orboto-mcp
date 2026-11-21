@@ -105,7 +105,7 @@ export const CHANNEL_INSTRUCTIONS =
   + 'dismiss what is not yours with orboto_messages { dismiss: { ids, reason } }. Never answer the channel itself. '
   + 'Declare the scope once in the shell with `orboto session-start --role worker --scope-projects <KEY>`, never through the claude.ai connector; details: orboto://rules.';
 
-const START_FLAG = '--dangerously-load-development-channels server:orboto';
+const START_FLAG = '--dangerously-load-development-channels=server:orboto';
 
 /** ORB-2148 - the commands an agent hands its operator verbatim; docs/claude-code.md carries the same lines. */
 export const CHANNEL_START_COMMANDS = {
