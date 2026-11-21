@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { ownerLine, type OwnerMatch } from './responsibilities.js';
-import { nextPageLine, originText, PresenceFilterShape, presenceQuery, readPresence, unknownProjectText, type PresenceFilters, type SessionOrigin } from './agent-coordination.js';
+import { nextPageLine, originText, PresenceFilterShape, presenceQuery, readPresence, statusText, unknownProjectText, type PresenceFilters, type SessionOrigin } from './agent-coordination.js';
 import { AGENT_WAKE_LABELS, type AgentSessionWake } from './agent-presence-schema.js';
 
 interface WhoEntry {
@@ -18,6 +18,8 @@ interface WhoEntry {
   wake?: AgentSessionWake;
   currentTicket: { key: string | null; title: string } | null;
   status: string;
+  /** ORB-3162 - what the harness's main agent does beside the status. */
+  harnessState?: { state: string; text: string; subagents: number; tasks: number; reportedAt: string } | null;
   host?: string | null;
   origin?: SessionOrigin;
   state?: string;
@@ -40,7 +42,7 @@ export function refusalLines(refusals: PresenceRefusalEntry[] | undefined): stri
 
 export const agentWhoToolConfig = {
   title: 'Who receives agent mail',
-  description: 'Live agent sessions and the role addresses (integrator@KEY) they answer to. GET /v1/agent/who; each row names account, role, declared projects, last seen, wake channel and current ticket; address a role from here, never a session id copied from a log. A session without a declared scope is not listed; the refused heartbeats of the last 24 hours follow per account (refusals). `for` (free text) names the topic owner and keeps its sessions; `state` keeps one state (orphaned: only another process touches it); email, sessionId (id or 8+ character prefix), kind and wake narrow on the server; 4 rows a page, nextCursor continues (cursor); a project that is unknown or not visible to you answers so in one line.',
+  description: 'Live agent sessions and the role addresses (integrator@KEY) they answer to. GET /v1/agent/who; each row names account, role, declared projects, last seen, wake channel and current ticket, and harnessState beside the status (what the main agent of a supervised harness does, such as at prompt, 2 subagents, 1 task running); address a role from here, never a session id copied from a log. A session without a declared scope is not listed; the refused heartbeats of the last 24 hours follow per account (refusals). `for` (free text) names the topic owner and keeps its sessions; `state` keeps one state (orphaned: only another process touches it); email, sessionId (id or 8+ character prefix), kind and wake narrow on the server; 4 rows a page, nextCursor continues (cursor); a project that is unknown or not visible to you answers so in one line.',
   inputSchema: z.object({
     project: z.string().min(1).max(64).optional(),
     for: z.string().min(2).max(2000).optional(),
@@ -58,7 +60,7 @@ export function whoLine(s: WhoEntry): string {
   const ticket = s.currentTicket ? `; on ${s.currentTicket.key ?? s.currentTicket.title}` : '';
   const host = s.origin ? originText(s) : s.host ? `, host ${s.host}` : '';
   const shared = s.sharedAddresses?.length ? `; also held by another live session: ${s.sharedAddresses.join(', ')}` : '';
-  return `- ${address} - ${s.email} session ${s.shortId}${host}, ${s.status}, ${channel}, last seen ${s.lastSeenAt}${ticket}${shared}`;
+  return `- ${address} - ${s.email} session ${s.shortId}${host}, ${statusText(s.status, s.harnessState)}, ${channel}, last seen ${s.lastSeenAt}${ticket}${shared}`;
 }
 
 export function makeAgentWhoHandler(client: OrbotoClient) {

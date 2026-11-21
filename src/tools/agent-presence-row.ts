@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AgentInventoryKindSchema, AgentSessionWakeSchema } from './agent-presence-schema.js';
+import { AgentHarnessStateSchema, AgentInventoryKindSchema, AgentSessionWakeSchema } from './agent-presence-schema.js';
 import { AgentSessionScopeSchema } from './agent-session-scope.js';
 
 /** ORB-2548 - one presence row as orboto_agent_presence returns it; the full inventory row is `orboto agents --json` and `GET /v1/agent/who?include=inventory`. */
@@ -10,6 +10,8 @@ export const AgentPresenceRowSchema = z.object({
   kind: AgentInventoryKindSchema,
   owner: z.string().nullable(),
   status: z.string(),
+  /** ORB-3162 - what the harness's main agent does beside the status; the status is never replaced. */
+  harnessState: AgentHarnessStateSchema.optional(),
   lane: z.string().nullable(),
   scope: AgentSessionScopeSchema.nullable(),
   memberProjects: z.number().int(),

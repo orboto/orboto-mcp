@@ -143,12 +143,28 @@ export function nextPageLine(nextCursor: string | null | undefined): string[] {
   return nextCursor ? [`More sessions: call again with cursor "${nextCursor}", or narrow with email, sessionId, project, role, kind, wake or state.`] : [];
 }
 
+/** ORB-3162 - the status, with the harness state beside it: in place of a plain idle, after any other status; control characters never reach the line. */
+export function statusText(status: string, harness: { text: string } | null | undefined): string {
+  const text = harness ? printableLine(harness.text) : '';
+  if (!text) return status;
+  return status === 'idle' ? text : `${status} (${text})`;
+}
+
+/** ORB-3162 - one printable line: control, format and line separator characters dropped, whitespace folded. */
+export function printableLine(value: string): string {
+  return value.replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+}
+
+function harnessStateView(h: NonNullable<PresenceRow['harnessState']>) {
+  return { state: printableLine(h.state), text: printableLine(h.text), subagents: h.subagents, tasks: h.tasks, reportedAt: h.reportedAt };
+}
+
 function presenceRow(s: PresenceRow): AgentPresenceRow {
   const o = s.origin;
   return {
     sessionId: s.sessionId, userEmail: s.userEmail, userFullName: s.userFullName, kind: s.kind,
     owner: s.owner?.name ?? s.owner?.email ?? (s.actsAs ? `acts as ${s.actsAs.name ?? s.actsAs.email}` : null),
-    status: s.status, lane: s.lane?.name ?? null, scope: s.scope ?? null, memberProjects: s.projects.length,
+    status: s.status, ...(s.harnessState ? { harnessState: harnessStateView(s.harnessState) } : {}), lane: s.lane?.name ?? null, scope: s.scope ?? null, memberProjects: s.projects.length,
     connections: [...new Set(s.connections.map((c) => c.type))], ...(s.wake ? { wake: s.wake } : {}), ...(s.state ? { state: s.state } : {}),
     origin: o ? { host: o.host, repo: o.repo, pid: o.pid, harness: o.harness, client: o.client } : null,
     workingOn: s.workingOnTicket ? s.workingOnTicket.key ?? s.workingOnTicket.id : null,
@@ -166,13 +182,13 @@ function presenceLine(s: PresenceRow): string {
   const keys = s.projects.map((p) => p.key);
   const projects = keys.length === 0 ? '' : keys.length <= 8 ? `; projects: ${keys.join(', ')}` : `; member of ${keys.length} projects`;
   const connections = s.connections.length ? `; connections: ${[...new Set(s.connections.map((c) => c.type))].join(', ')}` : '';
-  return `- ${name} <${s.userEmail}> (${runtime}, instance ${s.sessionId}) - ${s.status}${originText(s)}${work}; owner: ${owner}${s.lane ? `; lane: ${s.lane.name}` : ''}${scope}${projects}${connections}${s.wake ? `; ${AGENT_WAKE_LABELS[s.wake]}` : ''}`;
+  return `- ${name} <${s.userEmail}> (${runtime}, instance ${s.sessionId}) - ${statusText(s.status, s.harnessState)}${originText(s)}${work}; owner: ${owner}${s.lane ? `; lane: ${s.lane.name}` : ''}${scope}${projects}${connections}${s.wake ? `; ${AGENT_WAKE_LABELS[s.wake]}` : ''}`;
 }
 
 export const agentPresenceToolConfig = {
   title: 'Agent presence',
   description:
-    'Active agent instances. The orboto_who set from GET /v1/agent/who?include=inventory: lane workers and reviewers, inbox, MCP and runner connections. Each row: sessionId, account, kind (agent | human by credential), owner or acts-as, status, lane, declared scope, member project count, connection types, wake (on_call: nothing wakes it), state (live | quiet | orphaned | unknown_origin), origin (host, repo, pid, harness, client), current ticket. Filters run on the server: email, sessionId (id or 8+ character prefix), projectKey (sessions declared on it), role, kind, wake, state; 4 rows a page, nextCursor continues (cursor). A projectKey that is unknown or not visible to you answers so in one line, with no rows. Operators (admin:agents:read or admin:system:read) see the workspace, others their own sessions and those on their projects, a foreign row redacted. The full inventory row: `orboto agents --json`.',
+    'Active agent instances. The orboto_who set from GET /v1/agent/who?include=inventory: lane workers and reviewers, inbox, MCP and runner connections. Each row: sessionId, account, kind (agent | human by credential), owner or acts-as, status, harnessState beside it (what the main agent of a supervised harness does: state, text such as at prompt, 2 subagents, 1 task running, subagents, tasks, reportedAt; the status wins), lane, declared scope, member project count, connection types, wake (on_call: nothing wakes it), state (live | quiet | orphaned | unknown_origin), origin (host, repo, pid, harness, client), current ticket. Filters run on the server: email, sessionId (id or 8+ character prefix), projectKey (sessions declared on it), role, kind, wake, state; 4 rows a page, nextCursor continues (cursor). A projectKey that is unknown or not visible to you answers so in one line, with no rows. Operators (admin:agents:read or admin:system:read) see the workspace, others their own sessions and those on their projects, a foreign row redacted. The full inventory row: `orboto agents --json`.',
   inputSchema: z.object({
     projectKey: z.string().min(1).max(64).optional(),
     ...PresenceFilterShape,

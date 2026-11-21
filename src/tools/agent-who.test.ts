@@ -26,6 +26,16 @@ describe('orboto_who', () => {
     expect(result.structuredContent).toMatchObject({ sessions: [expect.objectContaining({ shortId: 'f072e1c5' })] });
   });
 
+  it('ORB-3162 - the harness state of a session stands beside its status, printed as one sanitised line and kept structured', async () => {
+    const harnessState = { state: 'idle', text: 'at prompt, 2 subagents, 0 tasks running', subagents: 2, tasks: 0, reportedAt: '2026-11-21T09:00:00.000Z' };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => ({ ok: true, status: 200, statusText: 'OK', text: async () => '', json: async () => ({ sessions: [{ ...entry, status: 'idle', harnessState }, { ...entry, shortId: 'aa11bb22', status: 'blocked', harnessState: { ...harnessState, text: 'x\r\ny' } }] }) } as unknown as Response));
+    const result = await makeAgentWhoHandler(client)({});
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain('session f072e1c5, at prompt, 2 subagents, 0 tasks running, claude-code online');
+    expect(text).toContain('session aa11bb22, blocked (x y), claude-code online');
+    expect((result.structuredContent as { sessions: unknown[] }).sessions[0]).toMatchObject({ status: 'idle', harnessState });
+  });
+
   it('ORB-2548: a project that is unknown or not visible answers in one line instead of a raw 404', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async () => ({ ok: false, status: 404, statusText: 'Not Found', headers: new Headers(), text: async () => '{"errorKey":"errors.agents.message_project_not_found"}', json: async () => ({}) } as unknown as Response));
     const result = await makeAgentWhoHandler(client)({ project: 'gone' });

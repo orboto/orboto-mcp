@@ -19,6 +19,7 @@ import {
   makeAgentHeartbeatHandler,
   makeAgentPresenceHandler,
   makeAgentNotifyHandler,
+  statusText,
 } from './agent-coordination.js';
 import { makeAgentMessagesHandler } from './agent-messages.js';
 
@@ -159,6 +160,28 @@ describe('orboto_agent_presence', () => {
       wake: 'channel', origin: null, workingOn: null, lastSeenAt: rows[0]!.lastSeenAt,
     });
     expect(structured.sessions[1]).toMatchObject({ owner: 'acts as Alice', memberProjects: 0, connections: ['oauth'] });
+  });
+
+  it('ORB-3162 - the harness state stands beside the status: in place of a plain idle in the line, after any other status, and as its own structured field', async () => {
+    const harnessState = { state: 'idle', text: 'at prompt, 5 subagents, 1 task running', subagents: 5, tasks: 1, reportedAt: '2026-11-21T09:00:00.000Z' };
+    const idle = { ...presenceRows()[1], clientInfo: { name: 'agy' }, harnessState };
+    const blocked = { ...presenceRows()[0], status: 'blocked', clientInfo: { name: 'agy' }, harnessState: { ...harnessState, text: 'at prompt\u001b[2J\nfake line' } };
+    stub([{ json: { sessions: [], inventory: [idle, blocked] } }]);
+    const result = await makeAgentPresenceHandler(client)({});
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain('(agy, instance 00000000-0000-0000-0000-000000000011) - at prompt, 5 subagents, 1 task running');
+    expect(text).toContain('(agy, instance 00000000-0000-0000-0000-000000000010) - blocked (at prompt [2J fake line)');
+    expect(text).not.toContain('\u001b');
+    expect(text.split('\n').some((line) => line.startsWith('fake line'))).toBe(false);
+    const sessions = (result.structuredContent as { sessions: Array<{ status: string; harnessState?: unknown }> }).sessions;
+    expect(sessions.map((s) => s.status)).toEqual(['idle', 'blocked']);
+    expect(sessions[0]!.harnessState).toEqual(harnessState);
+    expect(statusText('working', null)).toBe('working');
+  });
+
+  it('ORB-3162 - a lone surrogate in the harness state never reaches the line', () => {
+    expect(statusText('blocked', { text: 'at prompt \ud800 high \udfff low' })).toBe('blocked (at prompt high low)');
+    expect(statusText('idle', { text: '\ud83d' })).toBe('idle');
   });
 
   it('names the member count instead of listing more than eight projects', async () => {
