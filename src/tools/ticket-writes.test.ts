@@ -8,6 +8,7 @@
  * PBAC cascade surfaces through the MCP layer.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
 import {
   makeCreateTicketHandler, makeUpdateTicketHandler, makeMoveTicketHandler,
@@ -16,7 +17,7 @@ import {
   makeUnassignHandler, makeSetMilestoneHandler,
   makeAddTicketDependencyHandler, makeRemoveTicketDependencyHandler,
   makeListTicketDependenciesHandler,
-  makeLabelTicketHandler, makeUnlabelTicketHandler,
+  makeLabelTicketHandler, makeUnlabelTicketHandler, updateTicketToolConfig,
 } from './ticket-writes.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -473,6 +474,15 @@ describe('orboto_update_ticket', () => {
     });
     expect(calls[2].method).toBe('PATCH');
     expect(calls[2].body).toEqual({ title: 'Renamed', priority: 'high' });
+  });
+
+  it('ORB-3175 - sends labelNames and assigneeEmails, which replace the labels and assignees, and the schema takes them', async () => {
+    const calls = stub([{ json: PROJ }, { json: TICKET }, { json: TICKET }]);
+    const patch = { labelNames: ['alert', 'severity:critical'], assigneeEmails: [] };
+    expect(z.object(updateTicketToolConfig.inputSchema).parse({ ticketKey: 'ACME-1', patch }).patch).toEqual(patch);
+    await makeUpdateTicketHandler(client)({ ticketKey: 'ACME-1', patch });
+    expect(calls[2]).toMatchObject({ method: 'PATCH', body: patch });
+    expect(updateTicketToolConfig.description).toContain('REPLACE');
   });
 });
 

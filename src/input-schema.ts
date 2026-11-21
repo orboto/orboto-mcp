@@ -46,6 +46,7 @@ const ID_LIKE_CANONICALS = ['ticketKey', 'docId', 'milestone', 'commentId'] as c
 const UPDATE_TICKET_PATCH_KEYS = [
   'title', 'description', 'customerSummary', 'type', 'priority',
   'deliveryMode', 'dueDate', 'startDate', 'isPrivate', 'estimatedTimeMinutes', 'estimate',
+  'labelNames', 'assigneeEmails',
 ] as const;
 
 function applyAliases(toolName: string, shape: z.ZodRawShape, value: unknown): unknown {

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
 import {
   makeUpdateProjectHandler,
+  updateProjectToolConfig,
   makeCreateProjectHandler,
   makeArchiveProjectHandler,
 } from './update-project.js';
@@ -71,6 +72,74 @@ describe('orboto_update_project', () => {
     expect(res.structuredContent).toMatchObject({
       key: 'ACME', description: 'A new description.',
     });
+  });
+
+  const PLAN = {
+    ticketsUpdated: 7, docsUpdated: 1, milestonesUpdated: 0, spacesUpdated: 1, docBodiesUpdated: 1, ticketBodiesUpdated: 2, commentBodiesUpdated: 0,
+    smartLinkTokens: 4, gitActivities: 3, aliasesWritten: 7,
+  };
+  const NO_REWRITE = { ...PLAN, ticketsUpdated: 0, docsUpdated: 0, spacesUpdated: 0, docBodiesUpdated: 0, ticketBodiesUpdated: 0, smartLinkTokens: 0, aliasesWritten: 0 };
+
+  it('ORB-3175 - a new key is a dry run by default that counts what a rewrite of the existing keys would touch and what false leaves', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: { ...PLAN, project: PROJ, dryRun: true, oldKey: 'ACME', newKey: 'ACMX', rewriteExistingTickets: true } },
+    ]);
+    const res = await makeUpdateProjectHandler(client)({ projectKey: 'ACME', patch: { key: 'ACMX' } });
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toMatchObject({ method: 'POST', url: 'https://orboto.example.com/projects/p1/change-key' });
+    expect(calls[1].body).toEqual({ key: 'ACMX', rewriteExistingTickets: true, dryRun: true });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Dry run: ACME -> ACMX. Nothing changed.');
+    expect(text).toContain('With rewriteExistingTickets true the change rewrites 7 ticket, 1 doc, 0 milestone and 1 space keys and 4 smart-link tokens, keeping 7 old ticket keys as aliases');
+    expect(text).toContain('with false only the project key changes and every existing ticket, doc, milestone and space key stays');
+    expect(res.structuredContent).toMatchObject({ key: 'ACME', keyChange: { dryRun: true, ticketsUpdated: 7 } });
+  });
+
+  it('ORB-3175 - a dry run with rewriteExistingTickets false says why every rewrite count is 0', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: { ...NO_REWRITE, project: PROJ, dryRun: true, oldKey: 'ACME', newKey: 'ACMX', rewriteExistingTickets: false } },
+    ]);
+    const res = await makeUpdateProjectHandler(client)({ projectKey: 'ACME', rewriteExistingTickets: false, patch: { key: 'ACMX' } });
+    expect(calls[1].body).toEqual({ key: 'ACMX', rewriteExistingTickets: false, dryRun: true });
+    expect((res.content[0] as { text: string }).text).toContain('rewriteExistingTickets is false, so only the project key changes and every existing ticket, doc, milestone and space key stays and no rewrite is counted; 3 commits, branches and PRs name the old prefix.');
+  });
+
+  it('ORB-3175 - the real key change sends the key the caller typed and the rewrite the caller chose', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { json: { ...PLAN, project: { ...PROJ, key: 'ACMX' }, dryRun: false, oldKey: 'ACME', newKey: 'ACMX', rewriteExistingTickets: true } },
+    ]);
+    const res = await makeUpdateProjectHandler(client)({ projectKey: 'ACME', confirmProjectKey: 'ACME', rewriteExistingTickets: true, patch: { key: 'ACMX' } });
+    expect(calls[1].body).toEqual({ key: 'ACMX', rewriteExistingTickets: true, dryRun: false, confirmProjectKey: 'ACME' });
+    expect(res.structuredContent).toMatchObject({ key: 'ACMX', keyChange: { dryRun: false } });
+  });
+
+  it('ORB-3175 - a typed key that is not the current one reaches the API, which refuses it', async () => {
+    const calls = stub([
+      { json: PROJ },
+      { ok: false, status: 409, json: { error: 'mismatch', errorKey: 'errors.projects.change_key_confirmation_mismatch' } },
+    ]);
+    await expect(makeUpdateProjectHandler(client)({ projectKey: 'ACME', confirmProjectKey: 'ACMY', rewriteExistingTickets: false, patch: { key: 'ACMX' } })).rejects.toBeInstanceOf(OrbotoApiError);
+    expect(calls[1].body).toMatchObject({ confirmProjectKey: 'ACMY' });
+  });
+
+  it('ORB-3175 - a confirmation without an explicit rewriteExistingTickets is refused before any call', async () => {
+    const calls = stub([]);
+    await expect(makeUpdateProjectHandler(client)({ projectKey: 'ACME', confirmProjectKey: 'ACME', patch: { key: 'ACMX' } })).rejects.toThrow(/rewriteExistingTickets/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('ORB-3175 - a key change with other fields is refused before any call, so nothing is half applied', async () => {
+    const calls = stub([]);
+    await expect(makeUpdateProjectHandler(client)({ projectKey: 'ACME', confirmProjectKey: 'ACME', rewriteExistingTickets: true, patch: { key: 'ACMX', name: 'Acme X' } })).rejects.toThrow(/alone/);
+    await expect(makeUpdateProjectHandler(client)({ projectKey: 'ACME', confirmProjectKey: 'ACME', patch: { name: 'Acme X' } })).rejects.toThrow(/key change/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('ORB-3175 - the tool is marked destructive', () => {
+    expect(updateProjectToolConfig.annotations.destructiveHint).toBe(true);
   });
 
   it('passes null for description to clear it', async () => {

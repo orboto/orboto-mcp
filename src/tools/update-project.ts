@@ -19,15 +19,19 @@ type LocaleCode = (typeof LOCALE_CODES)[number];
 export const updateProjectToolConfig = {
   title: 'Update a project',
   description:
-    'Patch a project; set at least one field. `status` archived or closed leaves rotation. A `key` rename rewrites `PROJ-N` references. `language` null inherits. `noLaneReason`: no headless lane needed (bots work interactively); null clears.',
+    'Patch a project; set at least one field. `status` archived or closed leaves rotation. `language` null inherits. `noLaneReason`: no headless lane needed (bots work interactively); null clears. A new `key` goes alone in the patch and is a dry run that answers what would change; to apply it, send the current key, typed by the user, as `confirmProjectKey` and set `rewriteExistingTickets` (true moves every ticket, doc, milestone and space key, old ticket keys stay as aliases).',
   inputSchema: z.object({
     projectKey: z.string().min(1).describe('Current project key.'),
+    confirmProjectKey: z.string().min(1).optional()
+      .describe('Key change only: the CURRENT key as the user typed it; without it the key change is a dry run.'),
+    rewriteExistingTickets: z.boolean().optional()
+      .describe('Key change only: required with confirmProjectKey; true rewrites existing ticket, doc, milestone and space keys.'),
     patch: z.object({
       spec: ProjectSpecSettingsSchema.optional(),
       name: z.string().min(1).max(255).optional(),
       description: z.string().nullable().optional().describe('Null clears.'),
       key: z.string().min(2).max(10).regex(PROJECT_KEY_RE).optional()
-        .describe('New key; rewrites ticket references.'),
+        .describe('New key; alone in the patch, dry run unless confirmProjectKey is set.'),
       status: z.enum(['draft', 'active', 'archived', 'closed']).optional(),
       branchTemplate: z.string().max(100).nullable().optional(),
       customerId: z.string().regex(UUID_RE).nullable().optional()
@@ -39,12 +43,24 @@ export const updateProjectToolConfig = {
         .describe('Hosts its orboto browser sessions may act on beyond the default; replaces the list, [] clears.'),
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
   }).shape,
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 };
 
+type KeyChangeCounts = {
+  ticketsUpdated: number; docsUpdated: number; milestonesUpdated: number; spacesUpdated: number;
+  smartLinkTokens: number; gitActivities: number; aliasesWritten: number;
+};
+type KeyChangeResult = { project: ProjectRow; dryRun: boolean; oldKey: string; newKey: string; rewriteExistingTickets: boolean } & KeyChangeCounts & Record<string, unknown>;
+
+/** What a rewrite of the existing keys touches, from the counts of change-key. */
+const rewriteCounts = (r: KeyChangeCounts) => `${r.ticketsUpdated} ticket, ${r.docsUpdated} doc, ${r.milestonesUpdated} milestone and ${r.spacesUpdated} space keys and ${r.smartLinkTokens} smart-link tokens, keeping ${r.aliasesWritten} old ticket keys as aliases`;
+const KEYS_STAY = 'only the project key changes and every existing ticket, doc, milestone and space key stays';
+
 export function makeUpdateProjectHandler(client: OrbotoClient) {
-  return async ({ projectKey, patch }: {
+  return async ({ projectKey, confirmProjectKey, rewriteExistingTickets, patch }: {
     projectKey: string;
+    confirmProjectKey?: string;
+    rewriteExistingTickets?: boolean;
     patch: {
       spec?: ProjectSpecSettings;
       name?: string;
@@ -58,8 +74,19 @@ export function makeUpdateProjectHandler(client: OrbotoClient) {
       browserAllowedHosts?: string[];
     };
   }): Promise<CallToolResult> => {
+    const { key, ...rest } = patch;
+    if (key !== undefined && Object.keys(rest).length > 0) {
+      throw new Error('A key change goes alone in the patch: change the other fields in a separate call, so one failure never leaves half a change.');
+    }
+    if (key === undefined && (confirmProjectKey !== undefined || rewriteExistingTickets !== undefined)) {
+      throw new Error('confirmProjectKey and rewriteExistingTickets belong to a key change; set patch.key or leave them out.');
+    }
+    if (confirmProjectKey !== undefined && rewriteExistingTickets === undefined) {
+      throw new Error('Set rewriteExistingTickets (true or false) with confirmProjectKey; the key change does not pick it for you.');
+    }
     const project = await resolveProjectByKey(client, projectKey);
-    const updated = await client.patch<ProjectRow>(`/projects/${project.id}`, patch);
+    if (key !== undefined) return changeProjectKey(client, project, key, confirmProjectKey, rewriteExistingTickets);
+    const updated = await client.patch<ProjectRow>(`/projects/${project.id}`, rest);
     const fields = Object.keys(patch).join(', ');
     return {
       content: [{
@@ -78,6 +105,29 @@ export function makeUpdateProjectHandler(client: OrbotoClient) {
         spec: updated.spec,
       },
     };
+  };
+}
+
+/** ORB-3175 - a key change mirrors `orboto project change-key`: a dry run unless the caller typed the current key and chose rewriteExistingTickets. */
+async function changeProjectKey(client: OrbotoClient, project: ProjectRow, key: string, confirm: string | undefined, rewrite: boolean | undefined): Promise<CallToolResult> {
+  const dryRun = confirm === undefined;
+  const body: Record<string, unknown> = { key, rewriteExistingTickets: rewrite ?? true, dryRun };
+  if (!dryRun) body.confirmProjectKey = confirm;
+  const result = await client.post<KeyChangeResult>(`/projects/${project.id}/change-key`, body);
+  const { project: row, ...counts } = result;
+  const scope = !result.rewriteExistingTickets
+    ? `rewriteExistingTickets is false, so ${KEYS_STAY} and no rewrite is counted; ${result.gitActivities} commits, branches and PRs name the old prefix.`
+    : rewrite === undefined
+      ? `With rewriteExistingTickets true the change rewrites ${rewriteCounts(result)}; with false ${KEYS_STAY}.`
+      : `It rewrites ${rewriteCounts(result)}.`;
+  const text = result.oldKey === result.newKey
+    ? `${project.key} already has the key ${result.newKey}; nothing to change.`
+    : result.dryRun
+      ? `Dry run: ${result.oldKey} -> ${result.newKey}. Nothing changed. ${scope} To apply it, ask the user to type the current key and call again with confirmProjectKey and rewriteExistingTickets.`
+      : `Project key changed: ${result.oldKey} -> ${result.newKey}. ${scope.replace('It rewrites', 'It rewrote')}`;
+  return {
+    content: [{ type: 'text', text }],
+    structuredContent: { id: row.id, key: row.key, name: row.name, status: row.status, keyChange: counts },
   };
 }
 

@@ -425,7 +425,7 @@ function formatSimilarity(w: SimilarWarning): string {
 export const updateTicketToolConfig = {
   title: 'Update a ticket',
   description:
-    'Patch one or more fields on a ticket. Patchable: title, description, customerSummary, type, priority, specState, deliveryMode, dueDate, startDate, isPrivate, estimate (`2h`, `1.5d`), estimatedTimeMinutes. `customerSummary` is the customer-facing text shown in the customer project report instead of the internal description; null or empty falls back to an AI distillation or the title. `deliveryMode` is the role-aware commit policy (ORB-1608) - see `orboto_create_ticket` for the mode semantics. Use `orboto_move_ticket` for status, `orboto_set_milestone` for milestone, and `orboto_assign` / `orboto_unassign` for members.',
+    'Patch one or more fields on a ticket. Patchable: title, description, customerSummary, type, priority, specState, deliveryMode, dueDate, startDate, isPrivate, estimate (`2h`, `1.5d`), estimatedTimeMinutes, labelNames, assigneeEmails. `labelNames` and `assigneeEmails` REPLACE the ticket\'s labels and assignees (ORB-3175): `[]` clears, an omitted field stays as it is, and an unknown label or an email of no project member refuses the whole patch with a 400. `customerSummary` is the customer-facing text shown in the customer project report instead of the internal description; null or empty falls back to an AI distillation or the title. `deliveryMode` is the role-aware commit policy (ORB-1608) - see `orboto_create_ticket` for the mode semantics. Use `orboto_move_ticket` for status, `orboto_set_milestone` for milestone, `orboto_assign` / `orboto_unassign` to add or remove one member, and `orboto_label_ticket` / `orboto_unlabel_ticket` to add or remove one label.',
   inputSchema: z.object({
     ticketKey: z.string().min(3),
     patch: z.object({
@@ -441,6 +441,7 @@ export const updateTicketToolConfig = {
       isPrivate: z.boolean().optional(),
       estimatedTimeMinutes: z.number().int().nonnegative().optional(),
       estimate: z.string().optional(),
+      labelNames: z.array(z.string()).max(100).optional().describe('Replaces all labels; [] clears.'), assigneeEmails: z.array(z.string()).max(100).optional().describe('Replaces all assignees; [] clears.'),
     }).refine((p) => Object.keys(p).length > 0, { message: 'patch must include at least one field' }),
     allowLanguageMismatch: z.boolean().optional().describe('Retry a language block.'),
   }).shape,
