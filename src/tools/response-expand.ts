@@ -11,6 +11,7 @@ import {
   resolvePath,
   type OmittedEntry,
 } from '../response-budget.js';
+import { printableJson } from './printable-text.js';
 
 export const responseExpandToolConfig = {
   title: 'Expand a truncated response',
@@ -76,7 +77,7 @@ export function makeResponseExpandHandler(owner: object = PROCESS_OWNER) {
       return { isError: true, content: [{ type: 'text', text }] };
     }
 
-    const full = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 1) ?? '';
+    const full = typeof raw === 'string' ? raw : printableJson(raw, 1);
     const chunkSize = Math.max(500, budgetFor('orboto_response_expand') - 800);
     const cursor = Math.min(input.cursor ?? 0, full.length);
     const chunk = full.slice(cursor, cursor + chunkSize);

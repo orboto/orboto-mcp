@@ -224,6 +224,10 @@ afterEach(() => { vi.restoreAllMocks(); });
  * orboto_response_expand's `handle` parameter and every truncated response
  * say: full = 167,811 over HTTP and 167,851 on the stdio build, 1,549 chars
  * free; curated = 37,049.
+ * ORB-3174 bounded the heartbeat's clientInfo texts and capabilities and made
+ * them and the resource claim values one printable line inside the ceiling:
+ * the printable check is a refinement, so no tool carries a pattern, only a
+ * maxLength: 169,156 on the stdio build, 244 chars free; curated = 37,374.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
+import { printableJson } from './printable-text.js';
 
 interface PortfolioListItem {
   id: string;
@@ -43,7 +44,7 @@ export function makePortfolioSummaryHandler(client: OrbotoClient) {
       }
       const rollup = await client.get<unknown>(`/admin/portfolios/${input.portfolioId}/rollup`);
       return {
-        content: [{ type: 'text', text: `Portfolio rollup:\n${JSON.stringify(rollup, null, 2)}` }],
+        content: [{ type: 'text', text: `Portfolio rollup:\n${printableJson(rollup, 2)}` }],
         structuredContent: { rollup },
       };
     } catch (err) {

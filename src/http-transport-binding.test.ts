@@ -69,7 +69,7 @@ function fakeApiPerUser() {
 
 const store: McpSessionStore = {
   register: async () => {},
-  resolve: async () => false,
+  resolve: async () => ({ found: false }),
   remove: async () => {},
 };
 

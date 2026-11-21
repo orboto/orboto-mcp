@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { printableLineSchema } from './printable-line.js';
 import { AgentSessionScopeSchema } from './agent-session-scope.js';
 import { isoDateTime } from '../zod-v3-formats.js';
 
@@ -54,12 +55,10 @@ export const AgentLimitGateSchema = z.object({
 export type AgentLimitGate = z.infer<typeof AgentLimitGateSchema>;
 export type AgentLimitDecision = z.infer<typeof AgentLimitDecisionSchema>;
 
-/** ORB-3162 - one line of printable text: no control, format, lone surrogate or line separator character, so a reported value never steers a terminal nor breaks the jsonb column. */
-const singleLinePrintable = (max: number) => z.string().max(max).regex(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]*$/u, 'a single line of printable characters');
 /** ORB-3162 - what a supervisor reports of its harness's main agent beside the session status. */
 export const AgentHarnessStateReportSchema = z.object({
-  state: singleLinePrintable(40).describe('The agent state the harness reported, such as `idle`, `working` or `error`.'),
-  text: singleLinePrintable(120).describe('The state as one line: `at prompt, 2 subagents, 1 task running`.'),
+  state: printableLineSchema(40, { describe: 'The agent state the harness reported, such as `idle`, `working` or `error`.' }),
+  text: printableLineSchema(120, { describe: 'The state as one line: `at prompt, 2 subagents, 1 task running`.' }),
   subagents: z.number().int().min(0).max(1000).describe('Subagents running.'),
   tasks: z.number().int().min(0).max(1000).describe('Background tasks running.'),
 });

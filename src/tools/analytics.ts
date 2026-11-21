@@ -9,6 +9,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey } from './shared.js';
 import { resolveMilestoneByNameOrId } from './milestones.js';
+import { printableJson } from './printable-text.js';
 
 const REPORTS = ['overview', 'burndown', 'velocity', 'cycle-time', 'workload', 'budget', 'collaboration', 'earned-value', 'estimation-accuracy', 'flow-time', 'flow-metrics', 'forecast', 'bottleneck'] as const;
 type Report = (typeof REPORTS)[number];
@@ -70,7 +71,7 @@ export function makeAnalyticsHandler(client: OrbotoClient) {
     }
 
     return {
-      content: [{ type: 'text', text: `${input.report} for ${project.key}:\n${JSON.stringify(data, null, 2)}` }],
+      content: [{ type: 'text', text: `${input.report} for ${project.key}:\n${printableJson(data, 2)}` }],
       structuredContent: { report: input.report, projectKey: project.key, data },
     };
   };

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { OrbotoClient } from '../orboto-client.js';
 import { mcpInstanceToken } from './shared.js';
+import { printableJson } from './printable-text.js';
 
 export const agentMessageWorkToolConfig = {
   title: 'Handle message work',
@@ -21,6 +22,6 @@ export function makeAgentMessageWorkHandler(client: OrbotoClient) {
     const result = args.mutation
       ? await client.post(`/v1/agent/messages/${args.messageId}/work`, { ...args.mutation, instanceToken: mcpInstanceToken(undefined, extra) })
       : await client.get(`${args.messageId ? `/v1/agent/messages/${args.messageId}` : '/v1/agent/message-work'}?${q}`, { instanceToken: mcpInstanceToken(undefined, extra) });
-    return { content: [{ type: 'text' as const, text: `${JSON.stringify(result)}\n${WORK_STATE_NOTE}` }], structuredContent: result as Record<string, unknown> };
+    return { content: [{ type: 'text' as const, text: `${printableJson(result)}\n${WORK_STATE_NOTE}` }], structuredContent: result as Record<string, unknown> };
   };
 }

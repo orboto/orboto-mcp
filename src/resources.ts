@@ -6,6 +6,7 @@ import { OrbotoApiError, type OrbotoClient } from './orboto-client.js';
 import { loadRequiredRules } from './required-rules.js';
 import { resolveProjectByKey, resolveTicketByKey, type TicketRow } from './tools/shared.js';
 import { readTranscriptResource } from './tools/live-transcript.js';
+import { printableRegistry } from './printable-content.js';
 
 interface CommentPage {
   items: Array<{ content: string; userName: string | null; createdAt: string; isInternal: boolean }>;
@@ -43,7 +44,8 @@ interface NotificationsPage {
 }
 
 export function registerOrbotoResources(server: McpServer, client: OrbotoClient): void {
-  server.registerResource(
+  const registry = printableRegistry(server);
+  registry.registerResource(
     'rules',
     new ResourceTemplate('orboto://rules', { list: undefined }),
     {
@@ -60,7 +62,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     },
   );
 
-  server.registerResource(
+  registry.registerResource(
     'ticket',
     new ResourceTemplate('orboto://ticket/{ticketKey}', { list: undefined }),
     {
@@ -89,7 +91,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     },
   );
 
-  server.registerResource(
+  registry.registerResource(
     'doc',
     new ResourceTemplate('orboto://doc/{docId}', { list: undefined }),
     {
@@ -112,7 +114,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     },
   );
 
-  server.registerResource(
+  registry.registerResource(
     'project',
     new ResourceTemplate('orboto://project/{projectKey}', { list: undefined }),
     {
@@ -137,7 +139,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     },
   );
 
-  server.registerResource(
+  registry.registerResource(
     'live-transcript',
     new ResourceTemplate('orboto://live/{sessionId}/transcript', { list: undefined }),
     {
@@ -150,7 +152,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     }),
   );
 
-  server.registerResource(
+  registry.registerResource(
     'search',
     new ResourceTemplate('orboto://search/{query}', { list: undefined }),
     {
@@ -185,7 +187,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     },
   );
 
-  server.registerResource(
+  registry.registerResource(
     'user-notifications',
     new ResourceTemplate('orboto://user/me/notifications', { list: undefined }),
     {
@@ -225,7 +227,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
     return list.find((d) => d.kind === kind) ?? null;
   };
 
-  server.registerResource(
+  registry.registerResource(
     'wiki-index',
     new ResourceTemplate('orboto://wiki/{spaceId}/index', { list: undefined }),
     { title: 'LLM-Wiki index', description: 'The auto-maintained navigation index of an LLM-Wiki space.', mimeType: 'text/markdown' },
@@ -234,7 +236,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
       return { contents: [{ uri: uri.href, mimeType: 'text/markdown', text: doc?.content || '_(no index)_' }] };
     },
   );
-  server.registerResource(
+  registry.registerResource(
     'wiki-log',
     new ResourceTemplate('orboto://wiki/{spaceId}/log', { list: undefined }),
     { title: 'LLM-Wiki activity log', description: 'The append-only activity log of an LLM-Wiki space.', mimeType: 'text/markdown' },
@@ -243,7 +245,7 @@ export function registerOrbotoResources(server: McpServer, client: OrbotoClient)
       return { contents: [{ uri: uri.href, mimeType: 'text/markdown', text: doc?.content || '_(no log)_' }] };
     },
   );
-  server.registerResource(
+  registry.registerResource(
     'wiki-page',
     new ResourceTemplate('orboto://wiki/{spaceId}/page/{docId}', { list: undefined }),
     { title: 'LLM-Wiki page', description: 'A single wiki page by id within an LLM-Wiki space.', mimeType: 'text/markdown' },

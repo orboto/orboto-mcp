@@ -9,6 +9,7 @@ import { RESTART_REQUESTED_NOTICE, writeRestartRequest } from './session-restart
 import { confirmScope, rememberedScope } from './session-scope-memory.js';
 import { originHeader } from './session-origin.js';
 import { VERSION } from './version.js';
+import { printableLine, printableText } from './tools/printable-text.js';
 import type { AgentSessionScope } from './tools/agent-session-scope.js';
 
 export { RESTART_REQUESTED_NOTICE };
@@ -24,6 +25,7 @@ export const SESSION_ENDED_NOTICE = 'session_ended';
 export const DEFAULT_DIGEST_MINUTES = 15;
 const IMMEDIATE_AFTER_MS = 5 * 60_000;
 const CONTENT_CAP = 2000;
+const LABEL_CAP = 300;
 const SEEN_WINDOW = 1000;
 const MIN_BACKOFF_MS = 2_000;
 const MAX_BACKOFF_MS = 60_000;
@@ -62,7 +64,7 @@ export function wakeKey(m: Pick<InboxMessage, 'id' | 'reminderCount'>): string {
 
 /** ORB-2467 - `attachments: 1 archive, 12.4 MB (orboto messages --download <id>)`, or nothing. */
 export function attachmentLine(m: Pick<InboxMessage, 'id' | 'attachments'>): string {
-  return m.attachments?.count ? `attachments: ${m.attachments.label} (orboto messages --download ${m.id})` : '';
+  return m.attachments?.count ? `attachments: ${printableLine(m.attachments.label, LABEL_CAP)} (orboto messages --download ${m.id})` : '';
 }
 
 export interface InboxChannelOpts {
@@ -171,18 +173,28 @@ export function eventKind(m: Pick<InboxMessage, 'kind' | 'payload'>): string {
   return m.payload?.type === 'acknowledged' ? 'acknowledged' : m.kind;
 }
 
+/** ORB-3174 - every line of a body behind BODY_QUOTE, so no body line can pass for a header, `from ... | id ...` or another event line. */
+export const BODY_QUOTE = '\u2502 ';
+
+export function quotedBody(text: string): string {
+  if (!text) return '';
+  return printableText(text).split(/\r\n|\n|\u2028|\u2029/).map((line) => `${BODY_QUOTE}${line}`).join('\n');
+}
+
 export function renderEvent(m: InboxMessage, now: number): ChannelEvent {
   const kind = eventKind(m);
-  const from = m.from?.label ?? m.fromUserId ?? 'unknown';
-  const to = m.to?.label ?? 'you';
-  const text = firstLine(m.payload);
-  const body = text.length > CONTENT_CAP ? `${text.slice(0, CONTENT_CAP)} [... cut, read the rest with orboto_messages]` : text;
+  const from = printableLine(m.from?.label ?? m.fromUserId ?? 'unknown', LABEL_CAP);
+  const to = printableLine(m.to?.label ?? 'you', LABEL_CAP);
+  const points = Array.from(firstLine(m.payload));
+  const cut = points.length > CONTENT_CAP;
+  const body = quotedBody(points.slice(0, CONTENT_CAP).join(''));
   const marks = [m.priority === 'urgent' ? '[urgent]' : '', m.reminderCount ? `[reminder ${m.reminderCount}]` : ''].filter(Boolean).join(' ');
   const lines = [
-    `${marks ? `${marks} ` : ''}[${kind}] ${m.subject}`,
-    `from ${from} to ${to}${m.projectKey ? ` | project ${m.projectKey}` : ''} | id ${m.id}${m.threadId ? ` | thread ${m.threadId}` : ''}`,
+    `${marks ? `${marks} ` : ''}[${printableLine(kind, 40)}] ${printableLine(m.subject, LABEL_CAP)}`,
+    `from ${from} to ${to}${m.projectKey ? ` | project ${printableLine(m.projectKey, 64)}` : ''} | id ${printableLine(m.id, 64)}${m.threadId ? ` | thread ${printableLine(m.threadId, 64)}` : ''}`,
   ];
   if (body) lines.push(body);
+  if (cut) lines.push('[... cut, read the rest with orboto_messages]');
   const carried = attachmentLine(m);
   if (carried) lines.push(carried);
   const waited = waitedMinutes(m.createdAt, now);
@@ -204,12 +216,18 @@ export function scopeHintWithKey(content: string, rawKey: string | undefined): s
   return key && /^[A-Z][A-Z0-9_]{0,63}$/.test(key) ? content.replaceAll('<KEY>', key) : content;
 }
 
+/** ORB-3174 - the channel event as it goes out: the content as printable text, every meta value as one printable line. */
+export function printableChannelEvent(event: ChannelEvent): { content: string; meta: Record<string, string> } {
+  return { content: printableText(event.content), meta: Object.fromEntries(Object.entries(event.meta).map(([key, value]) => [key, printableLine(String(value), LABEL_CAP)])) };
+}
+
 export function renderDigest(batch: InboxMessage[], now: number): ChannelEvent {
   const lines = [`Inbox digest: ${batch.length} info/complete message(s) since the last event. Ack the ones you handled with orboto_messages { ackIds }.`];
   for (const m of batch) {
     const text = firstLine(m.payload);
-    const carried = m.attachments?.count ? ` | attachments: ${m.attachments.label}` : '';
-    lines.push(`- [${m.kind}] ${m.subject} | from ${m.from?.label ?? m.fromUserId ?? 'unknown'}${m.projectKey ? ` | ${m.projectKey}` : ''} | id ${m.id}${carried}${text ? ` | ${text.slice(0, 160)}` : ''}`);
+    const carried = m.attachments?.count ? ` | attachments: ${printableLine(m.attachments.label, LABEL_CAP)}` : '';
+    lines.push(`- [${printableLine(m.kind, 40)}] ${printableLine(m.subject, LABEL_CAP)} | from ${printableLine(m.from?.label ?? m.fromUserId ?? 'unknown', LABEL_CAP)}${m.projectKey ? ` | ${printableLine(m.projectKey, 64)}` : ''} | id ${printableLine(m.id, 64)}${carried}`);
+    if (text) lines.push(`  ${BODY_QUOTE}${printableLine(text, 160)}`);
   }
   return { content: lines.join('\n'), meta: { kind: 'digest', count: String(batch.length), waited_min: String(waitedMinutes(batch[0].createdAt, now)) } };
 }
@@ -341,7 +359,7 @@ export class InboxChannel {
 
   private async emit(event: ChannelEvent): Promise<void> {
     try {
-      await this.opts.mcp.server.notification({ method: CHANNEL_METHOD, params: { content: event.content, meta: event.meta } });
+      await this.opts.mcp.server.notification({ method: CHANNEL_METHOD, params: printableChannelEvent(event) });
       this.log(`channel event → ${event.meta.kind} ${event.meta.id ?? ''}`.trim());
     } catch (err) {
       this.log(`channel notification failed: ${(err as Error).message}`);

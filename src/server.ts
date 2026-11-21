@@ -302,6 +302,8 @@ import {
   listAgentDriftToolConfig, makeListAgentDriftHandler,
   resolveAgentDriftToolConfig, makeResolveAgentDriftHandler,
 } from './tools/agent-drift.js';
+import { printableText } from './tools/printable-text.js';
+import { noteTagInstruction, randomNoteTag, setNoteTag } from './printable-content.js';
 
 export interface BuildServerOptions extends OrbotoClientConfig {
   /** Optional - passed through to McpServer metadata. Clients
@@ -326,6 +328,8 @@ export interface BuildServerOptions extends OrbotoClientConfig {
    *  ever fire (which is correct - a stdio client without a
    *  bridge wouldn't receive them anyway). */
   subscriptions?: Set<string>;
+  /** ORB-3174 - the tag every real server note of this session ends with, stated in the instructions; the HTTP transport passes the random tag it keeps in the session's store row, stdio leaves it to a random one drawn here. */
+  noteTag?: string;
 }
 
 /** ORB-1090 - the workspace's configurable working-rules, used as the
@@ -344,7 +348,7 @@ export const CLIENT_INSTRUCTIONS_CAP = 2048;
 
 /** ORB-2552 - the mandatory first action, always the first characters of every tool-carrying instructions block. */
 export const MANDATORY_FIRST_ACTION =
-  'FIRST ACTION, before anything else: call `orboto_session_start` - it returns the binding workspace rules and your in-progress work; call it again after a context compaction. Non-negotiables: claim or create a ticket before touching code, one commit per ticket with the key in the subject, push after each commit, never mark work done that is not done. Complete rules: `orboto_session_start` or the `orboto://rules` resource.';
+  'FIRST ACTION, before anything else: call `orboto_session_start` - it returns the binding rules (also `orboto://rules`) and your in-progress work; call it again after a compaction. Non-negotiables: claim or create a ticket before touching code, one commit per ticket with the key in the subject, push after each commit, never mark work done that is not done.';
 
 function staticMcpHints(toolset: Toolset): string {
   if (toolset === 'minimal') {
@@ -369,7 +373,7 @@ function staticMcpHints(toolset: Toolset): string {
 const INSTRUCTIONS_BUDGET = CLIENT_INSTRUCTIONS_CAP;
 const RULES_HEADING = 'Working rules for this workspace:\n';
 const TRUNCATION_MARKER =
-  '\n\n[... rules truncated to fit the client cap - read the COMPLETE rules via the orboto_session_start tool or the orboto://rules resource ...]';
+  '\n\n[... rules truncated at the client cap; the COMPLETE rules: orboto_session_start or orboto://rules ...]';
 
 export function assembleInstructions(head: string, workingRules: string, budget = INSTRUCTIONS_BUDGET): string {
   const full = `${head}\n\n${RULES_HEADING}${workingRules}`;
@@ -382,7 +386,7 @@ export function assembleInstructions(head: string, workingRules: string, budget 
       kept += (kept ? '\n' : '') + line;
     }
   }
-  return `${head}\n\n${RULES_HEADING}${kept}${TRUNCATION_MARKER}`;
+  return kept ? `${head}\n\n${RULES_HEADING}${kept}${TRUNCATION_MARKER}` : `${head}${TRUNCATION_MARKER}`;
 }
 
 /**
@@ -406,6 +410,8 @@ export function withoutDefaultHints<T>(config: T): T {
 export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<McpServer> {
   z.config(zodV3Locale());
   const client = new OrbotoClient(opts);
+  const noteTag = opts.noteTag ?? randomNoteTag();
+  setNoteTag(client, noteTag);
   const toolset = resolveToolset(opts.toolset, process.env.ORBOTO_MCP_TOOLSET);
 
   let workingRules = FALLBACK_WORKING_RULES;
@@ -431,17 +437,18 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
         ...(toolset === 'channel' ? EMPTY_SURFACE_CAPABILITIES : { resources: { subscribe: true, listChanged: true } }),
         ...(opts.channel ? { experimental: { [CHANNEL_CAPABILITY]: {} } } : {}),
       },
-      instructions: toolset === 'channel'
+      instructions: printableText(toolset === 'channel'
         ? [CHANNEL_TOOLSET_INSTRUCTIONS, ...(opts.channel ? [CHANNEL_TOOLSET_WAKE_INSTRUCTIONS] : [])].join('\n\n')
         : toolset === 'minimal'
-        ? [MANDATORY_FIRST_ACTION, ...channelHint, staticMcpHints(toolset)].join('\n\n')
+        ? [MANDATORY_FIRST_ACTION, ...channelHint, staticMcpHints(toolset), noteTagInstruction(noteTag)].join('\n\n')
         : assembleInstructions(
-          [MANDATORY_FIRST_ACTION, ...channelHint, staticMcpHints(toolset)].join('\n\n'),
+          [MANDATORY_FIRST_ACTION, ...channelHint, staticMcpHints(toolset), noteTagInstruction(noteTag)].join('\n\n'),
           workingRules,
-        ),
+        )),
     },
   );
 
+  setNoteTag(server, noteTag);
   const nudgeState = createNudgeState(requireSessionStart);
 
   const regAll = registerWithMetrics(server, client, opts.userAgentSuffix, nudgeState);

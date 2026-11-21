@@ -14,6 +14,8 @@ import { captureToolDoc, summarizeToolDescription } from './tool-docs.js';
 import { postLogEntry, redactSecrets } from './mcp-instrument.js';
 import { envelopeStatus, metricsToolName } from './tail-labels.js';
 import { collectingReceipts, withReceiptLines } from './knowledge-receipts.js';
+import { NOTE_MAX_CHARS, noteTagFor, printableContent, printableParts, resultNote, shownAfterCut, withEscapedNote, type NoteState } from './printable-content.js';
+import { printableText } from './tools/printable-text.js';
 
 /**
  * ORB-1174 - turn an OrbotoApiError into an actionable, agent-visible
@@ -78,7 +80,26 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
     const label = metricsToolName(toolName, args);
     try {
       const { value: handlerResult, lines: receiptLines } = await collectingReceipts(() => handler(args, extra));
-      const budgeted = applyResponseBudget(toolName, handlerResult, process.env, client);
+      const tag = noteTagFor(client);
+      const printed = printableParts(handlerResult);
+      const state: NoteState = { shown: printed.shown, hadEscapes: printed.shown > 0, forged: printed.forged };
+      const budgetInput = (): CallToolResult => ({ ...printed.result, ...(printed.result._meta ? { _meta: { ...printed.result._meta } } : {}) });
+      const noteChars = (cut: CallToolResult) => Math.min(NOTE_MAX_CHARS, resultNote(state, cut.structuredContent, handlerResult.structuredContent, tag)?.length ?? 0);
+      let reserve = noteChars(printed.result);
+      let budgeted = applyResponseBudget(toolName, budgetInput(), process.env, client, reserve);
+      for (let pass = 0; pass < 2 && budgeted.truncatedChars > 0; pass += 1) {
+        state.shown = shownAfterCut(handlerResult, printed.result, budgeted.result);
+        const need = noteChars(budgeted.result);
+        if (need <= reserve) break;
+        reserve = need;
+        budgeted = applyResponseBudget(toolName, budgetInput(), process.env, client, reserve);
+      }
+      if (budgeted.truncatedChars > 0) state.shown = shownAfterCut(handlerResult, printed.result, budgeted.result);
+      if (noteChars(budgeted.result) > reserve) {
+        reserve = NOTE_MAX_CHARS;
+        budgeted = applyResponseBudget(toolName, budgetInput(), process.env, client, reserve);
+        if (budgeted.truncatedChars > 0) state.shown = shownAfterCut(handlerResult, printed.result, budgeted.result);
+      }
       const result = withReceiptLines(budgeted.result, receiptLines);
       const inner = label === toolName ? undefined : envelopeStatus(handlerResult.structuredContent);
       const isError = result.isError === true || (inner !== undefined && inner >= 400);
@@ -95,19 +116,20 @@ export function withMetrics<TArgs extends Record<string, unknown> | undefined>(
         responseChars: budgeted.responseChars,
         truncatedChars: budgeted.truncatedChars,
       });
-      const withMail = appendMailNudge(client, toolName, result);
+      const tail = printableParts(appendMailNudge(client, toolName, result));
+      const withMail = withEscapedNote(tail.result, { ...state, shown: state.shown + tail.shown, hadEscapes: state.hadEscapes || tail.shown > 0 }, handlerResult.structuredContent, tag);
       return wantsNudge ? prependNudge(withMail) : withMail;
     } catch (err) {
       const durationMs = Date.now() - start;
       if (nudge) recordSessionStartResult(nudge, toolName, false);
       if (err instanceof RequiredRulesError) {
         void postLogEntry(client, { toolName, durationMs, success: false, statusCode: err.status, errorMessage: err.message, clientHint });
-        return { isError: true, content: [{ type: 'text', text: err.message }], structuredContent: { errorKey: err.errorKey, reason: err.reason, ...(err.status ? { status: err.status } : {}) } };
+        return { isError: true, content: [{ type: 'text', text: printableText(err.message) }], structuredContent: { errorKey: err.errorKey, reason: err.reason, ...(err.status ? { status: err.status } : {}) } };
       }
       if (err instanceof OrbotoApiError) {
         const text = formatApiError(err);
         void postLogEntry(client, { toolName: label, durationMs, success: false, statusCode: err.status, errorMessage: redactSecrets(text).slice(0, 500), clientHint });
-        const errResult: CallToolResult = { isError: true, content: [{ type: 'text', text }] };
+        const errResult: CallToolResult = printableContent({ isError: true, content: [{ type: 'text', text }] }, noteTagFor(client));
         return wantsNudge ? prependNudge(errResult) : errResult;
       }
       void postLogEntry(client, {

@@ -6,6 +6,7 @@
  * ratchet, ORB-1863) without a cycle back into work-sessions.ts.
  */
 import { z } from 'zod';
+import { printableLineSchema } from './printable-line.js';
 import type { AgentEstimateCalibration } from './estimate-calibration.js';
 
 /** ORB-1610 - `state`/`requestedAt` are optional in the wire shape only
@@ -71,7 +72,7 @@ export interface QueuedClaimResult {
 
 export const ResourceClaimShape = {
   kind: z.enum(['path', 'named']),
-  value: z.string().min(1).max(500),
+  value: printableLineSchema(500, { min: 1 }),
   mode: z.enum(['read', 'write']),
 };
 

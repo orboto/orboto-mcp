@@ -12,6 +12,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { makeAgentMessageWorkHandler } from './agent-message-work.js';
 import { mcpInstanceToken } from './shared.js';
+import { printableJson } from './printable-text.js';
 
 interface Party { userId: string; email: string; sessionId: string | null; role: string | null; label: string }
 const PartySchema = z.object({ userId: z.string(), email: z.string(), sessionId: z.string().nullable(), role: z.string().nullable(), label: z.string() });
@@ -192,7 +193,7 @@ export function makeAgentMessagesHandler(client: OrbotoClient) {
     const header = (m: AgentMessage) => `${m.own ? `[sent] ${sentState(m)} ` : ''}[${m.kind}]${m.projectKey ? ` [${m.projectKey}]` : ''}${repeatMarks(m)} ${m.subject} (from ${m.from?.label ?? m.fromUserId} to ${m.to?.label ?? m.toUserId}, ${m.createdAt}, id ${m.id}${m.threadId ? `, thread ${m.threadId}` : ''})`;
     const lines = messages.length === 0
       ? [acked > 0 ? `Acknowledged ${acked} message(s). Inbox empty.` : 'Inbox empty.']
-      : messages.flatMap((m) => (compact ? compactLines(m, header(m)) : [`${header(m)}${m.payload ? ` payload: ${JSON.stringify(m.payload)}` : ''}`]));
+      : messages.flatMap((m) => (compact ? compactLines(m, header(m)) : [`${header(m)}${m.payload ? ` payload: ${printableJson(m.payload)}` : ''}`]));
     if (messages.length === 0 && args.direction === 'sent') lines[0] = 'Nothing sent matches.';
     if (messages.length > 0) {
       lines.push(`Acknowledge with ackIds once handled; reply via orboto_agent_notify with threadId (toSessionRef = the sender's instance short id reaches that session only).`);

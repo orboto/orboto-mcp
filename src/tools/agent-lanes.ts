@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
+import { printableLine } from './printable-text.js';
 
 type LaneControlAction = 'pause' | 'resume' | 'stop';
 
@@ -57,15 +58,15 @@ async function resolveLaneId(client: OrbotoClient, ref: string): Promise<string>
   const matches = exact.length > 0 ? exact : list.items.filter((l) => l.name.toLowerCase() === ref.toLowerCase());
   if (matches.length === 1) return matches[0]!.id;
   if (matches.length > 1) {
-    throw new Error(`Lane name "${ref}" is ambiguous (${matches.map((l) => `"${l.name}"`).join(', ')}); pass the exact name or the UUID.`);
+    throw new Error(`Lane name "${ref}" is ambiguous (${matches.map((l) => `"${printableLine(l.name, 64)}"`).join(', ')}); pass the exact name or the UUID.`);
   }
-  const names = list.items.map((l) => `"${l.name}"`).sort();
+  const names = list.items.map((l) => `"${printableLine(l.name, 64)}"`).sort();
   const shown = names.slice(0, LIST_LANES_LIMIT).join(', ') || '(none)';
   throw new Error(`No agent lane named "${ref}". Existing lanes: ${shown}${names.length > LIST_LANES_LIMIT ? `, and ${names.length - LIST_LANES_LIMIT} more` : ''}.`);
 }
 
 function sentence(action: LaneControlAction, lane: LaneRow): string {
-  const label = `Lane "${lane.name}"`;
+  const label = `Lane "${printableLine(lane.name, 64)}"`;
   if (action === 'resume') {
     return `${label} resumed: a held task continues in the same work session, with no new attempt.`;
   }

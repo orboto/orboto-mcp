@@ -318,6 +318,7 @@ export function ticketLine(t: TicketRow): string {
 
 import { createHash } from 'node:crypto';
 import { hostname } from 'node:os';
+import { printableLine } from './printable-text.js';
 
 /** ORB-2171 - the checkout's token, derived exactly like the CLI and the skill wrapper derive theirs; `ORBOTO_AGENT_SESSION` wins. */
 export function checkoutInstanceToken(env: NodeJS.ProcessEnv = process.env, host: string = hostname(), cwd: string = process.cwd()): string {
@@ -349,7 +350,7 @@ export async function beatAsToolServer(client: { post<T>(path: string, body: unk
 /** ORB-2465 - the machine a stdio proxy runs on, lower-cased, as `agent-broadcast live --host` matches it; an HTTP connection (per-connection session id) runs on the server, so it reports none. */
 export function localSessionHost(extra?: { sessionId?: string }, host: string = hostname()): string | undefined {
   if (extra?.sessionId) return undefined;
-  const value = host.trim().toLowerCase().slice(0, 200);
+  const value = printableLine(host.toLowerCase(), 200);
   return value || undefined;
 }
 

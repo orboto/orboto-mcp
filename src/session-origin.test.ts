@@ -119,7 +119,7 @@ describe('ORB-2544 - an MCP client reconnecting five times', () => {
       res.end(url.startsWith('/agent-instructions') ? JSON.stringify({ instructions: '' }) : '{}');
     });
     await new Promise<void>((r) => api!.listen(0, '127.0.0.1', r));
-    const store: McpSessionStore = { register: async () => {}, resolve: async () => false, remove: async () => {} };
+    const store: McpSessionStore = { register: async () => {}, resolve: async () => ({ found: false }), remove: async () => {} };
     server = createHttpServer({ baseUrl: `http://127.0.0.1:${(api.address() as AddressInfo).port}`, sessionStore: store });
     await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r));
     const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

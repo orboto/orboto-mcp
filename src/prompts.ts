@@ -3,9 +3,11 @@
  */
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { printableRegistry } from './printable-content.js';
 
 export function registerOrbotoPrompts(server: McpServer): void {
-  server.registerPrompt(
+  const registry = printableRegistry(server);
+  registry.registerPrompt(
     'plan-sprint',
     {
       title: 'Draft a sprint plan',
@@ -38,7 +40,7 @@ export function registerOrbotoPrompts(server: McpServer): void {
     }),
   );
 
-  server.registerPrompt(
+  registry.registerPrompt(
     'triage-my-tickets',
     {
       title: 'Triage my open tickets',
@@ -70,7 +72,7 @@ export function registerOrbotoPrompts(server: McpServer): void {
     }),
   );
 
-  server.registerPrompt(
+  registry.registerPrompt(
     'summarize-project',
     {
       title: 'Summarise a project',
@@ -98,7 +100,7 @@ export function registerOrbotoPrompts(server: McpServer): void {
     }),
   );
 
-  server.registerPrompt(
+  registry.registerPrompt(
     'estimate-ticket',
     {
       title: 'Estimate a ticket\'s effort',
@@ -127,7 +129,7 @@ export function registerOrbotoPrompts(server: McpServer): void {
     }),
   );
 
-  server.registerPrompt(
+  registry.registerPrompt(
     'find-duplicates',
     {
       title: 'Find duplicate tickets',
@@ -159,7 +161,7 @@ export function registerOrbotoPrompts(server: McpServer): void {
     }),
   );
 
-  server.registerPrompt(
+  registry.registerPrompt(
     'wiki-ingest',
     {
       title: 'Ingest a URL into the wiki',
@@ -186,7 +188,7 @@ export function registerOrbotoPrompts(server: McpServer): void {
     }),
   );
 
-  server.registerPrompt(
+  registry.registerPrompt(
     'wiki-maintain',
     {
       title: 'Maintain a wiki (lint + fix)',

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { OrbotoClient } from '../orboto-client.js';
 import { resolveTicketByKey } from './shared.js';
+import { printableJson } from './printable-text.js';
 
 export const specCheckToolConfig = {
   title: 'Check build order',
@@ -13,6 +14,6 @@ export function makeSpecCheckHandler(client: OrbotoClient) {
   return async (input: { ticketKey: string }) => {
     const ticket = await resolveTicketByKey(client, input.ticketKey);
     const result = await client.get<Record<string, unknown>>(`/projects/${ticket.projectId}/tickets/${ticket.id}/spec-check`);
-    return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], structuredContent: result };
+    return { content: [{ type: 'text' as const, text: printableJson(result) }], structuredContent: result };
   };
 }

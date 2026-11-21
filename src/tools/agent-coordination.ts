@@ -11,6 +11,8 @@ import { AgentPresenceRowSchema, type AgentPresenceRow } from './agent-presence-
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { mcpInstanceToken, presenceRefusal } from './shared.js';
+import { AGENT_CLIENT_TEXT_MAX, AgentCapabilitySchema, AgentHeartbeatClientTextSchema, printableLineSchema } from './printable-line.js';
+import { printableJson, printableLine } from './printable-text.js';
 import { AgentSessionRoleSchema, AgentSessionScopeInputSchema, AgentSessionScopeSchema, type AgentSessionScope } from './agent-session-scope.js';
 
 interface HeartbeatResponse {
@@ -31,13 +33,8 @@ export const agentHeartbeatToolConfig = {
     scope: AgentSessionScopeInputSchema.optional(),
     status: z.enum(['idle', 'working', 'blocked']).optional(),
     workingOnTicketId: z.guid().nullable().optional(),
-    capabilities: z.array(z.string()).max(200).optional(),
-    clientInfo: z.object({
-      name: z.string().optional(),
-      version: z.string().optional(),
-      host: z.string().optional(),
-      user_agent: z.string().optional(),
-    }).optional(),
+    capabilities: z.array(AgentCapabilitySchema).max(200).optional(),
+    clientInfo: AgentHeartbeatClientTextSchema.pick({ name: true, version: true, host: true, user_agent: true }).optional(),
     startedBy: z.guid().optional(),
   }).shape,
   outputSchema: z.object({
@@ -70,7 +67,7 @@ export function makeAgentHeartbeatHandler(client: OrbotoClient) {
       if (!refused) throw err;
       return { content: [{ type: 'text', text: `heartbeat refused (ORB-2553) - ${refused.message}` }], isError: true };
     }
-    const scope = res.scope ? ` scope=${JSON.stringify(res.scope)}` : '';
+    const scope = res.scope ? ` scope=${printableJson(res.scope)}` : '';
     const notes = (res.notes ?? []).map((n) => `\n${n}`).join('');
     return {
       content: [{ type: 'text', text: `heartbeat ack - sessionToken=${res.sessionToken.slice(0, 8)}… session ${res.sessionId.slice(0, 8)}${scope}${notes}` }],
@@ -89,8 +86,15 @@ export interface SessionOrigin { host: string | null; repo: string | null; pid: 
 export function originText(s: { origin?: SessionOrigin; state?: string }): string {
   if (!s.origin) return '';
   const o = s.origin;
-  const where = [o.host ?? 'unknown host', o.repo, o.pid ? `pid ${o.pid}` : null, o.harness, o.client ? `${o.client}${o.clientVersion ? ` ${o.clientVersion}` : ''}` : null].filter(Boolean).join(' ');
-  return ` [${s.state ?? 'live'}] on ${where}${o.startedAt ? ` since ${o.startedAt}` : ''}`;
+  const client = shown(o.client, 60);
+  const version = shown(o.clientVersion, AGENT_CLIENT_TEXT_MAX.version);
+  const where = [shown(o.host, AGENT_CLIENT_TEXT_MAX.host) || 'unknown host', shown(o.repo, 120), o.pid ? `pid ${o.pid}` : null, shown(o.harness, 20), client ? `${client}${version ? ` ${version}` : ''}` : null].filter(Boolean).join(' ');
+  return ` [${shown(s.state, 20) || 'live'}] on ${where}${o.startedAt ? ` since ${shown(o.startedAt, 40)}` : ''}`;
+}
+
+/** ORB-3174 - a value of another session's row as it is printed: one printable line within `max`, empty for none. */
+export function shown(value: string | null | undefined, max: number): string {
+  return typeof value === 'string' ? printableLine(value, max) : '';
 }
 
 /** ORB-2548 - the page an MCP presence read returns by default, sized so four rows fit the 4,000-character budget. */
@@ -145,44 +149,44 @@ export function nextPageLine(nextCursor: string | null | undefined): string[] {
 
 /** ORB-3162 - the status, with the harness state beside it: in place of a plain idle, after any other status; control characters never reach the line. */
 export function statusText(status: string, harness: { text: string } | null | undefined): string {
-  const text = harness ? printableLine(harness.text) : '';
+  const text = harness ? printableLine(harness.text, 120) : '';
   if (!text) return status;
   return status === 'idle' ? text : `${status} (${text})`;
 }
 
-/** ORB-3162 - one printable line: control, format and line separator characters dropped, whitespace folded. */
-export function printableLine(value: string): string {
-  return value.replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
-}
 
 function harnessStateView(h: NonNullable<PresenceRow['harnessState']>) {
-  return { state: printableLine(h.state), text: printableLine(h.text), subagents: h.subagents, tasks: h.tasks, reportedAt: h.reportedAt };
+  return { state: printableLine(h.state, 40), text: printableLine(h.text, 120), subagents: h.subagents, tasks: h.tasks, reportedAt: h.reportedAt };
 }
 
 function presenceRow(s: PresenceRow): AgentPresenceRow {
   const o = s.origin;
+  const owner = s.owner?.name ?? s.owner?.email ?? (s.actsAs ? `acts as ${s.actsAs.name ?? s.actsAs.email}` : null);
   return {
-    sessionId: s.sessionId, userEmail: s.userEmail, userFullName: s.userFullName, kind: s.kind,
-    owner: s.owner?.name ?? s.owner?.email ?? (s.actsAs ? `acts as ${s.actsAs.name ?? s.actsAs.email}` : null),
-    status: s.status, ...(s.harnessState ? { harnessState: harnessStateView(s.harnessState) } : {}), lane: s.lane?.name ?? null, scope: s.scope ?? null, memberProjects: s.projects.length,
-    connections: [...new Set(s.connections.map((c) => c.type))], ...(s.wake ? { wake: s.wake } : {}), ...(s.state ? { state: s.state } : {}),
-    origin: o ? { host: o.host, repo: o.repo, pid: o.pid, harness: o.harness, client: o.client } : null,
-    workingOn: s.workingOnTicket ? s.workingOnTicket.key ?? s.workingOnTicket.id : null,
+    sessionId: s.sessionId, userEmail: shown(s.userEmail, 320), userFullName: s.userFullName === null ? null : shown(s.userFullName, 200), kind: s.kind,
+    owner: owner === null ? null : shown(owner, 330),
+    status: shown(s.status, 40), ...(s.harnessState ? { harnessState: harnessStateView(s.harnessState) } : {}), lane: s.lane ? shown(s.lane.name, 64) : null, scope: s.scope ?? null, memberProjects: s.projects.length,
+    connections: [...new Set(s.connections.map((c) => c.type))], ...(s.wake ? { wake: s.wake } : {}), ...(s.state ? { state: shown(s.state, 20) } : {}),
+    origin: o ? { host: o.host === null ? null : shown(o.host, AGENT_CLIENT_TEXT_MAX.host), repo: o.repo === null ? null : shown(o.repo, 120), pid: o.pid, harness: o.harness === null ? null : shown(o.harness, 20), client: o.client === null ? null : shown(o.client, 60) } : null,
+    workingOn: s.workingOnTicket ? shown(s.workingOnTicket.key ?? s.workingOnTicket.id, 40) : null,
     lastSeenAt: String(s.lastSeenAt), ...(s.redacted ? { redacted: true } : {}),
   };
 }
 
+/** ORB-3174 - every free-text value of the row goes through printableLine, so a stored name, host or title never forges a row or steers a terminal. */
 function presenceLine(s: PresenceRow): string {
-  const name = s.userFullName ?? s.userEmail;
-  const runtime = s.clientInfo.name ?? 'unknown';
-  const work = s.workingOnTicket ? ` · working on [${s.workingOnTicket.projectKey ?? '?'}] ${s.workingOnTicket.key ?? s.workingOnTicket.id} (${s.workingOnTicket.title})` : '';
-  const owner = s.owner?.name ?? s.owner?.email ?? (s.actsAs ? `acts as ${s.actsAs.name ?? s.actsAs.email}` : s.kind === 'agent' ? 'unassigned' : 'self');
+  const email = shown(s.userEmail, 320);
+  const name = s.userFullName ? shown(s.userFullName, 200) : email;
+  const runtime = shown(s.clientInfo.name, AGENT_CLIENT_TEXT_MAX.name) || 'unknown';
+  const t = s.workingOnTicket;
+  const work = t ? ` · working on [${shown(t.projectKey, 40) || '?'}] ${shown(t.key ?? t.id, 40)} (${shown(t.title, 300)})` : '';
+  const owner = shown(s.owner?.name ?? s.owner?.email ?? (s.actsAs ? `acts as ${s.actsAs.name ?? s.actsAs.email}` : s.kind === 'agent' ? 'unassigned' : 'self'), 330);
   const declared = s.scope?.projectKeys ?? [];
   const scope = s.scope?.role || declared.length ? `; scope: ${s.scope?.role ?? 'no role'}${declared.length ? ` on ${declared.join(', ')}` : ''}${(s.scope as AgentSessionScope | null | undefined)?.account ? ' (account view)' : ''}` : '';
-  const keys = s.projects.map((p) => p.key);
+  const keys = s.projects.map((p) => shown(p.key, 40));
   const projects = keys.length === 0 ? '' : keys.length <= 8 ? `; projects: ${keys.join(', ')}` : `; member of ${keys.length} projects`;
   const connections = s.connections.length ? `; connections: ${[...new Set(s.connections.map((c) => c.type))].join(', ')}` : '';
-  return `- ${name} <${s.userEmail}> (${runtime}, instance ${s.sessionId}) - ${statusText(s.status, s.harnessState)}${originText(s)}${work}; owner: ${owner}${s.lane ? `; lane: ${s.lane.name}` : ''}${scope}${projects}${connections}${s.wake ? `; ${AGENT_WAKE_LABELS[s.wake]}` : ''}`;
+  return `- ${name} <${email}> (${runtime}, instance ${s.sessionId}) - ${statusText(shown(s.status, 40), s.harnessState)}${originText(s)}${work}; owner: ${owner}${s.lane ? `; lane: ${shown(s.lane.name, 64)}` : ''}${scope}${projects}${connections}${s.wake ? `; ${AGENT_WAKE_LABELS[s.wake]}` : ''}`;
 }
 
 export const agentPresenceToolConfig = {
@@ -298,7 +302,7 @@ export const agentNotifyToolConfig = {
     to: z.string().min(3).max(200).optional(),
     queue: z.boolean().optional(),
     kind: z.enum(['info', 'request', 'complete', 'error']).default('info'),
-    subject: z.string().min(1).max(200),
+    subject: printableLineSchema(200, { min: 1 }),
     outcome: z.string().optional(),
     body: z.string().optional(),
     payload: z.record(z.string(), z.unknown()).optional(),

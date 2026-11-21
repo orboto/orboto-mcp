@@ -4,7 +4,7 @@
  * @see ORB-1353, ORB-1324
  */
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -17,6 +17,8 @@ import { bindSessionInstance, mcpInstanceToken, releaseSessionInstance, stableCl
 import { useHttpOrigin } from './session-origin.js';
 import { releaseCapacityAtSessionEnd } from './tools/capacity-session.js';
 import { idleSessions, resolveSessionLimits, sessionsOverOwnerCap, type SessionLimits } from './session-limits.js';
+import { printableText } from './tools/printable-text.js';
+import { isNoteTag, noteTagFor, randomNoteTag } from './printable-content.js';
 
 /**
  * ORB-1353 - persisted-session store. The transport calls these to survive an
@@ -29,11 +31,18 @@ import { idleSessions, resolveSessionLimits, sessionsOverOwnerCap, type SessionL
 export interface McpSessionStore {
   register(
     token: string,
-    meta: { sessionId: string; clientInfo?: string; userAgent?: string; adoptedFrom?: string },
+    meta: { sessionId: string; clientInfo?: string; userAgent?: string; adoptedFrom?: string; noteTag?: string },
   ): Promise<void>;
-  /** True iff the id maps to a live session owned by this token (layer 1). */
-  resolve(token: string, sessionId: string): Promise<boolean>;
+  /** `found` iff the id maps to a live session owned by this token (layer 1); `noteTag` is the tag of the caller's own row, also past its TTL (ORB-3174). */
+  resolve(token: string, sessionId: string): Promise<McpSessionRecord>;
   remove(token: string, sessionId: string): Promise<void>;
+}
+
+export interface McpSessionRecord { found: boolean; noteTag?: string | null }
+
+/** ORB-3174 - the 12 hex characters of a session id's SHA-256 that a log line carries instead of the id; the api logs the same reference. */
+export function sessionLogRef(sessionId: string): string {
+  return createHash('sha256').update(sessionId).digest('hex').slice(0, 12);
 }
 
 /** Default store backed by the api's `/system/mcp/sessions` endpoints. Each
@@ -47,10 +56,10 @@ export function createApiSessionStore(baseUrl: string): McpSessionStore {
     },
     async resolve(token, sessionId) {
       const client = new OrbotoClient({ baseUrl, apiKey: token });
-      const res = await client.get<{ found: boolean }>(
+      const res = await client.get<{ found: boolean; noteTag?: unknown }>(
         `/system/mcp/sessions/${encodeURIComponent(sessionId)}`,
       );
-      return res.found === true;
+      return { found: res.found === true, noteTag: isNoteTag(res.noteTag) ? res.noteTag : null };
     },
     async remove(token, sessionId) {
       const client = new OrbotoClient({ baseUrl, apiKey: token });
@@ -198,7 +207,7 @@ export async function closeAllMcpSessions(
     try {
       await mcp.server.sendLoggingMessage({
         level: 'warning',
-        data: `orboto MCP: ${reason} Closing this session.`,
+        data: printableText(`orboto MCP: ${reason} Closing this session.`),
       });
     } catch {
       // Client never negotiated the logging capability - skip the
@@ -315,11 +324,11 @@ export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides
 
   const store = sessionStore ?? createApiSessionStore(baseUrl);
 
-  async function buildSessionCore(tokenHolder: SessionTokenHolder, userAgentSuffix: string | undefined, toolset?: Toolset, sessionId?: string) {
+  async function buildSessionCore(tokenHolder: SessionTokenHolder, userAgentSuffix: string | undefined, toolset: Toolset | undefined, sessionId: string | undefined, noteTag: string) {
     const tokenProvider = holderTokenProvider(tokenHolder);
     const sessionClient = new OrbotoClient({ baseUrl, tokenProvider, userAgentSuffix });
     const subscriptions = new Set<string>();
-    const mcp = await buildOrbotoMcpServer({ baseUrl, tokenProvider, userAgentSuffix, subscriptions, toolset });
+    const mcp = await buildOrbotoMcpServer({ baseUrl, tokenProvider, userAgentSuffix, subscriptions, toolset, noteTag });
     const bridge = new EventBridge({ baseUrl, tokenProvider, mcp, subscriptions,
       ...(sessionId ? { instanceToken: mcpInstanceToken(undefined, { sessionId }) } : {}) });
     return { sessionClient, subscriptions, mcp, bridge };
@@ -342,12 +351,13 @@ export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides
     userAgentSuffix: string | undefined,
     chosenSessionId: string,
     userEmail: string,
-    toolset?: Toolset,
-    credential?: Credential,
+    toolset: Toolset | undefined,
+    credential: Credential,
+    noteTag: string,
   ): Promise<McpSession> {
     await makeRoomFor(userEmail);
     bindStable(chosenSessionId, userEmail, credential, userAgentSuffix);
-    const { sessionClient, mcp, bridge } = await buildSessionCore(tokenHolder, userAgentSuffix, toolset, chosenSessionId);
+    const { sessionClient, mcp, bridge } = await buildSessionCore(tokenHolder, userAgentSuffix, toolset, chosenSessionId, noteTag);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
     transport.onclose = () => { sessions.delete(chosenSessionId); bridge.close(); endInstance(chosenSessionId, sessionClient); };
     await mcp.connect(transport);
@@ -498,7 +508,7 @@ export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides
           return sendError(res, 401, 'Bearer does not match the session owner');
         }
         process.stderr.write(
-          `[orboto-mcp] session ${sessionId} bearer rotated - adopting client's current access token\n`,
+          `[orboto-mcp] session ${sessionLogRef(sessionId)} bearer rotated - adopting client's current access token\n`,
         );
         session.tokenHolder.current = token;
       }
@@ -507,7 +517,7 @@ export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides
       const now = Date.now();
       if (now - session.lastTouchAt >= TOUCH_THROTTLE_MS) {
         session.lastTouchAt = now;
-        void store.register(session.tokenHolder.current, { sessionId }).catch(() => { /* best-effort */ });
+        void store.register(session.tokenHolder.current, { sessionId, noteTag: noteTagFor(session.mcp) }).catch(() => { /* best-effort */ });
       }
       return;
     }
@@ -525,35 +535,36 @@ export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides
       } catch {
         authValid = false;
       }
-      let isPersisted = false;
+      let record: McpSessionRecord = { found: false };
       if (authValid) {
         try {
-          isPersisted = await store.resolve(token, sessionId);
+          record = await store.resolve(token, sessionId);
         } catch {
-          isPersisted = false;
+          record = { found: false };
         }
       }
-      const action = classifyUnknownSession({ hasValidAuth: authValid, isPersistedForCaller: isPersisted });
+      const action = classifyUnknownSession({ hasValidAuth: authValid, isPersistedForCaller: record.found });
 
       if (action === 'reinit-404') {
         return sendError(res, 404, 'Unknown or expired MCP session - reinitialize (the server restarted since this session began).');
       }
+      const noteTag = isNoteTag(record.noteTag) ? record.noteTag : randomNoteTag();
 
       if (action === 'rehydrate') {
-        const session = await establishForcedSession({ current: token }, userAgentSuffix, sessionId, callerEmail, toolset, callerCredential);
-        void store.register(token, { sessionId, userAgent }).catch(() => { /* best-effort */ });
+        const session = await establishForcedSession({ current: token }, userAgentSuffix, sessionId, callerEmail, toolset, callerCredential, noteTag);
+        void store.register(token, { sessionId, userAgent, noteTag }).catch(() => { /* best-effort */ });
         await session.transport.handleRequest(req, res, body);
         return;
       }
 
       const newSessionId = randomUUID();
-      const session = await establishForcedSession({ current: token }, userAgentSuffix, newSessionId, callerEmail, toolset, callerCredential);
+      const session = await establishForcedSession({ current: token }, userAgentSuffix, newSessionId, callerEmail, toolset, callerCredential, noteTag);
       overrideSessionIdHeader(req, newSessionId);
       process.stderr.write(
-        `[orboto-mcp] auto-adopted stale session ${sessionId} → ${newSessionId} (client=${userAgent ?? 'unknown'})\n`,
+        `[orboto-mcp] auto-adopted stale session ${sessionLogRef(sessionId)} → ${sessionLogRef(newSessionId)} (client=${userAgent ?? 'unknown'})\n`,
       );
       void store
-        .register(token, { sessionId: newSessionId, userAgent, adoptedFrom: sessionId })
+        .register(token, { sessionId: newSessionId, userAgent, adoptedFrom: sessionId, noteTag })
         .catch(() => { /* best-effort */ });
       await session.transport.handleRequest(req, res, body);
       return;
@@ -576,7 +587,8 @@ export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides
 
       await makeRoomFor(ownerEmail);
       const tokenHolder: SessionTokenHolder = { current: token };
-      const { sessionClient, mcp, bridge } = await buildSessionCore(tokenHolder, userAgentSuffix, toolset);
+      const noteTag = randomNoteTag();
+      const { sessionClient, mcp, bridge } = await buildSessionCore(tokenHolder, userAgentSuffix, toolset, undefined, noteTag);
       const clientInfo = clientInfoLabel(body);
       const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
@@ -588,7 +600,7 @@ export function createHttpServer({ baseUrl, sessionStore, limits: limitOverrides
           bridge.setInstanceToken(mcpInstanceToken(undefined, { sessionId: sid }));
           bridge.start();
           void store
-            .register(token, { sessionId: sid, clientInfo, userAgent })
+            .register(token, { sessionId: sid, clientInfo, userAgent, noteTag })
             .catch(() => { /* best-effort */ });
         },
       });

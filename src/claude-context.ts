@@ -7,6 +7,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { homedir, hostname } from 'node:os';
 import path from 'node:path';
+import { printableLine } from './tools/printable-text.js';
 
 export const CLAUDE_CONTEXT_MAX_AGE_MS = 10 * 60_000;
 
@@ -109,8 +110,8 @@ export function readClaudeReport(dir: string, now = Date.now(), root = claudeCon
           ? { contextWindowSize: Math.max(0, Math.round(parsed.contextWindowSize)) }
           : {}),
         ...(typeof parsed.sessionId === 'string' && parsed.sessionId ? { sessionId: parsed.sessionId } : {}),
-        ...(typeof parsed.claudeAccount === 'string' && parsed.claudeAccount ? { claudeAccount: parsed.claudeAccount.slice(0, 64) } : {}),
-        ...(typeof parsed.claudeProfile === 'string' && parsed.claudeProfile ? { claudeProfile: parsed.claudeProfile.slice(0, 64) } : {}),
+        ...(typeof parsed.claudeAccount === 'string' && parsed.claudeAccount ? { claudeAccount: printableLine(parsed.claudeAccount, 64) } : {}),
+        ...(typeof parsed.claudeProfile === 'string' && parsed.claudeProfile ? { claudeProfile: printableLine(parsed.claudeProfile, 64) } : {}),
         ...(limitGate ? { limitGate } : {}),
       },
       usageSamples: usageSamplesOf(parsed.usageSamples),
@@ -134,12 +135,12 @@ export function newestSample(samples: ClaudeUsageSample[], previous: number | nu
 
 /** ORB-2584 - the one heartbeat of a stdio server without a channel: its host and `toolServer`, so the API drops a `legacy` channel an older proxy of this row announced. */
 export function toolServerHeartbeat(host: string = hostname()): Record<string, unknown> {
-  const value = host.trim().toLowerCase().slice(0, 200);
+  const value = printableLine(host.toLowerCase(), 200);
   return { toolServer: true, ...(value ? { host: value } : {}) };
 }
 
 /** ORB-2465 - the channel heartbeat's clientInfo: the wake channel, the host `--host` filters on, and the context report; ORB-2584 - the start that delivers the channel. */
 export function channelClientInfo(context: ClaudeContextReport | null, host: string = hostname(), start?: 'orboto-claude' | 'explicit' | 'legacy'): Record<string, unknown> {
-  const value = host.trim().toLowerCase().slice(0, 200);
+  const value = printableLine(host.toLowerCase(), 200);
   return { channel: 'claude-code', ...(start ? { channelStart: start } : {}), ...(value ? { host: value } : {}), ...(context ?? {}) };
 }

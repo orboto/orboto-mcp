@@ -13,6 +13,7 @@ import { boundedRecord } from '../zod-bounds.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { mcpInstanceToken } from './shared.js';
+import { printableJson } from './printable-text.js';
 
 interface ProxyEnvelope {
   status: number;
@@ -134,7 +135,7 @@ export function makeApiCallHandler(client: OrbotoClient) {
     const envelope = withheldLinks(answered, input.method, input.path);
 
     const bodyText = envelope.encoding === 'json'
-      ? JSON.stringify(envelope.body, null, 1)
+      ? printableJson(envelope.body, 1)
       : String(envelope.body ?? '');
     const truncNote = envelope.truncated ? ' (body truncated by the proxy cap)' : '';
     const okNote = envelope.status >= 400

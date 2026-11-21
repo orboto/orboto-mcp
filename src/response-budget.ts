@@ -327,13 +327,14 @@ export function applyResponseBudget(
   result: CallToolResult,
   env: NodeJS.ProcessEnv = process.env,
   owner: object = PROCESS_OWNER,
+  reserveChars = 0,
 ): BudgetOutcome {
   const protectText = takeProtectTextFlag(result);
   const originalChars = measureResult(result);
   if (!budgetEnabled(env)) {
     return { result, responseChars: originalChars, originalChars, truncatedChars: 0 };
   }
-  const budget = budgetFor(toolName, env);
+  const budget = Math.max(MIN_STRING_KEEP, budgetFor(toolName, env) - reserveChars);
   if (originalChars <= budget) {
     return { result, responseChars: originalChars, originalChars, truncatedChars: 0 };
   }

@@ -8,6 +8,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
+import { printableJson } from './printable-text.js';
 
 export const freeBusyToolConfig = {
   title: 'User free/busy',
@@ -44,7 +45,7 @@ export function makeFreeBusyHandler(client: OrbotoClient) {
     }
 
     return {
-      content: [{ type: 'text', text: `Free/busy:\n${JSON.stringify(data, null, 2)}` }],
+      content: [{ type: 'text', text: `Free/busy:\n${printableJson(data, 2)}` }],
       structuredContent: data as Record<string, unknown>,
     };
   };

@@ -16,6 +16,7 @@ import {
   McpError,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { printableLine } from './tools/printable-text.js';
 
 /** Declared at construction: the SDK refuses a request handler whose capability is not declared. */
 export const EMPTY_SURFACE_CAPABILITIES = { tools: {}, prompts: {}, resources: {} } as const;
@@ -25,16 +26,16 @@ export function registerEmptySurfaces(server: McpServer): void {
   const low = server.server;
   low.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [] }));
   low.setRequestHandler(CallToolRequestSchema, (req) => ({
-    content: [{ type: 'text' as const, text: new McpError(ErrorCode.InvalidParams, `Tool ${req.params.name} not found`).message }],
+    content: [{ type: 'text' as const, text: new McpError(ErrorCode.InvalidParams, `Tool ${printableLine(req.params.name, 200)} not found`).message }],
     isError: true,
   }));
   low.setRequestHandler(ListPromptsRequestSchema, () => ({ prompts: [] }));
   low.setRequestHandler(GetPromptRequestSchema, (req) => {
-    throw new McpError(ErrorCode.InvalidParams, `Prompt ${req.params.name} not found`);
+    throw new McpError(ErrorCode.InvalidParams, `Prompt ${printableLine(req.params.name, 200)} not found`);
   });
   low.setRequestHandler(ListResourcesRequestSchema, () => ({ resources: [] }));
   low.setRequestHandler(ListResourceTemplatesRequestSchema, () => ({ resourceTemplates: [] }));
   low.setRequestHandler(ReadResourceRequestSchema, (req) => {
-    throw new McpError(ErrorCode.InvalidParams, `Resource ${req.params.uri} not found`);
+    throw new McpError(ErrorCode.InvalidParams, `Resource ${printableLine(req.params.uri, 500)} not found`);
   });
 }

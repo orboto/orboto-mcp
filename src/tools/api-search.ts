@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
+import { printableJson } from './printable-text.js';
 
 interface SearchEntry {
   method: string;
@@ -81,7 +82,7 @@ export function makeApiSearchHandler(client: OrbotoClient) {
         content: [{
           type: 'text',
           text: `${detail.method} ${detail.path}${perms}\n${detail.summary ?? ''}\n`
-            + `Schema:\n${JSON.stringify({ parameters: detail.parameters, requestBody: detail.requestBody, responses: detail.responses }, null, 1)}`,
+            + `Schema:\n${printableJson({ parameters: detail.parameters, requestBody: detail.requestBody, responses: detail.responses }, 1)}`,
         }],
         structuredContent: detail as unknown as Record<string, unknown>,
       };

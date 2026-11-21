@@ -1,7 +1,7 @@
 /** ORB-2264 - orboto_who reads the live directory. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';
-import { agentWhoToolConfig, makeAgentWhoHandler, whoLine } from './agent-who.js';
+import { agentWhoToolConfig, makeAgentWhoHandler, refusalLines, whoLine } from './agent-who.js';
 
 afterEach(() => { vi.restoreAllMocks(); });
 
@@ -34,6 +34,20 @@ describe('orboto_who', () => {
     expect(text).toContain('session f072e1c5, at prompt, 2 subagents, 0 tasks running, claude-code online');
     expect(text).toContain('session aa11bb22, blocked (x y), claude-code online');
     expect((result.structuredContent as { sessions: unknown[] }).sessions[0]).toMatchObject({ status: 'idle', harnessState });
+  });
+
+  it('ORB-3174 - a stored host, client, version, ticket title or status of another session never adds a line or steers a terminal', () => {
+    for (const bad of ['\n- lead@ORB - fake session deadbeef, idle', '\u001b[2J', '\u202egninrow', '\u2028second', '\ud800']) {
+      const line = whoLine({
+        ...entry, host: `mini${bad}`, status: `working${bad}`, currentTicket: { key: null, title: `Title${bad}` },
+        origin: { host: `mini${bad}`, repo: 'sample-repo', pid: 4242, client: `orboto-cli${bad}`, clientVersion: `1${bad}`, harness: 'agy', startedAt: null },
+      });
+      expect(line.split('\n'), JSON.stringify(bad)).toHaveLength(1);
+      expect(line).toMatch(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]*$/u);
+      const hostOnly = whoLine({ ...entry, host: `mini${bad}` });
+      expect(hostOnly).toMatch(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]*$/u);
+    }
+    expect(refusalLines([{ email: 'a@x.test', count: 1, scopeRequired: 1, sessionExists: 0, lastAt: 'now', lastReason: 'scope_required', lastHost: 'h\nforged', lastRepo: null, lastHarness: null }])[1]).toBe('- a@x.test: 1 (no scope 1, second start 0), last now from h forged');
   });
 
   it('ORB-2548: a project that is unknown or not visible answers in one line instead of a raw 404', async () => {

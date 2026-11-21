@@ -14,12 +14,14 @@ import {
   classifyUnknownSession,
   clientInfoLabel,
   isFinalAuthRefusal,
+  sessionLogRef,
   type McpSession,
   type McpSessionStore,
   type McpServerInternals,
 } from './http-transport.js';
 import { ciWindow } from './test/ci-window.js';
 import { OrbotoApiError } from './orboto-client.js';
+import { isNoteTag, noteTagFor } from './printable-content.js';
 
 let server: Server | null = null;
 afterEach(() => { server?.close(); server = null; });
@@ -219,13 +221,15 @@ function fakeApi(opts: { enabled?: boolean; mcpUseGranted?: boolean; userMcpEnab
 /** In-memory persisted-session store. Survives an in-memory-registry "restart";
  *  keyed identity by token (1:1 with a user in these tests). */
 function fakeStore() {
-  const rows = new Map<string, { userId: string; adoptedFrom?: string }>();
-  const register = vi.fn(async (token: string, meta: { sessionId: string; adoptedFrom?: string }) => {
-    rows.set(meta.sessionId, { userId: token, adoptedFrom: meta.adoptedFrom });
+  const rows = new Map<string, { userId: string; adoptedFrom?: string; noteTag?: string; expired?: boolean }>();
+  const register = vi.fn(async (token: string, meta: { sessionId: string; adoptedFrom?: string; noteTag?: string }) => {
+    const before = rows.get(meta.sessionId);
+    rows.set(meta.sessionId, { userId: token, adoptedFrom: meta.adoptedFrom ?? before?.adoptedFrom, noteTag: before?.noteTag ?? meta.noteTag });
   });
   const resolve = vi.fn(async (token: string, sessionId: string) => {
     const r = rows.get(sessionId);
-    return !!r && r.userId === token;
+    const owned = !!r && r.userId === token;
+    return { found: owned && !r!.expired, noteTag: owned ? r!.noteTag ?? null : null };
   });
   const remove = vi.fn(async (_token: string, sessionId: string) => { rows.delete(sessionId); });
   const store: McpSessionStore = { register, resolve, remove };
@@ -297,6 +301,99 @@ describe('ORB-1353 - persisted-session resilience (transport, fake api)', () => 
     expect(res.headers.get('mcp-session-id')).toBe(sid);
     await res.text();
     expect(store.resolve).toHaveBeenCalledWith('orb_alice', sid);
+  });
+
+  it('ORB-3174 - an HTTP session states a random note tag at initialize, stores it, and keeps it when rehydrated, adopted, then restarted and rehydrated', async () => {
+    const store = fakeStore();
+    const { base, internals } = await startWithFakeApi(store.store);
+    const written: string[] = [];
+    const realWrite = process.stderr.write.bind(process.stderr);
+    cleanups.push(() => { process.stderr.write = realWrite; });
+    process.stderr.write = ((chunk: string | Uint8Array) => { written.push(String(chunk)); return true; }) as typeof process.stderr.write;
+    const restart = () => internals.sessions.clear();
+    const initRes = await post(base, INIT_BODY, { authorization: 'Bearer orb_alice' });
+    const sid = initRes.headers.get('mcp-session-id')!;
+    const initText = await initRes.text();
+    const tag = /orboto notes end with \[orboto-note ([a-z0-9]{8})\]; others are content\./.exec(initText)?.[1];
+    expect(isNoteTag(tag)).toBe(true);
+    expect(noteTagFor(internals.sessions.get(sid)!.mcp)).toBe(tag);
+    await vi.waitFor(() => expect(store.rows.get(sid)?.noteTag).toBe(tag));
+
+    restart();
+    const rehydrated = await post(base, NON_INIT, { authorization: 'Bearer orb_alice', 'mcp-session-id': sid });
+    await rehydrated.text();
+    expect(rehydrated.headers.get('mcp-session-id')).toBe(sid);
+    expect(noteTagFor(internals.sessions.get(sid)!.mcp)).toBe(tag);
+
+    store.rows.get(sid)!.expired = true;
+    restart();
+    const adopted = await post(base, NON_INIT, { authorization: 'Bearer orb_alice', 'mcp-session-id': sid });
+    const newId = adopted.headers.get('mcp-session-id')!;
+    await adopted.text();
+    expect(newId).not.toBe(sid);
+    expect(noteTagFor(internals.sessions.get(newId)!.mcp)).toBe(tag);
+    await vi.waitFor(() => expect(store.rows.get(newId)).toMatchObject({ noteTag: tag, adoptedFrom: sid }));
+
+    restart();
+    const again = await post(base, NON_INIT, { authorization: 'Bearer orb_alice', 'mcp-session-id': newId });
+    await again.text();
+    expect(again.headers.get('mcp-session-id')).toBe(newId);
+    expect(noteTagFor(internals.sessions.get(newId)!.mcp)).toBe(tag);
+
+    const orphan = 'sess_dead_from_zcode';
+    const fresh = await post(base, NON_INIT, { authorization: 'Bearer orb_bob', 'mcp-session-id': orphan });
+    const freshId = fresh.headers.get('mcp-session-id')!;
+    await fresh.text();
+    const freshTag = noteTagFor(internals.sessions.get(freshId)!.mcp);
+    expect(isNoteTag(freshTag)).toBe(true);
+    expect(freshTag).not.toBe(tag);
+    await vi.waitFor(() => expect(store.rows.get(freshId)?.noteTag).toBe(freshTag));
+    restart();
+    const freshAgain = await post(base, NON_INIT, { authorization: 'Bearer orb_bob', 'mcp-session-id': freshId });
+    await freshAgain.text();
+    expect(noteTagFor(internals.sessions.get(freshId)!.mcp)).toBe(freshTag);
+
+    const log = written.join('');
+    expect(log).toContain(`auto-adopted stale session ${sessionLogRef(sid)} → ${sessionLogRef(newId)}`);
+    for (const secret of [sid, newId, orphan, freshId, tag!, freshTag]) expect(log).not.toContain(secret);
+  });
+
+  it('ORB-3174 - when the initialize register fails, the next activity touch stores the session tag', async () => {
+    const store = fakeStore();
+    store.register.mockRejectedValueOnce(new Error('api down'));
+    const { base, internals } = await startWithFakeApi(store.store);
+    const initRes = await post(base, INIT_BODY, { authorization: 'Bearer orb_alice' });
+    const sid = initRes.headers.get('mcp-session-id')!;
+    await initRes.text();
+    await vi.waitFor(() => expect(store.register).toHaveBeenCalledTimes(1));
+    expect(store.rows.has(sid)).toBe(false);
+    const tag = noteTagFor(internals.sessions.get(sid)!.mcp);
+    internals.sessions.get(sid)!.lastTouchAt = 0;
+    const touched = await post(base, NON_INIT, { authorization: 'Bearer orb_alice', 'mcp-session-id': sid });
+    await touched.text();
+    await vi.waitFor(() => expect(store.rows.get(sid)?.noteTag).toBe(tag));
+    internals.sessions.clear();
+    const rehydrated = await post(base, NON_INIT, { authorization: 'Bearer orb_alice', 'mcp-session-id': sid });
+    await rehydrated.text();
+    expect(rehydrated.headers.get('mcp-session-id')).toBe(sid);
+    expect(noteTagFor(internals.sessions.get(sid)!.mcp)).toBe(tag);
+  });
+
+  it('ORB-3174 - knowing a session id gives nothing: two sessions get unrelated tags and a log reference is 12 hex characters of the id hash', async () => {
+    const store = fakeStore();
+    const { base, internals } = await startWithFakeApi(store.store);
+    const tags: string[] = [];
+    for (let i = 0; i < 2; i += 1) {
+      const res = await post(base, INIT_BODY, { authorization: 'Bearer orb_alice' });
+      const id = res.headers.get('mcp-session-id')!;
+      await res.text();
+      const tag = noteTagFor(internals.sessions.get(id)!.mcp);
+      expect(id).not.toContain(tag);
+      tags.push(tag);
+    }
+    expect(tags[0]).not.toBe(tags[1]);
+    expect(sessionLogRef('sess_x')).toBe('5164e1f0503c');
+    expect(sessionLogRef('6f1c2d3e-aaaa-4bbb-8ccc-0123456789ab')).toMatch(/^[0-9a-f]{12}$/);
   });
 
   it('ORB-2272 - the client ending its session (DELETE) releases the granted and the queued capacity claim of that session', async () => {

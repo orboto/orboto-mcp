@@ -3,7 +3,8 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
 import { ownerLine, type OwnerMatch } from './responsibilities.js';
-import { nextPageLine, originText, PresenceFilterShape, presenceQuery, readPresence, statusText, unknownProjectText, type PresenceFilters, type SessionOrigin } from './agent-coordination.js';
+import { nextPageLine, originText, PresenceFilterShape, presenceQuery, readPresence, shown, statusText, unknownProjectText, type PresenceFilters, type SessionOrigin } from './agent-coordination.js';
+import { AGENT_CLIENT_TEXT_MAX } from './printable-line.js';
 import { AGENT_WAKE_LABELS, type AgentSessionWake } from './agent-presence-schema.js';
 
 interface WhoEntry {
@@ -35,8 +36,9 @@ export interface PresenceRefusalEntry {
 export function refusalLines(refusals: PresenceRefusalEntry[] | undefined): string[] {
   if (!refusals?.length) return [];
   return ['Refused heartbeats in the last 24 hours (no role address, not listed):', ...refusals.map((r) => {
-    const where = [r.lastHost, r.lastRepo].filter(Boolean).join('/') || 'unknown origin';
-    return `- ${r.email}: ${r.count} (no scope ${r.scopeRequired}, second start ${r.sessionExists}), last ${r.lastAt} from ${where}${r.lastHarness ? ` (${r.lastHarness})` : ''}`;
+    const where = [shown(r.lastHost, AGENT_CLIENT_TEXT_MAX.host), shown(r.lastRepo, 120)].filter(Boolean).join('/') || 'unknown origin';
+    const harness = shown(r.lastHarness, 20);
+    return `- ${shown(r.email, 320)}: ${r.count} (no scope ${r.scopeRequired}, second start ${r.sessionExists}), last ${shown(r.lastAt, 40)} from ${where}${harness ? ` (${harness})` : ''}`;
   })];
 }
 
@@ -52,15 +54,17 @@ export const agentWhoToolConfig = {
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
-/** One directory row as a line: address, account, session, projects, channel, ticket. */
+/** One directory row as a line: address, account, session, projects, channel, ticket; ORB-3174 - each free-text value one printable line. */
 export function whoLine(s: WhoEntry): string {
-  const address = s.addresses.join(', ') || (s.role ? `${s.role} (no project)` : 'no scope');
-  const announced = s.channel.announced ? `${s.channel.announced}${s.channel.online ? ' online' : ' offline'}` : 'no channel';
+  const address = s.addresses.map((a) => shown(a, 80)).join(', ') || (s.role ? `${shown(s.role, 20)} (no project)` : 'no scope');
+  const announcedName = shown(s.channel.announced, AGENT_CLIENT_TEXT_MAX.channel);
+  const announced = announcedName ? `${announcedName}${s.channel.online ? ' online' : ' offline'}` : 'no channel';
   const channel = s.wake === 'channel' || !s.wake ? announced : AGENT_WAKE_LABELS[s.wake];
-  const ticket = s.currentTicket ? `; on ${s.currentTicket.key ?? s.currentTicket.title}` : '';
-  const host = s.origin ? originText(s) : s.host ? `, host ${s.host}` : '';
-  const shared = s.sharedAddresses?.length ? `; also held by another live session: ${s.sharedAddresses.join(', ')}` : '';
-  return `- ${address} - ${s.email} session ${s.shortId}${host}, ${statusText(s.status, s.harnessState)}, ${channel}, last seen ${s.lastSeenAt}${ticket}${shared}`;
+  const ticket = s.currentTicket ? `; on ${shown(s.currentTicket.key ?? s.currentTicket.title, 300)}` : '';
+  const hostName = shown(s.host, AGENT_CLIENT_TEXT_MAX.host);
+  const host = s.origin ? originText(s) : hostName ? `, host ${hostName}` : '';
+  const shared = s.sharedAddresses?.length ? `; also held by another live session: ${s.sharedAddresses.map((a) => shown(a, 80)).join(', ')}` : '';
+  return `- ${address} - ${shown(s.email, 320)} session ${shown(s.shortId, 12)}${host}, ${statusText(shown(s.status, 40), s.harnessState)}, ${channel}, last seen ${shown(s.lastSeenAt, 40)}${ticket}${shared}`;
 }
 
 export function makeAgentWhoHandler(client: OrbotoClient) {
