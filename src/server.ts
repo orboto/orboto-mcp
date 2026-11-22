@@ -155,6 +155,7 @@ import { gitProbeToolConfig, makeGitProbeHandler } from './tools/git-probe.js';
 import { ciArtifactsToolConfig, ciLogToolConfig, ciStatusToolConfig, makeCiArtifactsHandler, makeCiLogHandler, makeCiStatusHandler } from './tools/ci.js';
 import { sentryToolConfig, makeSentryHandler } from './tools/sentry.js';
 import { connectorToolConfig, makeConnectorHandler } from './tools/connector.js';
+import { designToolConfig, makeDesignHandler } from './tools/design.js';
 import {
   createTicketToolConfig, makeCreateTicketHandler,
   updateTicketToolConfig, makeUpdateTicketHandler,
@@ -574,6 +575,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_ci_artifacts', ciArtifactsToolConfig, makeCiArtifactsHandler(client));
   reg('orboto_sentry', sentryToolConfig, makeSentryHandler(client));
   reg('orboto_connector', connectorToolConfig, makeConnectorHandler(client));
+  reg('orboto_design', designToolConfig, makeDesignHandler(client));
 
   reg('orboto_create_ticket', createTicketToolConfig, makeCreateTicketHandler(client));
   reg('orboto_update_ticket', updateTicketToolConfig, makeUpdateTicketHandler(client));

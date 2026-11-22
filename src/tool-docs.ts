@@ -21,11 +21,11 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_requirements_spec:
     'Requirements spec of a project or milestone from its tickets.',
   orboto_update_doc_space:
-    'Update a doc space: name, description, icon, project, access mode.',
+    'Update a doc space: name, description, icon, project, access.',
   orboto_search_docs:
     'Full-text doc/wiki search with snippets, by space or project.',
   orboto_critical_path:
-    'Critical path (blocking dependency chain) of a project or milestone.',
+    'Blocking dependency chain of a project or milestone.',
   /** ORB-2237 - shortened summaries that pay for `orboto_feedback_reply`; each tool's full text stays in `getToolDoc`. */
   orboto_agent_broadcast:
     'Message every agent in a workspace, project or topic scope.',
@@ -38,20 +38,20 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_bulk_move_tickets:
     'Move every matching ticket to the same status category.',
   orboto_resolve_doc_smart_links:
-    'Resolve doc, ticket, milestone and project smart links to title + URL.',
+    'Resolve doc, ticket, milestone and project smart links.',
   orboto_admin_translation_revert:
-    'Restore the pre-translation title and description; clears the marker.',
+    'Restore the pre-translation title and description.',
   /** ORB-3078 - shortened summaries that pay for `orboto_credential_agent_access`; each tool's full text stays in `getToolDoc`. */
   orboto_browser_standing_allows:
-    'List or revoke the standing allows (Always allow in the side panel) of a browser session.',
+    'List or revoke a browser session\'s standing allows.',
   orboto_admin_api_key_revoke:
-    'Revoke any account\'s API key by id (admin:users:write); audited, the owner is told.',
+    'Revoke an account\'s API key by id (admin:users:write); audited, owner told.',
   orboto_delete_ticket:
     'DESTRUCTIVE, IRREVERSIBLE hard-delete of a ticket and its history.',
   orboto_lane_rereview:
     'Ask a review lane to review a ticket\'s delivery again.',
   orboto_browser_grants:
-    'Lend your paired browser to an agent account you own; list or revoke grants.',
+    'Lend your paired browser to an agent account you own; list, revoke.',
   orboto_wiki_plan_update:
     'Plan wiki page operations for an instruction WITHOUT writing.',
   orboto_session_digest:
@@ -65,7 +65,7 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_get_attachment:
     'Fetch an attachment\'s content by id.',
   orboto_admin_api_key_list:
-    'Every API key with owner, prefix, use, expiry and flags (admin:audit:read).',
+    'Every API key: owner, prefix, use, expiry, flags (admin:audit:read).',
   orboto_list_ticket_statuses:
     'The project\'s workflow statuses, category and order.',
   orboto_get_audit_log:
@@ -76,9 +76,9 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
     'Fetch a public URL as Markdown into a SOURCE doc of the space.',
   /** ORB-3117 - shortened summaries that pay for `orboto_ai_reviewer`; each tool's full text stays in `getToolDoc`. */
   orboto_credential_agent_access:
-    'Which agents may reveal a credential: list = entries, candidates = accounts that can; q searches name or e-mail.',
+    'Agents that may reveal a credential: entries, candidates, q by name or e-mail.',
   orboto_ci_status:
-    'CI runs of a commit, branch, tag or PR: verdicts and the jobs that did not end green.',
+    'CI runs of a commit, branch, tag or PR: verdicts, jobs not green.',
   orboto_ingest_file:
     'Upload a PDF, DOCX, Markdown or text file into `spaceId`.',
   orboto_update_company_closure:
@@ -86,13 +86,13 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_reset_agent_instruction:
     'Restore a seeded rule block (builtinKey) to its shipped text.',
   orboto_close_milestone:
-    'Close a milestone as `completed`, or `archived` with archive=true.',
+    'Close a milestone: `completed`, or `archived` with archive=true.',
   orboto_secret_exposures:
-    'Agent secret guard incidents (super-admin): class, masked preview, tool, project, credential to rotate.',
+    'Secret guard incidents (super-admin): class, masked preview, credential to rotate.',
   orboto_upload_link:
     'Single-use upload link for a ticket or doc; give its URL to the person (50 MB, no login).',
   orboto_ingest_url:
-    'Store a public URL as a Markdown doc in `spaceId` (Readability extract).',
+    'Store a public URL as a Markdown doc in `spaceId`.',
   orboto_work_session_claims_add:
     'Add resource claims to your session; lease and timer stay.',
   orboto_wiki_save_answer:
@@ -111,7 +111,7 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_import_cancel:
     'Cancel an import staging or discard an unapplied staged import.',
   orboto_wiki_ask:
-    'Retrieval-augmented Q&A over the docs, optionally in one space.',
+    'Retrieval-augmented Q&A over the docs, or one space.',
   orboto_bulk_assign_tickets:
     'Add `assigneeEmail` to every ticket in `ticketKeys` or `query`.',
   orboto_wiki_apply_plan:
@@ -125,7 +125,7 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_work_sessions:
     'Visible work leases and spec tasks awaiting ticket replies.',
   orboto_admin_translation_list:
-    'Tickets the AI auto-translate rewrote, newest-updated first.',
+    'Tickets the AI auto-translate rewrote, newest first.',
   orboto_delete_doc_attachment:
     'DESTRUCTIVE - deletes a doc attachment and its stored file.',
   orboto_update_comment:
@@ -149,7 +149,7 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_check_similar:
     'Duplicate check before orboto_create_ticket; creates nothing.',
   orboto_bulk_unassign_tickets:
-    'Remove `assigneeEmail` from every ticket in `ticketKeys` or `query`.',
+    'Remove `assigneeEmail` from tickets in `ticketKeys` or `query`.',
   orboto_work_session_start:
     'Take a ticket\'s work lease in a role and start its timer.',
   orboto_work_session_finish:
@@ -218,6 +218,29 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
     'A doc as PDF, a base64 resource attachment.',
   orboto_list_doc_attachments:
     'A doc\'s attachments, newest first, with download URLs.',
+  /** ORB-3188 - shorter wire summaries that buy the room of `orboto_design` (concept ORB-D205, 8.3); each full text stays in `getToolDoc`. */
+  orboto_lane_stop:
+    'Stop a lane now: interrupts the running turn, releases the work session; stays paused until resume.',
+  orboto_lane_pause:
+    'Pause a lane at its next turn boundary (work session is held) or resume it; orboto_lane_stop interrupts the running turn.',
+  orboto_connector:
+    'Connector links: source_link (ticketKey), list, health, sync (linkId).',
+  orboto_ci_log:
+    'CI job log (jobId) or a run\'s job logs (runId; failed=true: red only).',
+  orboto_delete_doc_space:
+    'DESTRUCTIVE - deletes the space and every doc in it.',
+  orboto_list_git_app_installations:
+    'GitHub App installations: account, suspension, allowed project keys.',
+  orboto_list_ticket_dependencies:
+    'A ticket\'s `blockedBy` (finish first) and `blocks` dependencies.',
+  orboto_ai_usage:
+    'AI calls, tokens and errors over a date range.',
+  orboto_rule_proposal_reject:
+    'Dismiss a candidate or reject a proposal, with a reason.',
+  orboto_message_work:
+    'List, inspect or mutate durable message work (schema: orboto_api_search).',
+  orboto_import_numbering:
+    'A staged import\'s kept and renumbered source numbers; merge flag.',
 };
 
 /** Runtime registry: tool name -> full guidance text, captured at

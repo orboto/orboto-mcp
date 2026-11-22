@@ -7,6 +7,8 @@
  * happy paths; the 403 test on each pinpoint how the API's existing
  * PBAC cascade surfaces through the MCP layer.
  */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
@@ -77,6 +79,25 @@ describe('orboto_create_ticket and orboto_update_ticket estimate (ORB-3100)', ()
     expect(calls.at(-1)?.method).toBe('PATCH');
     expect(calls.at(-1)?.body).toEqual({ estimate: '2h' });
     expect((res.content[0] as { text: string }).text).toContain('estimate 2h');
+  });
+});
+
+describe('orboto_create_ticket buildsFrom (ORB-3188)', () => {
+  it('sends the design handle and names a link the server could not write, the ticket created', async () => {
+    const warning = { code: 'design_not_found', handle: 'ACME-D9', errorKey: 'errors.design_reviews.not_found' };
+    const calls = stub([
+      { json: PROJ },
+      { json: { ...TICKET, ticketKey: 'ACME-13', title: 'Build', buildsFromWarning: warning } },
+    ]);
+    const res = await makeCreateTicketHandler(client)({ projectKey: 'ACME', title: 'Build', buildsFrom: 'ACME-D9' });
+    expect(calls[1].body).toMatchObject({ title: 'Build', buildsFrom: 'ACME-D9' });
+    expect((res.content[0] as { text: string }).text).toContain('Not linked to design ACME-D9 (design_not_found); the ticket was created.');
+    expect((res.structuredContent as { buildsFromWarning: unknown }).buildsFromWarning).toEqual(warning);
+  });
+
+  it('mirrors the warning codes of the shared schema', () => {
+    const canonical = readFileSync(path.resolve(process.cwd(), '../../packages/shared-schema/src/design-reviews.ts'), 'utf8');
+    expect(canonical).toContain("code: z.enum(['design_not_found', 'forbidden', 'link_failed'])");
   });
 });
 

@@ -228,11 +228,25 @@ afterEach(() => { vi.restoreAllMocks(); });
  * them and the resource claim values one printable line inside the ceiling:
  * the printable check is a refinement, so no tool carries a pattern, only a
  * maxLength: 169,156 on the stdio build, 244 chars free; curated = 37,374.
+ * ORB-3188 added `orboto_design` (full tier only, DESIGN_TOOL_MAX_CHARS) inside
+ * the ceiling: one action enum, a handle and a payload object in the shape of
+ * `orboto_connector`, its first sentence on the wire, and 11 new and 16 shorter
+ * summary overrides in tool-docs.ts (concept ORB-D205, 8.3) pay for it, each
+ * tool's full text kept and every pinned wire text unchanged. The overrides
+ * alone: 168,716 on the stdio build (440 bought); with the tool (605 on the
+ * wire) and the ticket create `buildsFrom` parameter (+31, no text): full =
+ * 169,313 over HTTP and 169,353 on the stdio build, 47 chars free; curated =
+ * 37,405. The review fix of ORB-3188 left the action enum at get until A2 and
+ * A3 and named what they add: the tool is 530 on the wire, full = 169,238 over
+ * HTTP and 169,278 on the stdio build, 122 chars free. The next tool or
+ * parameter buys its own room.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
 const CURATED_MAX_CHARS = 39_900;
 const FULL_MAX_CHARS = 169_400;
+/** ORB-3188 - the wire size of `orboto_design` (concept ORB-D205, 8.3: measured 530 with the get-only enum, budget 545). */
+const DESIGN_TOOL_MAX_CHARS = 545;
 
 /**
  * ORB-1805 - the estimator the ticket measured the failure with
@@ -258,7 +272,7 @@ const MINIMAL_MAX_TOKENS = 3_200;
  */
 const CURATED_SCHEMA_MAX_TOKENS = 11_100;
 
-interface Measurement { count: number; chars: number; instructionsChars: number }
+interface Measurement { count: number; chars: number; instructionsChars: number; tools: Array<{ name: string }> }
 
 async function measuredManifest(toolset?: Toolset, localFiles = false): Promise<Measurement> {
   const server = await buildOrbotoMcpServer({
@@ -272,7 +286,7 @@ async function measuredManifest(toolset?: Toolset, localFiles = false): Promise<
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
   try {
     let cursor: string | undefined;
-    const tools: unknown[] = [];
+    const tools: Array<{ name: string }> = [];
     do {
       const page = await client.listTools(cursor ? { cursor } : {});
       tools.push(...page.tools);
@@ -281,7 +295,7 @@ async function measuredManifest(toolset?: Toolset, localFiles = false): Promise<
     const instructions = String(
       (server as unknown as { server: { _instructions?: string } }).server._instructions ?? '',
     );
-    return { count: tools.length, chars: JSON.stringify(tools).length, instructionsChars: instructions.length };
+    return { count: tools.length, chars: JSON.stringify(tools).length, instructionsChars: instructions.length, tools };
   } finally {
     await client.close();
     await server.close();
@@ -312,6 +326,16 @@ describe('ORB-1521 - eager-load manifest size', () => {
     process.stdout.write(`[manifest-size] stdio: curated ${curated.chars} chars, full ${full.chars} chars (~${estTokens(full.chars)} tokens)\n`);
     expect(curated.chars).toBeLessThanOrEqual(CURATED_MAX_CHARS);
     expect(full.chars).toBeLessThanOrEqual(FULL_MAX_CHARS);
+  });
+
+  it('ORB-3188 - orboto_design stays within its own budget on the wire, in the full tier only', async () => {
+    const full = await measuredManifest('full');
+    const curated = await measuredManifest();
+    const design = full.tools.find((t) => t.name === 'orboto_design');
+    process.stdout.write(`[manifest-size] orboto_design: ${JSON.stringify(design).length} chars; full over HTTP ${full.chars} chars\n`);
+    expect(design).toBeDefined();
+    expect(JSON.stringify(design).length).toBeLessThanOrEqual(DESIGN_TOOL_MAX_CHARS);
+    expect(curated.tools.some((t) => t.name === 'orboto_design')).toBe(false);
   });
 });
 

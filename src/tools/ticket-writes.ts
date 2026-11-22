@@ -11,6 +11,7 @@ import { trimSimilarEntries } from './similar-projection.js';
 import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { resolveProjectByKey, resolveTicketByKey, resolveByName, type TicketRow } from './shared.js';
 import { resolveMilestoneByNameOrId } from './milestones.js';
+import type { BuildsFromWarning } from './design.js';
 
 const STATUS_CATEGORIES = ['todo', 'in_progress', 'in_review', 'done', 'wont_fix'] as const;
 type StatusCategory = (typeof STATUS_CATEGORIES)[number];
@@ -80,6 +81,7 @@ export const createTicketToolConfig = {
   description:
     'Create a ticket in a project. Creating more than ~3 tickets? Use `orboto_bulk_create_tickets` instead - one call, one compact response. Returns the new ticket\'s key (e.g. "ACME-42") so callers can chain follow-ups. **Read the new key from `structuredContent.createdTicketKey` (ORB-1176) - never from `similarWarnings[].ticketKey`, which are OTHER, possibly-duplicate tickets.** The caller must have `ticket:create` on the project. **Duplicate-detection safety-net (ORB-831):** if `similarWarnings` appears in the response with one or more entries, the ticket WAS created but you should review whether to close it as a duplicate of the listed ticket(s) instead. The warnings are advisory - never blocking - but each entry is a ticket the system thinks the new one overlaps with. Prefer `orboto_check_similar` BEFORE creating when you want a dry-run. **Deferred check under load (ORB-1437):** if `duplicateCheckDeferred: true` appears, the project was under a create burst so the duplicate-check was run in the background instead of inline - `similarWarnings` is then empty because it did NOT run synchronously, which is NOT the same as "no duplicates found". A strong match, if any, is posted as an advisory comment on the new ticket a moment later; check the ticket comments before treating it as new work. **Duplicate-check recall (ORB-1121):** when you search/check-similar first, results rank by term co-occurrence - a long, solution-framed title with rare terms can return 0 hits even when a short, symptom-framed dup sharing one distinctive token exists. Probe with a single distinctive STABLE token (file/component/error-string fragment), keep queries SHORT, and search the SYMPTOM not your fix; a 0-result long query is not "no dup". **Language-mismatch warning (ORB-890):** if `languageWarning` appears, the ticket was written in a language different from the workspace default. Consider rewriting in the expected language so search + duplicate-detection stay consistent. Non-blocking. **Before a mass-create (ORB-989):** call `orboto_whoami` first - its `workspaceLocale` field is the language you should write every ticket in. If the same `languageWarning` repeats, write the rest of the batch in the workspace language and continue. **Strict mode (ORB-990):** if the workspace enforces ticket language, a mismatch is rejected (the tool returns a `blocked` result, not a created ticket) - rewrite in the workspace language, or set `allowLanguageMismatch: true` only when the language is genuinely intentional. **Hard duplicate-block (ORB-1471, ORB-2185):** a workspace can REFUSE a create - the tool returns `duplicateBlocked` (no ticket) with the candidates. ONLY an AI-embedding match at/above the threshold against an OPEN ticket blocks; a text match and a closed match stay warnings, and a text match is printed WITHOUT a percentage because a text rank is relative, not a similarity. Extend one of the candidates, or retry with `allowDuplicate: true` AND a `duplicateJustification` (saved as a comment). `duplicateCheckDegraded: true` = the block was on but only text candidates existed, so nothing could be compared and the create went through unchecked. '
     + '**Pre-flight (ORB-2162):** `dryRun: true` runs the same language, type, label and duplicate checks the write runs and returns their verdicts WITHOUT creating anything - `structuredContent.preflight` carries `ok`, `severity`, `blockedBy` and one verdict per check, each with the exact message the real create would answer with. Use it when a create would otherwise cost a round trip to fix the payload afterwards; re-send the same arguments without `dryRun` once the verdicts are clean. '
+    + '**Builds from (ORB-3188):** `buildsFrom` (a design handle: doc key, ticket key or UUID) links the new ticket as a build ticket of that design; a link that cannot be written leaves the ticket created and returns `buildsFromWarning` with its code. '
     + '**Estimate (ORB-3100):** an agent account must pass `estimate` (your own time) for a story, task or bug, else 400 `errors.tickets.estimate_required`. '
     + '**Parameter notes.** `deliveryMode` (ORB-1608) is the role-aware commit policy that replaced the blanket one-commit-per-ticket rule: implementation/docs expect exactly one linked commit (closing without one is a non-blocking warning); review/admin/epic never expect one - reviews are read-only, admin work carries external evidence, epics derive completion from their children; unset defaults to "epic" when type=epic, else "implementation". `milestone` takes a key ("ORB-M3"), a name, or a UUID and is looked up in the project including closed milestones - unknown or ambiguous is an error, so pass the key/UUID when a name repeats. `labels` and `assigneeEmails` attach ATOMICALLY inside the create (ORB-1416): an unknown label or non-member email rolls the whole create back with a 400, leaving no orphan ticket - there is no separate attach call to retry.',
   inputSchema: z.object({
@@ -102,7 +104,7 @@ export const createTicketToolConfig = {
     allowDuplicate: z.boolean().optional().describe('Override the duplicate block.'),
     duplicateJustification: z.string().optional(),
     dryRun: z.boolean().optional().describe('Pre-flight only: return the verdicts, create nothing.'),
-    estimate: z.string().optional().describe('2h, 1h30m, 1.5d'),
+    estimate: z.string().optional().describe('2h, 1h30m, 1.5d'), buildsFrom: z.string().optional(),
   }).shape,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
@@ -121,7 +123,7 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
     allowLanguageMismatch?: boolean;
     allowDuplicate?: boolean; duplicateJustification?: string;
     dryRun?: boolean;
-    estimate?: string;
+    estimate?: string; buildsFrom?: string;
   }): Promise<CallToolResult> => {
     const project = await resolveProjectByKey(client, input.projectKey);
 
@@ -161,24 +163,15 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
     }
     if (input.labels && input.labels.length > 0) body.labelNames = input.labels;
     if (input.assigneeEmails && input.assigneeEmails.length > 0) body.assigneeEmails = input.assigneeEmails;
+    if (input.buildsFrom) body.buildsFrom = input.buildsFrom;
 
     const qs: string[] = [];
     if (input.allowLanguageMismatch) qs.push('allowLanguageMismatch=true');
     if (input.allowDuplicate) qs.push('allowDuplicate=true');
     const createPath = `/projects/${project.id}/tickets${qs.length ? `?${qs.join('&')}` : ''}`;
-    let created: TicketRow & {
-      similarWarnings?: SimilarWarning[];
-      languageWarning?: LanguageWarning;
-      duplicateCheckDeferred?: boolean;
-      duplicateCheckDegraded?: boolean;
-    };
+    let created: CreatedTicket;
     try {
-      created = await client.post<TicketRow & {
-        similarWarnings?: SimilarWarning[];
-        languageWarning?: LanguageWarning;
-        duplicateCheckDeferred?: boolean;
-        duplicateCheckDegraded?: boolean;
-      }>(createPath, body);
+      created = await client.post<CreatedTicket>(createPath, body);
     } catch (err) {
       const dup = duplicateBlockResult(err);
       if (dup) return dup;
@@ -219,6 +212,8 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
         `\n⚠ Language mismatch - this ticket reads as "${langWarning.detected}" but the workspace default is "${langWarning.expected}". Consider rewriting in ${langWarning.expected.toUpperCase()} to keep search + duplicate-detection consistent across the project.`,
       );
     }
+    const buildsFrom = created.buildsFromWarning;
+    if (buildsFrom) parts.push(`\n⚠ Not linked to design ${buildsFrom.handle} (${buildsFrom.code}); the ticket was created. Link it with PUT /design-subjects/{design}/build-tickets/{ticket} (orboto_api_call).`);
     const text = parts.join('\n');
 
     return {
@@ -229,11 +224,16 @@ export function makeCreateTicketHandler(client: OrbotoClient) {
         similarWarnings: trimSimilarEntries(warnings),
         ...(deferred ? { duplicateCheckDeferred: true } : {}),
         ...(degraded ? { duplicateCheckDegraded: true } : {}),
-        ...(langWarning ? { languageWarning: langWarning } : {}),
+        ...(langWarning ? { languageWarning: langWarning } : {}), ...(buildsFrom ? { buildsFromWarning: buildsFrom } : {}),
       },
     };
   };
 }
+
+type CreatedTicket = TicketRow & {
+  similarWarnings?: SimilarWarning[]; languageWarning?: LanguageWarning; duplicateCheckDeferred?: boolean; duplicateCheckDegraded?: boolean;
+  buildsFromWarning?: BuildsFromWarning;
+};
 
 interface SimilarWarning {
   id: string;
