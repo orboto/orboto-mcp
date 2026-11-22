@@ -6,7 +6,7 @@ import { join } from 'node:path';
 /** The session id Claude Code hands its stdio MCP servers; an HTTP server never sees it. */
 export const CLAUDE_SESSION_ENV = 'CLAUDE_CODE_SESSION_ID';
 
-/** The Claude Code hook events the CLI registers (claude_hook_settings.go OrbotoHookEvents). */
+/** The Claude Code hook events an agent context key needs (claude_hook_settings.go OrbotoHookEvents without modelEvents). */
 export const ORBOTO_HOOK_EVENTS = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Stop', 'StopFailure', 'SessionStart', 'SubagentStart', 'SubagentStop', 'SessionEnd', 'Notification'];
 
 /** The project settings file the hooks are registered in. */
