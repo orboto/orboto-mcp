@@ -11,8 +11,9 @@
 # Edit the file in the parent repo; the mirror is read-only.
 #
 # Tag-triggered. The parent repo's `scripts/release.mjs` produces a
-# tag like `v0.89.1`; once split-mcp.yml mirrors that tag to this
-# repo, this workflow runs and publishes the current `@orboto/mcp`
+# tag like `v0.89.1`; once the release run mirrors that tag to this
+# repo (job mcp-mirror of build-images.yml, or a split-mcp.yml tag
+# replay), this workflow runs and publishes the current `@orboto/mcp`
 # version to npm via OIDC (no NPM_TOKEN needed - npm verifies the
 # GitHub-issued OIDC token against the per-package "Trusted Publisher"
 # config on npmjs.com).
