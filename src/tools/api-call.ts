@@ -32,6 +32,7 @@ export const VAULT_PLAINTEXT_ROUTES = [
   'POST /credentials/browser-login',
   'POST /credentials/:id/browser-login/recovery-code',
   'POST /credentials/browser-login/passkey',
+  'POST /credentials/:id/passkey-assertion',
 ] as const;
 
 const VAULT_PLAINTEXT_PATHS = VAULT_PLAINTEXT_ROUTES.map((route) => new RegExp(`^${route.split(' ')[1].replace(/:[^/]+/g, '[^/]+')}$`, 'i'));
