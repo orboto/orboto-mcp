@@ -26,10 +26,11 @@ export const importCharRefsToolConfig = {
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
-/** Up to SAMPLE_LINES samples of the ticket fields and every label and milestone rename the report carries, so no rename of a name hides. */
+const isName = (s: ImportCharRefsReport['samples'][number]): boolean => s.field === 'label' || s.field === 'milestone';
+
+/** Every label and milestone rename the report carries, then up to SAMPLE_LINES ticket samples, within the MCP response budget; CLI and REST carry every sample. A cut takes an array's tail, so it takes the ticket samples before a rename of a name. */
 function samplesShown(samples: ImportCharRefsReport['samples']): ImportCharRefsReport['samples'] {
-  const names = samples.filter((s) => s.field === 'label' || s.field === 'milestone');
-  return [...samples.filter((s) => s.field !== 'label' && s.field !== 'milestone').slice(0, SAMPLE_LINES), ...names];
+  return [...samples.filter(isName), ...samples.filter((s) => !isName(s)).slice(0, SAMPLE_LINES)];
 }
 
 type ManualRow = ImportCharRefsReport['manualRows'][number];
@@ -52,6 +53,7 @@ const manualWhere = (x: ManualRow): string => {
 const fieldLine = (name: string, c: { checked: number; repairable: number; replacementChar: number }) =>
   `- ${name}: ${c.repairable} of ${c.checked} repairable, ${c.replacementChar} with U+FFFD`;
 
+/** Counts and the go line, the values to fix by hand, the renames of a name, the U+FFFD values, the ticket samples last: a cut of the MCP response budget takes the tail. */
 export function reportText(r: ImportCharRefsReport): string {
   const lines = [
     `Dry run of ${r.token ? `import ${r.token}` : `the import of project ${r.projectId} (audit entry ${r.importedAt}, ${r.importedTickets} tickets written)`} (${r.adapterId}, ${r.status}): ${r.tickets} tickets with a reference or U+FFFD.${r.supported ? '' : ` NOT REPAIRABLE: ${r.adapterId} stored no undecoded references; its text is the author's.`}`,
@@ -63,26 +65,27 @@ export function reportText(r: ImportCharRefsReport): string {
     ...(r.unnumberedTickets > 0 ? [`- ${r.unnumberedTickets} tickets without a ticket number are left out; fix them by hand.`] : []),
     ...(r.labelConflicts > 0 ? [`- ${r.labelConflicts} labels stay: another label of the project already holds the repaired name.`] : []),
     ...(r.milestoneConflicts > 0 ? [`- ${r.milestoneConflicts} milestones stay: another milestone of the project already holds the repaired name.`] : []),
+    ...(r.supported ? ['Show this to the user; repair only on their go with apply: true.'] : []),
   ];
-  const shown = samplesShown(r.samples);
-  if (shown.length > 0) {
-    lines.push('Samples (every label and milestone rename):', ...shown.map((s) => `- ${s.field} ${s.ticketKey ?? ''}: "${s.before}" -> "${s.after}"`));
-    const more = r.samples.length - shown.length + r.samplesOmitted;
-    if (more > 0) lines.push(`... ${more} more samples not listed.`);
-  }
-  const rows = r.replacementCharRows.slice(0, ROW_LINES);
-  if (rows.length > 0) {
-    lines.push('U+FFFD (the source character is lost; fix these by hand):', ...rows.map((x) => `- ${x.field} ${x.ticketKey ?? x.labelId ?? ''}${x.commentId ? ` comment ${x.commentId}` : ''}: ${x.excerpt}`));
-    const more = r.replacementCharRows.length - rows.length + r.replacementCharOmitted;
-    if (more > 0) lines.push(`... ${more} more U+FFFD values not listed.`);
-  }
   const manual = r.manualRows.slice(0, ROW_LINES);
   if (manual.length > 0) {
     lines.push('Not repaired, fix these by hand:', ...manual.map((x) => `- ${x.kind} ${manualWhere(x)} (${MANUAL_REASONS[x.reason]}): ${x.excerpt}`));
     const more = r.manualRows.length - manual.length + r.manualOmitted;
     if (more > 0) lines.push(`... ${more} more values to fix by hand not listed.`);
   }
-  if (r.supported) lines.push('Show this to the user; repair only on their go with apply: true.');
+  const names = r.samples.filter(isName);
+  if (names.length > 0) lines.push('Label and milestone renames:', ...names.map((s) => `- ${s.field}: "${s.before}" -> "${s.after}"`));
+  const rows = r.replacementCharRows.slice(0, ROW_LINES);
+  if (rows.length > 0) {
+    lines.push('U+FFFD (the source character is lost; fix these by hand):', ...rows.map((x) => `- ${x.field} ${x.ticketKey ?? x.labelId ?? ''}${x.commentId ? ` comment ${x.commentId}` : ''}: ${x.excerpt}`));
+    const more = r.replacementCharRows.length - rows.length + r.replacementCharOmitted;
+    if (more > 0) lines.push(`... ${more} more U+FFFD values not listed.`);
+  }
+  const tickets = r.samples.filter((s) => !isName(s));
+  const shown = tickets.slice(0, SAMPLE_LINES);
+  if (shown.length > 0) lines.push('Ticket samples:', ...shown.map((s) => `- ${s.field} ${s.ticketKey ?? ''}: "${s.before}" -> "${s.after}"`));
+  const more = tickets.length - shown.length + r.samplesOmitted;
+  if (more > 0) lines.push(`... ${more} more samples not listed.`);
   return lines.join('\n');
 }
 

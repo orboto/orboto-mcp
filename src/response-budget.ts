@@ -27,6 +27,7 @@ export const TOOL_BUDGET_CHARS: Record<string, number> = {
   orboto_api_search: 8_000,
   orboto_api_call: 8_000,
   orboto_design: 8_000,
+  orboto_import_char_refs: 18_000,
 };
 
 /**

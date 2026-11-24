@@ -1,7 +1,8 @@
 /** ORB-3206 - orboto_import_char_refs: the dry run by default, the repair batches only with apply, resumable at next; a project key reaches the project scope. */
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
+import { OrbotoApiError, OrbotoClient } from '../orboto-client.js';
+import { withMetrics } from '../with-metrics.js';
 import { importCharRefsToolConfig, makeImportCharRefsHandler } from './import-char-refs.js';
 import type { ImportCharRefsReport } from './import-char-refs-result.js';
 
@@ -155,6 +156,15 @@ describe('orboto_import_char_refs', () => {
     expect((result.structuredContent as { manualRows: unknown[] }).manualRows).toHaveLength(20);
   });
 
+  it('puts the go line under the counts and the ticket samples last', async () => {
+    const samples = [{ field: 'title' as const, ticketKey: 'AP-7', before: 'k&#252;rzer', after: 'kürzer' }, { field: 'milestone' as const, ticketKey: null, before: 'Sprint &#8470; 1', after: 'Sprint № 1' }];
+    const manualRows = [{ kind: 'user' as const, reason: 'person' as const, ticketId: null, ticketKey: null, commentId: null, userId: null, labelId: null, milestoneId: null, excerpt: 'J&#252;rgen' }];
+    const text = textOf(await makeImportCharRefsHandler({ get: vi.fn().mockResolvedValue(report({ samples, manualRows })) } as unknown as OrbotoClient)({ token: TOKEN }));
+    const at = ['- milestones: 2 of 2', 'repair only on their go with apply: true', 'Not repaired, fix these by hand', '- milestone: "Sprint &#8470; 1" -> "Sprint № 1"', 'U+FFFD (the source', '- title AP-7: "k&#252;rzer"'].map((s) => text.indexOf(s));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect(at).toEqual([...at].sort((a, b) => a - b));
+  });
+
   it('shows every label and milestone rename beside the first ticket samples', async () => {
     const samples = [
       ...Array.from({ length: 15 }, (_, i) => ({ field: 'title' as const, ticketKey: `AP-${i}`, before: `t&#252;${i}`, after: `tü${i}` })),
@@ -164,11 +174,61 @@ describe('orboto_import_char_refs', () => {
     ];
     const result = await makeImportCharRefsHandler({ get: vi.fn().mockResolvedValue(report({ samples, samplesOmitted: 7 })) } as unknown as OrbotoClient)({ token: TOKEN });
     const text = textOf(result);
-    expect(text).toContain('- label : "gr&#252;n" -> "grün"');
-    expect(text).toContain('- milestone : "Version gr&#252;n" -> "Version grün"');
-    expect(text).toContain('- label : "l&#252;23" -> "lü23"');
+    expect(text).toContain('- label: "gr&#252;n" -> "grün"');
+    expect(text).toContain('- milestone: "Version gr&#252;n" -> "Version grün"');
+    expect(text).toContain('- label: "l&#252;23" -> "lü23"');
     expect(text).not.toContain('t&#252;10');
     expect(text).toContain('... 12 more samples not listed.');
     expect((result.structuredContent as { samples: unknown[] }).samples).toHaveLength(36);
+  });
+});
+
+describe('orboto_import_char_refs within the MCP response budget', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const words = (i: number, n: number) => `${`Kommentar ${i} mit Umlaut k&#252;rzer und Pfeil &#8594; `.repeat(4)}`.slice(0, n);
+  const uuid = (i: number) => `66666666-6666-4666-8666-${String(i).padStart(12, '0')}`;
+  const apSized = (names: number) => report({
+    samples: [
+      ...Array.from({ length: 20 }, (_, i) => ({ field: 'title' as const, ticketKey: `AP-${100 + i}`, before: `[DEV] Spieler ${i} soll k&#252;rzer laufen &#8594; Animation`, after: `[DEV] Spieler ${i} soll kürzer laufen → Animation` })),
+      ...Array.from({ length: names }, (_, i) => ({ field: 'milestone' as const, ticketKey: null, before: `Sprint &#8470; ${i + 1} &#183; Gr&#252;ne Wiese`, after: `Sprint № ${i + 1} · Grüne Wiese` })),
+    ],
+    replacementCharRows: Array.from({ length: 25 }, (_, i) => ({ field: 'description' as const, ticketId: uuid(i), ticketKey: `AP-${200 + i}`, commentId: null, labelId: null, milestoneId: null, excerpt: `${words(i, 60)}�${words(i, 59)}` })),
+    manualRows: [
+      ...Array.from({ length: 10 }, (_, i) => ({ kind: 'user' as const, reason: 'person' as const, ticketId: null, ticketKey: null, commentId: null, userId: uuid(i), labelId: null, milestoneId: null, excerpt: `J&#252;rgen M&#252;ller ${i}` })),
+      ...Array.from({ length: 10 }, (_, i) => ({ kind: 'comment' as const, reason: 'source_unknown' as const, ticketId: uuid(i), ticketKey: `AP-${300 + i}`, commentId: uuid(50 + i), userId: null, labelId: null, milestoneId: null, excerpt: words(i, 120) })),
+    ],
+    manualOmitted: 0,
+  });
+  const throughBudget = async (r: ImportCharRefsReport) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }));
+    const client = new OrbotoClient({ baseUrl: 'https://orboto.example.com', apiKey: 'orb_x' });
+    const wrapped = withMetrics(client, 'orboto_import_char_refs', undefined, makeImportCharRefsHandler({ get: vi.fn().mockResolvedValue(r) } as unknown as OrbotoClient) as never);
+    const result = await wrapped({ token: TOKEN } as never);
+    return { result, text: (result.content as Array<{ type: string; text?: string }>).filter((p) => p.type === 'text').map((p) => p.text!).join('\n') };
+  };
+
+  it('carries the go line, every value to fix by hand and every rename of an AP-sized dry run whole', async () => {
+    const { result, text } = await throughBudget(apSized(26));
+    expect(text).toContain('Show this to the user; repair only on their go with apply: true.');
+    expect(text).toContain(`- comment AP-309 comment ${uuid(59)} (may be the author's text): ${words(9, 120)}`);
+    expect(text).toContain('- milestone: "Sprint &#8470; 26 &#183; Gr&#252;ne Wiese" -> "Sprint № 26 · Grüne Wiese"');
+    expect(text).toContain('- title AP-109:');
+    expect(text).not.toContain('Response truncated');
+    expect(result.structuredContent).not.toHaveProperty('__truncation');
+    expect((result.structuredContent as { samples: unknown[] }).samples).toHaveLength(36);
+  });
+
+  it('keeps the counts, the go line and the values to fix by hand when the budget cuts, and the cut points to CLI and REST', async () => {
+    const { result, text } = await throughBudget(apSized(400));
+    expect(text).toContain('- milestones: 2 of 2 repairable');
+    expect(text).toContain('Show this to the user; repair only on their go with apply: true.');
+    expect(text).toContain(`- comment AP-309 comment ${uuid(59)}`);
+    expect(text).toContain('- milestone: "Sprint &#8470; 1 &#183; Gr&#252;ne Wiese"');
+    expect(text).not.toContain('- title AP-100:');
+    expect(text).toContain('the REST API and both CLIs return the complete body');
+    const samples = (result.structuredContent as { samples: Array<{ field: string }> }).samples;
+    expect(samples[0]!.field).toBe('milestone');
+    expect(samples.some((s) => s.field === 'title')).toBe(false);
   });
 });
