@@ -26,6 +26,30 @@ export const importCharRefsToolConfig = {
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
+const NAME_LINES = 20;
+
+/** Up to SAMPLE_LINES samples of the ticket fields and NAME_LINES label and milestone renames, so a rename of a name always shows. */
+function samplesShown(samples: ImportCharRefsReport['samples']): ImportCharRefsReport['samples'] {
+  const names = samples.filter((s) => s.field === 'label' || s.field === 'milestone');
+  return [...samples.filter((s) => s.field !== 'label' && s.field !== 'milestone').slice(0, SAMPLE_LINES), ...names.slice(0, NAME_LINES)];
+}
+
+type ManualRow = ImportCharRefsReport['manualRows'][number];
+
+const MANUAL_REASONS: Record<ManualRow['reason'], string> = {
+  source_unknown: 'may be the author\'s text',
+  person: 'people are never renamed',
+  holds_other_tickets: 'also holds tickets outside the import',
+  attached_in_orboto: 'attached to an imported ticket in orboto',
+};
+
+const manualWhere = (x: ManualRow): string => {
+  if (x.kind === 'user') return x.userId ?? '(no member)';
+  if (x.kind === 'label') return x.labelId ?? '';
+  if (x.kind === 'milestone') return x.milestoneId ?? '';
+  return `${x.ticketKey ?? ''} comment ${x.commentId}`;
+};
+
 const fieldLine = (name: string, c: { checked: number; repairable: number; replacementChar: number }) =>
   `- ${name}: ${c.repairable} of ${c.checked} repairable, ${c.replacementChar} with U+FFFD`;
 
@@ -41,7 +65,12 @@ export function reportText(r: ImportCharRefsReport): string {
     ...(r.labelConflicts > 0 ? [`- ${r.labelConflicts} labels stay: another label of the project already holds the repaired name.`] : []),
     ...(r.milestoneConflicts > 0 ? [`- ${r.milestoneConflicts} milestones stay: another milestone of the project already holds the repaired name.`] : []),
   ];
-  if (r.samples.length > 0) lines.push('Samples:', ...r.samples.slice(0, SAMPLE_LINES).map((s) => `- ${s.field} ${s.ticketKey ?? ''}: "${s.before}" -> "${s.after}"`));
+  const shown = samplesShown(r.samples);
+  if (shown.length > 0) {
+    lines.push('Samples (every label and milestone rename up to 20):', ...shown.map((s) => `- ${s.field} ${s.ticketKey ?? ''}: "${s.before}" -> "${s.after}"`));
+    const more = r.samples.length - shown.length + r.samplesOmitted;
+    if (more > 0) lines.push(`... ${more} more samples not listed.`);
+  }
   const rows = r.replacementCharRows.slice(0, ROW_LINES);
   if (rows.length > 0) {
     lines.push('U+FFFD (the source character is lost; fix these by hand):', ...rows.map((x) => `- ${x.field} ${x.ticketKey ?? x.labelId ?? ''}${x.commentId ? ` comment ${x.commentId}` : ''}: ${x.excerpt}`));
@@ -50,8 +79,7 @@ export function reportText(r: ImportCharRefsReport): string {
   }
   const manual = r.manualRows.slice(0, ROW_LINES);
   if (manual.length > 0) {
-    lines.push('Not repaired, fix these by hand (an Asana JSON comment may be the author\'s text; people are never renamed):',
-      ...manual.map((x) => `- ${x.kind} ${x.kind === 'user' ? x.userId ?? '(no member)' : `${x.ticketKey ?? ''} comment ${x.commentId}`}: ${x.excerpt}`));
+    lines.push('Not repaired, fix these by hand:', ...manual.map((x) => `- ${x.kind} ${manualWhere(x)} (${MANUAL_REASONS[x.reason]}): ${x.excerpt}`));
     const more = r.manualRows.length - manual.length + r.manualOmitted;
     if (more > 0) lines.push(`... ${more} more values to fix by hand not listed.`);
   }
@@ -91,7 +119,11 @@ export function makeImportCharRefsHandler(client: OrbotoClient) {
       }
       const { replacementCharRows, ...rest } = report;
       const { manualRows, ...fields } = rest;
-      return { content: [{ type: 'text', text: reportText(report) }], structuredContent: { ...fields, replacementCharRows: replacementCharRows.slice(0, ROW_LINES), manualRows: manualRows.slice(0, ROW_LINES) } };
+      const { samples, ...counted } = fields;
+      return {
+        content: [{ type: 'text', text: reportText(report) }],
+        structuredContent: { ...counted, samples: samplesShown(samples), replacementCharRows: replacementCharRows.slice(0, ROW_LINES), manualRows: manualRows.slice(0, ROW_LINES) },
+      };
     }
     const post = async (at: number): Promise<ImportCharRefsRepairResponse> => {
       if (project) return client.post<ImportCharRefsRepairResponse>(`/admin/import/projects/${id}/char-refs/repair`, { from: at });

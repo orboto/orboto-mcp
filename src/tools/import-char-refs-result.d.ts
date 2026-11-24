@@ -25,11 +25,15 @@ export interface ImportCharRefsReport {
   labelConflicts: number;
   milestoneConflicts: number;
   samples: Array<{ field: ImportCharRefsField; ticketKey: string | null; before: string; after: string }>;
+  samplesOmitted: number;
   replacementCharRows: Array<{
     field: ImportCharRefsField; ticketId: string | null; ticketKey: string | null; commentId: string | null; labelId: string | null; milestoneId: string | null; excerpt: string;
   }>;
   replacementCharOmitted: number;
-  manualRows: Array<{ kind: 'comment' | 'user'; ticketId: string | null; ticketKey: string | null; commentId: string | null; userId: string | null; excerpt: string }>;
+  manualRows: Array<{
+    kind: 'comment' | 'user' | 'label' | 'milestone'; reason: 'source_unknown' | 'person' | 'holds_other_tickets' | 'attached_in_orboto';
+    ticketId: string | null; ticketKey: string | null; commentId: string | null; userId: string | null; labelId: string | null; milestoneId: string | null; excerpt: string;
+  }>;
   manualOmitted: number;
 }
 

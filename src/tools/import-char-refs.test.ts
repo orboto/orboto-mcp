@@ -16,6 +16,7 @@ function report(overrides: Partial<ImportCharRefsReport> = {}): ImportCharRefsRe
     labelConflicts: 1,
     milestoneConflicts: 1,
     samples: [{ field: 'title', ticketKey: 'AP-7', before: 'k&#252;rzer', after: 'kürzer' }],
+    samplesOmitted: 0,
     replacementCharRows: Array.from({ length: 25 }, (_, i) => ({ field: 'title' as const, ticketId: null, ticketKey: `AP-${i}`, commentId: null, labelId: null, milestoneId: null, excerpt: `[DEV] Bugfixing ${i}` })),
     replacementCharOmitted: 3,
     manualRows: [], manualOmitted: 0,
@@ -36,7 +37,7 @@ describe('orboto_import_char_refs', () => {
     expect(text).toContain('- 1 labels stay: another label of the project already holds the repaired name.');
     expect(text).toContain('- milestones: 2 of 2 repairable, 0 with U+FFFD');
     expect(text).toContain('- 1 milestones stay: another milestone of the project already holds the repaired name.');
-    expect(text).not.toContain('fix these by hand (an Asana');
+    expect(text).not.toContain('Not repaired');
     expect(text).toContain('- title AP-7: "k&#252;rzer" -> "kürzer"');
     expect(text).toContain('... 8 more U+FFFD values not listed.');
     expect(text).toContain('repair only on their go with apply: true');
@@ -137,15 +138,35 @@ describe('orboto_import_char_refs', () => {
 
   it('lists the values it leaves for a fix by hand, capped like the U+FFFD rows', async () => {
     const manualRows = [
-      { kind: 'comment' as const, ticketId: null, ticketKey: 'AS-1', commentId: '55555555-5555-4555-8555-555555555555', userId: null, excerpt: 'Kommentar &#8594;' },
-      ...Array.from({ length: 21 }, (_, i) => ({ kind: 'user' as const, ticketId: null, ticketKey: null, commentId: null, userId: i === 0 ? null : `66666666-6666-4666-8666-${String(i).padStart(12, '0')}`, excerpt: `J&#252;rgen ${i}` })),
+      { kind: 'comment' as const, reason: 'source_unknown' as const, ticketId: null, ticketKey: 'AS-1', commentId: '55555555-5555-4555-8555-555555555555', userId: null, labelId: null, milestoneId: null, excerpt: 'Kommentar &#8594;' },
+      { kind: 'milestone' as const, reason: 'holds_other_tickets' as const, ticketId: null, ticketKey: null, commentId: null, userId: null, labelId: null, milestoneId: '77777777-7777-4777-8777-777777777777', excerpt: 'Release &#8594; 2' },
+      ...Array.from({ length: 20 }, (_, i) => ({
+        kind: 'user' as const, reason: 'person' as const, ticketId: null, ticketKey: null, commentId: null, labelId: null, milestoneId: null,
+        userId: i === 0 ? null : `66666666-6666-4666-8666-${String(i).padStart(12, '0')}`, excerpt: `J&#252;rgen ${i}`,
+      })),
     ];
     const result = await makeImportCharRefsHandler({ get: vi.fn().mockResolvedValue(report({ manualRows, manualOmitted: 4 })) } as unknown as OrbotoClient)({ token: TOKEN });
     const text = textOf(result);
     expect(text).toContain('Not repaired, fix these by hand');
-    expect(text).toContain('- comment AS-1 comment 55555555-5555-4555-8555-555555555555: Kommentar &#8594;');
-    expect(text).toContain('- user (no member): J&#252;rgen 0');
+    expect(text).toContain('- comment AS-1 comment 55555555-5555-4555-8555-555555555555 (may be the author\'s text): Kommentar &#8594;');
+    expect(text).toContain('- milestone 77777777-7777-4777-8777-777777777777 (also holds tickets outside the import): Release &#8594; 2');
+    expect(text).toContain('- user (no member) (people are never renamed): J&#252;rgen 0');
     expect(text).toContain('... 6 more values to fix by hand not listed.');
     expect((result.structuredContent as { manualRows: unknown[] }).manualRows).toHaveLength(20);
+  });
+
+  it('shows every label and milestone rename beside the first ticket samples', async () => {
+    const samples = [
+      ...Array.from({ length: 15 }, (_, i) => ({ field: 'title' as const, ticketKey: `AP-${i}`, before: `t&#252;${i}`, after: `tü${i}` })),
+      { field: 'label' as const, ticketKey: null, before: 'gr&#252;n', after: 'grün' },
+      { field: 'milestone' as const, ticketKey: null, before: 'Version gr&#252;n', after: 'Version grün' },
+    ];
+    const result = await makeImportCharRefsHandler({ get: vi.fn().mockResolvedValue(report({ samples, samplesOmitted: 7 })) } as unknown as OrbotoClient)({ token: TOKEN });
+    const text = textOf(result);
+    expect(text).toContain('- label : "gr&#252;n" -> "grün"');
+    expect(text).toContain('- milestone : "Version gr&#252;n" -> "Version grün"');
+    expect(text).not.toContain('t&#252;10');
+    expect(text).toContain('... 12 more samples not listed.');
+    expect((result.structuredContent as { samples: unknown[] }).samples).toHaveLength(12);
   });
 });
