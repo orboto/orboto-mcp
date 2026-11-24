@@ -240,6 +240,13 @@ afterEach(() => { vi.restoreAllMocks(); });
  * A3 and named what they add: the tool is 530 on the wire, full = 169,238 over
  * HTTP and 169,278 on the stdio build, 122 chars free. The next tool or
  * parameter buys its own room.
+ * ORB-3206 added `orboto_import_char_refs` (full tier only, 455 on the wire:
+ * a plain string token, `apply` and no `from`, the handler runs every batch)
+ * inside the ceiling: 25 titles name the same action in fewer words, the
+ * primer fact add summary shrank and orboto_knowledge_ask got a shorter
+ * override in tool-docs.ts, each full text kept; the lane, upload link and
+ * attachment summaries stay, their tests pin them: full = 169,317 over HTTP
+ * and 169,357 on the stdio build, 43 chars free; curated = 37,388.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

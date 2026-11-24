@@ -176,7 +176,7 @@ export function makeGetAuditLogHandler(client: OrbotoClient) {
 }
 
 export const triggerBackupToolConfig = {
-  title: 'Run a backup job now (admin)',
+  title: 'Run a backup now',
   description:
     'Manually trigger a backup job by name. Resolves to the job\'s UUID via /admin/backup/jobs and POSTs to the run endpoint. Super-admin only.',
   inputSchema: z.object({

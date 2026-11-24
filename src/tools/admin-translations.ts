@@ -26,7 +26,7 @@ interface ListResponse {
 }
 
 export const listAdminTranslationsToolConfig = {
-  title: 'List auto-translated tickets',
+  title: 'List translations',
   description:
     'List tickets the AI auto-translate flow rewrote, newest-updated first. Default surface is the pending queue (tickets the admin has not yet approved). Pass `status: "all"` to include reviewed rows too. Returns up to `limit` (default 25) rows + a `nextCursor` for paging. Requires `admin:translation_review`.',
   inputSchema: z.object({
@@ -64,7 +64,7 @@ export function makeListAdminTranslationsHandler(client: OrbotoClient) {
 }
 
 export const approveTranslationToolConfig = {
-  title: 'Approve an auto-translated ticket',
+  title: 'Approve a translation',
   description:
     'Approve an auto-translated ticket: stamps the reviewer and the time. Idempotent - re-approving the same row simply refreshes the timestamp + reviewer. 409 if the ticket was never auto-translated. Requires `admin:translation_review`.',
   inputSchema: z.object({
@@ -87,7 +87,7 @@ export function makeApproveTranslationHandler(client: OrbotoClient) {
 }
 
 export const revertTranslationToolConfig = {
-  title: 'Revert an auto-translated ticket',
+  title: 'Revert a translation',
   description:
     'Restore the pre-translation title + description from the audit comment and clear the auto-translate marker + prior approval. Use when the AI got the translation wrong and the operator wants to start over. 409 if the ticket was never auto-translated. Requires `admin:translation_review`.',
   inputSchema: z.object({

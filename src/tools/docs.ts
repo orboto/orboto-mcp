@@ -551,7 +551,7 @@ export function makeMoveDocHandler(client: OrbotoClient) {
 }
 
 export const duplicateDocSpaceToolConfig = {
-  title: 'Clone a doc space with the docs you can read',
+  title: 'Clone a doc space',
   description:
     'Fork a doc space along with its doc tree. Needs manage rights on the source space; only docs the caller can read are copied. The new space\'s name becomes `<source> (copy)`, parent-child relationships in the tree are preserved via UUID remap. Useful when an agent wants to iterate on a runbook space without mutating the original.',
   inputSchema: z.object({

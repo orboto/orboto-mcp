@@ -78,7 +78,7 @@ export const COMPACT_PAGE_LIMIT = 4;
 const UNREGISTERED_INBOX_HINT = 'Not registered: only account mail is listed. Register with orboto_session_start to see the mail addressed to your session.';
 
 export const agentMessagesToolConfig = {
-  title: 'Agent inbox and message work',
+  title: 'Agent inbox',
   description: 'Your inbox as THIS session sees it. It holds mail to this session, account mail inside your declared scope, broadcasts; sibling-session mail and own sends stay out (includeOwnSends lists your sends with recipient session, delivered/read state, thread), all:true is the account view in full (ORB-2136). Default: the newest 4 unread, newest first, a header plus 300 payload characters each, then `N unread, M older than 7 days`; limit and since (ISO time or message id) narrow it. Server-side filters (ORB-2548): direction sent (only your sends, any read state), threadId (that message and its answers), kind; nextCursor continues the page (cursor). Before orboto_session_start only account mail is listed; register to see mail addressed to your session (ORB-2347). messageWork carries durable work ownership (mutation schema: orboto_api_search) - claim before executing. ackIds (message ids) acks: it completes an unclaimed request; claimed work with open steps is refused until messageWork completes or blocks it. dismiss: not_mine hides it here and tells the sender, obsolete/duplicate close it for the account (note or duplicateOf required). Never leave mail you read and judged. Reply via orboto_agent_notify with threadId (toSessionRef = from.sessionId).',
   inputSchema: z.object({
     messageWork: z.record(z.string(), z.unknown()).optional()

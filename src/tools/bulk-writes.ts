@@ -297,7 +297,7 @@ async function makeAssigneeResolver(client: OrbotoClient, email: string) {
 }
 
 export const bulkAssignTicketsToolConfig = {
-  title: 'Assign a user to many tickets',
+  title: 'Bulk assign',
   description:
     'Add `assigneeEmail` as assignee on every ticket in `ticketKeys` or `query`. Multi-assignee: this adds, never replaces. Idempotent: a 409 (already assigned) counts as success.',
   inputSchema: z.object({
@@ -342,7 +342,7 @@ export function makeBulkAssignTicketsHandler(client: OrbotoClient) {
 }
 
 export const bulkUnassignTicketsToolConfig = {
-  title: 'Unassign a user from many tickets',
+  title: 'Bulk unassign',
   description:
     'Remove `assigneeEmail` from every ticket in `ticketKeys` or `query`. Idempotent: a 404 (was not assigned) counts as success.',
   inputSchema: z.object({

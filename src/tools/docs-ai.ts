@@ -97,7 +97,7 @@ export function makeAskDocsHandler(client: OrbotoClient) {
 }
 
 export const ingestUrlToolConfig = {
-  title: 'Ingest a URL into a wiki space',
+  title: 'Ingest a wiki URL',
   description:
     'Fetch a public URL, extract it with Readability, store a Markdown doc in `spaceId`. Optionally nest under `parentDocId` to keep the tree tidy. Sets `readabilityFallback: true` when the page didn\'t look like a recognisable article (the body falls back to full-page text - a flag the caller should surface to the operator for review).',
   inputSchema: z.object({
@@ -147,7 +147,7 @@ function mimetypeFor(filename: string): string {
 }
 
 export const ingestFileToolConfig = {
-  title: 'Ingest a file into a wiki space',
+  title: 'Ingest a wiki file',
   description:
     'Upload a file (PDF / DOCX / Markdown / plain text) into `spaceId` via multipart. The model passes the bytes as a base64 `contentBase64` field (so this works without local FS access on the agent side). Use `filename` to give the doc a meaningful title - the backend sniffs the mimetype but also uses the filename for display. Optional `parentDocId` nests under an existing doc. The uploaded file is ALSO attached to the doc it produces (ORB-2167): the response names `attachmentId`, `orboto_list_doc_attachments` lists it and `orboto_get_attachment` downloads the original bytes, so the extracted text and its source stay together.',
   inputSchema: z.object({

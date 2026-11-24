@@ -55,7 +55,7 @@ export function makeListApprovalsHandler(client: OrbotoClient) {
 }
 
 export const approvalDecideToolConfig = {
-  title: 'Approve or reject a sign-off request',
+  title: 'Decide a sign-off',
   description:
     'Approve or reject a pending sign-off request. You must be an eligible approver (a policy role, a named user, or a RACI role on the ticket) - otherwise the API returns 403. A single reject resolves the request; enough approvals unblock the transition (the requester then re-applies the status move). If the ticket has several pending requests, pass `requestId`.',
   inputSchema: z.object({

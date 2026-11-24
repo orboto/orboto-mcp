@@ -18,7 +18,7 @@ function text(t: string, structured?: Record<string, unknown>): CallToolResult {
 const CATEGORY = z.enum(['tech_stack', 'conventions', 'deployment', 'architecture', 'integrations', 'gotchas', 'commands', 'other']);
 
 export const personalFactListToolConfig = {
-  title: 'List personal AI preferences',
+  title: 'List AI preferences',
   description: 'List your own personal primer facts (AI preferences). Privacy-strict - only your own facts, never another user\'s. These load into the project primer for your sessions only when you have enabled the opt-in in Profile -> AI Preferences. Wraps GET /users/me/primer-facts.',
   inputSchema: z.object({}).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
@@ -49,7 +49,7 @@ export function makePersonalFactAddHandler(client: OrbotoClient) {
 }
 
 export const personalFactUpdateToolConfig = {
-  title: 'Update a personal AI preference',
+  title: 'Update AI preference',
   description: 'Update a personal primer fact. Owner-scoped - you can only edit your own. Wraps PATCH /users/me/primer-facts/:id.',
   inputSchema: z.object({
     id: z.guid(),
@@ -68,7 +68,7 @@ export function makePersonalFactUpdateHandler(client: OrbotoClient) {
 }
 
 export const personalFactDeleteToolConfig = {
-  title: 'Delete a personal AI preference',
+  title: 'Delete AI preference',
   description: 'Delete a personal primer fact. Owner-scoped. Wraps DELETE /users/me/primer-facts/:id.',
   inputSchema: z.object({ id: z.guid() }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },

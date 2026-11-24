@@ -221,6 +221,7 @@ import {
   importStagingToolConfig, makeImportStagingHandler,
   importCancelToolConfig, makeImportCancelHandler,
 } from './tools/import-staging.js';
+import { importCharRefsToolConfig, makeImportCharRefsHandler } from './tools/import-char-refs.js';
 import {
   primerFactListToolConfig, makePrimerFactListHandler,
   primerFactAddToolConfig, makePrimerFactAddHandler,
@@ -636,6 +637,7 @@ export async function buildOrbotoMcpServer(opts: BuildServerOptions): Promise<Mc
   reg('orboto_import_stage', importStageToolConfig, makeImportStageHandler(client));
   reg('orboto_import_staging', importStagingToolConfig, makeImportStagingHandler(client));
   reg('orboto_import_cancel', importCancelToolConfig, makeImportCancelHandler(client));
+  reg('orboto_import_char_refs', importCharRefsToolConfig, makeImportCharRefsHandler(client));
 
   reg('orboto_primer_fact_list', primerFactListToolConfig, makePrimerFactListHandler(client));
   reg('orboto_primer_fact_add', primerFactAddToolConfig, makePrimerFactAddHandler(client));

@@ -101,7 +101,7 @@ export function makeListAgentDriftHandler(client: OrbotoClient) {
 }
 
 export const resolveAgentDriftToolConfig = {
-  title: 'Resolve an agent drift event',
+  title: 'Resolve a drift event',
   description:
     'Mark one agent drift event handled (stamps resolved_at). Idempotent. 404 if the id is unknown. Requires `admin:agent_drift:write`.',
   inputSchema: z.object({

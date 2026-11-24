@@ -100,7 +100,7 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_unclaim:
     'Unassign yourself; the ticket goes back to `todo`.',
   orboto_primer_fact_add:
-    'Record a project fact with your evidence; live at once in every session primer.',
+    'Record a project fact with evidence; live at once in every primer.',
   orboto_edit_doc:
     'Change a doc by exact string replacement; send only the diff.',
   orboto_project_readiness:
@@ -239,6 +239,8 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
     'Dismiss a candidate or reject a proposal, with a reason.',
   orboto_message_work:
     'List, inspect or mutate durable message work (schema: orboto_api_search).',
+  orboto_knowledge_ask:
+    'Ask your project wikis and the Operations wiki before a person; cite docs by key.',
   orboto_import_numbering:
     'A staged import\'s kept and renumbered source numbers; merge flag.',
 };
