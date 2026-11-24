@@ -35,6 +35,7 @@ export const TOOL_BUDGET_CHARS: Record<string, number> = {
  */
 export const PROTECTED_PATHS: Record<string, string[]> = {
   orboto_session_start: ['rules'],
+  orboto_import_char_refs: ['manualRows', 'replacementCharRows'],
 };
 
 /**

@@ -160,7 +160,7 @@ describe('orboto_import_char_refs', () => {
     const samples = [{ field: 'title' as const, ticketKey: 'AP-7', before: 'k&#252;rzer', after: 'kürzer' }, { field: 'milestone' as const, ticketKey: null, before: 'Sprint &#8470; 1', after: 'Sprint № 1' }];
     const manualRows = [{ kind: 'user' as const, reason: 'person' as const, ticketId: null, ticketKey: null, commentId: null, userId: null, labelId: null, milestoneId: null, excerpt: 'J&#252;rgen' }];
     const text = textOf(await makeImportCharRefsHandler({ get: vi.fn().mockResolvedValue(report({ samples, manualRows })) } as unknown as OrbotoClient)({ token: TOKEN }));
-    const at = ['- milestones: 2 of 2', 'repair only on their go with apply: true', 'Not repaired, fix these by hand', '- milestone: "Sprint &#8470; 1" -> "Sprint № 1"', 'U+FFFD (the source', '- title AP-7: "k&#252;rzer"'].map((s) => text.indexOf(s));
+    const at = ['- milestones: 2 of 2', 'repair only on their go with apply: true', 'Not repaired, fix these by hand', 'U+FFFD (the source', '- milestone: "Sprint &#8470; 1" -> "Sprint № 1"', '- title AP-7: "k&#252;rzer"'].map((s) => text.indexOf(s));
     expect(at.every((i) => i >= 0)).toBe(true);
     expect(at).toEqual([...at].sort((a, b) => a - b));
   });
@@ -188,15 +188,15 @@ describe('orboto_import_char_refs within the MCP response budget', () => {
 
   const words = (i: number, n: number) => `${`Kommentar ${i} mit Umlaut k&#252;rzer und Pfeil &#8594; `.repeat(4)}`.slice(0, n);
   const uuid = (i: number) => `66666666-6666-4666-8666-${String(i).padStart(12, '0')}`;
-  const apSized = (names: number) => report({
+  const apSized = (names: number, people = 10) => report({
     samples: [
       ...Array.from({ length: 20 }, (_, i) => ({ field: 'title' as const, ticketKey: `AP-${100 + i}`, before: `[DEV] Spieler ${i} soll k&#252;rzer laufen &#8594; Animation`, after: `[DEV] Spieler ${i} soll kürzer laufen → Animation` })),
       ...Array.from({ length: names }, (_, i) => ({ field: 'milestone' as const, ticketKey: null, before: `Sprint &#8470; ${i + 1} &#183; Gr&#252;ne Wiese`, after: `Sprint № ${i + 1} · Grüne Wiese` })),
     ],
     replacementCharRows: Array.from({ length: 25 }, (_, i) => ({ field: 'description' as const, ticketId: uuid(i), ticketKey: `AP-${200 + i}`, commentId: null, labelId: null, milestoneId: null, excerpt: `${words(i, 60)}�${words(i, 59)}` })),
     manualRows: [
-      ...Array.from({ length: 10 }, (_, i) => ({ kind: 'user' as const, reason: 'person' as const, ticketId: null, ticketKey: null, commentId: null, userId: uuid(i), labelId: null, milestoneId: null, excerpt: `J&#252;rgen M&#252;ller ${i}` })),
-      ...Array.from({ length: 10 }, (_, i) => ({ kind: 'comment' as const, reason: 'source_unknown' as const, ticketId: uuid(i), ticketKey: `AP-${300 + i}`, commentId: uuid(50 + i), userId: null, labelId: null, milestoneId: null, excerpt: words(i, 120) })),
+      ...Array.from({ length: people }, (_, i) => ({ kind: 'user' as const, reason: 'person' as const, ticketId: null, ticketKey: null, commentId: null, userId: uuid(i), labelId: null, milestoneId: null, excerpt: `J&#252;rgen M&#252;ller ${i}` })),
+      ...Array.from({ length: 20 - people }, (_, i) => ({ kind: 'comment' as const, reason: 'source_unknown' as const, ticketId: uuid(i), ticketKey: `AP-${300 + i}`, commentId: uuid(50 + i), userId: null, labelId: null, milestoneId: null, excerpt: words(i, 120) })),
     ],
     manualOmitted: 0,
   });
@@ -219,6 +219,18 @@ describe('orboto_import_char_refs within the MCP response budget', () => {
     expect((result.structuredContent as { samples: unknown[] }).samples).toHaveLength(36);
   });
 
+  it('keeps every value to fix by hand in structuredContent when 20 comment rows push it over the budget, and cuts the ticket samples first', async () => {
+    const { result, text } = await throughBudget(apSized(26, 0));
+    const structured = result.structuredContent as { manualRows: Array<{ commentId: string }>; samples: Array<{ field: string }>; replacementCharRows: unknown[]; __truncation?: { omitted: Array<{ path: string }> } };
+    expect(structured.__truncation).toBeDefined();
+    expect(structured.manualRows.map((x) => x.commentId)).toEqual(Array.from({ length: 20 }, (_, i) => uuid(50 + i)));
+    expect(structured.samples.filter((s) => s.field === 'milestone')).toHaveLength(26);
+    expect(structured.samples.filter((s) => s.field === 'title').length).toBeLessThan(10);
+    expect(structured.replacementCharRows).toHaveLength(20);
+    expect(text).toContain('Show this to the user; repair only on their go with apply: true.');
+    expect(text).toContain(`- comment AP-319 comment ${uuid(69)}`);
+  });
+
   it('keeps the counts, the go line and the values to fix by hand when the budget cuts, and the cut points to CLI and REST', async () => {
     const { result, text } = await throughBudget(apSized(400));
     expect(text).toContain('- milestones: 2 of 2 repairable');
@@ -227,8 +239,11 @@ describe('orboto_import_char_refs within the MCP response budget', () => {
     expect(text).toContain('- milestone: "Sprint &#8470; 1 &#183; Gr&#252;ne Wiese"');
     expect(text).not.toContain('- title AP-100:');
     expect(text).toContain('the REST API and both CLIs return the complete body');
-    const samples = (result.structuredContent as { samples: Array<{ field: string }> }).samples;
-    expect(samples[0]!.field).toBe('milestone');
-    expect(samples.some((s) => s.field === 'title')).toBe(false);
+    expect(text).toContain('- description AP-219:');
+    const structured = result.structuredContent as { samples: Array<{ field: string }>; manualRows: unknown[]; replacementCharRows: unknown[] };
+    expect(structured.samples[0]!.field).toBe('milestone');
+    expect(structured.samples.some((s) => s.field === 'title')).toBe(false);
+    expect(structured.manualRows).toHaveLength(20);
+    expect(structured.replacementCharRows).toHaveLength(20);
   });
 });
