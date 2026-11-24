@@ -30,7 +30,7 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_agent_broadcast:
     'Message every agent in a workspace, project or topic scope.',
   orboto_api_search:
-    'Find REST endpoints on demand: the escape hatch for any orboto endpoint.',
+    'Find the REST endpoint for what no named tool covers.',
   orboto_get_doc:
     'A doc\'s Markdown content plus its backlinks.',
   orboto_primer_fact_list:
@@ -82,7 +82,7 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_ingest_file:
     'Upload a PDF, DOCX, Markdown or text file into `spaceId`.',
   orboto_update_company_closure:
-    'Update a workspace-wide non-working block (offsite, shutdown).',
+    'Update a workspace-wide closure (offsite, shutdown).',
   orboto_reset_agent_instruction:
     'Restore a seeded rule block (builtinKey) to its shipped text.',
   orboto_close_milestone:
@@ -104,7 +104,7 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_edit_doc:
     'Change a doc by exact string replacement; send only the diff.',
   orboto_project_readiness:
-    'Setup checks before autonomous work: ok, missing or n/a, each with its fix.',
+    'Setup checks before autonomous work: ok, missing or n/a, with fixes.',
   orboto_review_approval_record:
     'Record your review verdict against an orboto_review_fingerprint.',
   /** ORB-3147 - shorter summaries that keep the manifest clear of its ceiling; each tool's full text stays in `getToolDoc`. */
@@ -240,9 +240,16 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_message_work:
     'List, inspect or mutate durable message work (schema: orboto_api_search).',
   orboto_knowledge_ask:
-    'Ask your project wikis and the Operations wiki before a person; cite docs by key.',
+    'Ask the project and Operations wikis before a person; cite docs by key.',
   orboto_import_numbering:
     'A staged import\'s kept and renumbered source numbers; merge flag.',
+  /** ORB-3206 - shorter summaries that pay for `from` and the dry-run sentence of `orboto_import_char_refs`; each tool's full text stays in `getToolDoc`. */
+  orboto_knowledge_add:
+    'File a durable fact in a project wiki (projectKey) or the Operations wiki, not just locally.',
+  orboto_who:
+    'Live agent sessions and their role addresses (integrator@KEY).',
+  orboto_edit_doc_section:
+    'Change a doc section by heading; send only that section.',
 };
 
 /** Runtime registry: tool name -> full guidance text, captured at

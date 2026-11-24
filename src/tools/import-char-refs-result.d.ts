@@ -17,6 +17,7 @@ export interface ImportCharRefsReport {
   importedTickets: number | null;
   supported: boolean;
   tickets: number;
+  unnumberedTickets: number;
   counts: { titles: ImportCharRefsFieldCounts; descriptions: ImportCharRefsFieldCounts; comments: ImportCharRefsFieldCounts; labels: ImportCharRefsFieldCounts };
   labelConflicts: number;
   samples: Array<{ field: ImportCharRefsField; ticketKey: string | null; before: string; after: string }>;

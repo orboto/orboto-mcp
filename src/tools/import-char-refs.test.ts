@@ -1,6 +1,7 @@
 /** ORB-3206 - orboto_import_char_refs: the dry run by default, the repair batches only with apply, resumable at next; a project key reaches the project scope. */
 import { describe, expect, it, vi } from 'vitest';
-import type { OrbotoClient } from '../orboto-client.js';
+import { z } from 'zod';
+import { OrbotoApiError, type OrbotoClient } from '../orboto-client.js';
 import { importCharRefsToolConfig, makeImportCharRefsHandler } from './import-char-refs.js';
 import type { ImportCharRefsReport } from './import-char-refs-result.js';
 
@@ -10,7 +11,7 @@ const zero = { checked: 0, repairable: 0, replacementChar: 0 };
 
 function report(overrides: Partial<ImportCharRefsReport> = {}): ImportCharRefsReport {
   return {
-    scope: 'job', token: TOKEN, adapterId: 'jira-xml', status: 'applied', projectId: '9b7a1c2d-3e4f-4a6b-8c1d-2e3f4a5b6c7d', importedAt: null, importedTickets: null, supported: true, tickets: 468,
+    scope: 'job', token: TOKEN, adapterId: 'jira-xml', status: 'applied', projectId: '9b7a1c2d-3e4f-4a6b-8c1d-2e3f4a5b6c7d', importedAt: null, importedTickets: null, supported: true, tickets: 468, unnumberedTickets: 0,
     counts: { titles: { checked: 468, repairable: 110, replacementChar: 2 }, descriptions: zero, comments: zero, labels: { checked: 3, repairable: 1, replacementChar: 0 } },
     labelConflicts: 1,
     samples: [{ field: 'title', ticketKey: 'AP-7', before: 'k&#252;rzer', after: 'kürzer' }],
@@ -33,7 +34,8 @@ describe('orboto_import_char_refs', () => {
     expect(text).toContain('- 1 labels stay: another label of the project already holds the repaired name.');
     expect(text).toContain('- title AP-7: "k&#252;rzer" -> "kürzer"');
     expect(text).toContain('... 8 more U+FFFD values not listed.');
-    expect(text).toContain('repair only on their go with apply: 0');
+    expect(text).toContain('repair only on their go with apply: true');
+    expect(text).not.toContain('without a ticket number');
     expect((result.structuredContent as { replacementCharRows: unknown[] }).replacementCharRows).toHaveLength(20);
   });
 
@@ -41,33 +43,33 @@ describe('orboto_import_char_refs', () => {
     const get = vi.fn().mockResolvedValue(report({ adapterId: 'csv', supported: false, samples: [], replacementCharRows: [], replacementCharOmitted: 0 }));
     const text = textOf(await makeImportCharRefsHandler({ get } as unknown as OrbotoClient)({ token: TOKEN }));
     expect(text).toContain('NOT REPAIRABLE: csv stored no undecoded references');
-    expect(text).not.toContain('apply: 0');
+    expect(text).not.toContain('apply: true');
   });
 
   it('posts the repair batches from apply until next is null and sums them', async () => {
     const post = vi.fn()
       .mockResolvedValueOnce({ processedTickets: 100, titles: 40, descriptions: 3, comments: 5, labels: 1, labelConflicts: 1, edited: 2, replacementChar: 1, next: 100 })
       .mockResolvedValueOnce({ processedTickets: 20, titles: 2, descriptions: 0, comments: 1, labels: 0, labelConflicts: 0, edited: 0, replacementChar: 1, next: null });
-    const result = await makeImportCharRefsHandler({ post } as unknown as OrbotoClient)({ token: TOKEN, apply: 0 });
+    const result = await makeImportCharRefsHandler({ post } as unknown as OrbotoClient)({ token: TOKEN, apply: true });
     expect(post.mock.calls).toEqual([[`/admin/import/jobs/${TOKEN}/char-refs/repair`, { from: 0 }], [`/admin/import/jobs/${TOKEN}/char-refs/repair`, { from: 100 }]]);
     expect(textOf(result)).toBe('Repaired in 2 batches: 42 titles, 3 descriptions, 6 comments, 1 labels in 120 tickets.\nLeft as they are: 2 changed since the read, 1 label name conflicts, 2 values with U+FFFD.\nDone.');
     expect(result.structuredContent).toMatchObject({ titles: 42, next: null, batches: 2 });
   });
 
-  it('stops after 100 batches with next, and apply: next resumes there instead of starting over', async () => {
+  it('stops after 100 batches with next, and from: next resumes there instead of starting over', async () => {
     let at = 0;
     const post = vi.fn(async (_path: string, body: { from: number }) => {
       at = body.from + 100;
       return { processedTickets: 100, titles: 1, descriptions: 0, comments: 0, labels: 0, labelConflicts: 0, edited: 0, replacementChar: 0, next: at < 15_000 ? at : null };
     });
     const handler = makeImportCharRefsHandler({ post } as unknown as OrbotoClient);
-    const stopped = await handler({ token: TOKEN, apply: 0 });
+    const stopped = await handler({ token: TOKEN, apply: true });
     expect(post).toHaveBeenCalledTimes(100);
     expect(post.mock.calls[0]).toEqual([`/admin/import/jobs/${TOKEN}/char-refs/repair`, { from: 0 }]);
     expect(stopped.structuredContent).toMatchObject({ processedTickets: 10_000, next: 10_000, batches: 100 });
-    expect(textOf(stopped)).toContain('Stopped after 100 batches; call again with apply: 10000 to continue.');
+    expect(textOf(stopped)).toContain('Stopped after 100 batches; call again with apply: true, from: 10000 to continue.');
     post.mockClear();
-    const resumed = await handler({ token: TOKEN, apply: 10_000 });
+    const resumed = await handler({ token: TOKEN, apply: true, from: 10_000 });
     expect(post.mock.calls[0]).toEqual([`/admin/import/jobs/${TOKEN}/char-refs/repair`, { from: 10_000 }]);
     expect(post).toHaveBeenCalledTimes(50);
     expect(resumed.structuredContent).toMatchObject({ processedTickets: 5_000, next: null, batches: 50 });
@@ -80,7 +82,51 @@ describe('orboto_import_char_refs', () => {
     const text = textOf(await handler({ token: 'AP' }));
     expect(get).toHaveBeenCalledWith('/admin/import/projects/AP/char-refs');
     expect(text).toContain('(audit entry 2026-06-18 13:54:43.495816+00, 468 tickets written)');
-    await handler({ token: 'AP', apply: 12 });
+    await handler({ token: 'AP', apply: true, from: 12 });
     expect(post).toHaveBeenCalledWith('/admin/import/projects/AP/char-refs/repair', { from: 12 });
+  });
+
+  it('writes nothing without apply: true, whatever from says, and refuses a negative or fractional from', async () => {
+    const schema = z.object(importCharRefsToolConfig.inputSchema);
+    for (const bad of [{ token: TOKEN, apply: 0 }, { token: TOKEN, apply: true, from: -1 }, { token: TOKEN, apply: true, from: 0.5 }]) expect(schema.safeParse(bad).success).toBe(false);
+    expect(schema.safeParse({ token: TOKEN, apply: true, from: 0 }).success).toBe(true);
+    const get = vi.fn().mockResolvedValue(report());
+    const post = vi.fn();
+    const handler = makeImportCharRefsHandler({ get, post } as unknown as OrbotoClient);
+    await handler({ token: TOKEN, apply: false, from: 5 });
+    await handler({ token: TOKEN, from: 5 });
+    for (const from of [-1, 0.5]) {
+      const refused = await handler({ token: TOKEN, apply: true, from });
+      expect(refused.isError).toBe(true);
+      expect(textOf(refused)).toContain('nothing was written');
+    }
+    expect(post).not.toHaveBeenCalled();
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads a UUID the token routes do not know as a project id, as REST does', async () => {
+    const PROJECT = 'e8612169-4527-47c9-b62f-cc1fded4d9ef';
+    const notStaged = new OrbotoApiError(404, '{"error":"Staged import not found or expired","errorKey":"errors.admin_import.staged_not_found"}', 'x');
+    const get = vi.fn(async (path: string) => {
+      if (path.startsWith('/admin/import/jobs/')) throw notStaged;
+      return report({ scope: 'project', token: null, projectId: PROJECT, importedAt: '2026-06-18 13:54:43.495816+00', importedTickets: 468 });
+    });
+    const post = vi.fn(async (path: string) => {
+      if (path.startsWith('/admin/import/jobs/')) throw notStaged;
+      return { processedTickets: 1, titles: 1, descriptions: 0, comments: 0, labels: 0, labelConflicts: 0, edited: 0, replacementChar: 0, next: null };
+    });
+    const handler = makeImportCharRefsHandler({ get, post } as unknown as OrbotoClient);
+    expect(textOf(await handler({ token: PROJECT }))).toContain('468 tickets written');
+    expect(get.mock.calls.map((c) => c[0])).toEqual([`/admin/import/jobs/${PROJECT}/char-refs`, `/admin/import/projects/${PROJECT}/char-refs`]);
+    await handler({ token: PROJECT, apply: true });
+    expect(post.mock.calls.map((c) => c[0])).toEqual([`/admin/import/jobs/${PROJECT}/char-refs/repair`, `/admin/import/projects/${PROJECT}/char-refs/repair`]);
+    const other = vi.fn().mockRejectedValue(new OrbotoApiError(409, '{"errorKey":"errors.admin_import.recovery_not_applied"}', 'x'));
+    await expect(makeImportCharRefsHandler({ get: other } as unknown as OrbotoClient)({ token: TOKEN })).rejects.toThrow('409');
+    expect(other).toHaveBeenCalledTimes(1);
+  });
+
+  it('names the tickets it leaves for want of a ticket number', async () => {
+    const get = vi.fn().mockResolvedValue(report({ unnumberedTickets: 2 }));
+    expect(textOf(await makeImportCharRefsHandler({ get } as unknown as OrbotoClient)({ token: TOKEN }))).toContain('- 2 tickets without a ticket number are left out; fix them by hand.');
   });
 });

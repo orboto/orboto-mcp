@@ -253,7 +253,12 @@ afterEach(() => { vi.restoreAllMocks(); });
  * and a resume point: `apply` is the position the repair starts at (no
  * separate `from`), its wire sentence shrank to "Fix an import's k&#252;rzer."
  * (427 on the wire): full = 169,360 over HTTP and 169,400 on the stdio
- * build, 0 chars free.
+ * build, 0 chars free. Its second fix round split that position off again:
+ * `apply` is a boolean, `from` an integer of 0 or more, and the wire sentence
+ * says a call without apply is a dry run (507 on the wire); seven summaries
+ * paid for it (api_search, company closure, project readiness, knowledge
+ * ask, knowledge add, who, edit doc section): full = 169,358 over HTTP and
+ * 169,398 on the stdio build, 2 chars free.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
