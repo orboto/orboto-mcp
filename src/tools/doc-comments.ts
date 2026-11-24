@@ -166,7 +166,7 @@ export function makePostDocCommentHandler(client: OrbotoClient) {
 }
 
 export const resolveDocCommentToolConfig = {
-  title: 'Resolve doc comment',
+  title: 'Resolve/reopen a doc comment',
   description:
     'Toggle a comment thread\'s resolved state. Pass `resolved=true` to fold the conversation, `resolved=false` to reopen. Always acts on the thread ROOT - resolving from a reply folds the whole conversation, same as the web UI.',
   inputSchema: z.object({

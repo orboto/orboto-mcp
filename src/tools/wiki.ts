@@ -18,7 +18,7 @@ function text(t: string, structured?: Record<string, unknown>): CallToolResult {
 }
 
 export const wikiIngestUrlToolConfig = {
-  title: 'Wiki URL source',
+  title: 'URL as wiki SOURCE doc',
   description:
     'Fetch a public URL, extract its article as Markdown, create a SOURCE doc in the space. On an LLM-Wiki space the ingest worker writes pages at once (auto-apply) or parks every ingest plan, stale re-ingests included, for review (review-gate; orboto_wiki_runs apply or reject); lint merges always apply directly, with receipt and undo. Wraps POST /spaces/:id/docs/ingest-url.',
   inputSchema: z.object({
@@ -219,7 +219,7 @@ export function makeWikiSaveAnswerHandler(client: OrbotoClient) {
 }
 
 export const wikiFlagStaleToolConfig = {
-  title: 'Flag a stale wiki page',
+  title: 'Flag/clear a stale wiki page',
   description:
     'Set or clear the "may be outdated" flag on a page. The flag surfaces passively as a pill in the UI; it does not change the content. Pass stale=false to clear. Wraps POST /docs/:id/flag-stale.',
   inputSchema: z.object({

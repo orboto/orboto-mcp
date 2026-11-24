@@ -8,10 +8,13 @@ export interface ImportCharRefsFieldCounts {
 }
 
 export interface ImportCharRefsReport {
-  token: string;
+  scope: 'job' | 'project';
+  token: string | null;
   adapterId: string;
   status: string;
   projectId: string | null;
+  importedAt: string | null;
+  importedTickets: number | null;
   supported: boolean;
   tickets: number;
   counts: { titles: ImportCharRefsFieldCounts; descriptions: ImportCharRefsFieldCounts; comments: ImportCharRefsFieldCounts; labels: ImportCharRefsFieldCounts };

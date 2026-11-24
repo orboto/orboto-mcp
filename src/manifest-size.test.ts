@@ -246,7 +246,14 @@ afterEach(() => { vi.restoreAllMocks(); });
  * primer fact add summary shrank and orboto_knowledge_ask got a shorter
  * override in tool-docs.ts, each full text kept; the lane, upload link and
  * attachment summaries stay, their tests pin them: full = 169,317 over HTTP
- * and 169,357 on the stdio build, 43 chars free; curated = 37,388.
+ * and 169,357 on the stdio build, 43 chars free; curated = 37,388. Its fix
+ * round brought back the qualifier of eight titles (ticket untouched,
+ * start/renew, pending/draft, the wiki URL source and ingest pair,
+ * close/archive, resolve/reopen, flag/clear) and gave the tool a project key
+ * and a resume point: `apply` is the position the repair starts at (no
+ * separate `from`), its wire sentence shrank to "Fix an import's k&#252;rzer."
+ * (427 on the wire): full = 169,360 over HTTP and 169,400 on the stdio
+ * build, 0 chars free.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

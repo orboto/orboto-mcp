@@ -227,7 +227,7 @@ export async function resolveMilestoneByNameOrId(
 }
 
 export const closeMilestoneToolConfig = {
-  title: 'Close a milestone',
+  title: 'Close/archive a milestone',
   description:
     'Move a milestone to `completed` (default) or `archived` (pass `archive=true`). Looks up the milestone by name or UUID, including already-closed ones, so re-closing is idempotent. Useful when a release ships and you want to lock the milestone but keep the tickets on it.',
   inputSchema: z.object({

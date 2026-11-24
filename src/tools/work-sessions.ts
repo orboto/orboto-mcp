@@ -266,7 +266,7 @@ export function makeWorkStartHandler(client: OrbotoClient) {
 }
 
 export const workSessionStartToolConfig = {
-  title: 'Start a work session',
+  title: 'Start/renew a work session',
   description:
     'Take the work lease on a ticket in a given role and start its timer. This is the coordination primitive: exactly ONE active session per (ticket, role) exists workspace-wide, so a second agent attempting the same role gets a conflict naming the current holder instead of silently colliding. Re-calling with the same agent instance renews your own lease and is a no-op otherwise - safe to call defensively. Roles other than `implementation` (review / preflight / integration / spec) attach to the ticket WITHOUT reassigning it or moving its status, so a reviewing agent no longer has to fake a claim. The lease expires on its own (default 15 min, renewed automatically by your subsequent calls), so a crashed agent never wedges a ticket. Pass `takeover: true` only when you have decided to displace the current holder - their session is closed and their time booked, and the takeover is visible in history.',
   inputSchema: z.object({
@@ -392,7 +392,7 @@ export function makeWorkSessionStartHandler(client: OrbotoClient) {
 }
 
 export const workSessionFinishToolConfig = {
-  title: 'Finish a work session',
+  title: 'End a work session, ticket untouched',
   description:
     'End a work session: timer booked, lease released, evidence recorded. The timer is stopped and booked, the (ticket, role) lease is released for the next agent, and the evidence you pass (commit sha + which gates you ran) is recorded on the session. Idempotent - finishing an already-finished session succeeds and still absorbs late evidence, so a retrying harness never has to distinguish "already done" from "failed". This does NOT close the ticket; ticket status is a separate, deliberate decision (use orboto_close_ticket once the acceptance criteria are verified). Prefer orboto_work_finish (ORB-1612) for an `implementation` session that is actually done - it does this AND the ticket transition AND the completion note in one call.',
   inputSchema: z.object({

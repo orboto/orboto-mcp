@@ -97,7 +97,7 @@ export function makeAskDocsHandler(client: OrbotoClient) {
 }
 
 export const ingestUrlToolConfig = {
-  title: 'Ingest a wiki URL',
+  title: 'Ingest a URL into a wiki',
   description:
     'Fetch a public URL, extract it with Readability, store a Markdown doc in `spaceId`. Optionally nest under `parentDocId` to keep the tree tidy. Sets `readabilityFallback: true` when the page didn\'t look like a recognisable article (the body falls back to full-page text - a flag the caller should surface to the operator for review).',
   inputSchema: z.object({
