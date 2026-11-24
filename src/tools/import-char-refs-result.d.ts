@@ -31,7 +31,7 @@ export interface ImportCharRefsReport {
   }>;
   replacementCharOmitted: number;
   manualRows: Array<{
-    kind: 'comment' | 'user' | 'label' | 'milestone'; reason: 'source_unknown' | 'person' | 'holds_other_tickets' | 'attached_in_orboto';
+    kind: 'comment' | 'user' | 'label' | 'milestone'; reason: 'source_unknown' | 'person' | 'holds_other_tickets' | 'synced_from_source' | 'attached_in_orboto';
     ticketId: string | null; ticketKey: string | null; commentId: string | null; userId: string | null; labelId: string | null; milestoneId: string | null; excerpt: string;
   }>;
   manualOmitted: number;

@@ -26,12 +26,10 @@ export const importCharRefsToolConfig = {
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 };
 
-const NAME_LINES = 20;
-
-/** Up to SAMPLE_LINES samples of the ticket fields and NAME_LINES label and milestone renames, so a rename of a name always shows. */
+/** Up to SAMPLE_LINES samples of the ticket fields and every label and milestone rename the report carries, so no rename of a name hides. */
 function samplesShown(samples: ImportCharRefsReport['samples']): ImportCharRefsReport['samples'] {
   const names = samples.filter((s) => s.field === 'label' || s.field === 'milestone');
-  return [...samples.filter((s) => s.field !== 'label' && s.field !== 'milestone').slice(0, SAMPLE_LINES), ...names.slice(0, NAME_LINES)];
+  return [...samples.filter((s) => s.field !== 'label' && s.field !== 'milestone').slice(0, SAMPLE_LINES), ...names];
 }
 
 type ManualRow = ImportCharRefsReport['manualRows'][number];
@@ -40,6 +38,7 @@ const MANUAL_REASONS: Record<ManualRow['reason'], string> = {
   source_unknown: 'may be the author\'s text',
   person: 'people are never renamed',
   holds_other_tickets: 'also holds tickets outside the import',
+  synced_from_source: 'on a ticket synced from a git issue, connector or peer',
   attached_in_orboto: 'attached to an imported ticket in orboto',
 };
 
@@ -67,7 +66,7 @@ export function reportText(r: ImportCharRefsReport): string {
   ];
   const shown = samplesShown(r.samples);
   if (shown.length > 0) {
-    lines.push('Samples (every label and milestone rename up to 20):', ...shown.map((s) => `- ${s.field} ${s.ticketKey ?? ''}: "${s.before}" -> "${s.after}"`));
+    lines.push('Samples (every label and milestone rename):', ...shown.map((s) => `- ${s.field} ${s.ticketKey ?? ''}: "${s.before}" -> "${s.after}"`));
     const more = r.samples.length - shown.length + r.samplesOmitted;
     if (more > 0) lines.push(`... ${more} more samples not listed.`);
   }

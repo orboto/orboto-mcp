@@ -159,14 +159,16 @@ describe('orboto_import_char_refs', () => {
     const samples = [
       ...Array.from({ length: 15 }, (_, i) => ({ field: 'title' as const, ticketKey: `AP-${i}`, before: `t&#252;${i}`, after: `tü${i}` })),
       { field: 'label' as const, ticketKey: null, before: 'gr&#252;n', after: 'grün' },
+      ...Array.from({ length: 24 }, (_, i) => ({ field: 'label' as const, ticketKey: null, before: `l&#252;${i}`, after: `lü${i}` })),
       { field: 'milestone' as const, ticketKey: null, before: 'Version gr&#252;n', after: 'Version grün' },
     ];
     const result = await makeImportCharRefsHandler({ get: vi.fn().mockResolvedValue(report({ samples, samplesOmitted: 7 })) } as unknown as OrbotoClient)({ token: TOKEN });
     const text = textOf(result);
     expect(text).toContain('- label : "gr&#252;n" -> "grün"');
     expect(text).toContain('- milestone : "Version gr&#252;n" -> "Version grün"');
+    expect(text).toContain('- label : "l&#252;23" -> "lü23"');
     expect(text).not.toContain('t&#252;10');
     expect(text).toContain('... 12 more samples not listed.');
-    expect((result.structuredContent as { samples: unknown[] }).samples).toHaveLength(12);
+    expect((result.structuredContent as { samples: unknown[] }).samples).toHaveLength(36);
   });
 });
