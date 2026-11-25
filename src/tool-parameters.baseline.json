@@ -1346,11 +1346,25 @@
   "orboto_list_users": {
     "params": [
       "limit",
+      "order",
       "search",
-      "showGhosts"
+      "showGhosts",
+      "sort"
     ],
     "required": [],
-    "enums": {}
+    "enums": {
+      "order": [
+        "asc",
+        "desc"
+      ],
+      "sort": [
+        "email",
+        "joined",
+        "lastActive",
+        "name",
+        "status"
+      ]
+    }
   },
   "orboto_log_time": {
     "params": [
