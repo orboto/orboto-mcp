@@ -1,10 +1,12 @@
 /**
  * ORB-244 Phase C Group 4 - admin-only tool tests.
  */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrbotoClient } from '../orboto-client.js';
 import {
-  makeListUsersHandler, makeGetAuditLogHandler, makeTriggerBackupHandler,
+  ADMIN_USERS_SORT_KEYS, listUsersToolConfig, makeListUsersHandler, makeGetAuditLogHandler, makeTriggerBackupHandler,
 } from './admin-writes.js';
 
 beforeEach(() => { vi.restoreAllMocks(); });
@@ -57,6 +59,27 @@ describe('orboto_list_users', () => {
     await expect(
       makeListUsersHandler(client)({})
     ).rejects.toThrow(/super-admin permissions/);
+  });
+
+  it('ORB-3257: passes sort and order to GET /admin/users, and sends no order without a sort', async () => {
+    const calls = stub([{ json: { items: [], nextCursor: null } }, { json: { items: [], nextCursor: null } }]);
+    await makeListUsersHandler(client)({ sort: 'lastActive', order: 'desc' });
+    const sorted = new URL(calls[0].url).searchParams;
+    expect(sorted.get('sort')).toBe('lastActive');
+    expect(sorted.get('order')).toBe('desc');
+    await makeListUsersHandler(client)({ order: 'desc' });
+    const plain = new URL(calls[1].url).searchParams;
+    expect(plain.has('sort')).toBe(false);
+    expect(plain.has('order')).toBe(false);
+  });
+
+  it('ORB-3257: the sort keys and orders the tool accepts are the ones the API validates (shared-schema admin-users-sort.ts)', () => {
+    const shared = readFileSync(resolve(process.cwd(), '../../packages/shared-schema/src/admin-users-sort.ts'), 'utf8');
+    expect(shared).toContain(`ADMIN_USERS_SORT_KEYS = [${ADMIN_USERS_SORT_KEYS.map((k) => `'${k}'`).join(', ')}] as const;`);
+    expect(shared).toContain("AdminUsersSortOrderSchema = z.enum(['asc', 'desc']);");
+    const shape = listUsersToolConfig.inputSchema;
+    expect(shape.sort.unwrap().options).toEqual([...ADMIN_USERS_SORT_KEYS]);
+    expect(shape.order.unwrap().options).toEqual(['asc', 'desc']);
   });
 });
 

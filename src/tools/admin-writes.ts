@@ -59,26 +59,33 @@ function rewrite403(action: string): (err: unknown) => never {
   };
 }
 
+/** ORB-3257 - mirror of ADMIN_USERS_SORT_KEYS in @orboto/shared-schema (admin-users-sort.ts), which this standalone package cannot import; admin-writes.test.ts pins the two. */
+export const ADMIN_USERS_SORT_KEYS = ['name', 'email', 'status', 'lastActive', 'joined'] as const;
+
 export const listUsersToolConfig = {
   title: 'List users (admin)',
   description:
-    'Return the workspace user directory. Super-admin only. Useful for AI agents that need to look up an email beyond their visible project members (e.g. to assign someone who isn\'t on the current project yet). Imported placeholder users (`*@imported.ghost`) are hidden by default; set `showGhosts=true` to include them.',
+    'All workspace users. Super-admin only. Useful for AI agents that need to look up an email beyond their visible project members (e.g. to assign someone who isn\'t on the current project yet). `search` matches a substring of fullName or email (default limit 50). Imported placeholder users (`*@imported.ghost`) are hidden by default; set `showGhosts=true` to include them. `sort` (name, email, status, lastActive, joined) with `order` (asc, the default, or desc) orders the list; without `sort` it is newest first. A never-active account comes last in both directions of lastActive.',
   inputSchema: z.object({
-    search: z.string().optional().describe('Substring of fullName or email.'),
-    limit: z.number().int().min(1).max(100).default(50),
-    showGhosts: z.boolean().optional().describe('Include `*@imported.ghost` import users.'),
+    search: z.string().optional(),
+    limit: z.number().int().min(1).max(100).optional(),
+    showGhosts: z.boolean().optional(),
+    sort: z.enum(ADMIN_USERS_SORT_KEYS).optional(),
+    order: z.enum(['asc', 'desc']).optional(),
   }).shape,
   annotations: { readOnlyHint: true, idempotentHint: true },
 };
 
 export function makeListUsersHandler(client: OrbotoClient) {
-  return async ({ search, limit, showGhosts }: {
-    search?: string; limit?: number; showGhosts?: boolean;
+  return async ({ search, limit, showGhosts, sort, order }: {
+    search?: string; limit?: number; showGhosts?: boolean; sort?: (typeof ADMIN_USERS_SORT_KEYS)[number]; order?: 'asc' | 'desc';
   }): Promise<CallToolResult> => {
     const qs = new URLSearchParams();
     qs.set('limit', String(limit ?? 50));
     if (search) qs.set('search', search);
     if (showGhosts) qs.set('hideGhosts', 'false');
+    if (sort) qs.set('sort', sort);
+    if (sort && order) qs.set('order', order);
     const page = await client.get<{ items: UserRow[]; nextCursor: string | null }>(
       `/admin/users?${qs}`,
     ).catch(rewrite403('list_users'));

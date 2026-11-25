@@ -259,6 +259,13 @@ afterEach(() => { vi.restoreAllMocks(); });
  * paid for it (api_search, company closure, project readiness, knowledge
  * ask, knowledge add, who, edit doc section): full = 169,358 over HTTP and
  * 169,398 on the stdio build, 2 chars free.
+ * ORB-3257 gave `orboto_list_users` the `sort` and `order` enums of
+ * `GET /admin/users` inside the ceiling: its search and showGhosts
+ * parameters lost their texts and limit its schema default (the full
+ * description behind orboto_help says all three, the handler still sends
+ * 50), and its first sentence shrank to "All workspace users.": full =
+ * 169,352 over HTTP and 169,392 on the stdio build, 8 chars free; curated
+ * unchanged at 37,369.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
