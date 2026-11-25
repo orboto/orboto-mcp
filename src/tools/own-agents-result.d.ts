@@ -1,4 +1,4 @@
-/** Mirrors OwnAgent, OwnAgentRevoked and OwnAgentDeactivated of @orboto/shared-schema; the MCP package ships without them, apps/api/src/test/own-agents-mcp-drift.test.ts pins the copy in both directions. */
+/** Mirrors OwnAgent, OwnedBotsPage, OwnAgentRevoked and OwnAgentDeactivated of @orboto/shared-schema; the MCP package ships without them, apps/api/src/test/own-agents-mcp-drift.test.ts pins the copy in both directions. */
 export interface OwnAgent {
   id: string;
   fullName: string;
@@ -6,6 +6,11 @@ export interface OwnAgent {
   createdAt?: string | undefined;
   isActive?: boolean | undefined;
   manageable?: boolean | undefined;
+}
+
+export interface OwnedBotsPage {
+  items: OwnAgent[];
+  nextCursor: string | null;
 }
 
 export interface OwnAgentRevoked {

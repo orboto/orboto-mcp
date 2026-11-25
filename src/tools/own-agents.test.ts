@@ -36,12 +36,17 @@ async function listed(toolset?: 'full') {
 }
 
 describe('ORB-3258 - orboto_own_agents', () => {
-  it('lists every own account with its state by default', async () => {
-    const calls = stub([[agent, { ...agent, id: 'x', isActive: false, manageable: false }]]);
+  it('lists a page of every own account with its state by default and names the cursor of the next page', async () => {
+    const calls = stub([{ items: [agent, { ...agent, id: 'x', isActive: false, manageable: false }], nextCursor: 'next 1' }, { items: [agent], nextCursor: null }]);
     const out = await makeOwnAgentsHandler(client)({});
     expect(calls[0]).toMatchObject({ method: 'GET', url: 'https://orboto.example.com/users/me/owned-bots?include=inactive' });
     expect(text(out)).toContain(`${agentId} Design Assistant <${agent.email}>: active`);
     expect(text(out)).toContain('deactivated, assigned by an administrator');
+    expect(text(out)).toContain('More accounts: call again with cursor "next 1".');
+    expect(out.structuredContent).toMatchObject({ nextCursor: 'next 1' });
+    const last = await makeOwnAgentsHandler(client)({ cursor: 'next 1' });
+    expect(calls[1]).toMatchObject({ method: 'GET', url: 'https://orboto.example.com/users/me/owned-bots?include=inactive&cursor=next%201' });
+    expect(text(last)).not.toContain('More accounts');
   });
 
   it('creates and names the sign-in commands with a valid profile name', async () => {

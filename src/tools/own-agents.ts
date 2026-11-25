@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { OrbotoClient } from '../orboto-client.js';
-import type { OwnAgent, OwnAgentDeactivated } from './own-agents-result.js';
+import type { OwnAgent, OwnAgentDeactivated, OwnedBotsPage } from './own-agents-result.js';
 
 /** The CLI profile name for an agent account of this name; the same rule as ownAgentProfileName in @orboto/shared-schema. */
 export function profileNameFor(fullName: string): string {
@@ -27,12 +27,12 @@ function line(agent: OwnAgent): string {
 
 export const ownAgentsToolConfig = {
   title: 'Own agents',
-  description: 'Your agent accounts: list, create (name), or deactivate (id): its API keys are deleted and its OAuth tokens revoked for good. list shows id, name, e-mail, active or deactivated, created, and manageable false for one an administrator assigned and manages. create needs agent:create-own; the workspace limit counts your active own accounts (409 names it); the account gets the service-account role and your project memberships, never more than you hold, and the answer names the sign-in commands. deactivate also ends its grants, leases, capacity claims and work sessions and closes its connections; reactivating needs you yourself in Profile -> My agent accounts or `orboto agents reactivate`, and a fresh sign-in.',
-  inputSchema: z.object({ action: z.enum(['list', 'create', 'deactivate']).optional(), name: z.string().optional(), id: z.string().optional() }).shape,
+  description: 'Your agent accounts: list, create (name), or deactivate (id): its API keys are deleted and its OAuth tokens revoked for good. list shows id, name, e-mail, active or deactivated, created, and manageable false for one an administrator assigned and manages, 50 a page by name; nextCursor continues it (cursor). create needs agent:create-own; the workspace limit counts your active own accounts (409 names it); the account gets the service-account role and your project memberships, never more than you hold, and the answer names the sign-in commands. deactivate also ends its grants, leases, capacity claims and work sessions and closes its connections; reactivating needs you yourself in Profile -> My agent accounts or `orboto agents reactivate`, and a fresh sign-in.',
+  inputSchema: z.object({ action: z.enum(['list', 'create', 'deactivate']).optional(), name: z.string().optional(), id: z.string().optional(), cursor: z.string().optional() }).shape,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
 };
 
-type Args = { action?: 'list' | 'create' | 'deactivate'; name?: string; id?: string };
+type Args = { action?: 'list' | 'create' | 'deactivate'; name?: string; id?: string; cursor?: string };
 
 export function makeOwnAgentsHandler(client: OrbotoClient) {
   return async (args: Args = {}): Promise<CallToolResult> => {
@@ -50,8 +50,10 @@ export function makeOwnAgentsHandler(client: OrbotoClient) {
       const failed = agent.failedCleanups?.length ? `\nThese cleanups failed and were logged: ${agent.failedCleanups.join(', ')}; deactivate it again to retry them.` : '';
       return { content: [{ type: 'text', text: text + failed }], structuredContent: { action, agent } };
     }
-    const agents = await client.get<OwnAgent[]>('/users/me/owned-bots?include=inactive');
-    const text = agents.length ? agents.map(line).join('\n') : 'You own no agent accounts. Action create makes one.';
-    return { content: [{ type: 'text', text }], structuredContent: { action, agents } };
+    const page = await client.get<OwnedBotsPage>(`/users/me/owned-bots?include=inactive${args.cursor ? `&cursor=${encodeURIComponent(args.cursor)}` : ''}`);
+    const agents = page.items;
+    const more = page.nextCursor ? `\nMore accounts: call again with cursor "${page.nextCursor}".` : '';
+    const text = agents.length ? agents.map(line).join('\n') + more : 'You own no agent accounts. Action create makes one.';
+    return { content: [{ type: 'text', text }], structuredContent: { action, agents, nextCursor: page.nextCursor } };
   };
 }

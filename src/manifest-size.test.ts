@@ -272,7 +272,9 @@ afterEach(() => { vi.restoreAllMocks(); });
  * action in fewer words, each full text kept in getToolDoc: full = 169,331
  * over HTTP and 169,371 on the stdio build, 29 chars free; curated = 37,323.
  * Both together on develop: full = 169,325 over HTTP and 169,365 on the
- * stdio build, 35 chars free; curated = 37,323.
+ * stdio build, 35 chars free; curated = 37,323. The `cursor` parameter of
+ * `orboto_own_agents` (its list is a cursor page) costs 27: full = 169,352
+ * over HTTP and 169,392 on the stdio build, 8 chars free; curated unchanged.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */
