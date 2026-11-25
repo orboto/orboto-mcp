@@ -266,6 +266,13 @@ afterEach(() => { vi.restoreAllMocks(); });
  * 50), and its first sentence shrank to "All workspace users.": full =
  * 169,352 over HTTP and 169,392 on the stdio build, 8 chars free; curated
  * unchanged at 37,369.
+ * ORB-3258 added `orboto_own_agents` (full tier only, one tool with list,
+ * create and deactivate actions instead of three named tools, 532 on the
+ * wire): 24 wire summaries in tool-docs.ts SUMMARY_OVERRIDES name the same
+ * action in fewer words, each full text kept in getToolDoc: full = 169,331
+ * over HTTP and 169,371 on the stdio build, 29 chars free; curated = 37,323.
+ * Both together on develop: full = 169,325 over HTTP and 169,365 on the
+ * stdio build, 35 chars free; curated = 37,323.
  *
  * @see ORB-1805, ORB-1669, ORB-1910
  */

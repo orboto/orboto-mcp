@@ -45,7 +45,7 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_browser_standing_allows:
     'List or revoke a browser session\'s standing allows.',
   orboto_admin_api_key_revoke:
-    'Revoke an account\'s API key by id (admin:users:write); audited, owner told.',
+    'Revoke an account\'s API key by id (admin:users:write).',
   orboto_delete_ticket:
     'DESTRUCTIVE, IRREVERSIBLE hard-delete of a ticket and its history.',
   orboto_lane_rereview:
@@ -57,7 +57,7 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_session_digest:
     'What this session (or sessionId) did: tickets, commits, receipts, claims, mail.',
   orboto_set_raci:
-    'Set a person\'s RACI role on a ticket (R, A: one per ticket, C, I).',
+    'Set a person\'s RACI role on a ticket.',
   orboto_primer_fact_supersede:
     'Replace a wrong fact by id; the old one stays in its history.',
   orboto_review_policy_check:
@@ -78,7 +78,7 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_credential_agent_access:
     'Agents that may reveal a credential: entries, candidates, q by name or e-mail.',
   orboto_ci_status:
-    'CI runs of a commit, branch, tag or PR: verdicts, jobs not green.',
+    'CI runs of a commit, branch, tag or PR.',
   orboto_ingest_file:
     'Upload a PDF, DOCX, Markdown or text file into `spaceId`.',
   orboto_update_company_closure:
@@ -86,9 +86,9 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_reset_agent_instruction:
     'Restore a seeded rule block (builtinKey) to its shipped text.',
   orboto_close_milestone:
-    'Close a milestone: `completed`, or `archived` with archive=true.',
+    'Close a milestone as completed or archived.',
   orboto_secret_exposures:
-    'Secret guard incidents (super-admin): class, masked preview, credential to rotate.',
+    'Secret guard incidents: masked preview, what to rotate.',
   orboto_upload_link:
     'Single-use upload link for a ticket or doc; give its URL to the person (50 MB, no login).',
   orboto_ingest_url:
@@ -100,22 +100,22 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_unclaim:
     'Unassign yourself; the ticket goes back to `todo`.',
   orboto_primer_fact_add:
-    'Record a project fact with evidence; live at once in every primer.',
+    'Record a project fact with evidence.',
   orboto_edit_doc:
     'Change a doc by exact string replacement; send only the diff.',
   orboto_project_readiness:
-    'Setup checks before autonomous work: ok, missing or n/a, with fixes.',
+    'Setup checks before autonomous work, with fixes.',
   orboto_review_approval_record:
     'Record your review verdict against an orboto_review_fingerprint.',
   /** ORB-3147 - shorter summaries that keep the manifest clear of its ceiling; each tool's full text stays in `getToolDoc`. */
   orboto_import_cancel:
-    'Cancel an import staging or discard an unapplied staged import.',
+    'Cancel an import staging or a staged import.',
   orboto_wiki_ask:
     'Retrieval-augmented Q&A over the docs, or one space.',
   orboto_bulk_assign_tickets:
     'Add `assigneeEmail` to every ticket in `ticketKeys` or `query`.',
   orboto_wiki_apply_plan:
-    'Commit the page operations of an orboto_wiki_plan_update plan.',
+    'Commit an orboto_wiki_plan_update plan.',
   orboto_ask_docs:
     'Ask the wiki through the workspace RAG pipeline.',
   orboto_move_doc:
@@ -137,25 +137,25 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_list_approvals:
     'A ticket\'s sign-off requests, the gates on transitions.',
   orboto_review_fingerprint:
-    'Hash the exact submitted diff server-side (sha256-diff-v2).',
+    'Hash the exact submitted diff server-side.',
   orboto_list_backups:
     'Recent backup runs; download with orboto_download_backup.',
   orboto_bulk_patch_tickets:
-    'PATCH every ticket in `ticketKeys` or `query` with one `patch`.',
+    'PATCH many tickets (keys or query) at once.',
   orboto_list_agent_instructions:
     'ADMIN: rule BLOCKS at a scope for editing, not rules to follow.',
   orboto_set_milestone:
     'Move a ticket to another milestone, or off with null.',
   orboto_check_similar:
-    'Duplicate check before orboto_create_ticket; creates nothing.',
+    'Duplicate check before orboto_create_ticket.',
   orboto_bulk_unassign_tickets:
-    'Remove `assigneeEmail` from tickets in `ticketKeys` or `query`.',
+    'Remove an assignee from many tickets.',
   orboto_work_session_start:
     'Take a ticket\'s work lease in a role and start its timer.',
   orboto_work_session_finish:
     'End a work session: timer booked, lease released, evidence kept.',
   orboto_admin_translation_approve:
-    'Approve an auto-translated ticket; stamps reviewer and time.',
+    'Approve an auto-translated ticket.',
   orboto_bulk_comment_tickets:
     'Comment on every ticket in `ticketKeys` or `query`.',
   orboto_rule_proposal_accept:
@@ -163,9 +163,9 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_list_docs_in_space:
     'A space\'s doc pages, flat; `parentDocId` rebuilds the tree.',
   orboto_raci:
-    'A project\'s RACI matrix (tickets x members, cells R/A/C/I).',
+    'A project\'s RACI matrix.',
   orboto_bulk_close_tickets:
-    'Close every matching ticket, optionally with one `comment`.',
+    'Close every matching ticket.',
   orboto_remove_cross_project_link:
     'DESTRUCTIVE - drops a cross-project link between two tickets.',
   orboto_archive_project:
@@ -224,25 +224,25 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
   orboto_lane_pause:
     'Pause a lane at its next turn boundary (work session is held) or resume it; orboto_lane_stop interrupts the running turn.',
   orboto_connector:
-    'Connector links: source_link (ticketKey), list, health, sync (linkId).',
+    'Connector links: source link, list, health, sync.',
   orboto_ci_log:
-    'CI job log (jobId) or a run\'s job logs (runId; failed=true: red only).',
+    'CI log of a job (jobId) or of a run\'s jobs (runId).',
   orboto_delete_doc_space:
     'DESTRUCTIVE - deletes the space and every doc in it.',
   orboto_list_git_app_installations:
-    'GitHub App installations: account, suspension, allowed project keys.',
+    'GitHub App installations and their allowed projects.',
   orboto_list_ticket_dependencies:
-    'A ticket\'s `blockedBy` (finish first) and `blocks` dependencies.',
+    'A ticket\'s blockedBy and blocks dependencies.',
   orboto_ai_usage:
     'AI calls, tokens and errors over a date range.',
   orboto_rule_proposal_reject:
     'Dismiss a candidate or reject a proposal, with a reason.',
   orboto_message_work:
-    'List, inspect or mutate durable message work (schema: orboto_api_search).',
+    'List, inspect or mutate durable message work.',
   orboto_knowledge_ask:
     'Ask the project and Operations wikis before a person; cite docs by key.',
   orboto_import_numbering:
-    'A staged import\'s kept and renumbered source numbers; merge flag.',
+    'A staged import\'s kept and renumbered numbers.',
   /** ORB-3206 - shorter summaries that pay for `from` and the dry-run sentence of `orboto_import_char_refs`; each tool's full text stays in `getToolDoc`. */
   orboto_knowledge_add:
     'File a durable fact in a project wiki (projectKey) or the Operations wiki, not just locally.',
@@ -250,6 +250,11 @@ const SUMMARY_OVERRIDES: Record<string, string> = {
     'Live agent sessions and their role addresses (integrator@KEY).',
   orboto_edit_doc_section:
     'Change a doc section by heading; send only that section.',
+  /** ORB-3258 - shorter wire summaries that pay for `orboto_own_agents`; each tool's full text stays in `getToolDoc`. */
+  orboto_search:
+    'Search tickets, comments and docs; `types` adds more kinds.',
+  orboto_work_next:
+    'Reserve the next ready ticket of a project for a role.',
 };
 
 /** Runtime registry: tool name -> full guidance text, captured at
