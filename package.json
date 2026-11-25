@@ -1,6 +1,6 @@
 {
   "name": "@orboto/mcp",
-  "version": "0.240.4",
+  "version": "0.240.5",
   "description": "Model Context Protocol server for orboto - exposes tickets, projects, milestones, time, docs, primer-facts, alerts and absences as MCP tools for Claude Desktop / Cursor / Copilot Chat / any MCP-aware AI client.",
   "license": "MIT",
   "type": "module",
@@ -39,7 +39,7 @@
     "vitest": "^5.1.0"
   },
   "engines": {
-    "node": "^22.20.0 || ^24.0.0"
+    "node": "^22.23.4 || ^24.22.1 || >=26.12.1"
   },
   "keywords": [
     "orboto",
