@@ -55,8 +55,9 @@ describe('ORB-3258 - orboto_own_agents', () => {
 
   it('deactivates and says what was revoked', async () => {
     const revoked = { apiKeys: 2, oauthTokens: 3, authorizationCodes: 1, workSessions: 1, browserPairings: 0, browserGrants: 1, liveLeases: 0, liveGrants: 0, credentialGrants: 0, capacityClaims: 1 };
-    const calls = stub([{ ...agent, isActive: false, revoked }]);
+    const calls = stub([{ ...agent, isActive: false, revoked, failedCleanups: ['registered_browsers'] }]);
     const out = await makeOwnAgentsHandler(client)({ action: 'deactivate', id: agentId });
+    expect(text(out)).toContain('These cleanups failed and were logged: registered_browsers; deactivate it again to retry them.');
     expect(calls[0]).toMatchObject({ method: 'POST', url: `https://orboto.example.com/users/me/agents/${agentId}/deactivate` });
     expect(text(out)).toContain('2 API keys deleted, 3 OAuth tokens and 1 codes revoked');
     await expect(makeOwnAgentsHandler(client)({ action: 'deactivate' })).rejects.toThrow('deactivate needs id');

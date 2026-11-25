@@ -47,7 +47,8 @@ export function makeOwnAgentsHandler(client: OrbotoClient) {
       const agent = await client.post<OwnAgentDeactivated>(`/users/me/agents/${encodeURIComponent(args.id)}/deactivate`, {});
       const r = agent.revoked;
       const text = `Deactivated ${agent.fullName} <${agent.email}>: ${r.apiKeys} API keys deleted, ${r.oauthTokens} OAuth tokens and ${r.authorizationCodes} codes revoked, ${r.workSessions} work sessions, ${r.browserGrants} browser grants, ${r.liveLeases} live leases and ${r.capacityClaims} capacity claims ended. Reactivate it in Profile -> My agent accounts or with \`orboto agents reactivate ${agent.id}\`, then sign it in again.`;
-      return { content: [{ type: 'text', text }], structuredContent: { action, agent } };
+      const failed = agent.failedCleanups?.length ? `\nThese cleanups failed and were logged: ${agent.failedCleanups.join(', ')}; deactivate it again to retry them.` : '';
+      return { content: [{ type: 'text', text: text + failed }], structuredContent: { action, agent } };
     }
     const agents = await client.get<OwnAgent[]>('/users/me/owned-bots?include=inactive');
     const text = agents.length ? agents.map(line).join('\n') : 'You own no agent accounts. Action create makes one.';

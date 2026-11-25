@@ -5,6 +5,7 @@ import {
   GUARDED_FILES,
   driftProblems,
   goMapQuotes,
+  inconsistentTokenQuotes,
   markerQuotes,
   parseFigure,
   tableQuotes,
@@ -187,5 +188,40 @@ describe('ORB-2873 - the real files', () => {
   it('carries at least one marker in every file that is read for markers', () => {
     const empty = GUARDED_FILES.filter((guarded) => guarded.reader.kind === 'markers' && markerQuotes(guarded.file, real(guarded.file)).quotes.length === 0);
     expect(empty.map((guarded) => guarded.file)).toEqual([]);
+  });
+});
+
+describe('ORB-3258 - one token figure per toolset across every guarded file', () => {
+  const files: GuardedFile[] = [
+    { file: 'docs/a.md', reader: { kind: 'markers' } },
+    { file: 'docs/table.md', reader: { kind: 'table', toolsets: ['full'] } },
+    { file: 'cli/map.go', reader: { kind: 'go-map' } },
+  ];
+  const goMap = (full: number) => `var toolsetTokens = map[string]int{\n\t"channel": 400,\n\t"minimal": 3000,\n\t"curated": 10400,\n\t"full":    ${full},\n}`;
+  const texts = (full: number): Record<string, string> => ({
+    'docs/a.md': `The full list is about ${marker('full', 'tokens', '47,000')} tokens and ${marker('full', 'chars', '169,371')} characters.`,
+    'docs/table.md': '| Toolset | Tools | Tokens |\n|---|---|---|\n| `full` | 225 | ~47.0k tokens |',
+    'cli/map.go': goMap(full),
+  });
+
+  it('accepts the same figure written as 47,000, ~47.0k and 47000', () => {
+    const read = texts(47000);
+    expect(inconsistentTokenQuotes(files, (file) => read[file]!)).toEqual([]);
+  });
+
+  it('names every quote of a toolset whose figures differ, with file, line and value', () => {
+    const read = texts(46900);
+    expect(inconsistentTokenQuotes(files, (file) => read[file]!)).toEqual([
+      'full tokens: docs/a.md:1 47000, docs/table.md:3 47000, cli/map.go:5 46900',
+    ]);
+  });
+
+  it('compares token figures only, never tool counts or character counts', () => {
+    const read: Record<string, string> = { ...texts(47000), 'docs/a.md': `${marker('full', 'tokens', '47.0k')} ${marker('full', 'chars', '1,000')} ${marker('full', 'tools', '9')}` };
+    expect(inconsistentTokenQuotes(files, (file) => read[file]!)).toEqual([]);
+  });
+
+  it('holds for the real guarded files', () => {
+    expect(inconsistentTokenQuotes(GUARDED_FILES, real)).toEqual([]);
   });
 });
