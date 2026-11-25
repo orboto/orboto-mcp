@@ -20,6 +20,7 @@ export interface OwnAgentRevoked {
   credentialGrants: number;
   capacityClaims: number;
   browserRegistrations: number;
+  browserRelayRevokes: number;
   browserDriveGrants: number;
   browserDriveLeases: number;
   credentialBrowserGrants: number;
