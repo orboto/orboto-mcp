@@ -9,7 +9,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { buildOrbotoMcpServer } from './server.js';
 import type { Toolset } from './toolset.js';
 import { tokensForChars } from './token-size.js';
-import { GUARDED_FILES, driftProblems } from './test/toolset-quotes.js';
+import { GUARDED_FILES, driftProblems, inconsistentTokenQuotes } from './test/toolset-quotes.js';
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -470,5 +470,10 @@ describe('ORB-2873 - quoted toolset figures follow the measurement', () => {
     };
     const read = (file: string) => readFileSync(new URL(`../../../${file}`, import.meta.url), 'utf8');
     expect(driftProblems(GUARDED_FILES, read, measured), 'update each marked quote to the measured figure in the same commit as the tool change').toEqual([]);
+  });
+
+  it('every file quotes the same token figure for a toolset (ORB-3258)', () => {
+    const read = (file: string) => readFileSync(new URL(`../../../${file}`, import.meta.url), 'utf8');
+    expect(inconsistentTokenQuotes(GUARDED_FILES, read), 'quote one rounded measurement everywhere').toEqual([]);
   });
 });

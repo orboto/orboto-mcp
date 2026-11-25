@@ -155,6 +155,26 @@ function compare(quote: Quote, measured: Measured): string | null {
   return `${where}: quotes ${unit}${quote.value} ${noun} for ${quote.toolset}, measured ${actual} (allowed drift ${Math.round(allowed)})`;
 }
 
+/** ORB-3258 - the token figure of a toolset is one number wherever it is quoted (`~47.0k`, `47,000`, the Go map), so no file keeps an older measurement inside the 5 % tolerance. */
+export function inconsistentTokenQuotes(files: readonly GuardedFile[], readFile: (file: string) => string): string[] {
+  const byToolset = new Map<QuotedToolset, Quote[]>();
+  for (const { file, reader } of files) {
+    const text = readFile(file);
+    const own = reader.kind === 'go-map' ? goMapQuotes(file, text) : reader.kind === 'table' ? tableQuotes(file, text) : [];
+    const marked = reader.kind === 'go-map' ? [] : markerQuotes(file, text).quotes;
+    for (const quote of [...own, ...marked]) {
+      if (quote.kind !== 'tokens') continue;
+      byToolset.set(quote.toolset, [...(byToolset.get(quote.toolset) ?? []), quote]);
+    }
+  }
+  const problems: string[] = [];
+  for (const [toolset, quotes] of byToolset) {
+    const values = new Set(quotes.map((quote) => quote.value));
+    if (values.size > 1) problems.push(`${toolset} tokens: ${quotes.map((quote) => `${quote.file}:${quote.line} ${quote.value}`).join(', ')}`);
+  }
+  return problems;
+}
+
 /** One message per quoted figure that is missing, unmarked, malformed or different from the measurement. */
 export function driftProblems(files: readonly GuardedFile[], readFile: (file: string) => string, measured: Record<QuotedToolset, Measured>): string[] {
   const problems: string[] = [];

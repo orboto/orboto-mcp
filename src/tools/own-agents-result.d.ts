@@ -19,6 +19,13 @@ export interface OwnAgentRevoked {
   liveGrants: number;
   credentialGrants: number;
   capacityClaims: number;
+  browserRegistrations: number;
+  browserDriveGrants: number;
+  browserDriveLeases: number;
+  credentialBrowserGrants: number;
+  liveSessions: number;
+  calendarFeedTokens: number;
+  webSessions: number;
 }
 
 export interface OwnAgentDeactivated {
