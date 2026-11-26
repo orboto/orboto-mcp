@@ -131,28 +131,43 @@ describe('over budget', () => {
     expect(UNCUT_ELSEWHERE).toContain('no CLI expand');
   });
 
-  it('ORB-3289: the notice of a cut names the exact CLI command of the tool that was cut, in the text and in __truncation', () => {
+  it('ORB-3289: the notice of a cut names the exact CLI commands of the tool that was cut, in the text and in __truncation, inside the budget', () => {
     for (const [tool, read] of Object.entries(CLI_READS)) {
       resetPayloadStore();
       const out = applyResponseBudget(tool, result({ description: 'd'.repeat(60_000) }));
       const how = String(truncationOf(out.result)!.howToGetTheRest);
       const text = (out.result.content[0] as { text: string }).text;
-      expect(how, tool).toContain(`\`${read.usage}\``);
-      expect(text, tool).toContain(`\`${read.usage}\``);
+      for (const part of read.parts) {
+        expect(how, tool).toContain(`\`${part.usage}\``);
+        expect(text, tool).toContain(`\`${part.usage}\``);
+      }
       expect(how, tool).toContain(uncutElsewhere(tool));
       expect(how, tool).not.toContain('the named CLI command');
       expect(out.responseChars, tool).toBeLessThanOrEqual(budgetFor(tool));
+      const textOnly = applyResponseBudget(tool, result(undefined, 'e'.repeat(60_000)));
+      expect(measureHalves(textOnly.result).textChars, tool).toBeLessThanOrEqual(budgetFor(tool));
+      expect((textOnly.result.content[0] as { text: string }).text, tool).toContain(`\`${read.parts[0]!.usage}\``);
     }
   });
 
-  it('ORB-3289: a tool without a mapped command gets the generic way out, and the other tools do not', () => {
+  it('ORB-3289: the query notice says how to page, the list notices lift the cap, get_ticket claims no whole body, ask tools say they ask again', () => {
+    expect(uncutElsewhere('orboto_query')).toContain('orboto query "<oql>" --json --limit 200');
+    expect(uncutElsewhere('orboto_query')).toContain('page on with `--cursor <nextCursor>`');
+    expect(uncutElsewhere('orboto_list_tickets')).toContain('orboto ticket list <KEY> --json --all --status all');
+    expect(uncutElsewhere('orboto_list_tickets')).toContain('`--all` lifts the 50-row cap');
+    expect(uncutElsewhere('orboto_my_tickets')).toContain('orboto ticket mine --json --all');
+    expect(uncutElsewhere('orboto_get_ticket')).toContain('orboto ticket comments <KEY> --all --json');
+    expect(uncutElsewhere('orboto_get_ticket')).not.toContain('complete body');
+    expect(uncutElsewhere('orboto_knowledge_ask')).toContain('asks again');
+    expect(uncutElsewhere('orboto_wiki_ask')).toContain('a new answer');
+    for (const tool of Object.keys(CLI_READS)) expect(uncutElsewhere(tool), tool).toContain('There is no CLI expand.');
+  });
+
+  it('ORB-3289: a tool without a mapped command gets the generic way out, and the mapped tools do not', () => {
     expect(uncutElsewhere(TOOL)).toBe(UNCUT_ELSEWHERE);
     expect(UNCUT_ELSEWHERE).not.toContain('the named CLI command');
     expect(UNCUT_ELSEWHERE).toContain('orboto help');
     expect(uncutElsewhere('orboto_list_tickets')).not.toBe(UNCUT_ELSEWHERE);
-    expect(uncutElsewhere('orboto_list_tickets')).toContain('orboto ticket list <KEY> --json');
-    expect(uncutElsewhere('orboto_list_tickets')).toContain('no CLI expand');
-    expect(uncutElsewhere('orboto_query')).toContain('orboto query "<oql>" --json');
   });
 
   it('marks the cut inside the value, so a reader cannot mistake it for the whole', () => {

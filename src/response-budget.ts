@@ -4,7 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { cliReadFor } from './cli-reads.js';
+import { cliReadFor, cliReadSentence } from './cli-reads.js';
 
 /** Default cap for a tool that does not declare its own. */
 export const DEFAULT_BUDGET_CHARS = 4000;
@@ -70,20 +70,17 @@ const MAX_CUT_PASSES = 64;
 export const HANDLE_TTL_MS = 15 * 60 * 1000;
 export const MAX_HANDLES = 16;
 
-const UNCUT_PREFIX = 'The cut is an MCP-server artefact: the REST API and both CLIs return the complete body ';
-
 /** ORB-2164 - the budget is an MCP-server artefact; the same data over REST or
  *  either CLI comes back whole, which is the way out that outlives a handle.
  *  A tool without a command in `CLI_READS` (ORB-3289) gets this generic form. */
 export const UNCUT_ELSEWHERE =
-  `${UNCUT_PREFIX}(\`orboto get <path>\`, \`orboto_api_call\`, or the CLI command of this tool, found with \`orboto help\`). There is no CLI expand.`;
+  'The cut is an MCP-server artefact: the REST API and both CLIs return the complete body '
+  + '(`orboto get <path>`, `orboto_api_call`, or the CLI command of this tool, found with `orboto help`). There is no CLI expand.';
 
-/** ORB-3289 - the notice of a cut names the exact shell command that returns the whole body of that tool, so it reads as an instruction and not as a remark. */
+/** ORB-3289 - the notice of a cut names the exact shell commands that return what the cut tool returned, so it reads as an instruction and not as a remark. */
 export function uncutElsewhere(toolName: string): string {
   const read = cliReadFor(toolName);
-  return read
-    ? `${UNCUT_PREFIX}in one shell call: \`${read.usage}\` (or \`orboto get <path>\`, \`orboto_api_call\`). There is no CLI expand.`
-    : UNCUT_ELSEWHERE;
+  return read ? cliReadSentence(read) : UNCUT_ELSEWHERE;
 }
 
 /**
@@ -381,7 +378,7 @@ function shrink(
     ? undefined
     : (JSON.parse(safeStringify(result.structuredContent)) as unknown);
 
-  const RESERVE = 700;
+  const RESERVE = 700 + Math.max(0, uncutElsewhere(toolName).length - UNCUT_ELSEWHERE.length);
   const target = Math.max(MIN_STRING_KEEP, budget - RESERVE);
 
   const measure = (): number => (structured === undefined ? 0 : safeStringify(structured).length);

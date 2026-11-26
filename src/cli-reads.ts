@@ -1,33 +1,104 @@
 /**
- * ORB-3289 - the CLI command that returns the whole body of a read tool, named in the cut notice of the response budget and in the
- * instructions of the tooled toolsets. `command` is the key in docs/cli-surface-inventory.json (cli-reads.test.ts holds the map to it).
+ * ORB-3289 - the CLI commands that return what a read tool returns, named in the cut notice of the response budget and in the
+ * instructions of the tooled toolsets. `command` is the key in docs/cli-surface-inventory.json (cli-reads.test.ts holds every entry to it).
  */
-export interface CliRead {
+export interface CliPart {
   command: string;
   usage: string;
+  returns: string;
+  /** The tool whose row in the inventory lists this command, when it is not the tool of the entry. */
+  tool?: string;
+}
+
+export interface CliRead {
+  /** One entry when a single command returns what the tool returns; several when the CLI reads the answer in parts. */
+  parts: CliPart[];
+  /** What the command does not carry over from the tool: paging, filters, flags the CLI lacks. */
+  note?: string;
+  /** The CLI cannot return the cut answer, it asks again. */
+  again?: true;
 }
 
 export const CLI_READS: Record<string, CliRead> = {
-  orboto_list_tickets: { command: 'ticket list', usage: 'orboto ticket list <KEY> --json' },
-  orboto_my_tickets: { command: 'ticket mine', usage: 'orboto ticket mine --json' },
-  orboto_get_ticket: { command: 'ticket get', usage: 'orboto ticket get <KEY> --json' },
-  orboto_query: { command: 'query', usage: 'orboto query "<oql>" --json' },
-  orboto_search: { command: 'search', usage: 'orboto search "<words>" --json' },
-  orboto_list_projects: { command: 'project list', usage: 'orboto project list --limit 200' },
-  orboto_get_project_primer: { command: 'primer', usage: 'orboto primer <KEY>' },
-  orboto_list_milestones: { command: 'milestone list', usage: 'orboto milestone list <KEY> --json' },
-  orboto_get_doc: { command: 'doc get', usage: 'orboto doc get <doc> --content' },
-  orboto_list_docs_in_space: { command: 'doc list', usage: 'orboto doc list <space> --json' },
-  orboto_knowledge_ask: { command: 'knowledge ask', usage: 'orboto knowledge ask "<question>" --json' },
-  orboto_knowledge_find: { command: 'knowledge find', usage: 'orboto knowledge find "<words>" --json' },
-  orboto_wiki_ask: { command: 'wiki ask', usage: 'orboto wiki ask "<question>" --json' },
+  orboto_list_tickets: {
+    parts: [{ command: 'ticket list', usage: 'orboto ticket list <KEY> --json --all --status all', returns: 'tickets' }],
+    note: '`--all` lifts the 50-row cap; `--status all` matches the tool, which lists every status (the CLI lists open tickets without it, `--status <category>` is `statusCategory`); `--milestone`, `--unscheduled`, `--parent` and `--sort` take the tool\'s inputs; `specState` and `assigneeEmail` have no flag, filter the JSON',
+  },
+  orboto_my_tickets: {
+    parts: [{ command: 'ticket mine', usage: 'orboto ticket mine --json --all', returns: 'tickets' }],
+    note: '`--all` lifts the 50-row cap; without `--status` it lists the tool\'s open set, `--status <category>` is `statusCategory`',
+  },
+  orboto_get_ticket: {
+    parts: [
+      { command: 'ticket get', usage: 'orboto ticket get <KEY> --json', returns: 'ticket row' },
+      { command: 'ticket comments', usage: 'orboto ticket comments <KEY> --all --json', returns: 'comments' },
+      { command: 'get', usage: 'orboto get /tickets/<ticketId>/attachments', returns: 'attachments' },
+      { command: 'ticket list', usage: 'orboto ticket list <PROJECT> --parent <KEY> --status all --all --json', returns: 'children', tool: 'orboto_list_tickets' },
+      { command: 'get', usage: 'orboto get /tickets/<ticketId>/checklists', returns: 'checklists' },
+      { command: 'get', usage: 'orboto get /tickets/<id>/git-activity', returns: 'git activity' },
+    ],
+    note: '`<ticketId>` and `<id>` are the `id` of the ticket row',
+  },
+  orboto_query: {
+    parts: [{ command: 'query', usage: 'orboto query "<oql>" --json --limit 200', returns: 'tickets' }],
+    note: 'one page: page on with `--cursor <nextCursor>` from the document; `--syntax jql` for JQL',
+  },
+  orboto_search: {
+    parts: [{ command: 'search', usage: 'orboto search "<words>" --json --limit 50', returns: 'hits' }],
+    note: '`more: true` marks a longer list; `--types` and `--project` take the tool\'s inputs',
+  },
+  orboto_list_projects: {
+    parts: [{ command: 'project list', usage: 'orboto project list --limit 200', returns: 'projects' }],
+    note: 'it prints JSON without a flag, `more: true` marks a longer list; `--search` and `--query` take the tool\'s inputs',
+  },
+  orboto_get_project_primer: {
+    parts: [{ command: 'primer', usage: 'orboto primer <KEY>', returns: 'primer' }],
+  },
+  orboto_list_milestones: {
+    parts: [{ command: 'milestone list', usage: 'orboto milestone list <KEY> --all --json', returns: 'milestones' }],
+  },
+  orboto_get_doc: {
+    parts: [{ command: 'doc get', usage: 'orboto doc get <doc> --content', returns: 'doc' }],
+    note: 'it prints the Markdown only, without `--content` the doc as JSON; `--section "A > B"` reads one section',
+  },
+  orboto_list_docs_in_space: {
+    parts: [{ command: 'doc list', usage: 'orboto doc list <space> --json', returns: 'pages' }],
+  },
+  orboto_knowledge_ask: {
+    parts: [{ command: 'knowledge ask', usage: 'orboto knowledge ask "<question>" --json', returns: 'answer' }],
+    again: true,
+  },
+  orboto_knowledge_find: {
+    parts: [{ command: 'knowledge find', usage: 'orboto knowledge find "<words>" --strict --json', returns: 'hits' }],
+    note: '`--limit` and `--project` take the tool\'s inputs',
+  },
+  orboto_wiki_ask: {
+    parts: [{ command: 'wiki ask', usage: 'orboto wiki ask "<question>" --json', returns: 'answer' }],
+    again: true,
+  },
 };
 
-/** The sentence the tooled toolsets (curated, full) carry in their instructions; the two commands come from the map above. */
+/** The two commands the instructions of the tooled toolsets name; each is the start of the usage of its tool in the map above, which adds the filters. */
+export const CLI_READS_INSTRUCTION_COMMANDS = ['orboto ticket list <KEY> --json --all', 'orboto query "<oql>" --json --limit 200'] as const;
+
+/** The sentence the tooled toolsets (curated, full) carry in their instructions. */
 export const CLI_READS_INSTRUCTION =
-  `With a shell, lists, queries and bulk reads: the orboto CLI with --json, never cut: \`${CLI_READS.orboto_list_tickets.usage}\`, \`${CLI_READS.orboto_query.usage}\`. `
+  `With a shell, lists, queries and bulk reads go to the CLI, never cut: \`${CLI_READS_INSTRUCTION_COMMANDS[0]}\`, \`${CLI_READS_INSTRUCTION_COMMANDS[1]}\`. `
   + 'Tools: session start, claims, writes.';
 
 export function cliReadFor(toolName: string): CliRead | undefined {
   return Object.hasOwn(CLI_READS, toolName) ? CLI_READS[toolName] : undefined;
+}
+
+/** The sentence a cut notice carries for a mapped tool; it claims the whole body only where one command returns it. */
+export function cliReadSentence(read: CliRead): string {
+  const note = read.note ? ` (${read.note})` : '';
+  if (read.again) {
+    return `The cut is an MCP-server artefact: the CLI cannot return this answer, \`${read.parts[0].usage}\` asks again and gives a new answer with new AI usage. There is no CLI expand.`;
+  }
+  if (read.parts.length > 1) {
+    const parts = read.parts.map((part) => `${part.returns}: \`${part.usage}\``).join('; ');
+    return `The cut is an MCP-server artefact: no single CLI command returns this tool's whole answer, the CLI reads it in parts - ${parts}${note}. There is no CLI expand.`;
+  }
+  return `The cut is an MCP-server artefact: the REST API and both CLIs return the complete body, in the shell \`${read.parts[0].usage}\`${note}. There is no CLI expand.`;
 }

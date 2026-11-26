@@ -363,14 +363,14 @@ function staticMcpHints(toolset: Toolset): string {
     ].join(' ');
   }
   return [
-    'orboto is a ticket + project management system; ticket keys look like `PROJ-123`.',
+    'orboto is a ticket and project system; ticket keys look like `PROJ-123`.',
     CLI_READS_INSTRUCTION,
-    'Tools: `orboto_list_projects` lists projects; a project\'s conventions, once: `orboto_get_project_primer(<KEY>)`; "what am I working on?" is `orboto_my_tickets`, "anything about X?" is `orboto_search`.',
+    'Without a shell: `orboto_list_projects` lists projects; a project\'s conventions, once: `orboto_get_project_primer(<KEY>)`; "what am I working on?" is `orboto_my_tickets`, "anything about X?" is `orboto_search`.',
     toolset === 'full'
       ? '`orboto_get_ticket` includes checklists inline, `orboto_get_checklists` returns only the items.'
       : 'CURATED manifest; the ENTIRE REST API stays reachable: `orboto_api_search` finds an endpoint, `orboto_api_call` runs it; all tools: `?toolset=full` (HTTP) or ORBOTO_MCP_TOOLSET=full (stdio).',
-    'Resources: `orboto://ticket/<key>`, `orboto://doc/<id>`, `orboto://project/<key>`, `orboto://search/<query>`.',
-    '`orboto_list_agent_instructions` is for admins, not for reading the rules.',
+    'Resources: orboto://ticket/<key>, orboto://doc/<id>, orboto://project/<key>, orboto://search/<query>.',
+    '`orboto_list_agent_instructions` is admin-only, not for reading the rules.',
     'A 403 is the API refusing, not this server.',
   ].join(' ');
 }

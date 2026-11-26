@@ -12,7 +12,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { assembleInstructions, buildOrbotoMcpServer, CLIENT_INSTRUCTIONS_CAP, MANDATORY_FIRST_ACTION } from './server.js';
 import type { Toolset } from './toolset.js';
 import { CHANNEL_INSTRUCTIONS } from './inbox-channel.js';
-import { CLI_READS, CLI_READS_INSTRUCTION } from './cli-reads.js';
+import { CLI_READS_INSTRUCTION, CLI_READS_INSTRUCTION_COMMANDS } from './cli-reads.js';
 import { CHANNEL_TOOLSET_INSTRUCTIONS } from './toolset.js';
 
 const HEADING = 'Working rules for this workspace:\n';
@@ -187,11 +187,13 @@ describe('ORB-3289 - the tooled toolsets send lists, queries and bulk reads to t
       it(`${toolset}${channel ? ' + wake channel' : ''}: one sentence names both commands, sits in the head and stays inside the client cap`, async () => {
         const text = await deliveredInstructions(toolset, channel);
         expect(clientCut(text)).toContain(CLI_READS_INSTRUCTION);
-        expect(CLI_READS_INSTRUCTION).toContain('`orboto ticket list <KEY> --json`');
-        expect(CLI_READS_INSTRUCTION).toContain('`orboto query "<oql>" --json`');
+        expect(CLI_READS_INSTRUCTION).toContain('`orboto ticket list <KEY> --json --all`');
+        expect(CLI_READS_INSTRUCTION).toContain('`orboto query "<oql>" --json --limit 200`');
         expect(CLI_READS_INSTRUCTION).toContain('Tools: session start, claims, writes.');
-        expect(CLI_READS_INSTRUCTION).toContain(CLI_READS.orboto_list_tickets.usage);
-        expect(CLI_READS_INSTRUCTION).toContain(CLI_READS.orboto_query.usage);
+        for (const command of CLI_READS_INSTRUCTION_COMMANDS) expect(CLI_READS_INSTRUCTION).toContain(`\`${command}\``);
+        expect(text.split('Tools: session start, claims, writes.')).toHaveLength(2);
+        expect(clientCut(text)).toContain('Without a shell: `orboto_list_projects`');
+        expect(text).not.toMatch(/Tools: `orboto_/);
         if (text.includes(HEADING)) expect(text.indexOf(CLI_READS_INSTRUCTION)).toBeLessThan(text.indexOf(HEADING));
         expect(text.length).toBeLessThanOrEqual(CLIENT_INSTRUCTIONS_CAP);
       });
