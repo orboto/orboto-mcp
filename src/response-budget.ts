@@ -409,7 +409,10 @@ function shrink(
   owner: object = PROCESS_OWNER,
 ): BudgetOutcome {
   const fullText = (result.content ?? [])
-    .map((part) => textOf(part) ?? '')
+    .flatMap((part) => {
+      const text = textOf(part);
+      return text === null ? [] : [text];
+    })
     .join('\n');
   const handle = storePayload(toolName, {
     structuredContent: result.structuredContent,

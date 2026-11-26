@@ -307,11 +307,35 @@ describe('over budget', () => {
         structuredContent: { sizeBytes: 150_000, contentType: 'application/octet-stream', runId: 'r', sealed: true },
       });
       const shown = (out.result.content[0] as { text: string }).text;
-      expect(shown.trimStart().startsWith(`${text}\n\n[Response is `)).toBe(true);
+      expect(shown.startsWith(`${text}\n\n[Response is `)).toBe(true);
+      expect(readPayload(out.handle!)!.text).toBe(text);
       expect(shown).toContain('nothing in it could be cut safely');
       expect(shown).not.toContain('Response truncated');
       expect(truncationOf(out.result)!.omitted).toEqual([]);
       expect(out.result.content).toContainEqual(blob);
+    });
+
+    it('only text parts make the text: a part that is not text adds no newline to the shown text or the stored $text', async () => {
+      const image: CallToolResult['content'][number] = { type: 'image', mimeType: 'image/png', data: 'A'.repeat(300) };
+      const first = 'first line\n'.repeat(500).trimEnd();
+      const second = 'second part';
+      const out = applyResponseBudget(TOOL, {
+        content: [image, { type: 'text', text: first }, image, { type: 'text', text: second }, image],
+        structuredContent: { nextCursor: 'c' },
+      });
+      const shown = (out.result.content[0] as { text: string }).text;
+      expect(shown.startsWith('first line')).toBe(true);
+      expect(readPayload(out.handle!)!.text).toBe(`${first}\n${second}`);
+      const expanded = await makeResponseExpandHandler()({ handle: out.handle!, path: '$text' });
+      expect((expanded.structuredContent as { chunk: string }).chunk.startsWith('first line')).toBe(true);
+      expect((expanded.structuredContent as { totalChars: number }).totalChars).toBe(first.length + 1 + second.length);
+    });
+
+    it('an answer of non-text parts only gets the notice and nothing before it', () => {
+      const out = applyResponseBudget(TOOL, {
+        content: [{ type: 'image', mimeType: 'image/png', data: 'A'.repeat(6000) }, { type: 'image', mimeType: 'image/png', data: 'B'.repeat(6000) }],
+      });
+      expect((out.result.content[0] as { text: string }).text.startsWith('[Response is ')).toBe(true);
     });
 
     it('a payload of many long strings is cut once per string, lists each path once and says it is at the floor', () => {
