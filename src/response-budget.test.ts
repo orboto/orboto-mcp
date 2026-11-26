@@ -314,6 +314,17 @@ describe('over budget', () => {
       }
     });
 
+    it('a part that cannot fit leaves a short text whole and names the cut of the structured half with the truncated notice', () => {
+      const text = 'Created full workspace backup (1.5 MB), run r.';
+      const blob: CallToolResult['content'][number] = { type: 'resource', resource: { uri: 'orboto://backup/full.zip', mimeType: 'application/zip', blob: 'B'.repeat(200_000) } };
+      const out = applyResponseBudget(TOOL, { content: [blob, { type: 'text', text }], structuredContent: { runId: 'r', log: 'l'.repeat(30_000) } });
+      const shown = (out.result.content[0] as { text: string }).text;
+      expect(shown.startsWith(`${text}\n\n[Response truncated `)).toBe(true);
+      expect(shown).not.toContain('nothing in it could be cut safely');
+      expect((truncationOf(out.result)!.omitted as Array<{ path: string }>).map((entry) => entry.path)).toEqual(['log']);
+      expect(out.result.content).toContainEqual(blob);
+    });
+
     it('a non-text part that cannot fit the budget at all leaves the text whole: the sealed backup result says nothing could be cut', () => {
       const note = ' The archive is encrypted with the instance key - it only restores where that key exists.';
       const line = (runId: string): string => `Created full workspace backup (1.5 MB), run ${runId}.${note}`;
