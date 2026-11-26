@@ -170,6 +170,69 @@ describe('over budget', () => {
     expect(uncutElsewhere('orboto_list_tickets')).not.toBe(UNCUT_ELSEWHERE);
   });
 
+  describe('ORB-3289: the structured half is measured with its __truncation block', () => {
+    const shapes: Record<string, () => CallToolResult> = {
+      'one huge string beside a long text': () => ({
+        content: [{ type: 'text', text: 'x'.repeat(30_000) }],
+        structuredContent: { description: 'd'.repeat(60_000) },
+      }),
+      'a ticket-like mixed result': () => ({
+        content: [{ type: 'text', text: 'q\n'.repeat(8000) }],
+        structuredContent: {
+          ticket: { description: 'd'.repeat(20_000) },
+          comments: Array.from({ length: 80 }, () => ({ body: 'c'.repeat(800) })),
+          attachments: Array.from({ length: 40 }, () => ({ name: 'n'.repeat(100) })),
+          children: Array.from({ length: 60 }, () => ({ key: 'k', title: 't'.repeat(80) })),
+        },
+      }),
+      '400 rows': () => ({
+        content: [{ type: 'text', text: Array.from({ length: 400 }, (_, i) => `ORB-${i} some title here ${'y'.repeat(40)}`).join('\n') }],
+        structuredContent: {
+          items: Array.from({ length: 400 }, (_, i) => ({ key: `ORB-${i}`, title: 't'.repeat(60), status: 'todo', more: { a: 'b'.repeat(30) } })),
+          nextCursor: 'c',
+        },
+      }),
+    };
+
+    for (const tool of [TOOL, 'orboto_list_tickets', 'orboto_get_ticket', 'orboto_knowledge_find', 'orboto_get_doc']) {
+      for (const [name, make] of Object.entries(shapes)) {
+        it(`${tool}, ${name}: both halves stay within the budget and nothing says atFloor`, () => {
+          const out = applyResponseBudget(tool, make());
+          const halves = measureHalves(out.result);
+          expect(halves.structuredChars, 'structured half').toBeLessThanOrEqual(budgetFor(tool));
+          expect(halves.textChars, 'text half').toBeLessThanOrEqual(budgetFor(tool));
+          expect(truncationOf(out.result)!.atFloor).toBeUndefined();
+        });
+      }
+    }
+
+    it('a payload of many long strings is cut once per string, lists each path once and says it is at the floor', () => {
+      const fields = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`field${i}`, 's'.repeat(2000)]));
+      const out = applyResponseBudget(TOOL, result(fields));
+      const block = truncationOf(out.result)!;
+      const paths = (block.omitted as Array<{ path: string }>).map((entry) => entry.path);
+      expect(new Set(paths).size).toBe(paths.length);
+      expect(paths).toHaveLength(30);
+      expect(block.atFloor).toBe(true);
+      for (let i = 0; i < 30; i += 1) {
+        const value = (out.result.structuredContent as Record<string, string>)[`field${i}`]!;
+        expect(value.startsWith('s'.repeat(160))).toBe(true);
+        expect(value.length).toBeLessThan(2000);
+      }
+    });
+
+    it('a string that a cut would not make shorter is left alone', () => {
+      const fields = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`field${i}`, 'k'.repeat(250)]));
+      const out = applyResponseBudget(TOOL, result(fields));
+      const block = truncationOf(out.result)!;
+      expect(block.omitted).toEqual([]);
+      for (let i = 0; i < 40; i += 1) {
+        expect((out.result.structuredContent as Record<string, string>)[`field${i}`]).toBe('k'.repeat(250));
+      }
+      expect(block.atFloor).toBe(true);
+    });
+  });
+
   it('marks the cut inside the value, so a reader cannot mistake it for the whole', () => {
     const out = applyResponseBudget(TOOL, result({ description: 'd'.repeat(30_000) }));
     const sc = out.result.structuredContent as { description: string };

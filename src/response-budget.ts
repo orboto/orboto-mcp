@@ -381,8 +381,6 @@ function shrink(
   const RESERVE = 700 + Math.max(0, uncutElsewhere(toolName).length - UNCUT_ELSEWHERE.length);
   const target = Math.max(MIN_STRING_KEEP, budget - RESERVE);
 
-  const measure = (): number => (structured === undefined ? 0 : safeStringify(structured).length);
-
   let currentTextLength = fullText.length;
   let textOmitted = 0;
   if (!protectText && fullText.length > target) {
@@ -390,20 +388,46 @@ function shrink(
     currentTextLength = boundary > MIN_STRING_KEEP ? boundary : target;
     textOmitted = fullText.length - currentTextLength;
   }
+  const textEntries: OmittedEntry[] = textOmitted > 0 ? [{ path: '$text', kind: 'string', omittedChars: textOmitted }] : [];
 
+  const attachBlock = structured !== undefined && structured !== null && typeof structured === 'object' && !Array.isArray(structured);
+  const howToGetTheRest =
+    `Call orboto_response_expand { handle: "${handle}", path: "<one of omitted[].path>" } for the omitted `
+    + 'remainder. Omit `path` to list what is available. The handle lives in this MCP server process and '
+    + `expires 15 minutes after this call. ${uncutElsewhere(toolName)}`;
+  const blockFor = (entries: OmittedEntry[], atFloor: boolean): TruncationBlock => ({
+    handle,
+    budgetChars: budget,
+    originalChars,
+    omittedChars: originalChars,
+    omitted: entries,
+    howToGetTheRest,
+    ...(atFloor ? { atFloor: true } : {}),
+  });
+  const blockKeyChars = ',"__truncation":'.length;
+  const measure = (): number => {
+    if (structured === undefined) return 0;
+    const body = safeStringify(structured).length;
+    return attachBlock ? body + blockKeyChars + safeStringify(blockFor([...omitted, ...textEntries], false)).length : body;
+  };
+  const entryChars = (entry: OmittedEntry): number => (attachBlock ? safeStringify(entry).length + 1 : 0);
+
+  const uncuttable = new Set<string>();
   let passes = 0;
-  while (structured !== undefined && measure() > target && passes < MAX_CUT_PASSES) {
+  while (structured !== undefined && measure() > budget && passes < MAX_CUT_PASSES) {
     passes += 1;
-    const candidates = collectCandidates(structured, PROTECTED_PATHS[toolName] ?? []);
+    const candidates = collectCandidates(structured, PROTECTED_PATHS[toolName] ?? [])
+      .filter((candidate) => !uncuttable.has(candidate.path));
     const largest = candidates[0];
     if (!largest) break;
 
-    const overshoot = measure() - target;
     if (largest.kind === 'string') {
       const value = largest.value as string;
-      const marker = stringMarker(0, handle, largest.path).length + 8;
-      const keep = Math.max(MIN_STRING_KEEP, value.length - overshoot - marker);
-      if (keep >= value.length) break;
+      const overshoot = measure() - budget + entryChars({ path: largest.path, kind: 'string', omittedChars: value.length });
+      const markerChars = safeStringify(stringMarker(value.length, handle, largest.path)).length - 2;
+      const keep = Math.max(MIN_STRING_KEEP, value.length - overshoot - markerChars);
+      uncuttable.add(largest.path);
+      if (value.length - keep <= markerChars) continue;
       const omittedChars = value.length - keep;
       (largest.parent as Record<string, unknown>)[largest.key as string] =
         value.slice(0, keep) + stringMarker(omittedChars, handle, largest.path);
@@ -412,13 +436,16 @@ function shrink(
     }
 
     const items = largest.value as unknown[];
+    const overshoot = measure() - budget
+      + entryChars({ path: largest.path, kind: 'array', keptItems: items.length, omittedItems: items.length });
     let keptItems = items.length;
     while (keptItems > MIN_ARRAY_KEEP) {
       const trial = items.slice(0, keptItems - 1);
       keptItems -= 1;
       if (safeStringify(trial).length <= Math.max(0, safeStringify(items).length - overshoot)) break;
     }
-    if (keptItems >= items.length) break;
+    uncuttable.add(largest.path);
+    if (keptItems >= items.length) continue;
     (largest.parent as Record<string, unknown>)[largest.key as string] = items.slice(0, keptItems);
     omitted.push({
       path: largest.path,
@@ -428,12 +455,10 @@ function shrink(
     });
   }
 
-  const allOmitted: OmittedEntry[] = textOmitted > 0
-    ? [...omitted, { path: '$text', kind: 'string', omittedChars: textOmitted }]
-    : omitted;
+  const allOmitted: OmittedEntry[] = [...omitted, ...textEntries];
   annotatePayload(handle, allOmitted);
 
-  const atFloor = measure() > target;
+  const atFloor = measure() > budget;
   const notice = allOmitted.length > 0
     ? `[Response truncated to the MCP response budget (${budget} chars) - it would otherwise cost `
       + `${originalChars} chars on EVERY later request in this session. Omitted content is not lost: `
@@ -442,19 +467,9 @@ function shrink(
     : `[Response is ${originalChars} chars, over the MCP response budget (${budget} chars), and nothing in it `
       + 'could be cut safely - it is protected or uncuttable content. NOTHING was omitted; there is no remainder to fetch.]';
 
-  if (structured !== undefined && structured !== null && typeof structured === 'object' && !Array.isArray(structured)) {
-    const block: TruncationBlock = {
-      handle,
-      budgetChars: budget,
-      originalChars,
-      omittedChars: 0, // filled in below, once the final size is known
-      omitted: allOmitted,
-      howToGetTheRest:
-        `Call orboto_response_expand { handle: "${handle}", path: "<one of omitted[].path>" } for the omitted `
-        + 'remainder. Omit `path` to list what is available. The handle lives in this MCP server process and '
-        + `expires 15 minutes after this call. ${uncutElsewhere(toolName)}`,
-      ...(atFloor ? { atFloor: true } : {}),
-    };
+  if (attachBlock) {
+    const block = blockFor(allOmitted, atFloor);
+    block.omittedChars = 0;
     (structured as Record<string, unknown>).__truncation = block;
     const finalChars = Math.max(
       safeStringify(structured).length,

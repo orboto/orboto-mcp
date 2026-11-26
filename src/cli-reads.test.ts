@@ -103,6 +103,18 @@ describe('CLI_READS against docs/cli-surface-inventory.json and cli/openapi.json
     expect(CLI_READS.orboto_list_projects.parts[0].usage).toBe('orboto project list --limit 200');
   });
 
+  it('closed milestones are named where the CLI lists them and the tool leaves them out', () => {
+    expect(CLI_READS.orboto_list_tickets.note).toContain('`--all` and `--status all` also list the tickets of completed or archived milestones');
+    expect(CLI_READS.orboto_list_tickets.note).toContain('which the tool leaves out unless `includeClosedMilestones` is set (`--include-closed-milestones` is that input)');
+    expect(CLI_READS.orboto_list_milestones.note).toBe('`--all` also lists completed and archived milestones, which the tool leaves out');
+  });
+
+  it('knowledge find names --budget as tokenBudget and strict false as the command without --strict', () => {
+    const note = CLI_READS.orboto_knowledge_find.note!;
+    expect(note).toContain('`--budget` is `tokenBudget` (100 to 4000 tokens, `--limit` is ignored then)');
+    expect(note).toContain('`--strict` is the tool\'s default, and `strict: false` is the same command without `--strict`');
+  });
+
   it('a knowledge or wiki answer is asked again, and the sentence says it is a new answer', () => {
     for (const tool of ['orboto_knowledge_ask', 'orboto_wiki_ask']) {
       const sentence = cliReadSentence(CLI_READS[tool]);

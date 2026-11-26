@@ -22,7 +22,7 @@ export interface CliRead {
 export const CLI_READS: Record<string, CliRead> = {
   orboto_list_tickets: {
     parts: [{ command: 'ticket list', usage: 'orboto ticket list <KEY> --json --all --status all', returns: 'tickets' }],
-    note: '`--all` lifts the 50-row cap; `--status all` matches the tool, which lists every status (the CLI lists open tickets without it, `--status <category>` is `statusCategory`); `--milestone`, `--unscheduled`, `--parent` and `--sort` take the tool\'s inputs; `specState` and `assigneeEmail` have no flag, filter the JSON',
+    note: '`--all` lifts the 50-row cap; `--status all` lists every status like the tool (without it the CLI lists open tickets, `--status <category>` is `statusCategory`); `--all` and `--status all` also list the tickets of completed or archived milestones, which the tool leaves out unless `includeClosedMilestones` is set (`--include-closed-milestones` is that input); `--milestone`, `--unscheduled`, `--parent` and `--sort` take the tool\'s inputs; `specState` and `assigneeEmail` have no flag, filter the JSON',
   },
   orboto_my_tickets: {
     parts: [{ command: 'ticket mine', usage: 'orboto ticket mine --json --all', returns: 'tickets' }],
@@ -56,6 +56,7 @@ export const CLI_READS: Record<string, CliRead> = {
   },
   orboto_list_milestones: {
     parts: [{ command: 'milestone list', usage: 'orboto milestone list <KEY> --all --json', returns: 'milestones' }],
+    note: '`--all` also lists completed and archived milestones, which the tool leaves out',
   },
   orboto_get_doc: {
     parts: [{ command: 'doc get', usage: 'orboto doc get <doc> --content', returns: 'doc' }],
@@ -70,7 +71,7 @@ export const CLI_READS: Record<string, CliRead> = {
   },
   orboto_knowledge_find: {
     parts: [{ command: 'knowledge find', usage: 'orboto knowledge find "<words>" --strict --json', returns: 'hits' }],
-    note: '`--limit` and `--project` take the tool\'s inputs',
+    note: '`--limit` and `--project` take the tool\'s inputs; `--budget` is `tokenBudget` (100 to 4000 tokens, `--limit` is ignored then); `--strict` is the tool\'s default, and `strict: false` is the same command without `--strict`',
   },
   orboto_wiki_ask: {
     parts: [{ command: 'wiki ask', usage: 'orboto wiki ask "<question>" --json', returns: 'answer' }],
