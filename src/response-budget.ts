@@ -434,7 +434,7 @@ function shrink(
   const nonTextChars = (result.content ?? [])
     .filter((part) => textOf(part) === null)
     .reduce((sum, part) => sum + safeStringify(part).length, 0);
-  const nonTextRoom = nonTextChars + noticeChars > budget ? 0 : nonTextChars;
+  const nonTextRoom = nonTextChars + noticeChars + MIN_STRING_KEEP > budget ? 0 : nonTextChars;
   const target = Math.max(MIN_STRING_KEEP, budget - noticeChars - nonTextRoom);
 
   let currentTextLength = fullText.length;

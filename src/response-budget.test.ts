@@ -293,6 +293,27 @@ describe('over budget', () => {
       }
     }
 
+    it('a part that leaves the text less than its floor beside the notice never makes a cut that stays over: the band 3452 characters sits in', () => {
+      const budget = budgetFor(TOOL);
+      const text = Array.from({ length: 20 }, (_, i) => `row ${i} ${'t'.repeat(28)}`).join('\n');
+      expect(text.length).toBeGreaterThan(560);
+      expect(text.length).toBeLessThan(800);
+      const image = (chars: number): CallToolResult['content'][number] => withJsonLength(chars, (pad) => ({ type: 'image', mimeType: 'image/png', data: pad })) as CallToolResult['content'][number];
+      const specific = applyResponseBudget(TOOL, { content: [{ type: 'text', text }, image(3452)] });
+      const shown = (specific.result.content[0] as { text: string }).text;
+      expect(shown).not.toContain('Response truncated');
+      expect(shown).toContain('nothing in it could be cut safely');
+      expect(shown.startsWith(`${text}\n\n[Response is `)).toBe(true);
+      for (let chars = 3000; chars <= 3700; chars += 1) {
+        const out = applyResponseBudget(TOOL, { content: [{ type: 'text', text }, image(chars)] });
+        const body = (out.result.content[0] as { text: string }).text;
+        const cut = body.includes('Response truncated');
+        const halves = measureHalves(out.result);
+        if (cut) expect(halves.textChars, `a ${chars}-character part: cut and still over`).toBeLessThanOrEqual(budget);
+        else expect(body.startsWith(text), `a ${chars}-character part: the text stays whole`).toBe(true);
+      }
+    });
+
     it('a non-text part that cannot fit the budget at all leaves the text whole: the sealed backup result says nothing could be cut', () => {
       const note = ' The archive is encrypted with the instance key - it only restores where that key exists.';
       const line = (runId: string): string => `Created full workspace backup (1.5 MB), run ${runId}.${note}`;
