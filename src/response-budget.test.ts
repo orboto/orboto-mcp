@@ -293,6 +293,27 @@ describe('over budget', () => {
       }
     }
 
+    it('a non-text part that cannot fit the budget at all leaves the text whole: the sealed backup result says nothing could be cut', () => {
+      const note = ' The archive is encrypted with the instance key - it only restores where that key exists.';
+      const line = (runId: string): string => `Created full workspace backup (1.5 MB), run ${runId}.${note}`;
+      const text = line('r'.repeat(171 - line('').length));
+      expect(text).toHaveLength(171);
+      const blob: CallToolResult['content'][number] = {
+        type: 'resource',
+        resource: { uri: 'orboto://backup/full.zip.orbenc', mimeType: 'application/octet-stream', blob: 'B'.repeat(200_000) },
+      };
+      const out = applyResponseBudget('orboto_create_full_backup', {
+        content: [blob, { type: 'text', text }],
+        structuredContent: { sizeBytes: 150_000, contentType: 'application/octet-stream', runId: 'r', sealed: true },
+      });
+      const shown = (out.result.content[0] as { text: string }).text;
+      expect(shown.trimStart().startsWith(`${text}\n\n[Response is `)).toBe(true);
+      expect(shown).toContain('nothing in it could be cut safely');
+      expect(shown).not.toContain('Response truncated');
+      expect(truncationOf(out.result)!.omitted).toEqual([]);
+      expect(out.result.content).toContainEqual(blob);
+    });
+
     it('a payload of many long strings is cut once per string, lists each path once and says it is at the floor', () => {
       const fields = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`field${i}`, 's'.repeat(2000)]));
       const out = applyResponseBudget(TOOL, result(fields));

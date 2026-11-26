@@ -427,10 +427,12 @@ function shrink(
     + `${uncutElsewhere(toolName)}]`;
   const uncuttableNotice = `[Response is ${originalChars} chars, over the MCP response budget (${budget} chars), and nothing in it `
     + 'could be cut safely - it is protected or uncuttable content. NOTHING was omitted; there is no remainder to fetch.]';
+  const noticeChars = Math.max(truncatedNotice.length, uncuttableNotice.length) + 2;
   const nonTextChars = (result.content ?? [])
     .filter((part) => textOf(part) === null)
     .reduce((sum, part) => sum + safeStringify(part).length, 0);
-  const target = Math.max(MIN_STRING_KEEP, budget - Math.max(truncatedNotice.length, uncuttableNotice.length) - 2 - nonTextChars);
+  const nonTextRoom = nonTextChars + noticeChars > budget ? 0 : nonTextChars;
+  const target = Math.max(MIN_STRING_KEEP, budget - noticeChars - nonTextRoom);
 
   let currentTextLength = fullText.length;
   let textOmitted = 0;
