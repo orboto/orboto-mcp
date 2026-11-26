@@ -4,6 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { cliReadFor } from './cli-reads.js';
 
 /** Default cap for a tool that does not declare its own. */
 export const DEFAULT_BUDGET_CHARS = 4000;
@@ -69,11 +70,21 @@ const MAX_CUT_PASSES = 64;
 export const HANDLE_TTL_MS = 15 * 60 * 1000;
 export const MAX_HANDLES = 16;
 
+const UNCUT_PREFIX = 'The cut is an MCP-server artefact: the REST API and both CLIs return the complete body ';
+
 /** ORB-2164 - the budget is an MCP-server artefact; the same data over REST or
- *  either CLI comes back whole, which is the way out that outlives a handle. */
+ *  either CLI comes back whole, which is the way out that outlives a handle.
+ *  A tool without a command in `CLI_READS` (ORB-3289) gets this generic form. */
 export const UNCUT_ELSEWHERE =
-  'The cut is an MCP-server artefact: the REST API and both CLIs return the complete body '
-  + '(`orboto get <path>`, `orboto_api_call`, or the named CLI command). There is no CLI expand.';
+  `${UNCUT_PREFIX}(\`orboto get <path>\`, \`orboto_api_call\`, or the CLI command of this tool, found with \`orboto help\`). There is no CLI expand.`;
+
+/** ORB-3289 - the notice of a cut names the exact shell command that returns the whole body of that tool, so it reads as an instruction and not as a remark. */
+export function uncutElsewhere(toolName: string): string {
+  const read = cliReadFor(toolName);
+  return read
+    ? `${UNCUT_PREFIX}in one shell call: \`${read.usage}\` (or \`orboto get <path>\`, \`orboto_api_call\`). There is no CLI expand.`
+    : UNCUT_ELSEWHERE;
+}
 
 /**
  * `ORBOTO_MCP_RESPONSE_BUDGET=off` disables the cap entirely (escape
@@ -430,7 +441,7 @@ function shrink(
     ? `[Response truncated to the MCP response budget (${budget} chars) - it would otherwise cost `
       + `${originalChars} chars on EVERY later request in this session. Omitted content is not lost: `
       + `call orboto_response_expand with handle "${handle}" and one of the paths in __truncation.omitted. `
-      + `${UNCUT_ELSEWHERE}]`
+      + `${uncutElsewhere(toolName)}]`
     : `[Response is ${originalChars} chars, over the MCP response budget (${budget} chars), and nothing in it `
       + 'could be cut safely - it is protected or uncuttable content. NOTHING was omitted; there is no remainder to fetch.]';
 
@@ -444,7 +455,7 @@ function shrink(
       howToGetTheRest:
         `Call orboto_response_expand { handle: "${handle}", path: "<one of omitted[].path>" } for the omitted `
         + 'remainder. Omit `path` to list what is available. The handle lives in this MCP server process and '
-        + `expires 15 minutes after this call. ${UNCUT_ELSEWHERE}`,
+        + `expires 15 minutes after this call. ${uncutElsewhere(toolName)}`,
       ...(atFloor ? { atFloor: true } : {}),
     };
     (structured as Record<string, unknown>).__truncation = block;

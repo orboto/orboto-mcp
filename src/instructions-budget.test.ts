@@ -12,6 +12,8 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { assembleInstructions, buildOrbotoMcpServer, CLIENT_INSTRUCTIONS_CAP, MANDATORY_FIRST_ACTION } from './server.js';
 import type { Toolset } from './toolset.js';
 import { CHANNEL_INSTRUCTIONS } from './inbox-channel.js';
+import { CLI_READS, CLI_READS_INSTRUCTION } from './cli-reads.js';
+import { CHANNEL_TOOLSET_INSTRUCTIONS } from './toolset.js';
 
 const HEADING = 'Working rules for this workspace:\n';
 
@@ -173,4 +175,40 @@ describe('ORB-3174 - the note tag costs no rule line', () => {
       });
     }
   }
+});
+
+describe('ORB-3289 - the tooled toolsets send lists, queries and bulk reads to the CLI', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  const SHORT_RULES = Array.from({ length: 60 }, (_, i) => `- Rule ${i + 1}: never do thing ${i} without a ticket and a review.`).join('\n');
+
+  for (const toolset of ['curated', 'full'] as const) {
+    for (const channel of [false, true]) {
+      it(`${toolset}${channel ? ' + wake channel' : ''}: one sentence names both commands, sits in the head and stays inside the client cap`, async () => {
+        const text = await deliveredInstructions(toolset, channel);
+        expect(clientCut(text)).toContain(CLI_READS_INSTRUCTION);
+        expect(CLI_READS_INSTRUCTION).toContain('`orboto ticket list <KEY> --json`');
+        expect(CLI_READS_INSTRUCTION).toContain('`orboto query "<oql>" --json`');
+        expect(CLI_READS_INSTRUCTION).toContain('Tools: session start, claims, writes.');
+        expect(CLI_READS_INSTRUCTION).toContain(CLI_READS.orboto_list_tickets.usage);
+        expect(CLI_READS_INSTRUCTION).toContain(CLI_READS.orboto_query.usage);
+        if (text.includes(HEADING)) expect(text.indexOf(CLI_READS_INSTRUCTION)).toBeLessThan(text.indexOf(HEADING));
+        expect(text.length).toBeLessThanOrEqual(CLIENT_INSTRUCTIONS_CAP);
+      });
+    }
+  }
+
+  it('the sentence costs a workspace of short rules at most two lines of them (curated 11 to 10, full 13 to 11 before ORB-3289)', async () => {
+    expect(ruleLinesShown(await deliveredInstructions('curated', false, SHORT_RULES))).toBeGreaterThanOrEqual(9);
+    expect(ruleLinesShown(await deliveredInstructions('full', false, SHORT_RULES))).toBeGreaterThanOrEqual(11);
+  });
+
+  it('the toolless text and the minimal manifest stay as they were', async () => {
+    for (const channel of [false, true]) {
+      const text = await deliveredInstructions('channel', channel);
+      expect(text).toContain(CHANNEL_TOOLSET_INSTRUCTIONS);
+      expect(text).not.toContain(CLI_READS_INSTRUCTION);
+    }
+    expect(await deliveredInstructions('minimal', false)).not.toContain(CLI_READS_INSTRUCTION);
+  });
 });

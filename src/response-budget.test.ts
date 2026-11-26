@@ -18,7 +18,9 @@ import {
   storePayload,
   PROTECT_TEXT_META,
   UNCUT_ELSEWHERE,
+  uncutElsewhere,
 } from './response-budget.js';
+import { CLI_READS } from './cli-reads.js';
 import { makeResponseExpandHandler } from './tools/response-expand.js';
 
 const TOOL = 'orboto_test_tool';
@@ -127,6 +129,30 @@ describe('over budget', () => {
     expect(text).toContain(UNCUT_ELSEWHERE);
     expect(UNCUT_ELSEWHERE).toContain('REST API and both CLIs');
     expect(UNCUT_ELSEWHERE).toContain('no CLI expand');
+  });
+
+  it('ORB-3289: the notice of a cut names the exact CLI command of the tool that was cut, in the text and in __truncation', () => {
+    for (const [tool, read] of Object.entries(CLI_READS)) {
+      resetPayloadStore();
+      const out = applyResponseBudget(tool, result({ description: 'd'.repeat(60_000) }));
+      const how = String(truncationOf(out.result)!.howToGetTheRest);
+      const text = (out.result.content[0] as { text: string }).text;
+      expect(how, tool).toContain(`\`${read.usage}\``);
+      expect(text, tool).toContain(`\`${read.usage}\``);
+      expect(how, tool).toContain(uncutElsewhere(tool));
+      expect(how, tool).not.toContain('the named CLI command');
+      expect(out.responseChars, tool).toBeLessThanOrEqual(budgetFor(tool));
+    }
+  });
+
+  it('ORB-3289: a tool without a mapped command gets the generic way out, and the other tools do not', () => {
+    expect(uncutElsewhere(TOOL)).toBe(UNCUT_ELSEWHERE);
+    expect(UNCUT_ELSEWHERE).not.toContain('the named CLI command');
+    expect(UNCUT_ELSEWHERE).toContain('orboto help');
+    expect(uncutElsewhere('orboto_list_tickets')).not.toBe(UNCUT_ELSEWHERE);
+    expect(uncutElsewhere('orboto_list_tickets')).toContain('orboto ticket list <KEY> --json');
+    expect(uncutElsewhere('orboto_list_tickets')).toContain('no CLI expand');
+    expect(uncutElsewhere('orboto_query')).toContain('orboto query "<oql>" --json');
   });
 
   it('marks the cut inside the value, so a reader cannot mistake it for the whole', () => {
