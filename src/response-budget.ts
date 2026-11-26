@@ -66,6 +66,8 @@ const MIN_ARRAY_KEEP = 1;
 const MIN_ARRAY_CUT = 3;
 /** Bound the cut loop; each pass removes the current largest offender. */
 const MAX_CUT_PASSES = 64;
+/** A cut string is cut again, from the original, while the first cut landed over the budget and still shrinks. */
+const MAX_STRING_CUT_ATTEMPTS = 3;
 
 export const HANDLE_TTL_MS = 15 * 60 * 1000;
 export const MAX_HANDLES = 16;
@@ -212,6 +214,49 @@ export function resolvePath(root: unknown, path: string): unknown {
     current = (current as Record<string, unknown>)[token];
   }
   return current;
+}
+
+/**
+ * How a prefix of a string serializes: the longest whole-character prefix of `value`, at least `minKeep` units long, that
+ * JSON.stringify writes in at most `limit` characters between the quotes. A quote, a backslash and the usual controls take two,
+ * the other controls and a lone surrogate six, a surrogate pair two; a pair is never split, so the cut never leaves a lone
+ * surrogate behind.
+ */
+function jsonPrefix(value: string, limit: number, minKeep: number): { keep: number; used: number } {
+  let keep = 0;
+  let used = 0;
+  while (keep < value.length) {
+    const code = value.charCodeAt(keep);
+    let units = 1;
+    let cost = 1;
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(keep + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        units = 2;
+        cost = 2;
+      } else {
+        cost = 6;
+      }
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      cost = 6;
+    } else if (code === 0x22 || code === 0x5c || code === 0x08 || code === 0x09 || code === 0x0a || code === 0x0c || code === 0x0d) {
+      cost = 2;
+    } else if (code < 0x20) {
+      cost = 6;
+    }
+    if (keep >= minKeep && used + cost > limit) break;
+    keep += units;
+    used += cost;
+  }
+  return { keep, used };
+}
+
+/** `index` moved back by one when it falls between the two halves of a surrogate pair. */
+function wholeCharEnd(value: string, index: number): number {
+  if (index <= 0 || index >= value.length) return index;
+  const before = value.charCodeAt(index - 1);
+  const after = value.charCodeAt(index);
+  return before >= 0xd800 && before <= 0xdbff && after >= 0xdc00 && after <= 0xdfff ? index - 1 : index;
 }
 
 type CutKind = 'string' | 'array';
@@ -378,14 +423,19 @@ function shrink(
     ? undefined
     : (JSON.parse(safeStringify(result.structuredContent)) as unknown);
 
-  const RESERVE = 700 + Math.max(0, uncutElsewhere(toolName).length - UNCUT_ELSEWHERE.length);
-  const target = Math.max(MIN_STRING_KEEP, budget - RESERVE);
+  const truncatedNotice = `[Response truncated to the MCP response budget (${budget} chars) - it would otherwise cost `
+    + `${originalChars} chars on EVERY later request in this session. Omitted content is not lost: `
+    + `call orboto_response_expand with handle "${handle}" and one of the paths in __truncation.omitted. `
+    + `${uncutElsewhere(toolName)}]`;
+  const uncuttableNotice = `[Response is ${originalChars} chars, over the MCP response budget (${budget} chars), and nothing in it `
+    + 'could be cut safely - it is protected or uncuttable content. NOTHING was omitted; there is no remainder to fetch.]';
+  const target = Math.max(MIN_STRING_KEEP, budget - Math.max(truncatedNotice.length, uncuttableNotice.length) - 2);
 
   let currentTextLength = fullText.length;
   let textOmitted = 0;
   if (!protectText && fullText.length > target) {
     const boundary = fullText.lastIndexOf('\n', target);
-    currentTextLength = boundary > MIN_STRING_KEEP ? boundary : target;
+    currentTextLength = wholeCharEnd(fullText, boundary > MIN_STRING_KEEP ? boundary : target);
     textOmitted = fullText.length - currentTextLength;
   }
   const textEntries: OmittedEntry[] = textOmitted > 0 ? [{ path: '$text', kind: 'string', omittedChars: textOmitted }] : [];
@@ -423,15 +473,26 @@ function shrink(
 
     if (largest.kind === 'string') {
       const value = largest.value as string;
-      const overshoot = measure() - budget + entryChars({ path: largest.path, kind: 'string', omittedChars: value.length });
-      const markerChars = safeStringify(stringMarker(value.length, handle, largest.path)).length - 2;
-      const keep = Math.max(MIN_STRING_KEEP, value.length - overshoot - markerChars);
       uncuttable.add(largest.path);
-      if (value.length - keep <= markerChars) continue;
-      const omittedChars = value.length - keep;
-      (largest.parent as Record<string, unknown>)[largest.key as string] =
-        value.slice(0, keep) + stringMarker(omittedChars, handle, largest.path);
-      omitted.push({ path: largest.path, kind: 'string', omittedChars });
+      const markerChars = safeStringify(stringMarker(value.length, handle, largest.path)).length - 2;
+      const valueChars = safeStringify(value).length - 2;
+      const entry: OmittedEntry = { path: largest.path, kind: 'string', omittedChars: value.length };
+      let limit = valueChars - (measure() - budget + entryChars(entry)) - markerChars;
+      let lastKeep = -1;
+      let cut = false;
+      for (let attempt = 0; attempt < MAX_STRING_CUT_ATTEMPTS; attempt += 1) {
+        const { keep, used } = jsonPrefix(value, limit, MIN_STRING_KEEP);
+        if (used + markerChars >= valueChars || (lastKeep >= 0 && keep >= lastKeep)) break;
+        entry.omittedChars = value.length - keep;
+        (largest.parent as Record<string, unknown>)[largest.key as string] =
+          value.slice(0, keep) + stringMarker(entry.omittedChars, handle, largest.path);
+        if (!cut) omitted.push(entry);
+        cut = true;
+        lastKeep = keep;
+        const excess = measure() - budget;
+        if (excess <= 0) break;
+        limit = used - excess;
+      }
       continue;
     }
 
@@ -459,13 +520,7 @@ function shrink(
   annotatePayload(handle, allOmitted);
 
   const atFloor = measure() > budget;
-  const notice = allOmitted.length > 0
-    ? `[Response truncated to the MCP response budget (${budget} chars) - it would otherwise cost `
-      + `${originalChars} chars on EVERY later request in this session. Omitted content is not lost: `
-      + `call orboto_response_expand with handle "${handle}" and one of the paths in __truncation.omitted. `
-      + `${uncutElsewhere(toolName)}]`
-    : `[Response is ${originalChars} chars, over the MCP response budget (${budget} chars), and nothing in it `
-      + 'could be cut safely - it is protected or uncuttable content. NOTHING was omitted; there is no remainder to fetch.]';
+  const notice = allOmitted.length > 0 ? truncatedNotice : uncuttableNotice;
 
   if (attachBlock) {
     const block = blockFor(allOmitted, atFloor);

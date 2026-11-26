@@ -32,6 +32,10 @@ function result(structured: Record<string, unknown> | undefined, text = 'text bl
   };
 }
 
+function safeJson(value: unknown): string {
+  return JSON.stringify(value) ?? '';
+}
+
 /** A truncation block, if the budget wrote one. */
 function truncationOf(r: CallToolResult): Record<string, unknown> | undefined {
   const sc = r.structuredContent as Record<string, unknown> | undefined;
@@ -204,6 +208,63 @@ describe('over budget', () => {
           expect(truncationOf(out.result)!.atFloor).toBeUndefined();
         });
       }
+    }
+
+    const hasLoneSurrogate = (value: string): boolean => {
+      for (let i = 0; i < value.length; i += 1) {
+        const code = value.charCodeAt(i);
+        if (code >= 0xd800 && code <= 0xdbff) {
+          const next = value.charCodeAt(i + 1);
+          if (!(next >= 0xdc00 && next <= 0xdfff)) return true;
+          i += 1;
+        } else if (code >= 0xdc00 && code <= 0xdfff) {
+          return true;
+        }
+      }
+      return false;
+    };
+    const headBeforeMarker = (value: string): string => value.slice(0, value.indexOf('... [truncated'));
+
+    const stringShapes: Record<string, string> = {
+      'emoji': '\u{1F600}'.repeat(5000),
+      'a, then emoji': 'a' + '\u{1F600}'.repeat(5000),
+      'quotes, backslashes and control characters': '"\\\n\u0001'.repeat(5000),
+      'CJK, an astral CJK character, emoji and escapes': '\u6F22\u5B57\u{20BB7}\u{1F600}e\u0007"'.repeat(4000),
+    };
+    for (const tool of [TOOL, 'orboto_get_ticket', 'orboto_list_tickets', 'orboto_query']) {
+      for (const [name, body] of Object.entries(stringShapes)) {
+        it(`${tool}, ${name}: the cut fits the budget by the JSON length of what it keeps, splits no surrogate pair and is not at the floor`, () => {
+          const out = applyResponseBudget(tool, result({ body }));
+          const halves = measureHalves(out.result);
+          const kept = (out.result.structuredContent as { body: string }).body;
+          expect(halves.structuredChars, 'structured half').toBeLessThanOrEqual(budgetFor(tool));
+          expect(halves.structuredChars, 'the budget is used, not undershot').toBeGreaterThanOrEqual(budgetFor(tool) - 50);
+          expect(truncationOf(out.result)!.atFloor).toBeUndefined();
+          expect(hasLoneSurrogate(headBeforeMarker(kept))).toBe(false);
+          expect(hasLoneSurrogate(kept)).toBe(false);
+          expect(safeJson(out.result.structuredContent)).not.toMatch(/\\ud[89a-f][0-9a-f]{2}/i);
+        });
+      }
+    }
+
+    for (const prefix of ['', 'a']) {
+      it(`a text of emoji${prefix ? ' behind one letter' : ''} is cut between whole characters`, () => {
+        const text = prefix + '\u{1F600}'.repeat(5000);
+        const out = applyResponseBudget(TOOL, { content: [{ type: 'text', text }] });
+        const cut = (out.result.content[0] as { text: string }).text;
+        expect(hasLoneSurrogate(cut.slice(0, cut.indexOf('\n\n[Response truncated')))).toBe(false);
+        expect(measureHalves(out.result).textChars).toBeLessThanOrEqual(budgetFor(TOOL));
+      });
+    }
+
+    for (const tool of [TOOL, 'orboto_list_tickets']) {
+      it(`${tool}: the text half keeps rows up to the exact length of its notice`, () => {
+        const text = Array.from({ length: 400 }, (_, i) => `ORB-${i} some title here ${'y'.repeat(40)}`).join('\n');
+        const out = applyResponseBudget(tool, { content: [{ type: 'text', text }], structuredContent: { nextCursor: 'c' } });
+        const halves = measureHalves(out.result);
+        expect(halves.textChars).toBeLessThanOrEqual(budgetFor(tool));
+        expect(halves.textChars, 'no more than one row of room is left unused').toBeGreaterThan(budgetFor(tool) - 70);
+      });
     }
 
     it('a payload of many long strings is cut once per string, lists each path once and says it is at the floor', () => {
