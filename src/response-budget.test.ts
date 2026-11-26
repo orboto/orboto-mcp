@@ -267,6 +267,32 @@ describe('over budget', () => {
       });
     }
 
+    const withJsonLength = (chars: number, make: (pad: string) => Record<string, unknown>): Record<string, unknown> => {
+      const empty = JSON.stringify(make('')).length;
+      return make('p'.repeat(chars - empty));
+    };
+    const nonTextParts: Record<string, Record<string, unknown>> = {
+      'a resource_link': withJsonLength(370, (pad) => ({ type: 'resource_link', uri: 'orboto://ticket/ORB-1', name: 'ORB-1', description: pad })),
+      'an image': withJsonLength(370, (pad) => ({ type: 'image', mimeType: 'image/png', data: pad })),
+      'an embedded resource': withJsonLength(370, (pad) => ({ type: 'resource', resource: { uri: 'orboto://doc/1', mimeType: 'text/plain', text: pad } })),
+    };
+    for (const tool of [TOOL, 'orboto_list_tickets']) {
+      for (const [name, part] of Object.entries(nonTextParts)) {
+        it(`${tool}: a cut text beside ${name} of 370 characters stays within the budget and the part is kept`, () => {
+          const text = Array.from({ length: 400 }, (_, i) => `ORB-${i} some title here ${'y'.repeat(40)}`).join('\n');
+          expect(JSON.stringify(part).length).toBe(370);
+          const out = applyResponseBudget(tool, {
+            content: [{ type: 'text', text }, part as CallToolResult['content'][number]],
+            structuredContent: { nextCursor: 'c' },
+          });
+          const halves = measureHalves(out.result);
+          expect(halves.textChars).toBeLessThanOrEqual(budgetFor(tool));
+          expect(halves.textChars, 'the rest of the budget is used by the text').toBeGreaterThan(budgetFor(tool) - 70);
+          expect(out.result.content).toContainEqual(part);
+        });
+      }
+    }
+
     it('a payload of many long strings is cut once per string, lists each path once and says it is at the floor', () => {
       const fields = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`field${i}`, 's'.repeat(2000)]));
       const out = applyResponseBudget(TOOL, result(fields));

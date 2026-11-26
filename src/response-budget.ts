@@ -66,8 +66,6 @@ const MIN_ARRAY_KEEP = 1;
 const MIN_ARRAY_CUT = 3;
 /** Bound the cut loop; each pass removes the current largest offender. */
 const MAX_CUT_PASSES = 64;
-/** A cut string is cut again, from the original, while the first cut landed over the budget and still shrinks. */
-const MAX_STRING_CUT_ATTEMPTS = 3;
 
 export const HANDLE_TTL_MS = 15 * 60 * 1000;
 export const MAX_HANDLES = 16;
@@ -429,7 +427,10 @@ function shrink(
     + `${uncutElsewhere(toolName)}]`;
   const uncuttableNotice = `[Response is ${originalChars} chars, over the MCP response budget (${budget} chars), and nothing in it `
     + 'could be cut safely - it is protected or uncuttable content. NOTHING was omitted; there is no remainder to fetch.]';
-  const target = Math.max(MIN_STRING_KEEP, budget - Math.max(truncatedNotice.length, uncuttableNotice.length) - 2);
+  const nonTextChars = (result.content ?? [])
+    .filter((part) => textOf(part) === null)
+    .reduce((sum, part) => sum + safeStringify(part).length, 0);
+  const target = Math.max(MIN_STRING_KEEP, budget - Math.max(truncatedNotice.length, uncuttableNotice.length) - 2 - nonTextChars);
 
   let currentTextLength = fullText.length;
   let textOmitted = 0;
@@ -476,23 +477,15 @@ function shrink(
       uncuttable.add(largest.path);
       const markerChars = safeStringify(stringMarker(value.length, handle, largest.path)).length - 2;
       const valueChars = safeStringify(value).length - 2;
-      const entry: OmittedEntry = { path: largest.path, kind: 'string', omittedChars: value.length };
-      let limit = valueChars - (measure() - budget + entryChars(entry)) - markerChars;
-      let lastKeep = -1;
-      let cut = false;
-      for (let attempt = 0; attempt < MAX_STRING_CUT_ATTEMPTS; attempt += 1) {
-        const { keep, used } = jsonPrefix(value, limit, MIN_STRING_KEEP);
-        if (used + markerChars >= valueChars || (lastKeep >= 0 && keep >= lastKeep)) break;
-        entry.omittedChars = value.length - keep;
-        (largest.parent as Record<string, unknown>)[largest.key as string] =
-          value.slice(0, keep) + stringMarker(entry.omittedChars, handle, largest.path);
-        if (!cut) omitted.push(entry);
-        cut = true;
-        lastKeep = keep;
-        const excess = measure() - budget;
-        if (excess <= 0) break;
-        limit = used - excess;
-      }
+      const limit = valueChars
+        - (measure() - budget + entryChars({ path: largest.path, kind: 'string', omittedChars: value.length }))
+        - markerChars;
+      const { keep, used } = jsonPrefix(value, limit, MIN_STRING_KEEP);
+      if (used + markerChars >= valueChars) continue;
+      const omittedChars = value.length - keep;
+      (largest.parent as Record<string, unknown>)[largest.key as string] =
+        value.slice(0, keep) + stringMarker(omittedChars, handle, largest.path);
+      omitted.push({ path: largest.path, kind: 'string', omittedChars });
       continue;
     }
 
