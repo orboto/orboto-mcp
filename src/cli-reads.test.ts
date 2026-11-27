@@ -5,6 +5,30 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { type CliPart, CLI_READS, CLI_READS_INSTRUCTION, CLI_READS_INSTRUCTION_COMMANDS, cliReadFor, cliReadSentence } from './cli-reads.js';
+import { listTicketsToolConfig } from './tools/list-tickets.js';
+import { searchToolConfig } from './tools/search.js';
+
+/** Each input of orboto_list_tickets and the query parameter of /projects/{projectId}/tickets it is, with where an id comes from; null when the call has no such filter. */
+const LIST_TICKETS_INPUTS: Record<string, { param: string; idFrom?: string } | null> = {
+  projectKey: null,
+  limit: null,
+  verbose: null,
+  specState: { param: 'specState' },
+  statusCategory: { param: 'statusCategory' },
+  open: { param: 'open' },
+  unscheduled: { param: 'unscheduled' },
+  includeClosedMilestones: { param: 'includeClosedMilestones' },
+  sort: { param: 'sort' },
+  milestone: { param: 'milestoneId', idFrom: '`orboto milestones <KEY> --all --json`' },
+  parentTicketKey: { param: 'parentTicketId', idFrom: '`orboto ticket <KEY> --json`' },
+  assigneeEmail: { param: 'assigneeId', idFrom: 'user in `orboto get /projects/<projectId>/members`' },
+};
+
+/** Each input of orboto_search and the query parameter of /search it is. */
+const SEARCH_INPUTS: Record<string, string> = { query: 'q', types: 'types', projectKey: 'projectId', limit: 'limit' };
+
+/** The longest cut notice each entry may carry; the default holds the rest. */
+const NOTICE_BUDGET: Record<string, number> = { orboto_list_tickets: 1000 };
 
 interface InventoryCommand {
   command: string;
@@ -246,16 +270,59 @@ describe('CLI_READS against docs/cli-surface-inventory.json and cli/openapi.json
     });
   }
 
-  it('orboto_list_tickets names every filter of the tool as a query parameter of its REST call, assigneeEmail as assigneeId', () => {
-    const route = routeOf('/projects/{projectId}/tickets', 'get');
-    const query = new Set((route?.parameters ?? []).filter((parameter) => parameter.in === 'query').map((parameter) => parameter.name));
-    for (const name of ['specState', 'statusCategory', 'milestoneId', 'unscheduled', 'parentTicketId', 'includeClosedMilestones', 'sort', 'assigneeId']) {
-      expect(query.has(name), `${name} is no query parameter of the ticket list`).toBe(true);
-      expect(CLI_READS.orboto_list_tickets.note).toContain(`\`${name}\``);
+  const queryOf = (path: string): Set<string> => new Set((routeOf(path, 'get')?.parameters ?? [])
+    .filter((parameter) => parameter.in === 'query').map((parameter) => parameter.name));
+
+  it('orboto_list_tickets names every input of the tool as a query parameter of its REST call, and where each id comes from', () => {
+    const query = queryOf('/projects/{projectId}/tickets');
+    const note = CLI_READS.orboto_list_tickets.note!;
+    const unmapped = Object.keys(listTicketsToolConfig.inputSchema).filter((input) => !Object.hasOwn(LIST_TICKETS_INPUTS, input));
+    expect(unmapped, 'an input of orboto_list_tickets has no row in LIST_TICKETS_INPUTS').toEqual([]);
+    for (const [input, mapping] of Object.entries(LIST_TICKETS_INPUTS)) {
+      expect(Object.keys(listTicketsToolConfig.inputSchema)).toContain(input);
+      if (mapping === null) continue;
+      expect(query.has(mapping.param), `${mapping.param} is no query parameter of the ticket list`).toBe(true);
+      if (mapping.param === input) continue;
+      expect(mapping.idFrom, `${input} is renamed to ${mapping.param}, so the note names where the id comes from`).toBeDefined();
+      expect(note).toContain(`\`${input}\``);
+      expect(note).toContain(`\`${mapping.param}\` (${mapping.idFrom})`);
     }
-    expect(CLI_READS.orboto_list_tickets.note).toContain('`assigneeId`, the user id of `assigneeEmail` from `orboto get /projects/<projectId>/members`');
+    expect(note).toContain('params: the tool\'s inputs by name (`open` too)');
+    expect(note).toContain('`<projectId>`: `orboto get /projects/by-key/<KEY>`');
+    expect(CLI_READS.orboto_list_milestones.parts[0].usage).toBe('orboto milestones <KEY> --all --json');
+    expect(CLI_READS.orboto_get_ticket.parts.map((part) => part.usage)).toContain('orboto ticket <KEY> --json');
     expect(routeOf('/projects/{id}/members', 'get')).toBeDefined();
     expect(routeOf('/projects/by-key/{key}', 'get')).toBeDefined();
+  });
+
+  it('orboto_search names every input of the tool as a query parameter of its REST call', () => {
+    const query = queryOf('/search');
+    const note = CLI_READS.orboto_search.note!;
+    const unmapped = Object.keys(searchToolConfig.inputSchema).filter((input) => !Object.hasOwn(SEARCH_INPUTS, input));
+    expect(unmapped, 'an input of orboto_search has no row in SEARCH_INPUTS').toEqual([]);
+    for (const [input, param] of Object.entries(SEARCH_INPUTS)) {
+      expect(Object.keys(searchToolConfig.inputSchema)).toContain(input);
+      expect(query.has(param), `${param} is no query parameter of /search`).toBe(true);
+      if (input !== 'query' && input !== 'limit') expect(note).toContain(`\`${param}\``);
+    }
+    expect(CLI_READS.orboto_search.body?.usage).toContain('q=<words>');
+    expect(note).toContain('`projectId` for `projectKey` (`id` in `orboto get /projects/by-key/<KEY>`)');
+  });
+
+  it('a REST call that carries words says they are URL-encoded, since the Go CLI sends the path as written', () => {
+    for (const tool of Object.keys(CLI_READS)) {
+      const read = CLI_READS[tool];
+      const words = /<words>/.test(read.body?.usage ?? '') || /`[a-zA-Z]+=<words>`/.test(read.note ?? '');
+      if (words) expect(read.note, tool).toMatch(/URL-encoded, `%20` for a space/);
+    }
+    expect(CLI_READS.orboto_search.note).toContain('in the REST call `<words>` is URL-encoded, `%20` for a space');
+    expect(CLI_READS.orboto_list_projects.note).toContain('`search=<words>` (URL-encoded, `%20` for a space)');
+  });
+
+  it('keeps every cut notice inside its length budget, since a cut result carries it twice', () => {
+    for (const [tool, read] of Object.entries(CLI_READS)) {
+      expect(cliReadSentence(read).length, tool).toBeLessThanOrEqual(NOTICE_BUDGET[tool] ?? 600);
+    }
   });
 
   it('orboto_get_ticket names every command for the parts the tool returns and does not claim a whole body', () => {
@@ -294,8 +361,8 @@ describe('CLI_READS against docs/cli-surface-inventory.json and cli/openapi.json
   });
 
   it('closed milestones are named where the CLI lists them and the tool leaves them out', () => {
-    expect(CLI_READS.orboto_list_tickets.note).toContain('`--all` and `--status all` also list the tickets of completed or archived milestones');
-    expect(CLI_READS.orboto_list_tickets.note).toContain('which the tool leaves out unless `includeClosedMilestones` is set (`--include-closed-milestones` (CLI 0.233.1 and later) is that input)');
+    expect(CLI_READS.orboto_list_tickets.note).toContain('`--include-closed-milestones` (CLI 0.233.1 and later), there also `--all` and `--status all`, add closed-milestone tickets the tool omits, older CLIs need `includeClosedMilestones=true`');
+    expect(CLI_READS.orboto_list_tickets.note).toContain('without `--status all` only open tickets');
     expect(CLI_READS.orboto_list_milestones.note).toBe('`--all` also lists completed and archived milestones, which the tool leaves out');
   });
 
