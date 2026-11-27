@@ -155,7 +155,7 @@ describe('over budget', () => {
   });
 
   it('ORB-3289: the query notice says how to page, the list notices lift the cap, get_ticket claims no whole body, ask tools say they ask again', () => {
-    expect(uncutElsewhere('orboto_query')).toContain('orboto query "<oql>" --json --limit 200');
+    expect(uncutElsewhere('orboto_query')).toContain('orboto query "<oql>" --limit 200');
     expect(uncutElsewhere('orboto_query')).toContain('page on with `--cursor <nextCursor>`');
     expect(uncutElsewhere('orboto_list_tickets')).toContain('orboto list-tickets <KEY> --json --all --status all');
     expect(uncutElsewhere('orboto_list_tickets')).toContain('`--all` lifts the 50-row cap');

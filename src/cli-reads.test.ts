@@ -4,17 +4,19 @@
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CLI_READS, CLI_READS_INSTRUCTION, CLI_READS_INSTRUCTION_COMMANDS, cliReadFor, cliReadSentence } from './cli-reads.js';
+import { type CliPart, CLI_READS, CLI_READS_INSTRUCTION, CLI_READS_INSTRUCTION_COMMANDS, cliReadFor, cliReadSentence } from './cli-reads.js';
 
 interface InventoryCommand {
   command: string;
   native: { flags: Array<{ name: string }> } | null;
+  wrapper: { flags: string[] } | null;
   mcpTools: string[];
 }
 
 const inventory = JSON.parse(readFileSync(new URL('../../../docs/cli-surface-inventory.json', import.meta.url), 'utf8')) as {
   commands: InventoryCommand[];
   mcpTools: string[];
+  wrapperGlobalFlags: string[];
 };
 const openapi = JSON.parse(readFileSync(new URL('../../../cli/openapi.json', import.meta.url), 'utf8')) as {
   paths: Record<string, Record<string, unknown>>;
@@ -26,6 +28,36 @@ const goAliases = new Map([...goAliasSource.matchAll(/"([a-z-]+)":\s*\{"([a-z-]+
 const wrapperAliasBlock = /const COMMAND_ALIASES = \{([\s\S]*?)\};/.exec(wrapperSource)?.[1] ?? '';
 const wrapperAliases = new Map([...wrapperAliasBlock.matchAll(/'?([a-z-]+)'?: '([a-z-]+ [a-z-]+)'/g)].map((match) => [match[1], match[2]]));
 const NOUN_FIRST = /^orboto (?:ticket|project|milestone|timer) (?:get|list|mine|comments|create|close|start|stop|log)\b/;
+
+/** The flags of each named command in the Go CLI at 3c2a73e2e, just before the noun-first scheme shipped in v0.228.0; every CLI since accepts them. */
+const PRE_SCHEME_FLAGS: Record<string, string[]> = {
+  'list-tickets': ['status', 'limit', 'all', 'json', 'sort', 'parent', 'milestone', 'unscheduled'],
+  'my-tickets': ['project', 'status', 'limit', 'all', 'json'],
+  ticket: ['full', 'json'],
+  comments: ['limit', 'all', 'id', 'since', 'json'],
+  'list-projects': ['search', 'query', 'limit'],
+  milestones: ['all', 'json'],
+  query: ['syntax', 'limit', 'cursor', 'explain'],
+  search: ['types', 'project', 'limit', 'json'],
+  primer: [],
+  'doc get': ['content'],
+  'doc list': ['json'],
+  'knowledge ask': ['project', 'limit', 'json'],
+  'knowledge find': ['project', 'limit', 'json'],
+  'wiki ask': ['space', 'limit', 'json'],
+};
+
+/** A newer flag a note names, with the first CLI release that has it (git tag --contains of the commit that added it). */
+const NEWER_FLAGS: Record<string, string> = {
+  'list-tickets --include-closed-milestones': '0.233.1 and later',
+  'query --json': 'after 0.240.6',
+  'doc get --section': '0.236.0 and later',
+  'knowledge find --strict': '0.236.0 and later',
+  'knowledge find --budget': '0.238.0 and later',
+};
+
+const typedName = (part: CliPart): string => part.flat ?? part.command;
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const flagsIn = (text: string): string[] => [...text.matchAll(/--([a-z][a-z-]*)/g)].map((match) => match[1]);
 const shape = (path: string): string => path.replace(/[<{][^>}]*[>}]/g, '{}');
@@ -71,6 +103,24 @@ describe('CLI_READS against docs/cli-surface-inventory.json and cli/openapi.json
           });
         }
 
+        if (part.command !== 'get') {
+          it(`${part.returns}: \`${typedName(part)}\` passes only flags the CLI had before the noun-first scheme`, () => {
+            const known = PRE_SCHEME_FLAGS[typedName(part)];
+            expect(known, `${typedName(part)} has no row in PRE_SCHEME_FLAGS`).toBeDefined();
+            for (const flag of flagsIn(part.usage)) {
+              expect(known, `${part.usage}: --${flag} is newer than the pre-scheme CLI, name it in the note with its version`).toContain(flag);
+            }
+          });
+        }
+
+        it(`${part.returns}: the texts name the wrapper exactly when the inventory has \`${part.command}\` in it`, () => {
+          expect(part.goOnly === true, `${part.command}: goOnly must match wrapper ${row?.wrapper === null ? 'null' : 'present'}`).toBe(row?.wrapper === null);
+          if (row?.wrapper) {
+            const wrapperFlags = new Set([...row.wrapper.flags, ...inventory.wrapperGlobalFlags]);
+            for (const flag of flagsIn(part.usage)) expect(wrapperFlags.has(flag), `${part.usage}: --${flag} is not a wrapper flag`).toBe(true);
+          }
+        });
+
         if (part.command === 'get') {
           it(`${part.returns}: the API path is a GET route of cli/openapi.json`, () => {
             const path = /^orboto get (\S+)$/.exec(part.usage)?.[1];
@@ -95,6 +145,24 @@ describe('CLI_READS against docs/cli-surface-inventory.json and cli/openapi.json
           expect(declared.has(flag), `${tool}: the note names --${flag}, which none of its commands declares`).toBe(true);
         }
       });
+
+      it('marks every note flag the pre-scheme CLI lacks with the first version that has it', () => {
+        const names = read.parts.filter((part) => part.command !== 'get').map(typedName);
+        for (const flag of flagsIn(read.note ?? '')) {
+          if (names.some((name) => PRE_SCHEME_FLAGS[name]?.includes(flag))) continue;
+          const mark = names.map((name) => NEWER_FLAGS[`${name} --${flag}`]).find((value) => value !== undefined);
+          expect(mark, `${tool}: --${flag} is newer than the pre-scheme CLI and has no row in NEWER_FLAGS`).toBeDefined();
+          expect(read.note).toMatch(new RegExp(`\`--${escapeRegExp(flag)}[^\`]*\` \\(CLI ${escapeRegExp(mark!)}\\)`));
+        }
+      });
+
+      it('names the Go CLI alone where the wrapper has no such command', () => {
+        const sentence = cliReadSentence(read);
+        if (read.parts[0].goOnly) {
+          expect(sentence).toContain('the Go CLI');
+          expect(sentence).not.toContain('both CLIs');
+        }
+      });
     });
   }
 
@@ -116,7 +184,8 @@ describe('CLI_READS against docs/cli-surface-inventory.json and cli/openapi.json
   });
 
   it('a list or a query pages: the cap is lifted or the cursor is named', () => {
-    expect(CLI_READS.orboto_query.parts[0].usage).toBe('orboto query "<oql>" --json --limit 200');
+    expect(CLI_READS.orboto_query.parts[0].usage).toBe('orboto query "<oql>" --limit 200');
+    expect(CLI_READS.orboto_query.note).toContain('`--json` (CLI after 0.240.6) prints the page as one document, `{ items, nextCursor }`');
     expect(CLI_READS.orboto_query.note).toContain('page on with `--cursor <nextCursor>`');
     expect(CLI_READS.orboto_list_tickets.parts[0].usage).toBe('orboto list-tickets <KEY> --json --all --status all');
     expect(CLI_READS.orboto_list_tickets.note).toContain('`--all` lifts the 50-row cap');
@@ -127,14 +196,15 @@ describe('CLI_READS against docs/cli-surface-inventory.json and cli/openapi.json
 
   it('closed milestones are named where the CLI lists them and the tool leaves them out', () => {
     expect(CLI_READS.orboto_list_tickets.note).toContain('`--all` and `--status all` also list the tickets of completed or archived milestones');
-    expect(CLI_READS.orboto_list_tickets.note).toContain('which the tool leaves out unless `includeClosedMilestones` is set (`--include-closed-milestones` is that input)');
+    expect(CLI_READS.orboto_list_tickets.note).toContain('which the tool leaves out unless `includeClosedMilestones` is set (`--include-closed-milestones` (CLI 0.233.1 and later) is that input)');
     expect(CLI_READS.orboto_list_milestones.note).toBe('`--all` also lists completed and archived milestones, which the tool leaves out');
   });
 
   it('knowledge find names --budget as tokenBudget and strict false as the command without --strict', () => {
     const note = CLI_READS.orboto_knowledge_find.note!;
-    expect(note).toContain('`--budget` is `tokenBudget` (100 to 4000 tokens, `--limit` is ignored then)');
-    expect(note).toContain('`--strict` is the tool\'s default, and `strict: false` is the same command without `--strict`');
+    expect(CLI_READS.orboto_knowledge_find.parts[0].usage).toBe('orboto knowledge find "<words>" --json');
+    expect(note).toContain('`--budget` (CLI 0.238.0 and later) is `tokenBudget` (100 to 4000 tokens, `--limit` is ignored then)');
+    expect(note).toContain('the tool\'s default is `strict: true`, which is `--strict` (CLI 0.236.0 and later), and the command without it is `strict: false`');
   });
 
   it('a knowledge or wiki answer is asked again, and the sentence says it is a new answer', () => {
