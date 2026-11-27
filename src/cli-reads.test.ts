@@ -19,11 +19,19 @@ const inventory = JSON.parse(readFileSync(new URL('../../../docs/cli-surface-inv
   wrapperGlobalFlags: string[];
 };
 const openapi = JSON.parse(readFileSync(new URL('../../../cli/openapi.json', import.meta.url), 'utf8')) as {
-  paths: Record<string, Record<string, { requestBody?: { content?: Record<string, { schema?: JsonSchema }> } }>>;
+  paths: Record<string, Record<string, {
+    requestBody?: { content?: Record<string, { schema?: JsonSchema }> };
+    parameters?: Array<{ name: string; in: string; schema?: ParameterSchema }>;
+  }>>;
 };
 
+interface ParameterSchema {
+  maximum?: number;
+  enum?: string[];
+}
+
 interface JsonSchema {
-  properties?: Record<string, { maximum?: number }>;
+  properties?: Record<string, ParameterSchema>;
   required?: string[];
 }
 const goAliasSource = readFileSync(new URL('../../../cli/internal/cmd/command_aliases.go', import.meta.url), 'utf8');
@@ -34,7 +42,7 @@ const wrapperAliasBlock = /const COMMAND_ALIASES = \{([\s\S]*?)\};/.exec(wrapper
 const wrapperAliases = new Map([...wrapperAliasBlock.matchAll(/'?([a-z-]+)'?: '([a-z-]+ [a-z-]+)'/g)].map((match) => [match[1], match[2]]));
 const NOUN_FIRST = /^orboto (?:ticket|project|milestone|timer) (?:get|list|mine|comments|create|close|start|stop|log)\b/;
 
-/** The flags of each named command in the Go CLI at 3c2a73e2e, just before the noun-first scheme shipped in v0.228.0; every CLI since accepts them. */
+/** The flags of each named command in the Go CLI at 3c2a73e2e, just before the noun-first scheme shipped in v0.228.0, the same as in v0.227.0; every CLI since accepts them. */
 const PRE_SCHEME_FLAGS: Record<string, string[]> = {
   'list-tickets': ['status', 'limit', 'all', 'json', 'sort', 'parent', 'milestone', 'unscheduled'],
   'my-tickets': ['project', 'status', 'limit', 'all', 'json'],
@@ -55,21 +63,28 @@ const PRE_SCHEME_FLAGS: Record<string, string[]> = {
 /** A newer flag a note names, with the first CLI release that has it (git tag --contains of the commit that added it). */
 const NEWER_FLAGS: Record<string, string> = {
   'list-tickets --include-closed-milestones': '0.233.1 and later',
-  'query --json': 'after 0.240.6',
+  'query --json': '0.241.0 and later',
   'doc get --section': '0.236.0 and later',
   'knowledge find --strict': '0.236.0 and later',
   'knowledge find --budget': '0.238.0 and later',
 };
 
-/** The commands that print their JSON answer without a flag in the Go CLI at 3c2a73e2e (doc get only without --content). */
-const PRINTS_JSON_BY_DEFAULT = new Set(['list-projects', 'primer', 'doc get', 'milestones']);
+/**
+ * The usages that print the server answer unchanged in the Go CLI and the wrapper at 3c2a73e2e and HEAD: doc get without --content
+ * and doc list --json the rows, milestones the rows as {items}, knowledge find --json the hits (Go only), and primer the Markdown
+ * of the primer, which is the text the tool returns. Every other single-command read names a REST call for the complete body.
+ */
+const PRINTS_SERVER_ANSWER = new Set([
+  'orboto doc get <doc>',
+  'orboto doc list <space> --json',
+  'orboto milestones <KEY> --all --json',
+  'orboto knowledge find "<words>" --json',
+  'orboto primer <KEY>',
+]);
 
 const typedName = (part: CliPart): string => part.flat ?? part.command;
-const printsJsonOnEveryVersion = (part: CliPart): boolean => {
-  const flags = flagsIn(part.usage);
-  if (flags.includes('json')) return PRE_SCHEME_FLAGS[typedName(part)]?.includes('json') === true;
-  return PRINTS_JSON_BY_DEFAULT.has(typedName(part)) && !flags.includes('content');
-};
+const routeOf = (path: string, method: 'get' | 'post') => Object.entries(openapi.paths)
+  .find(([route, methods]) => shape(route).replace(/\/$/, '') === shape(path).replace(/\/$/, '') && method in methods)?.[1][method];
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const flagsIn = (text: string): string[] => [...text.matchAll(/--([a-z][a-z-]*)/g)].map((match) => match[1]);
@@ -170,37 +185,53 @@ describe('CLI_READS against docs/cli-surface-inventory.json and cli/openapi.json
       });
 
       if (!read.again && read.parts.length === 1) {
-        it('claims the complete body for a command only where it prints the JSON answer on every CLI version, else names the REST call', () => {
+        it('claims the complete body for a command only where it prints the server answer unchanged, else names the REST call and what the command prints', () => {
           const sentence = cliReadSentence(read);
-          if (printsJsonOnEveryVersion(read.parts[0])) {
+          if (PRINTS_SERVER_ANSWER.has(read.parts[0].usage)) {
             expect(read.body).toBeUndefined();
+            expect(read.prints).toBeUndefined();
             expect(sentence).toMatch(/the REST API and (?:both CLIs|the Go CLI) return the complete body/);
           } else {
-            expect(read.body, `${read.parts[0].usage} prints lines on some CLI version, so the read names the REST call`).toBeDefined();
+            expect(read.body, `${read.parts[0].usage} prints less than the server answer, so the read names the REST call`).toBeDefined();
+            expect(read.prints, `${read.parts[0].usage}: say what the command prints`).toBeDefined();
             expect(sentence).toContain('the REST API returns the complete body');
             expect(sentence).not.toMatch(/CLIs? returns? the complete body/);
             expect(sentence).toContain(`\`${read.body!.usage}\``);
+            expect(sentence).toContain(`\`${read.parts[0].usage}\` prints ${read.prints}`);
           }
         });
       }
 
       const body = read.body;
       if (body !== undefined) {
-        it(`the REST call \`${body.usage}\` is a POST route of cli/openapi.json, its body fits the schema, and both CLIs have \`${body.command}\``, () => {
+        it(`the REST call \`${body.usage}\` is a route of cli/openapi.json with the parameters it passes, and both CLIs have \`${body.command}\``, () => {
           const row = inventory.commands.find((candidate) => candidate.command === body.command);
           expect(row?.native, `${body.command} has no native command`).toBeTruthy();
           expect(row?.wrapper, `${body.command} has no wrapper command`).toBeTruthy();
           expect(row!.mcpTools).toContain('orboto_api_call');
-          const match = /^orboto post (\/\S+) '(.+)'$/.exec(body.usage);
-          expect(match, body.usage).not.toBeNull();
-          const schema = openapi.paths[match![1]]?.post?.requestBody?.content?.['application/json']?.schema;
-          expect(schema, `${match![1]} is no POST route with a JSON body`).toBeDefined();
-          const payload = JSON.parse(match![2]) as Record<string, unknown>;
-          for (const key of Object.keys(payload)) expect(Object.keys(schema!.properties ?? {})).toContain(key);
-          for (const key of schema!.required ?? []) expect(Object.keys(payload)).toContain(key);
-          for (const [key, value] of Object.entries(payload)) {
-            const maximum = schema!.properties?.[key]?.maximum;
-            if (typeof value === 'number' && maximum !== undefined) expect(value).toBeLessThanOrEqual(maximum);
+          const fits = (value: unknown, schema: ParameterSchema | undefined, name: string) => {
+            expect(schema, `${body.usage}: ${name} is not a parameter of the route`).toBeDefined();
+            if (typeof value === 'string' && /^<[^>]+>$/.test(value)) return;
+            if (schema!.maximum !== undefined) expect(Number(value)).toBeLessThanOrEqual(schema!.maximum);
+            if (schema!.enum) for (const item of String(value).split(',')) expect(schema!.enum).toContain(item);
+          };
+          const post = /^orboto post (\/\S+) '(.+)'$/.exec(body.usage);
+          const get = /^orboto get (?:"([^"?]+)(?:\?([^"]*))?"|(\/\S+))$/.exec(body.usage);
+          expect(post ?? get, `${body.usage} is neither orboto post <path> '<json>' nor orboto get <path>`).not.toBeNull();
+          if (post) {
+            expect(body.command).toBe('post');
+            const schema = routeOf(post[1], 'post')?.requestBody?.content?.['application/json']?.schema;
+            expect(schema, `${post[1]} is no POST route with a JSON body`).toBeDefined();
+            const payload = JSON.parse(post[2]) as Record<string, unknown>;
+            for (const [key, value] of Object.entries(payload)) fits(value, schema!.properties?.[key], key);
+            for (const key of schema!.required ?? []) expect(Object.keys(payload)).toContain(key);
+          } else {
+            expect(body.command).toBe('get');
+            const route = routeOf(get![1] ?? get![3], 'get');
+            expect(route, `${get![1] ?? get![3]} is no GET route`).toBeDefined();
+            const query = new Map((route!.parameters ?? []).filter((parameter) => parameter.in === 'query').map((parameter) => [parameter.name, parameter.schema ?? {}]));
+            for (const [key, value] of new URLSearchParams(get![2] ?? '')) fits(value, query.get(key), key);
+            for (const match of (read.note ?? '').matchAll(/`([a-zA-Z]+)=[^`]*`/g)) fits(`<${match[1]}>`, query.get(match[1]), match[1]);
           }
         });
       }
@@ -214,6 +245,18 @@ describe('CLI_READS against docs/cli-surface-inventory.json and cli/openapi.json
       });
     });
   }
+
+  it('orboto_list_tickets names every filter of the tool as a query parameter of its REST call, assigneeEmail as assigneeId', () => {
+    const route = routeOf('/projects/{projectId}/tickets', 'get');
+    const query = new Set((route?.parameters ?? []).filter((parameter) => parameter.in === 'query').map((parameter) => parameter.name));
+    for (const name of ['specState', 'statusCategory', 'milestoneId', 'unscheduled', 'parentTicketId', 'includeClosedMilestones', 'sort', 'assigneeId']) {
+      expect(query.has(name), `${name} is no query parameter of the ticket list`).toBe(true);
+      expect(CLI_READS.orboto_list_tickets.note).toContain(`\`${name}\``);
+    }
+    expect(CLI_READS.orboto_list_tickets.note).toContain('`assigneeId`, the user id of `assigneeEmail` from `orboto get /projects/<projectId>/members`');
+    expect(routeOf('/projects/{id}/members', 'get')).toBeDefined();
+    expect(routeOf('/projects/by-key/{key}', 'get')).toBeDefined();
+  });
 
   it('orboto_get_ticket names every command for the parts the tool returns and does not claim a whole body', () => {
     const read = CLI_READS.orboto_get_ticket;
@@ -234,13 +277,18 @@ describe('CLI_READS against docs/cli-surface-inventory.json and cli/openapi.json
 
   it('a list or a query pages: the cap is lifted or the cursor is named', () => {
     expect(CLI_READS.orboto_query.parts[0].usage).toBe('orboto query "<oql>" --limit 200');
-    expect(CLI_READS.orboto_query.note).toContain('one line per ticket on every CLI version, the next with `--cursor <nextCursor>`');
-    expect(CLI_READS.orboto_query.note).toContain('`--json` (CLI after 0.240.6) and the global `--json` of the skill wrapper print the complete page, `{ items, nextCursor }`');
+    expect(CLI_READS.orboto_query.prints).toBe('one line per ticket');
+    expect(CLI_READS.orboto_query.note).toContain('the next with `--cursor <nextCursor>` from its last line in every CLI since v0.227.0');
+    expect(CLI_READS.orboto_query.note).toContain('`--json` (CLI 0.241.0 and later) and the global `--json` of the skill wrapper print the complete page, `{ items, nextCursor }`');
     expect(CLI_READS.orboto_query.body?.usage).toBe('orboto post /query \'{"oql":"<oql>","limit":200}\'');
     expect(CLI_READS.orboto_get_doc.parts[0].usage).toBe('orboto doc get <doc>');
     expect(CLI_READS.orboto_list_tickets.parts[0].usage).toBe('orboto list-tickets <KEY> --json --all --status all');
     expect(CLI_READS.orboto_list_tickets.note).toContain('`--all` lifts the 50-row cap');
-    expect(CLI_READS.orboto_list_tickets.note).toContain('`specState` and `assigneeEmail` have no flag');
+    expect(CLI_READS.orboto_list_tickets.note).not.toContain('filter the JSON');
+    expect(CLI_READS.orboto_list_tickets.body?.usage).toBe('orboto get "/projects/<projectId>/tickets?limit=500"');
+    expect(CLI_READS.orboto_my_tickets.body?.usage).toBe('orboto get "/users/me/assigned-tickets?statuses=TODO,IN_PROGRESS,IN_REVIEW&limit=50"');
+    expect(CLI_READS.orboto_list_projects.body?.usage).toBe('orboto get /projects');
+    expect(CLI_READS.orboto_search.body?.usage).toBe('orboto get "/search?q=<words>&limit=100"');
     expect(CLI_READS.orboto_my_tickets.parts[0].usage).toBe('orboto my-tickets --json --all');
     expect(CLI_READS.orboto_list_projects.parts[0].usage).toBe('orboto list-projects --limit 200');
   });

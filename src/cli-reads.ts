@@ -1,8 +1,8 @@
 /**
  * ORB-3289 - the CLI commands that return what a read tool returns, named in the cut notice of the response budget and in the
  * instructions of the tooled toolsets. `command` is the key in docs/cli-surface-inventory.json (cli-reads.test.ts holds every entry to it).
- * A usage names the flat command name and only the flags every installed CLI version knows (ORB-2570), never the noun-first form;
- * a newer flag stays in the note, marked with the first CLI version that has it.
+ * A usage names the flat command name (ORB-2570), never the noun-first form, and only flags every CLI since v0.227.0 knows, the last
+ * release before the noun-first scheme; a newer flag stays in the note, marked with the first CLI version that has it.
  */
 export interface CliPart {
   command: string;
@@ -21,8 +21,10 @@ export interface CliRead {
   parts: CliPart[];
   /** What the command does not carry over from the tool: paging, filters, flags the CLI lacks. */
   note?: string;
-  /** The REST call that prints the complete body in both CLIs of every version, when the command prints lines there. */
+  /** The REST call that prints the complete body in both CLIs since v0.227.0, when the command prints less than the server answer. */
   body?: CliPart;
+  /** What the command prints when `body` carries the complete answer. */
+  prints?: string;
   /** The CLI cannot return the cut answer, it asks again. */
   again?: true;
 }
@@ -30,11 +32,15 @@ export interface CliRead {
 export const CLI_READS: Record<string, CliRead> = {
   orboto_list_tickets: {
     parts: [{ command: 'ticket list', flat: 'list-tickets', usage: 'orboto list-tickets <KEY> --json --all --status all', returns: 'tickets' }],
-    note: '`--all` lifts the 50-row cap; `--status all` lists every status like the tool (without it the CLI lists open tickets, `--status <category>` is `statusCategory`); `--all` and `--status all` also list the tickets of completed or archived milestones, which the tool leaves out unless `includeClosedMilestones` is set (`--include-closed-milestones` (CLI 0.233.1 and later) is that input); `--milestone`, `--unscheduled`, `--parent` and `--sort` take the tool\'s inputs; `specState` and `assigneeEmail` have no flag, filter the JSON',
+    body: { command: 'get', usage: 'orboto get "/projects/<projectId>/tickets?limit=500"', returns: 'page' },
+    prints: 'one row per ticket with key, title, status, priority, assignee names and times',
+    note: '`<projectId>` is the `id` of `orboto get /projects/by-key/<KEY>`; the REST call pages with `cursor=<nextCursor>` and takes the tool\'s filters as query parameters `specState`, `statusCategory`, `milestoneId`, `unscheduled`, `parentTicketId`, `includeClosedMilestones`, `sort` and `assigneeId`, the user id of `assigneeEmail` from `orboto get /projects/<projectId>/members`; in the command `--all` lifts the 50-row cap, `--status all` lists every status like the tool (without it the CLI lists open tickets, `--status <category>` is `statusCategory`), `--all` and `--status all` also list the tickets of completed or archived milestones, which the tool leaves out unless `includeClosedMilestones` is set (`--include-closed-milestones` (CLI 0.233.1 and later) is that input), and `--milestone`, `--unscheduled`, `--parent` and `--sort` take the tool\'s inputs',
   },
   orboto_my_tickets: {
     parts: [{ command: 'ticket mine', flat: 'my-tickets', usage: 'orboto my-tickets --json --all', returns: 'tickets' }],
-    note: '`--all` lifts the 50-row cap; without `--status` it lists the tool\'s open set, `--status <category>` is `statusCategory`',
+    body: { command: 'get', usage: 'orboto get "/users/me/assigned-tickets?statuses=TODO,IN_PROGRESS,IN_REVIEW&limit=50"', returns: 'page' },
+    prints: 'one row per ticket with key, title, status, priority, assignee names and times',
+    note: 'the REST call pages with `cursor=<nextCursor>`, and `statuses=<STATUS>` is `statusCategory` (TODO, IN_PROGRESS, IN_REVIEW, DONE or WONT_FIX); in the command `--all` lifts the 50-row cap, without `--status` it lists the tool\'s open set, `--status <category>` is `statusCategory`',
   },
   orboto_get_ticket: {
     parts: [
@@ -50,15 +56,20 @@ export const CLI_READS: Record<string, CliRead> = {
   orboto_query: {
     parts: [{ command: 'query', usage: 'orboto query "<oql>" --limit 200', returns: 'tickets' }],
     body: { command: 'post', usage: 'orboto post /query \'{"oql":"<oql>","limit":200}\'', returns: 'page' },
-    note: 'one page, one line per ticket on every CLI version, the next with `--cursor <nextCursor>` from its last line; `--json` (CLI after 0.240.6) and the global `--json` of the skill wrapper print the complete page, `{ items, nextCursor }`; `--syntax jql` for JQL',
+    prints: 'one line per ticket',
+    note: 'one page, the next with `--cursor <nextCursor>` from its last line in every CLI since v0.227.0; `--json` (CLI 0.241.0 and later) and the global `--json` of the skill wrapper print the complete page, `{ items, nextCursor }`; `--syntax jql` for JQL',
   },
   orboto_search: {
     parts: [{ command: 'search', usage: 'orboto search "<words>" --json --limit 50', returns: 'hits' }],
-    note: '`more: true` marks a longer list; `--types` and `--project` take the tool\'s inputs',
+    body: { command: 'get', usage: 'orboto get "/search?q=<words>&limit=100"', returns: 'page' },
+    prints: 'each hit without `spaceName`, and neither `pass` nor `total`',
+    note: 'the REST call pages with `cursor=<nextCursor>` and takes `types`, `projectId` and `spaceId` as query parameters; in the command `more: true` marks a longer list, `--types` and `--project` take the tool\'s inputs',
   },
   orboto_list_projects: {
     parts: [{ command: 'project list', flat: 'list-projects', usage: 'orboto list-projects --limit 200', returns: 'projects' }],
-    note: 'it prints JSON without a flag, `more: true` marks a longer list; `--search` and `--query` take the tool\'s inputs',
+    body: { command: 'get', usage: 'orboto get /projects', returns: 'projects' },
+    prints: 'key, name and status per project, as JSON without a flag',
+    note: '`search=<words>` on the REST call is the tool\'s `search`; in the command `more: true` marks a longer list, `--search` and `--query` take the tool\'s inputs',
   },
   orboto_get_project_primer: {
     parts: [{ command: 'primer', usage: 'orboto primer <KEY>', returns: 'primer' }],
@@ -108,7 +119,7 @@ export function cliReadSentence(read: CliRead): string {
     return `The cut is an MCP-server artefact: ${goOnly ? 'the Go CLI' : 'the CLI'} cannot return this answer, \`${read.parts[0].usage}\` asks again and gives a new answer with new AI usage. There is no CLI expand.`;
   }
   if (read.body) {
-    return `The cut is an MCP-server artefact: the REST API returns the complete body, in either CLI \`${read.body.usage}\`; \`${read.parts[0].usage}\` prints it in lines${note}. There is no CLI expand.`;
+    return `The cut is an MCP-server artefact: the REST API returns the complete body, in either CLI \`${read.body.usage}\`; \`${read.parts[0].usage}\` prints ${read.prints}${note}. There is no CLI expand.`;
   }
   if (read.parts.length > 1) {
     const parts = read.parts.map((part) => `${part.returns}: \`${part.usage}\``).join('; ');
