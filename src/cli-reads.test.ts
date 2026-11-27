@@ -19,6 +19,13 @@ const inventory = JSON.parse(readFileSync(new URL('../../../docs/cli-surface-inv
 const openapi = JSON.parse(readFileSync(new URL('../../../cli/openapi.json', import.meta.url), 'utf8')) as {
   paths: Record<string, Record<string, unknown>>;
 };
+const goAliasSource = readFileSync(new URL('../../../cli/internal/cmd/command_aliases.go', import.meta.url), 'utf8');
+const goTicketSource = readFileSync(new URL('../../../cli/internal/cmd/ticket_cmd.go', import.meta.url), 'utf8');
+const wrapperSource = readFileSync(new URL('../../../skills/orboto/scripts/orboto.mjs', import.meta.url), 'utf8');
+const goAliases = new Map([...goAliasSource.matchAll(/"([a-z-]+)":\s*\{"([a-z-]+)", "([a-z-]+)"\}/g)].map((match) => [match[1], `${match[2]} ${match[3]}`]));
+const wrapperAliasBlock = /const COMMAND_ALIASES = \{([\s\S]*?)\};/.exec(wrapperSource)?.[1] ?? '';
+const wrapperAliases = new Map([...wrapperAliasBlock.matchAll(/'?([a-z-]+)'?: '([a-z-]+ [a-z-]+)'/g)].map((match) => [match[1], match[2]]));
+const NOUN_FIRST = /^orboto (?:ticket|project|milestone|timer) (?:get|list|mine|comments|create|close|start|stop|log)\b/;
 
 const flagsIn = (text: string): string[] => [...text.matchAll(/--([a-z][a-z-]*)/g)].map((match) => match[1]);
 const shape = (path: string): string => path.replace(/[<{][^>}]*[>}]/g, '{}');
@@ -43,11 +50,26 @@ describe('CLI_READS against docs/cli-surface-inventory.json and cli/openapi.json
       for (const part of read.parts) {
         const row = inventory.commands.find((candidate) => candidate.command === part.command);
 
-        it(`${part.returns}: \`${part.usage}\` starts with the command \`${part.command}\`, a command of the inventory`, () => {
-          expect(part.usage.startsWith(`orboto ${part.command}`)).toBe(true);
+        it(`${part.returns}: \`${part.usage}\` starts with the command \`${part.flat ?? part.command}\`, a command of the inventory`, () => {
+          expect(part.usage.startsWith(`orboto ${part.flat ?? part.command} `)).toBe(true);
+          expect(NOUN_FIRST.test(part.usage), `${part.usage} names the noun-first form older CLIs do not know (ORB-2570)`).toBe(false);
           expect(row, `${part.command} is not in docs/cli-surface-inventory.json`).toBeDefined();
           expect(row!.native, `${part.command} has no native command`).not.toBeNull();
         });
+
+        const flat = part.flat;
+        if (flat !== undefined) {
+          it(`${part.returns}: \`${flat}\` is the flat name of \`${part.command}\` in the Go CLI and in the wrapper`, () => {
+            if (flat === 'ticket') {
+              expect(part.command).toBe('ticket get');
+              expect(goTicketSource).toMatch(/default:\s*return ticketGet\(client, args\)/);
+              expect(wrapperSource).toContain("if (cmd === 'ticket') return { cmd: 'ticket get', rawArgs };");
+            } else {
+              expect(goAliases.get(flat)).toBe(part.command);
+              expect(wrapperAliases.get(flat)).toBe(part.command);
+            }
+          });
+        }
 
         if (part.command === 'get') {
           it(`${part.returns}: the API path is a GET route of cli/openapi.json`, () => {
@@ -80,13 +102,13 @@ describe('CLI_READS against docs/cli-surface-inventory.json and cli/openapi.json
     const read = CLI_READS.orboto_get_ticket;
     const usages = read.parts.map((part) => part.usage);
     expect(usages).toEqual(expect.arrayContaining([
-      'orboto ticket get <KEY> --json',
-      'orboto ticket comments <KEY> --all --json',
+      'orboto ticket <KEY> --json',
+      'orboto comments <KEY> --all --json',
       'orboto get /tickets/<ticketId>/attachments',
       'orboto get /tickets/<ticketId>/checklists',
       'orboto get /tickets/<id>/git-activity',
     ]));
-    expect(usages.some((usage) => /^orboto ticket list \S+ --parent <KEY> --status all --all --json$/.test(usage))).toBe(true);
+    expect(usages.some((usage) => /^orboto list-tickets \S+ --parent <KEY> --status all --all --json$/.test(usage))).toBe(true);
     const sentence = cliReadSentence(read);
     expect(sentence).toContain('no single CLI command returns this tool\'s whole answer');
     expect(sentence).not.toContain('complete body');
@@ -96,11 +118,11 @@ describe('CLI_READS against docs/cli-surface-inventory.json and cli/openapi.json
   it('a list or a query pages: the cap is lifted or the cursor is named', () => {
     expect(CLI_READS.orboto_query.parts[0].usage).toBe('orboto query "<oql>" --json --limit 200');
     expect(CLI_READS.orboto_query.note).toContain('page on with `--cursor <nextCursor>`');
-    expect(CLI_READS.orboto_list_tickets.parts[0].usage).toBe('orboto ticket list <KEY> --json --all --status all');
+    expect(CLI_READS.orboto_list_tickets.parts[0].usage).toBe('orboto list-tickets <KEY> --json --all --status all');
     expect(CLI_READS.orboto_list_tickets.note).toContain('`--all` lifts the 50-row cap');
     expect(CLI_READS.orboto_list_tickets.note).toContain('`specState` and `assigneeEmail` have no flag');
-    expect(CLI_READS.orboto_my_tickets.parts[0].usage).toBe('orboto ticket mine --json --all');
-    expect(CLI_READS.orboto_list_projects.parts[0].usage).toBe('orboto project list --limit 200');
+    expect(CLI_READS.orboto_my_tickets.parts[0].usage).toBe('orboto my-tickets --json --all');
+    expect(CLI_READS.orboto_list_projects.parts[0].usage).toBe('orboto list-projects --limit 200');
   });
 
   it('closed milestones are named where the CLI lists them and the tool leaves them out', () => {

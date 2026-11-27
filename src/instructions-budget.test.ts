@@ -187,7 +187,7 @@ describe('ORB-3289 - the tooled toolsets send lists, queries and bulk reads to t
       it(`${toolset}${channel ? ' + wake channel' : ''}: one sentence names both commands, sits in the head and stays inside the client cap`, async () => {
         const text = await deliveredInstructions(toolset, channel);
         expect(clientCut(text)).toContain(CLI_READS_INSTRUCTION);
-        expect(CLI_READS_INSTRUCTION).toContain('`orboto ticket list <KEY> --json --all`');
+        expect(CLI_READS_INSTRUCTION).toContain('`orboto list-tickets <KEY> --json --all`');
         expect(CLI_READS_INSTRUCTION).toContain('`orboto query "<oql>" --json --limit 200`');
         expect(CLI_READS_INSTRUCTION).toContain('Tools: session start, claims, writes.');
         for (const command of CLI_READS_INSTRUCTION_COMMANDS) expect(CLI_READS_INSTRUCTION).toContain(`\`${command}\``);

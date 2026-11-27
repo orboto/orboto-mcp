@@ -157,10 +157,10 @@ describe('over budget', () => {
   it('ORB-3289: the query notice says how to page, the list notices lift the cap, get_ticket claims no whole body, ask tools say they ask again', () => {
     expect(uncutElsewhere('orboto_query')).toContain('orboto query "<oql>" --json --limit 200');
     expect(uncutElsewhere('orboto_query')).toContain('page on with `--cursor <nextCursor>`');
-    expect(uncutElsewhere('orboto_list_tickets')).toContain('orboto ticket list <KEY> --json --all --status all');
+    expect(uncutElsewhere('orboto_list_tickets')).toContain('orboto list-tickets <KEY> --json --all --status all');
     expect(uncutElsewhere('orboto_list_tickets')).toContain('`--all` lifts the 50-row cap');
-    expect(uncutElsewhere('orboto_my_tickets')).toContain('orboto ticket mine --json --all');
-    expect(uncutElsewhere('orboto_get_ticket')).toContain('orboto ticket comments <KEY> --all --json');
+    expect(uncutElsewhere('orboto_my_tickets')).toContain('orboto my-tickets --json --all');
+    expect(uncutElsewhere('orboto_get_ticket')).toContain('orboto comments <KEY> --all --json');
     expect(uncutElsewhere('orboto_get_ticket')).not.toContain('complete body');
     expect(uncutElsewhere('orboto_knowledge_ask')).toContain('asks again');
     expect(uncutElsewhere('orboto_wiki_ask')).toContain('a new answer');
