@@ -21,6 +21,8 @@ export interface CliRead {
   parts: CliPart[];
   /** What the command does not carry over from the tool: paging, filters, flags the CLI lacks. */
   note?: string;
+  /** The REST call that prints the complete body in both CLIs of every version, when the command prints lines there. */
+  body?: CliPart;
   /** The CLI cannot return the cut answer, it asks again. */
   again?: true;
 }
@@ -47,7 +49,8 @@ export const CLI_READS: Record<string, CliRead> = {
   },
   orboto_query: {
     parts: [{ command: 'query', usage: 'orboto query "<oql>" --limit 200', returns: 'tickets' }],
-    note: 'one page, one line per ticket: page on with `--cursor <nextCursor>` from its last line; `--json` (CLI after 0.240.6) prints the page as one document, `{ items, nextCursor }`; `--syntax jql` for JQL',
+    body: { command: 'post', usage: 'orboto post /query \'{"oql":"<oql>","limit":200}\'', returns: 'page' },
+    note: 'one page, one line per ticket on every CLI version, the next with `--cursor <nextCursor>` from its last line; `--json` (CLI after 0.240.6) and the global `--json` of the skill wrapper print the complete page, `{ items, nextCursor }`; `--syntax jql` for JQL',
   },
   orboto_search: {
     parts: [{ command: 'search', usage: 'orboto search "<words>" --json --limit 50', returns: 'hits' }],
@@ -65,8 +68,8 @@ export const CLI_READS: Record<string, CliRead> = {
     note: '`--all` also lists completed and archived milestones, which the tool leaves out',
   },
   orboto_get_doc: {
-    parts: [{ command: 'doc get', usage: 'orboto doc get <doc> --content', returns: 'doc' }],
-    note: 'it prints the Markdown only, without `--content` the doc as JSON; `--section "A > B"` (CLI 0.236.0 and later) reads one section',
+    parts: [{ command: 'doc get', usage: 'orboto doc get <doc>', returns: 'doc' }],
+    note: 'it prints the doc as JSON with the raw body, `--content` the Markdown only; `--section "A > B"` (CLI 0.236.0 and later) reads one section',
   },
   orboto_list_docs_in_space: {
     parts: [{ command: 'doc list', usage: 'orboto doc list <space> --json', returns: 'pages' }],
@@ -103,6 +106,9 @@ export function cliReadSentence(read: CliRead): string {
   const goOnly = read.parts[0].goOnly === true;
   if (read.again) {
     return `The cut is an MCP-server artefact: ${goOnly ? 'the Go CLI' : 'the CLI'} cannot return this answer, \`${read.parts[0].usage}\` asks again and gives a new answer with new AI usage. There is no CLI expand.`;
+  }
+  if (read.body) {
+    return `The cut is an MCP-server artefact: the REST API returns the complete body, in either CLI \`${read.body.usage}\`; \`${read.parts[0].usage}\` prints it in lines${note}. There is no CLI expand.`;
   }
   if (read.parts.length > 1) {
     const parts = read.parts.map((part) => `${part.returns}: \`${part.usage}\``).join('; ');

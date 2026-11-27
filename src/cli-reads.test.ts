@@ -19,8 +19,13 @@ const inventory = JSON.parse(readFileSync(new URL('../../../docs/cli-surface-inv
   wrapperGlobalFlags: string[];
 };
 const openapi = JSON.parse(readFileSync(new URL('../../../cli/openapi.json', import.meta.url), 'utf8')) as {
-  paths: Record<string, Record<string, unknown>>;
+  paths: Record<string, Record<string, { requestBody?: { content?: Record<string, { schema?: JsonSchema }> } }>>;
 };
+
+interface JsonSchema {
+  properties?: Record<string, { maximum?: number }>;
+  required?: string[];
+}
 const goAliasSource = readFileSync(new URL('../../../cli/internal/cmd/command_aliases.go', import.meta.url), 'utf8');
 const goTicketSource = readFileSync(new URL('../../../cli/internal/cmd/ticket_cmd.go', import.meta.url), 'utf8');
 const wrapperSource = readFileSync(new URL('../../../skills/orboto/scripts/orboto.mjs', import.meta.url), 'utf8');
@@ -56,7 +61,15 @@ const NEWER_FLAGS: Record<string, string> = {
   'knowledge find --budget': '0.238.0 and later',
 };
 
+/** The commands that print their JSON answer without a flag in the Go CLI at 3c2a73e2e (doc get only without --content). */
+const PRINTS_JSON_BY_DEFAULT = new Set(['list-projects', 'primer', 'doc get', 'milestones']);
+
 const typedName = (part: CliPart): string => part.flat ?? part.command;
+const printsJsonOnEveryVersion = (part: CliPart): boolean => {
+  const flags = flagsIn(part.usage);
+  if (flags.includes('json')) return PRE_SCHEME_FLAGS[typedName(part)]?.includes('json') === true;
+  return PRINTS_JSON_BY_DEFAULT.has(typedName(part)) && !flags.includes('content');
+};
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const flagsIn = (text: string): string[] => [...text.matchAll(/--([a-z][a-z-]*)/g)].map((match) => match[1]);
@@ -156,6 +169,42 @@ describe('CLI_READS against docs/cli-surface-inventory.json and cli/openapi.json
         }
       });
 
+      if (!read.again && read.parts.length === 1) {
+        it('claims the complete body for a command only where it prints the JSON answer on every CLI version, else names the REST call', () => {
+          const sentence = cliReadSentence(read);
+          if (printsJsonOnEveryVersion(read.parts[0])) {
+            expect(read.body).toBeUndefined();
+            expect(sentence).toMatch(/the REST API and (?:both CLIs|the Go CLI) return the complete body/);
+          } else {
+            expect(read.body, `${read.parts[0].usage} prints lines on some CLI version, so the read names the REST call`).toBeDefined();
+            expect(sentence).toContain('the REST API returns the complete body');
+            expect(sentence).not.toMatch(/CLIs? returns? the complete body/);
+            expect(sentence).toContain(`\`${read.body!.usage}\``);
+          }
+        });
+      }
+
+      const body = read.body;
+      if (body !== undefined) {
+        it(`the REST call \`${body.usage}\` is a POST route of cli/openapi.json, its body fits the schema, and both CLIs have \`${body.command}\``, () => {
+          const row = inventory.commands.find((candidate) => candidate.command === body.command);
+          expect(row?.native, `${body.command} has no native command`).toBeTruthy();
+          expect(row?.wrapper, `${body.command} has no wrapper command`).toBeTruthy();
+          expect(row!.mcpTools).toContain('orboto_api_call');
+          const match = /^orboto post (\/\S+) '(.+)'$/.exec(body.usage);
+          expect(match, body.usage).not.toBeNull();
+          const schema = openapi.paths[match![1]]?.post?.requestBody?.content?.['application/json']?.schema;
+          expect(schema, `${match![1]} is no POST route with a JSON body`).toBeDefined();
+          const payload = JSON.parse(match![2]) as Record<string, unknown>;
+          for (const key of Object.keys(payload)) expect(Object.keys(schema!.properties ?? {})).toContain(key);
+          for (const key of schema!.required ?? []) expect(Object.keys(payload)).toContain(key);
+          for (const [key, value] of Object.entries(payload)) {
+            const maximum = schema!.properties?.[key]?.maximum;
+            if (typeof value === 'number' && maximum !== undefined) expect(value).toBeLessThanOrEqual(maximum);
+          }
+        });
+      }
+
       it('names the Go CLI alone where the wrapper has no such command', () => {
         const sentence = cliReadSentence(read);
         if (read.parts[0].goOnly) {
@@ -185,8 +234,10 @@ describe('CLI_READS against docs/cli-surface-inventory.json and cli/openapi.json
 
   it('a list or a query pages: the cap is lifted or the cursor is named', () => {
     expect(CLI_READS.orboto_query.parts[0].usage).toBe('orboto query "<oql>" --limit 200');
-    expect(CLI_READS.orboto_query.note).toContain('`--json` (CLI after 0.240.6) prints the page as one document, `{ items, nextCursor }`');
-    expect(CLI_READS.orboto_query.note).toContain('page on with `--cursor <nextCursor>`');
+    expect(CLI_READS.orboto_query.note).toContain('one line per ticket on every CLI version, the next with `--cursor <nextCursor>`');
+    expect(CLI_READS.orboto_query.note).toContain('`--json` (CLI after 0.240.6) and the global `--json` of the skill wrapper print the complete page, `{ items, nextCursor }`');
+    expect(CLI_READS.orboto_query.body?.usage).toBe('orboto post /query \'{"oql":"<oql>","limit":200}\'');
+    expect(CLI_READS.orboto_get_doc.parts[0].usage).toBe('orboto doc get <doc>');
     expect(CLI_READS.orboto_list_tickets.parts[0].usage).toBe('orboto list-tickets <KEY> --json --all --status all');
     expect(CLI_READS.orboto_list_tickets.note).toContain('`--all` lifts the 50-row cap');
     expect(CLI_READS.orboto_list_tickets.note).toContain('`specState` and `assigneeEmail` have no flag');
